@@ -7,6 +7,7 @@ import { player } from '../data/player';
 
 import { getPlayerStats } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
+import { getCachedVKUser } from '../systems/VKBridgeSystem';
 
 export class CampScene extends Phaser.Scene {
   constructor() {
@@ -16,6 +17,8 @@ export class CampScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     const stats = getPlayerStats(player);
+
+    const vkUser = getCachedVKUser();
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
 
@@ -34,7 +37,21 @@ export class CampScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5);
 
-    this.createCampfire(width / 2, 225);
+    this.add.text(
+      width / 2,
+      142,
+      vkUser
+        ? `Игрок VK: ${vkUser.first_name} ${vkUser.last_name}`
+        : 'Локальный режим',
+      {
+        fontFamily: 'Arial',
+        fontSize: '18px',
+        color: vkUser ? '#75d184' : '#70675a',
+        align: 'center',
+      }
+    ).setOrigin(0.5);
+
+    this.createCampfire(width / 2, 245);
 
     this.createHeroCard(stats);
 

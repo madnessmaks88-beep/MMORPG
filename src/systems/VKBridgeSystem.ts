@@ -95,3 +95,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     }),
   ]);
 }
+
+export function getCachedVKUser(): VKUser | null {
+  return currentUser;
+}
