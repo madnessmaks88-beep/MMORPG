@@ -46,7 +46,7 @@ export class DungeonSelectScene extends Phaser.Scene {
     this.createDungeonCards();
 
     createBottomNav(this, {
-      active: 'camp',
+      activeScene: 'CampScene',
     });
   }
 

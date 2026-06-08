@@ -79,7 +79,7 @@ export class ForgeScene extends Phaser.Scene {
     this.createUpgradeList();
 
     createBottomNav(this, {
-      active: 'camp',
+      activeScene: 'CampScene',
     });
   }
 

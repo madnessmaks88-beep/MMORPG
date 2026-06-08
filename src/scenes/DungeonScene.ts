@@ -287,48 +287,48 @@ export class DungeonScene extends Phaser.Scene {
 
   private triggerTrap() {
     const stats = getPlayerStats(player);
-    
+
     if (Math.random() < stats.trapDodgeChance) {
       goToNextRoom();
-    
+
       void saveGameAsync();
-    
+
       this.showMessage(
         `Ты вовремя заметил ловушку.\n\nЛовкость помогла тебе уклониться.\nУрон не получен.`,
         () => {
           this.scene.restart();
         }
       );
-    
+
       return;
     }
-  
+
     const damage = Phaser.Math.Between(14, 28);
-  
+
     player.hp = Math.max(0, player.hp - damage);
-  
+
     if (player.hp <= 0) {
       this.showMessage(
         `Ты попал в смертельную ловушку.\n\nПолучено урона: ${damage}\n\nТы едва выбрался обратно в лагерь...`,
         () => {
           const freshStats = getPlayerStats(player);
-        
+
           player.hp = freshStats.maxHp;
           player.energy = player.maxEnergy;
-        
+
           void saveGameAsync();
-        
+
           this.scene.start('CampScene');
         }
       );
-    
+
       return;
     }
-  
+
     goToNextRoom();
-  
+
     void saveGameAsync();
-  
+
     this.showMessage(
       `Ты попал в ловушку.\n\nПолучено урона: ${damage}\nHP: ${player.hp}/${stats.maxHp}`,
       () => {
@@ -386,7 +386,11 @@ export class DungeonScene extends Phaser.Scene {
       this.scene.start('CampScene');
     }, 520, 72);
 
-    createBottomNav(this);
+    createBottomNav(this, {
+      activeScene: 'DungeonScene',
+      disabledScenes: ['CampScene'],
+      disabledMessage: 'Нельзя уйти в лагерь, пока ты в подземелье.',
+    });
   }
 
   private showMessage(message: string, onContinue: () => void) {

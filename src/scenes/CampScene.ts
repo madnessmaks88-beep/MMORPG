@@ -53,7 +53,7 @@ export class CampScene extends Phaser.Scene {
     this.createActionCards();
 
     createBottomNav(this, {
-      active: 'camp',
+      activeScene: 'CampScene',
     });
   }
 

@@ -103,7 +103,7 @@ export class QuestScene extends Phaser.Scene {
     });
 
     createBottomNav(this, {
-      active: 'camp',
+      activeScene: 'CampScene',
     });
   }
 

@@ -70,7 +70,7 @@ export class ShopScene extends Phaser.Scene {
     ).setOrigin(0.5);
 
     createBottomNav(this, {
-      active: 'shop',
+      activeScene: 'ShopScene',
     });
   }
 
