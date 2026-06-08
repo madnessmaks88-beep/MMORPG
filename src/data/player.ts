@@ -31,6 +31,9 @@ export type PlayerData = {
   defense: number;
   critChance: number;
 
+  agility: number;
+  luck: number;
+
   inventory: InventoryItem[];
   equipment: PlayerEquipment;
 };
@@ -53,6 +56,9 @@ export const player: PlayerData = {
   attack: 12,
   defense: 3,
   critChance: 0.1,
+
+  agility: 5,
+  luck: 5,
 
   inventory: [],
   equipment: {},

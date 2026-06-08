@@ -12,7 +12,7 @@ import { addExperience, createLevelUpText } from '../systems/LevelSystem';
 import {
   addItemToInventory,
   getPlayerStats,
-  getRarityText,
+  rollItemDrop,
 } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 
@@ -248,55 +248,29 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private openChest() {
-    const dungeon = getDungeonById(gameState.currentDungeonId);
-    const currentRoom = dungeon.rooms[gameState.currentRoomIndex];
-
-    const gold = currentRoom.goldReward ?? 0;
-    const exp = currentRoom.expReward ?? 0;
-    const item = getRandomLootItem();
+    const gold = Phaser.Math.Between(12, 28);
 
     player.gold += gold;
-    trackGoldEarned(gold);
-    addItemToInventory(player, item.id);
+
     trackChestOpened();
+    trackGoldEarned(gold);
 
-    const levelResult = addExperience(player, exp);
-    const levelText = createLevelUpText(levelResult);
+    const expResult = addExperience(player, 12);
 
-    goToNextRoom();
+    let itemText = '';
 
-    void saveGameAsync();
+    if (rollItemDrop(player, 0.45)) {
+      const item = getRandomLootItem();
 
-    this.showMessage(
-      `Ты открыл сундук.\n\nПолучено золота: ${gold}\nПолучено опыта: ${exp}\n\nНайден ${getRarityText(item).toLowerCase()} предмет:\n${item.name} +0${levelText}`,
-      () => {
-        this.scene.restart();
-      }
-    );
-  }
+      addItemToInventory(player, item.id);
 
-  private triggerTrap() {
-    const dungeon = getDungeonById(gameState.currentDungeonId);
-    const currentRoom = dungeon.rooms[gameState.currentRoomIndex];
+      itemText = `\nНайден предмет: ${item.name}`;
+    }
 
-    const damage = currentRoom.trapDamage ?? 0;
-    player.hp = Math.max(0, player.hp - damage);
+    let levelText = '';
 
-    if (player.hp <= 0) {
-      this.showMessage(
-        `Ловушка наносит ${damage} урона.\n\nТы погиб в катакомбах...`,
-        () => {
-          const stats = getPlayerStats(player);
-          player.hp = stats.maxHp;
-          player.energy = player.maxEnergy;
-
-          void saveGameAsync();
-
-          this.scene.start('CampScene');
-        }
-      );
-
-      return;
+    if (expResult.leveledUp) {
+      levelText = `\n\n${createLevelUpText(expResult)}`;
     }
 
     goToNextRoom();
@@ -304,7 +278,59 @@ export class DungeonScene extends Phaser.Scene {
     void saveGameAsync();
 
     this.showMessage(
-      `Ловушка наносит ${damage} урона.\n\nТы выжил и идёшь дальше.`,
+      `Ты открыл сундук.\n\nЗолото: +${gold}\nОпыт: +12${itemText}${levelText}`,
+      () => {
+        this.scene.restart();
+      }
+    );
+  }
+
+  private triggerTrap() {
+    const stats = getPlayerStats(player);
+    
+    if (Math.random() < stats.trapDodgeChance) {
+      goToNextRoom();
+    
+      void saveGameAsync();
+    
+      this.showMessage(
+        `Ты вовремя заметил ловушку.\n\nЛовкость помогла тебе уклониться.\nУрон не получен.`,
+        () => {
+          this.scene.restart();
+        }
+      );
+    
+      return;
+    }
+  
+    const damage = Phaser.Math.Between(14, 28);
+  
+    player.hp = Math.max(0, player.hp - damage);
+  
+    if (player.hp <= 0) {
+      this.showMessage(
+        `Ты попал в смертельную ловушку.\n\nПолучено урона: ${damage}\n\nТы едва выбрался обратно в лагерь...`,
+        () => {
+          const freshStats = getPlayerStats(player);
+        
+          player.hp = freshStats.maxHp;
+          player.energy = player.maxEnergy;
+        
+          void saveGameAsync();
+        
+          this.scene.start('CampScene');
+        }
+      );
+    
+      return;
+    }
+  
+    goToNextRoom();
+  
+    void saveGameAsync();
+  
+    this.showMessage(
+      `Ты попал в ловушку.\n\nПолучено урона: ${damage}\nHP: ${player.hp}/${stats.maxHp}`,
       () => {
         this.scene.restart();
       }

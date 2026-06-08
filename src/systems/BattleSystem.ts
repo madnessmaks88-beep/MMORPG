@@ -98,8 +98,16 @@ export function enemyAttack(
   enemy: EnemyData,
   player: PlayerData,
   isDefending = false
-): EnemyActionResult {
+): EnemyActionResult & { dodged: boolean } {
   const stats = getPlayerStats(player);
+
+  if (Math.random() < stats.dodgeChance) {
+    return {
+      damage: 0,
+      playerDead: false,
+      dodged: true,
+    };
+  }
 
   let damage = calculateDamage(enemy.attack, stats.defense);
 
@@ -112,6 +120,7 @@ export function enemyAttack(
   return {
     damage,
     playerDead: player.hp <= 0,
+    dodged: false,
   };
 }
 

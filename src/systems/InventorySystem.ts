@@ -9,6 +9,13 @@ export type PlayerStats = {
   attack: number;
   defense: number;
   critChance: number;
+
+  agility: number;
+  luck: number;
+
+  dodgeChance: number;
+  trapDodgeChance: number;
+  lootChanceBonus: number;
 };
 
 export function createInventoryItem(itemId: string): InventoryItem {
@@ -218,28 +225,23 @@ export function getItemBonusWithUpgrade(
 }
 
 export function getPlayerStats(player: PlayerData): PlayerStats {
-  const equippedItems = getEquippedInventoryItems(player);
+  const stats: PlayerStats = {
+    maxHp: player.maxHp,
+    attack: player.attack,
+    defense: player.defense,
+    critChance: player.critChance,
 
-  let maxHp = player.maxHp;
-  let attack = player.attack;
-  let defense = player.defense;
-  let critChance = player.critChance;
+    agility: player.agility,
+    luck: player.luck,
 
-  for (const inventoryItem of equippedItems) {
-    const bonuses = getItemBonusWithUpgrade(inventoryItem);
-
-    maxHp += bonuses.bonusHp;
-    attack += bonuses.bonusAttack;
-    defense += bonuses.bonusDefense;
-    critChance += bonuses.bonusCritChance;
-  }
-
-  return {
-    maxHp: Math.max(1, maxHp),
-    attack: Math.max(1, attack),
-    defense: Math.max(0, defense),
-    critChance: Math.max(0, critChance),
+    dodgeChance: Math.min(0.35, player.agility * 0.015),
+    trapDodgeChance: Math.min(0.45, player.agility * 0.02),
+    lootChanceBonus: Math.min(0.35, player.luck * 0.015),
   };
+
+  // ниже оставь свой старый код, который добавляет бонусы экипировки
+
+  return stats;
 }
 
 export function getRarityText(item: ItemData): string {
@@ -360,4 +362,12 @@ export function getSlotIcon(item: ItemData): string {
   if (item.slot === 'weapon') return '⚔';
   if (item.slot === 'armor') return '🛡';
   return '◆';
+}
+
+export function rollItemDrop(player: PlayerData, baseChance: number): boolean {
+  const stats = getPlayerStats(player);
+
+  const finalChance = Math.min(0.95, baseChance + stats.lootChanceBonus);
+
+  return Math.random() < finalChance;
 }

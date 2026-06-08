@@ -697,53 +697,73 @@ export class BattleScene extends Phaser.Scene {
 
   private enemyTurn(playerActionText: string, isDefending = false) {
     this.updateTexts();
-
+    
     this.time.delayedCall(500, () => {
       this.animateEnemyAttack();
-
+    
       const enemyResult = enemyAttack(this.enemy, player, isDefending);
-
+    
+      if (enemyResult.dodged) {
+        this.showFloatingText(
+          this.playerCard.x,
+          this.playerCard.y - 55,
+          'УКЛОНЕНИЕ',
+          '#70a6ff'
+        );
+      
+        restoreEnergy(player, 1);
+      
+        this.logText.setText(
+          `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.`
+        );
+      
+        this.updateTexts();
+        this.isBusy = false;
+      
+        return;
+      }
+    
       this.showFloatingText(
         this.playerCard.x,
         this.playerCard.y - 55,
         `-${enemyResult.damage}`,
         isDefending ? '#70a6ff' : '#ff6b6b'
       );
-
+    
       this.animateHit(this.playerCard);
-
+    
       if (!isDefending) {
         this.flashScreen(0xc24747, 0.25);
       }
-
+    
       restoreEnergy(player, 1);
-
+    
       if (enemyResult.playerDead) {
         this.isBattleEnded = true;
-
+      
         this.logText.setText(
           `${playerActionText}\n\n${this.enemy.name} наносит ${enemyResult.damage} урона.\n\nТы пал в катакомбах...`
         );
-
+      
         this.updateTexts();
-
+      
         this.time.delayedCall(2000, () => {
           const stats = getPlayerStats(player);
           player.hp = stats.maxHp;
           player.energy = player.maxEnergy;
-
+        
           void saveGameAsync();
-
+        
           this.scene.start('CampScene');
         });
-
+      
         return;
       }
-
+    
       this.logText.setText(
         `${playerActionText}\n\n${this.enemy.name} наносит ${enemyResult.damage} урона.\nЭнергия восстановлена на 1.`
       );
-
+    
       this.updateTexts();
       this.isBusy = false;
     });

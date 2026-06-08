@@ -6,23 +6,11 @@ export type LevelUpResult = {
   levelsGained: number;
   oldLevel: number;
   newLevel: number;
-  hpGained: number;
-  attackGained: number;
-  defenseGained: number;
-  energyGained: number;
 };
 
 export function addExperience(player: PlayerData, amount: number): LevelUpResult {
-  const result: LevelUpResult = {
-    leveledUp: false,
-    levelsGained: 0,
-    oldLevel: player.level,
-    newLevel: player.level,
-    hpGained: 0,
-    attackGained: 0,
-    defenseGained: 0,
-    energyGained: 0,
-  };
+  const oldLevel = player.level;
+  let levelsGained = 0;
 
   player.exp += amount;
 
@@ -30,39 +18,35 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
     player.exp -= player.expToNextLevel;
 
     player.level += 1;
-    result.levelsGained += 1;
-    result.leveledUp = true;
-
-    const hpGain = 18;
-    const attackGain = 3;
-    const defenseGain = 1;
-    const energyGain = player.level % 3 === 0 ? 1 : 0;
-
-    player.maxHp += hpGain;
-    player.attack += attackGain;
-    player.defense += defenseGain;
-
-    if (energyGain > 0) {
-      player.maxEnergy += energyGain;
-    }
-
-    result.hpGained += hpGain;
-    result.attackGained += attackGain;
-    result.defenseGained += defenseGain;
-    result.energyGained += energyGain;
+    levelsGained += 1;
 
     player.expToNextLevel = Math.floor(player.expToNextLevel * 1.35);
+
+    player.maxHp += 18;
+    player.attack += 3;
+    player.defense += 1;
+
+    player.agility += 1;
+    player.luck += 1;
+
+    if (player.level % 3 === 0) {
+      player.maxEnergy += 1;
+    }
   }
 
-  if (result.leveledUp) {
+  if (levelsGained > 0) {
     const stats = getPlayerStats(player);
+
     player.hp = stats.maxHp;
     player.energy = player.maxEnergy;
   }
 
-  result.newLevel = player.level;
-
-  return result;
+  return {
+    leveledUp: levelsGained > 0,
+    levelsGained,
+    oldLevel,
+    newLevel: player.level,
+  };
 }
 
 export function createLevelUpText(result: LevelUpResult): string {
@@ -70,18 +54,29 @@ export function createLevelUpText(result: LevelUpResult): string {
     return '';
   }
 
-  const energyText = result.energyGained > 0
-    ? `\nМакс. энергия +${result.energyGained}`
-    : '';
+  if (result.levelsGained === 1) {
+    return [
+      `Новый уровень: ${result.newLevel}`,
+      '',
+      '+18 к максимальному HP',
+      '+3 к атаке',
+      '+1 к защите',
+      '+1 к ловкости',
+      '+1 к удаче',
+      result.newLevel % 3 === 0 ? '+1 к максимальной энергии' : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
 
-  return `
-
-Уровень повышен!
-${result.oldLevel} → ${result.newLevel}
-
-Макс. здоровье +${result.hpGained}
-Атака +${result.attackGained}
-Защита +${result.defenseGained}${energyText}
-
-Здоровье и энергия восстановлены.`;
+  return [
+    `Получено уровней: ${result.levelsGained}`,
+    `Новый уровень: ${result.newLevel}`,
+    '',
+    `+${18 * result.levelsGained} к максимальному HP`,
+    `+${3 * result.levelsGained} к атаке`,
+    `+${result.levelsGained} к защите`,
+    `+${result.levelsGained} к ловкости`,
+    `+${result.levelsGained} к удаче`,
+  ].join('\n');
 }
