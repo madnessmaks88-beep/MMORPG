@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 
 import { createButton } from '../ui/createButton';
-import { createBottomNav } from '../ui/createBottomNav';
 
 import { player } from '../data/player';
 import { getDungeonById } from '../data/dungeons';
@@ -79,8 +78,6 @@ export class DungeonScene extends Phaser.Scene {
     this.createRoomInfo(currentRoom);
 
     this.createRoomAction(currentRoom);
-
-    createBottomNav(this);
   }
 
   private createBackground() {
@@ -386,11 +383,6 @@ export class DungeonScene extends Phaser.Scene {
       this.scene.start('CampScene');
     }, 520, 72);
 
-    createBottomNav(this, {
-      activeScene: 'DungeonScene',
-      disabledScenes: ['CampScene'],
-      disabledMessage: 'Нельзя уйти в лагерь, пока ты в подземелье.',
-    });
   }
 
   private showMessage(message: string, onContinue: () => void) {
