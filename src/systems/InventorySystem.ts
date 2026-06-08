@@ -239,7 +239,7 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
     lootChanceBonus: Math.min(0.35, player.luck * 0.015),
   };
 
-  // ниже оставь свой старый код, который добавляет бонусы экипировки
+  // дальше твой код с экипировкой
 
   return stats;
 }

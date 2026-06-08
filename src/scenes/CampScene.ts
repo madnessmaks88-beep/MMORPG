@@ -1,10 +1,8 @@
 import Phaser from 'phaser';
 
+import { player } from '../data/player';
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
-
-import { player } from '../data/player';
-
 import { getPlayerStats } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
@@ -15,31 +13,30 @@ export class CampScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width } = this.scale;
     const stats = getPlayerStats(player);
-
     const vkUser = getCachedVKUser();
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
 
     this.createBackground();
 
-    this.add.text(width / 2, 60, 'Лагерь у входа', {
+    this.add.text(width / 2, 58, 'Лагерь у входа', {
       fontFamily: 'Arial',
-      fontSize: '48px',
-      color: '#d8b56d',
+      fontSize: '46px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 112, 'Последнее тёплое место перед тьмой.', {
+    this.add.text(width / 2, 106, 'Последнее тёплое место перед тьмой.', {
       fontFamily: 'Arial',
-      fontSize: '22px',
+      fontSize: '21px',
       color: '#9c8f7a',
       align: 'center',
     }).setOrigin(0.5);
 
     this.add.text(
       width / 2,
-      142,
+      136,
       vkUser
         ? `Игрок VK: ${vkUser.first_name} ${vkUser.last_name}`
         : 'Локальный режим',
@@ -51,10 +48,8 @@ export class CampScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    this.createCampfire(width / 2, 245);
-
+    this.createCampfire(width / 2, 230);
     this.createHeroCard(stats);
-
     this.createActionCards();
 
     createBottomNav(this, {
@@ -65,159 +60,230 @@ export class CampScene extends Phaser.Scene {
   private createBackground() {
     const { width, height } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x0b0b0b);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
 
-    for (let i = 0; i < 28; i++) {
-      const x = Phaser.Math.Between(20, width - 20);
-      const y = Phaser.Math.Between(150, height - 160);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x160f0c, 0.75);
+
+    for (let i = 0; i < 26; i++) {
+      const x = Phaser.Math.Between(0, width);
+      const y = Phaser.Math.Between(0, height);
       const size = Phaser.Math.Between(1, 3);
-      const alpha = Phaser.Math.FloatBetween(0.06, 0.16);
 
-      this.add.circle(x, y, size, 0xd8b56d, alpha);
+      this.add.circle(x, y, size, 0xd8b56d, 0.08);
     }
 
-    this.add.rectangle(width / 2, 410, 620, 520, 0x111111, 0.78);
-    this.add.rectangle(width / 2, 410, 580, 480, 0x0a0a0a, 0.7);
+    this.add.rectangle(width / 2, height - 170, width, 300, 0x050505, 0.45);
   }
 
   private createCampfire(x: number, y: number) {
-    this.add.ellipse(x, y + 70, 220, 45, 0x000000, 0.35);
+    this.add.ellipse(x, y + 58, 250, 70, 0x000000, 0.35);
 
-    this.add.rectangle(x - 35, y + 65, 120, 18, 0x4a2a16)
-      .setRotation(-0.25);
+    this.add.circle(x, y, 115, 0xe0772f, 0.08);
+    this.add.circle(x, y, 75, 0xf0d58a, 0.1);
 
-    this.add.rectangle(x + 35, y + 65, 120, 18, 0x4a2a16)
-      .setRotation(0.25);
+    this.add.rectangle(x - 35, y + 40, 100, 18, 0x4a2a16).setAngle(-18);
+    this.add.rectangle(x + 35, y + 40, 100, 18, 0x4a2a16).setAngle(18);
 
-    const outerFlame = this.add.triangle(
+    const flame1 = this.add.triangle(
       x,
-      y + 10,
+      y + 18,
       0,
-      80,
-      42,
+      95,
+      38,
       0,
-      84,
-      80,
+      76,
+      95,
       0xc24747,
-      0.8
+      0.95
     ).setOrigin(0.5);
 
-    const middleFlame = this.add.triangle(
+    const flame2 = this.add.triangle(
       x,
-      y + 20,
+      y + 5,
       0,
-      65,
-      32,
+      72,
+      30,
       0,
-      64,
-      65,
+      60,
+      72,
       0xe0772f,
-      0.9
+      0.95
     ).setOrigin(0.5);
 
-    const innerFlame = this.add.triangle(
+    const flame3 = this.add.triangle(
       x,
-      y + 32,
+      y,
       0,
-      45,
-      22,
+      48,
+      20,
       0,
-      44,
-      45,
+      40,
+      48,
       0xf0d58a,
       0.95
     ).setOrigin(0.5);
 
     this.tweens.add({
-      targets: [outerFlame, middleFlame, innerFlame],
+      targets: [flame1, flame2, flame3],
       scaleX: 1.08,
       scaleY: 0.94,
       duration: 520,
       yoyo: true,
       repeat: -1,
     });
-
-    this.add.circle(x, y + 45, 120, 0xe0772f, 0.08);
-    this.add.circle(x, y + 45, 70, 0xf0d58a, 0.08);
   }
 
   private createHeroCard(stats: ReturnType<typeof getPlayerStats>) {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 510, 620, 255, 0x171313);
-    const inner = this.add.rectangle(width / 2, 510, 580, 215, 0x121212);
-    inner.setStrokeStyle(2, 0x8b5a2b);
+    this.add.rectangle(width / 2, 500, 620, 350, 0x0d0d0d, 0.92);
+    this.add.rectangle(width / 2, 500, 590, 320, 0x171313, 0.95)
+      .setStrokeStyle(2, 0x8b5a2b);
 
-    this.add.text(width / 2, 420, player.name, {
+    this.add.text(width / 2, 360, player.name, {
       fontFamily: 'Arial',
-      fontSize: '32px',
-      color: '#e6d2aa',
+      fontSize: '34px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 455, `Уровень ${player.level}`, {
+    const statsText = [
+      `Уровень: ${player.level}`,
+      `Опыт: ${player.exp}/${player.expToNextLevel}`,
+      `Золото: ${player.gold}`,
+      `HP: ${player.hp}/${stats.maxHp}`,
+      `Энергия: ${player.energy}/${player.maxEnergy}`,
+      `Атака: ${stats.attack}`,
+      `Защита: ${stats.defense}`,
+      `Крит: ${Math.round(stats.critChance * 100)}%`,
+      `Ловкость: ${stats.agility}`,
+      `Уклонение: ${Math.round(stats.dodgeChance * 100)}%`,
+      `Удача: ${stats.luck}`,
+      `Добыча: +${Math.round(stats.lootChanceBonus * 100)}%`,
+      `Зелья: ${player.potions}`,
+    ].join('\n');
+
+    this.add.text(width / 2, 520, statsText, {
       fontFamily: 'Arial',
       fontSize: '22px',
-      color: '#d8b56d',
+      color: '#d8c7a3',
+      align: 'center',
+      lineSpacing: 4,
     }).setOrigin(0.5);
-
-    this.add.text(
-      width / 2,
-      525,
-      `HP: ${player.hp}/${stats.maxHp}     EN: ${player.energy}/${player.maxEnergy}
-  Опыт: ${player.exp}/${player.expToNextLevel}     Золото: ${player.gold}
-  Атака: ${stats.attack}     Защита: ${stats.defense}     Крит: ${Math.round(stats.critChance * 100)}%
-  Зелья: ${player.potions}`,
-      {
-        fontFamily: 'Arial',
-        fontSize: '22px',
-        color: '#b8aa91',
-        align: 'center',
-        lineSpacing: 8,
-      }
-    ).setOrigin(0.5);
   }
 
   private createActionCards() {
     const { width } = this.scale;
 
-    this.add.text(width / 2, 690, 'Действия', {
+    createButton(
+      this,
+      width / 2,
+      720,
+      'Войти в катакомбы',
+      () => {
+        this.scene.start('DungeonSelectScene');
+      },
+      540,
+      76
+    );
+
+    createButton(
+      this,
+      width / 2,
+      812,
+      'Задания',
+      () => {
+        this.scene.start('QuestScene');
+      },
+      540,
+      76
+    );
+
+    createButton(
+      this,
+      width / 2,
+      904,
+      'Кузница',
+      () => {
+        this.scene.start('ForgeScene');
+      },
+      540,
+      76
+    );
+
+    createButton(
+      this,
+      width / 2,
+      996,
+      'Отдохнуть у костра',
+      () => {
+        const stats = getPlayerStats(player);
+
+        player.hp = stats.maxHp;
+        player.energy = player.maxEnergy;
+        player.potions = Math.max(player.potions, 2);
+
+        void saveGameAsync();
+
+        this.showRestMessage();
+      },
+      540,
+      76
+    );
+  }
+
+  private showRestMessage() {
+    const { width, height } = this.scale;
+
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
+      .setDepth(100);
+
+    const panel = this.add.rectangle(width / 2, height / 2, 560, 300, 0x171313)
+      .setStrokeStyle(3, 0x8b5a2b)
+      .setDepth(101);
+
+    const title = this.add.text(width / 2, height / 2 - 85, 'Отдых у костра', {
       fontFamily: 'Arial',
       fontSize: '34px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
 
-    createButton(this, width / 2, 760, 'Войти в катакомбы', () => {
-      this.scene.start('DungeonSelectScene');
-    }, 540, 68);
+    const text = this.add.text(
+      width / 2,
+      height / 2,
+      'Ты восстановил здоровье и энергию.\nЗелья пополнены минимум до 2.',
+      {
+        fontFamily: 'Arial',
+        fontSize: '23px',
+        color: '#d8c7a3',
+        align: 'center',
+        lineSpacing: 8,
+      }
+    ).setOrigin(0.5).setDepth(102);
 
-    createButton(this, width / 2, 845, 'Задания', () => {
-      this.scene.start('QuestScene');
-    }, 540, 68);
+    const closeBg = this.add.rectangle(width / 2, height / 2 + 95, 260, 60, 0x241515)
+      .setStrokeStyle(2, 0x8b5a2b)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
 
-    createButton(this, width / 2, 930, 'Кузница', () => {
-      this.scene.start('ForgeScene');
-    }, 540, 68);
-
-    createButton(this, width / 2, 1015, 'Отдохнуть у костра', () => {
-      const currentStats = getPlayerStats(player);
-    
-      player.hp = currentStats.maxHp;
-      player.energy = player.maxEnergy;
-      player.potions = 2;
-    
-      void saveGameAsync();
-    
-      this.scene.restart();
-    }, 540, 68);
-
-    this.add.text(width / 2, 1090, 'Катакомбы ждут тех, кому нечего терять.', {
+    const closeText = this.add.text(width / 2, height / 2 + 95, 'Хорошо', {
       fontFamily: 'Arial',
-      fontSize: '21px',
-      color: '#70675a',
-      align: 'center',
-      wordWrap: {
-        width: 560,
-      },
-    }).setOrigin(0.5);
+      fontSize: '24px',
+      color: '#f0d58a',
+    }).setOrigin(0.5).setDepth(103);
+
+    closeBg.on('pointerdown', () => {
+      overlay.destroy();
+      panel.destroy();
+      title.destroy();
+      text.destroy();
+      closeBg.destroy();
+      closeText.destroy();
+
+      this.scene.restart();
+    });
   }
 }

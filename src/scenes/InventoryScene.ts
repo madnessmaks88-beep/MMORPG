@@ -24,290 +24,360 @@ import {
 
 export class InventoryScene extends Phaser.Scene {
   private currentPage = 0;
-  private readonly itemsPerPage = 4;
+  private itemsPerPage = 4;
 
   constructor() {
     super('InventoryScene');
   }
 
-  init(data: { page?: number }) {
-    this.currentPage = data.page ?? 0;
+  init(data?: { page?: number }) {
+    this.currentPage = data?.page ?? 0;
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width } = this.scale;
     const stats = getPlayerStats(player);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+    this.createBackground();
 
-    this.add.text(width / 2, 70, 'Инвентарь', {
+    this.add.text(width / 2, 56, 'Инвентарь', {
       fontFamily: 'Arial',
-      fontSize: '56px',
-      color: '#d8b56d',
+      fontSize: '46px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.rectangle(width / 2, 185, 620, 120, 0x171313);
-
-    this.add.text(
-      width / 2,
-      185,
-      `HP: ${player.hp}/${stats.maxHp}    Атака: ${stats.attack}\nЗащита: ${stats.defense}    Крит: ${Math.round(stats.critChance * 100)}%`,
-      {
-        fontFamily: 'Arial',
-        fontSize: '24px',
-        color: '#e6d2aa',
-        align: 'center',
-        lineSpacing: 8,
-      }
-    ).setOrigin(0.5);
-
-    this.add.text(width / 2, 290, 'Экипировка', {
-      fontFamily: 'Arial',
-      fontSize: '34px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
-
+    this.createStatsPanel(stats);
     this.createEquipmentBlock();
+    this.createInventoryList();
+    this.createPageControls();
 
-    this.add.text(width / 2, 560, 'Предметы', {
+    createBottomNav(this, 'InventoryScene');
+  }
+
+  private createBackground() {
+    const { width, height } = this.scale;
+
+    this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x11100e, 0.9);
+
+    for (let i = 0; i < 18; i++) {
+      const x = Phaser.Math.Between(0, width);
+      const y = Phaser.Math.Between(0, height);
+      this.add.circle(x, y, Phaser.Math.Between(1, 3), 0xd8b56d, 0.07);
+    }
+  }
+
+  private createStatsPanel(stats: ReturnType<typeof getPlayerStats>) {
+    const { width } = this.scale;
+
+    this.add.rectangle(width / 2, 170, 620, 190, 0x0d0d0d, 0.9)
+      .setStrokeStyle(2, 0x8b5a2b);
+
+    this.add.text(width / 2, 94, 'Характеристики героя', {
       fontFamily: 'Arial',
-      fontSize: '34px',
-      color: '#e6d2aa',
+      fontSize: '25px',
+      color: '#f0d58a',
     }).setOrigin(0.5);
 
-    this.createInventoryList();
+    const leftText = [
+      `Уровень: ${player.level}`,
+      `HP: ${player.hp}/${stats.maxHp}`,
+      `Энергия: ${player.energy}/${player.maxEnergy}`,
+      `Атака: ${stats.attack}`,
+      `Защита: ${stats.defense}`,
+    ].join('\n');
 
-    createBottomNav(this, {
-      active: 'inventory',
-    });
+    const rightText = [
+      `Крит: ${Math.round(stats.critChance * 100)}%`,
+      `Ловкость: ${stats.agility}`,
+      `Уклонение: ${Math.round(stats.dodgeChance * 100)}%`,
+      `Удача: ${stats.luck}`,
+      `Добыча: +${Math.round(stats.lootChanceBonus * 100)}%`,
+    ].join('\n');
+
+    this.add.text(95, 135, leftText, {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#d8c7a3',
+      lineSpacing: 5,
+    }).setOrigin(0, 0);
+
+    this.add.text(390, 135, rightText, {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#d8c7a3',
+      lineSpacing: 5,
+    }).setOrigin(0, 0);
   }
 
   private createEquipmentBlock() {
     const { width } = this.scale;
 
-    const weaponInventoryItem = player.equipment.weapon
-      ? player.inventory.find(item => item.instanceId === player.equipment.weapon)
-      : undefined;
+    this.add.rectangle(width / 2, 330, 620, 120, 0x0d0d0d, 0.9)
+      .setStrokeStyle(2, 0x8b5a2b);
 
-    const armorInventoryItem = player.equipment.armor
-      ? player.inventory.find(item => item.instanceId === player.equipment.armor)
-      : undefined;
-
-    const trinketInventoryItem = player.equipment.trinket
-      ? player.inventory.find(item => item.instanceId === player.equipment.trinket)
-      : undefined;
-
-    const weapon = weaponInventoryItem
-      ? getBaseItemFromInventoryItem(weaponInventoryItem)
-      : undefined;
-
-    const armor = armorInventoryItem
-      ? getBaseItemFromInventoryItem(armorInventoryItem)
-      : undefined;
-
-    const trinket = trinketInventoryItem
-      ? getBaseItemFromInventoryItem(trinketInventoryItem)
-      : undefined;
-
-    const lines = [
-      `Оружие: ${weapon ? `${weapon.name} +${weaponInventoryItem?.upgradeLevel ?? 0}` : 'пусто'}`,
-      `Броня: ${armor ? `${armor.name} +${armorInventoryItem?.upgradeLevel ?? 0}` : 'пусто'}`,
-      `Амулет: ${trinket ? `${trinket.name} +${trinketInventoryItem?.upgradeLevel ?? 0}` : 'пусто'}`,
-    ];
-
-    this.add.rectangle(width / 2, 405, 620, 185, 0x121212);
-
-    this.add.text(width / 2, 375, lines.join('\n'), {
+    this.add.text(width / 2, 280, 'Экипировка', {
       fontFamily: 'Arial',
       fontSize: '25px',
-      color: '#b8aa91',
-      align: 'center',
-      lineSpacing: 10,
+      color: '#f0d58a',
     }).setOrigin(0.5);
 
-    createButton(this, width / 2, 485, 'Снять всё', () => {
-      unequipItem(player, 'weapon');
-      unequipItem(player, 'armor');
-      unequipItem(player, 'trinket');
+    const slots = [
+      { key: 'weapon', label: 'Оружие' },
+      { key: 'armor', label: 'Броня' },
+      { key: 'trinket', label: 'Амулет' },
+    ] as const;
 
-      void saveGameAsync();
+    slots.forEach((slot, index) => {
+      const x = 130 + index * 230;
+      const equippedInstanceId = player.equipment[slot.key];
+      const inventoryItem = player.inventory.find(
+        item => item.instanceId === equippedInstanceId
+      );
 
-      this.scene.restart({
-        page: this.currentPage,
-      });
-    }, 360, 58);
+      const item = inventoryItem
+        ? getBaseItemFromInventoryItem(inventoryItem)
+        : undefined;
+
+      const text = item && inventoryItem
+        ? `${slot.label}\n${item.name} +${getItemUpgradeLevel(inventoryItem)}`
+        : `${slot.label}\nПусто`;
+
+      this.add.text(x, 330, text, {
+        fontFamily: 'Arial',
+        fontSize: '18px',
+        color: item ? getRarityColor(item) : '#8f826d',
+        align: 'center',
+        lineSpacing: 5,
+      }).setOrigin(0.5);
+
+      if (item && inventoryItem) {
+        const unequipBg = this.add.rectangle(x, 385, 120, 34, 0x241515)
+          .setStrokeStyle(1, 0x8b5a2b)
+          .setInteractive({ useHandCursor: true });
+
+        this.add.text(x, 385, 'Снять', {
+          fontFamily: 'Arial',
+          fontSize: '16px',
+          color: '#f0d58a',
+        }).setOrigin(0.5);
+
+        unequipBg.on('pointerdown', () => {
+          unequipItem(player, item.slot);
+          void saveGameAsync();
+
+          this.scene.restart({
+            page: this.currentPage,
+          });
+        });
+      }
+    });
   }
 
   private createInventoryList() {
     const { width } = this.scale;
 
-    if (player.inventory.length === 0) {
-      this.add.rectangle(width / 2, 780, 620, 320, 0x121212);
+    this.add.text(width / 2, 430, `Предметы: ${player.inventory.length}`, {
+      fontFamily: 'Arial',
+      fontSize: '28px',
+      color: '#f0d58a',
+    }).setOrigin(0.5);
 
-      this.add.text(width / 2, 780, 'Инвентарь пуст.\nОткрой сундук или победи врага.', {
+    if (player.inventory.length === 0) {
+      this.add.text(width / 2, 610, 'Инвентарь пуст.', {
         fontFamily: 'Arial',
-        fontSize: '28px',
+        fontSize: '26px',
         color: '#8f826d',
-        align: 'center',
-        lineSpacing: 8,
       }).setOrigin(0.5);
 
       return;
     }
 
-    const totalPages = Math.max(1, Math.ceil(player.inventory.length / this.itemsPerPage));
+    const start = this.currentPage * this.itemsPerPage;
+    const pageItems = player.inventory.slice(start, start + this.itemsPerPage);
 
-    if (this.currentPage > totalPages - 1) {
-      this.currentPage = totalPages - 1;
-    }
-
-    if (this.currentPage < 0) {
-      this.currentPage = 0;
-    }
-
-    const startIndex = this.currentPage * this.itemsPerPage;
-    const visibleItems = player.inventory.slice(startIndex, startIndex + this.itemsPerPage);
-
-    visibleItems.forEach((inventoryItem, index) => {
+    pageItems.forEach((inventoryItem, index) => {
       const item = getBaseItemFromInventoryItem(inventoryItem);
 
       if (!item) {
         return;
       }
 
-      const y = 640 + index * 105;
-      const isEquipped = isItemEquipped(player, inventoryItem.instanceId);
-      const sellPrice = getItemSellPrice(item, inventoryItem.upgradeLevel);
+      const y = 520 + index * 118;
+      const equipped = isItemEquipped(player, inventoryItem.instanceId);
       const upgradeLevel = getItemUpgradeLevel(inventoryItem);
-      const statsText = createItemStatsText(inventoryItem);
-      const equippedText = isEquipped ? ' [надето]' : '';
+      const sellPrice = getItemSellPrice(item, upgradeLevel);
 
-      const itemBg = this.add.rectangle(width / 2, y, 620, 88, 0x121212);
-      itemBg.setStrokeStyle(2, getRarityStrokeColor(item));
+      const itemBg = this.add.rectangle(width / 2, y, 620, 100, 0x0d0d0d, 0.92)
+        .setStrokeStyle(2, getRarityStrokeColor(item));
 
-      this.add.text(75, y, getSlotIcon(item), {
+      if (equipped) {
+        itemBg.setFillStyle(0x142015, 0.95);
+      }
+
+      this.add.text(80, y, getSlotIcon(item), {
         fontFamily: 'Arial',
-        fontSize: '34px',
+        fontSize: '36px',
         color: getRarityColor(item),
       }).setOrigin(0.5);
 
-      this.add.text(
-        115,
-        y - 24,
-        `${item.name} +${upgradeLevel}${equippedText}`,
-        {
-          fontFamily: 'Arial',
-          fontSize: '20px',
-          color: isEquipped ? '#d8b56d' : getRarityColor(item),
-          wordWrap: {
-            width: 360,
-          },
-        }
-      ).setOrigin(0, 0.5);
+      this.add.text(120, y - 31, `${item.name} +${upgradeLevel}`, {
+        fontFamily: 'Arial',
+        fontSize: '21px',
+        color: getRarityColor(item),
+      }).setOrigin(0, 0.5);
 
-      this.add.text(
-        115,
-        y + 2,
-        `${getSlotText(item)} • ${getRarityText(item)}`,
-        {
-          fontFamily: 'Arial',
-          fontSize: '17px',
-          color: '#8f826d',
-        }
-      ).setOrigin(0, 0.5);
+      this.add.text(120, y - 5, `${getSlotText(item)} • ${getRarityText(item)}`, {
+        fontFamily: 'Arial',
+        fontSize: '16px',
+        color: '#9c8f7a',
+      }).setOrigin(0, 0.5);
 
-      this.add.text(
-        115,
-        y + 27,
-        statsText,
-        {
-          fontFamily: 'Arial',
-          fontSize: '17px',
-          color: '#b8aa91',
-          wordWrap: {
-            width: 360,
-          },
-        }
-      ).setOrigin(0, 0.5);
+      this.add.text(120, y + 24, createItemStatsText(inventoryItem), {
+        fontFamily: 'Arial',
+        fontSize: '15px',
+        color: '#d8c7a3',
+      }).setOrigin(0, 0.5);
 
-      createButton(this, 560, y - 20, 'Надеть', () => {
-        equipItem(player, inventoryItem.instanceId);
+      const equipText = equipped ? 'Надето' : 'Надеть';
 
-        void saveGameAsync();
+      const equipBg = this.add.rectangle(525, y - 20, 130, 38, equipped ? 0x1b2a1b : 0x241515)
+        .setStrokeStyle(1, equipped ? 0x75d184 : 0x8b5a2b)
+        .setInteractive({ useHandCursor: !equipped });
 
-        this.scene.restart({
-          page: this.currentPage,
+      this.add.text(525, y - 20, equipText, {
+        fontFamily: 'Arial',
+        fontSize: '17px',
+        color: equipped ? '#75d184' : '#f0d58a',
+      }).setOrigin(0.5);
+
+      if (!equipped) {
+        equipBg.on('pointerdown', () => {
+          equipItem(player, inventoryItem.instanceId);
+          void saveGameAsync();
+
+          this.scene.restart({
+            page: this.currentPage,
+          });
         });
-      }, 135, 40);
+      }
 
-      createButton(this, 560, y + 24, `${sellPrice} зол.`, () => {
-        const result = sellItem(player, inventoryItem.instanceId);
+      const sellBg = this.add.rectangle(525, y + 27, 130, 38, equipped ? 0x222222 : 0x241515)
+        .setStrokeStyle(1, equipped ? 0x555555 : 0x8b5a2b)
+        .setInteractive({ useHandCursor: !equipped });
 
-        void saveGameAsync();
+      this.add.text(525, y + 27, `Продать ${sellPrice}`, {
+        fontFamily: 'Arial',
+        fontSize: '15px',
+        color: equipped ? '#777777' : '#f0d58a',
+      }).setOrigin(0.5);
 
-        this.showMessage(result.message);
-      }, 135, 40);
+      if (!equipped) {
+        sellBg.on('pointerdown', () => {
+          const result = sellItem(player, inventoryItem.instanceId);
+
+          if (result.success) {
+            void saveGameAsync();
+
+            const maxPage = Math.max(
+              0,
+              Math.ceil(player.inventory.length / this.itemsPerPage) - 1
+            );
+
+            this.currentPage = Math.min(this.currentPage, maxPage);
+
+            this.scene.restart({
+              page: this.currentPage,
+            });
+          } else {
+            this.showMessage(result.message);
+          }
+        });
+      }
     });
-
-    this.createPageControls(totalPages);
   }
 
-  private createPageControls(totalPages: number) {
+  private createPageControls() {
     const { width } = this.scale;
 
-    const y = 1085;
+    const totalPages = Math.max(1, Math.ceil(player.inventory.length / this.itemsPerPage));
 
-    createButton(this, 160, y, '<', () => {
-      if (this.currentPage <= 0) {
-        return;
-      }
-
-      this.scene.restart({
-        page: this.currentPage - 1,
-      });
-    }, 120, 52);
-
-    this.add.text(width / 2, y, `Страница ${this.currentPage + 1}/${totalPages}`, {
+    this.add.text(width / 2, 1000, `Страница ${this.currentPage + 1}/${totalPages}`, {
       fontFamily: 'Arial',
-      fontSize: '24px',
-      color: '#e6d2aa',
+      fontSize: '22px',
+      color: '#d8c7a3',
     }).setOrigin(0.5);
 
-    createButton(this, width - 160, y, '>', () => {
-      if (this.currentPage >= totalPages - 1) {
-        return;
-      }
+    createButton(
+      this,
+      190,
+      1055,
+      'Назад',
+      () => {
+        if (this.currentPage > 0) {
+          this.scene.restart({
+            page: this.currentPage - 1,
+          });
+        }
+      },
+      220,
+      60
+    );
 
-      this.scene.restart({
-        page: this.currentPage + 1,
-      });
-    }, 120, 52);
+    createButton(
+      this,
+      530,
+      1055,
+      'Далее',
+      () => {
+        if (this.currentPage < totalPages - 1) {
+          this.scene.restart({
+            page: this.currentPage + 1,
+          });
+        }
+      },
+      220,
+      60
+    );
   }
 
   private showMessage(message: string) {
     const { width, height } = this.scale;
 
-    this.children.removeAll();
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
+      .setDepth(100);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+    const panel = this.add.rectangle(width / 2, height / 2, 560, 240, 0x171313)
+      .setStrokeStyle(3, 0x8b5a2b)
+      .setDepth(101);
 
-    this.add.rectangle(width / 2, height / 2, 620, 330, 0x181414);
-    this.add.rectangle(width / 2, height / 2, 580, 290, 0x0d0d0d);
-
-    this.add.text(width / 2, height / 2 - 35, message, {
+    const text = this.add.text(width / 2, height / 2 - 35, message, {
       fontFamily: 'Arial',
-      fontSize: '29px',
-      color: '#e6d2aa',
+      fontSize: '24px',
+      color: '#d8c7a3',
       align: 'center',
-      wordWrap: {
-        width: 520,
-      },
-    }).setOrigin(0.5);
+      lineSpacing: 8,
+    }).setOrigin(0.5).setDepth(102);
 
-    createButton(this, width / 2, height / 2 + 105, 'Продолжить', () => {
-      this.scene.restart({
-        page: this.currentPage,
-      });
-    }, 440, 70);
+    const closeBg = this.add.rectangle(width / 2, height / 2 + 70, 240, 58, 0x241515)
+      .setStrokeStyle(2, 0x8b5a2b)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
+
+    const closeText = this.add.text(width / 2, height / 2 + 70, 'Ок', {
+      fontFamily: 'Arial',
+      fontSize: '24px',
+      color: '#f0d58a',
+    }).setOrigin(0.5).setDepth(103);
+
+    closeBg.on('pointerdown', () => {
+      overlay.destroy();
+      panel.destroy();
+      text.destroy();
+      closeBg.destroy();
+      closeText.destroy();
+    });
   }
 }
