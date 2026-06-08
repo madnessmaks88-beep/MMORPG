@@ -53,7 +53,9 @@ export class InventoryScene extends Phaser.Scene {
     this.createInventoryList();
     this.createPageControls();
 
-    createBottomNav(this, 'InventoryScene');
+    createBottomNav(this, {
+		  active: 'shop',
+		});
   }
 
   private createBackground() {
