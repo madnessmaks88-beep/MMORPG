@@ -22,8 +22,9 @@ export class CampScene extends Phaser.Scene {
   create() {
     this.createBackground();
     this.createHeader();
-    this.createHeroCard();
-    this.createActionPanel();
+    this.createHeroSummary();
+    this.createMainActions();
+    this.createRunInfo();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
@@ -33,21 +34,22 @@ export class CampScene extends Phaser.Scene {
   private createBackground() {
     const { width, height } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080706);
-    this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.92);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x070605);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.94);
 
-    for (let i = 0; i < 42; i++) {
-      const x = Phaser.Math.Between(25, width - 25);
+    for (let i = 0; i < 46; i++) {
+      const x = Phaser.Math.Between(24, width - 24);
       const y = Phaser.Math.Between(30, height - 145);
       const size = Phaser.Math.Between(1, 3);
 
       this.add.circle(x, y, size, 0xd8b56d, 0.055);
     }
 
-    this.add.circle(width / 2, 150, 95, 0x8b2f16, 0.16);
-    this.add.circle(width / 2, 150, 55, 0xf0a348, 0.12);
+    this.add.circle(width / 2, 186, 120, 0x9b3519, 0.13);
+    this.add.circle(width / 2, 186, 70, 0xf0a348, 0.12);
+    this.add.circle(width / 2, 186, 34, 0xf0d58a, 0.08);
 
-    this.add.rectangle(width / 2, height - 158, width, 290, 0x050505, 0.55);
+    this.add.rectangle(width / 2, height - 160, width, 300, 0x050505, 0.58);
     this.add.rectangle(width / 2, height - 112, width, 2, 0x8b5a2b, 0.7);
   }
 
@@ -55,113 +57,98 @@ export class CampScene extends Phaser.Scene {
     const { width } = this.scale;
 
     const vkUser = getCachedVKUser();
-    const vkName = vkUser ? `${vkUser.first_name}` : 'локальный режим';
+    const vkName = vkUser ? vkUser.first_name : 'локальный режим';
 
-    this.add.text(width / 2, 45, 'Лагерь у входа', {
+    this.add.text(width / 2, 48, 'Лагерь у входа', {
       fontFamily: 'Arial',
-      fontSize: '38px',
+      fontSize: '40px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 84, `Игрок: ${vkName}`, {
+    this.add.text(width / 2, 88, `Игрок: ${vkName}`, {
       fontFamily: 'Arial',
       fontSize: '17px',
       color: '#9c8f7a',
     }).setOrigin(0.5);
+
+    this.add.text(width / 2, 126, 'Тихое место перед спуском в катакомбы', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#70675a',
+    }).setOrigin(0.5);
   }
 
-  private createHeroCard() {
+  private createHeroSummary() {
     const { width } = this.scale;
 
-    const stats = getPlayerStats(player);
     const race = player.raceId ? getRaceById(player.raceId) : null;
+    const relicNames = player.relicIds
+      .map(id => getRelicById(id)?.name)
+      .filter(Boolean);
 
-    const cardY = 235;
+    const panelY = 270;
 
-    this.add.rectangle(width / 2, cardY, 620, 260, 0x0d0d0d, 0.96)
+    this.add.rectangle(width / 2, panelY, 620, 220, 0x0d0d0d, 0.96)
       .setStrokeStyle(2, 0x8b5a2b);
 
-    this.add.text(width / 2, cardY - 105, player.name, {
+    this.add.text(width / 2, panelY - 78, player.name, {
       fontFamily: 'Arial',
-      fontSize: '30px',
+      fontSize: '32px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, cardY - 72, race ? `Раса: ${race.name}` : 'Раса не выбрана', {
+    this.add.text(width / 2, panelY - 42, race ? race.name : 'Раса не выбрана', {
       fontFamily: 'Arial',
-      fontSize: '18px',
+      fontSize: '20px',
       color: '#d8c7a3',
     }).setOrigin(0.5);
 
-    this.add.rectangle(width / 2, cardY - 42, 540, 1, 0x8b5a2b, 0.45);
+    this.add.rectangle(width / 2, panelY - 12, 540, 1, 0x8b5a2b, 0.45);
 
-    const leftStats = [
-      `Уровень: ${player.level}`,
-      `Опыт: ${player.exp}/${player.expToNextLevel}`,
+    const summary = [
+      `Уровень ${player.level}`,
       `Золото: ${player.gold}`,
-      `HP: ${player.hp}/${stats.maxHp}`,
-      `Энергия: ${player.energy}/${stats.maxEnergy}`,
       `Зелья: ${player.potions}`,
-    ].join('\n');
+    ].join('  •  ');
 
-    const rightStats = [
-      `Атака: ${stats.attack}`,
-      `Защита: ${stats.defense}`,
-      `Крит: ${Math.round(stats.critChance * 100)}%`,
-      `Ловкость: ${stats.agility}`,
-      `Уклонение: ${Math.round(stats.dodgeChance * 100)}%`,
-      `Удача: ${stats.luck}`,
-    ].join('\n');
-
-    this.add.text(width / 2 - 255, cardY - 15, leftStats, {
+    this.add.text(width / 2, panelY + 24, summary, {
       fontFamily: 'Arial',
-      fontSize: '18px',
+      fontSize: '19px',
       color: '#d8c7a3',
-      lineSpacing: 5,
-    }).setOrigin(0, 0);
-
-    this.add.text(width / 2 + 35, cardY - 15, rightStats, {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#d8c7a3',
-      lineSpacing: 5,
-    }).setOrigin(0, 0);
-
-    const relicNames = player.relicIds
-      .map(id => getRelicById(id)?.name)
-      .filter(Boolean);
+      align: 'center',
+    }).setOrigin(0.5);
 
     const relicText =
       relicNames.length > 0
         ? `Реликвии: ${relicNames.join(', ')}`
         : 'Реликвии: нет';
 
-    this.add.text(width / 2, cardY + 105, relicText, {
+    this.add.text(width / 2, panelY + 66, relicText, {
       fontFamily: 'Arial',
-      fontSize: '15px',
+      fontSize: '16px',
       color: relicNames.length > 0 ? '#f0d58a' : '#70675a',
       align: 'center',
       wordWrap: {
-        width: 560,
+        width: 540,
       },
     }).setOrigin(0.5);
   }
 
-  private createActionPanel() {
+  private createMainActions() {
     const { width } = this.scale;
 
-    const panelY = 630;
+    const panelY = 620;
 
-    this.add.rectangle(width / 2, panelY, 620, 490, 0x0d0d0d, 0.94)
+    this.add.rectangle(width / 2, panelY, 620, 430, 0x0d0d0d, 0.95)
       .setStrokeStyle(2, 0x8b5a2b);
 
-    this.add.text(width / 2, panelY - 215, 'Действия', {
+    this.add.text(width / 2, panelY - 180, 'Что делаем?', {
       fontFamily: 'Arial',
-      fontSize: '30px',
+      fontSize: '31px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 4,
@@ -175,10 +162,12 @@ export class CampScene extends Phaser.Scene {
       ? `Продолжить спуск: этаж ${gameState.floorRun.currentFloor}`
       : 'Войти в катакомбы';
 
+    let y = panelY - 112;
+
     createButton(
       this,
       width / 2,
-      panelY - 150,
+      y,
       dungeonButtonText,
       () => {
         if (hasActiveRun) {
@@ -189,30 +178,31 @@ export class CampScene extends Phaser.Scene {
         this.scene.start('DungeonSelectScene');
       },
       540,
-      58
+      62
     );
+
+    y += 72;
 
     if (hasActiveRun) {
       createButton(
         this,
         width / 2,
-        panelY - 88,
+        y,
         'Покинуть спуск',
         () => {
           this.showLeaveRunMessage();
         },
         540,
-        52
+        56
       );
-    }
 
-    const buttonStartY = hasActiveRun ? panelY - 25 : panelY - 80;
-    const gap = 62;
+      y += 66;
+    }
 
     createButton(
       this,
       width / 2,
-      buttonStartY,
+      y,
       'Задания',
       () => {
         this.scene.start('QuestScene');
@@ -221,10 +211,12 @@ export class CampScene extends Phaser.Scene {
       56
     );
 
+    y += 66;
+
     createButton(
       this,
       width / 2,
-      buttonStartY + gap,
+      y,
       'Кузница',
       () => {
         this.scene.start('ForgeScene');
@@ -232,6 +224,8 @@ export class CampScene extends Phaser.Scene {
       540,
       56
     );
+
+    y += 66;
 
     const cooldownLeft = this.getCampfireCooldownLeft();
     const restButtonText =
@@ -242,39 +236,47 @@ export class CampScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
-      buttonStartY + gap * 2,
+      y,
       restButtonText,
       () => {
         const currentCooldownLeft = this.getCampfireCooldownLeft();
-      
+
         if (currentCooldownLeft > 0) {
           this.showRestCooldownMessage(currentCooldownLeft);
           return;
         }
-      
+
         const stats = getPlayerStats(player);
-      
+
         player.hp = stats.maxHp;
         player.energy = stats.maxEnergy;
         player.potions = Math.max(player.potions, 2);
-      
+
         gameState.lastCampRestAt = Date.now();
-      
+
         void saveGameAsync();
-      
+
         this.showRestMessage();
       },
       540,
       56
     );
-
-    this.createSmallInfo(panelY + 165);
   }
 
-  private createSmallInfo(y: number) {
+  private createRunInfo() {
     const { width } = this.scale;
 
-    const nextTier = gameState.highestClearedTier + 1;
+    const panelY = 900;
+
+    this.add.rectangle(width / 2, panelY, 620, 135, 0x0d0d0d, 0.92)
+      .setStrokeStyle(2, 0x3a2518);
+
+    this.add.text(width / 2, panelY - 42, 'Прогресс', {
+      fontFamily: 'Arial',
+      fontSize: '23px',
+      color: '#f0d58a',
+    }).setOrigin(0.5);
+
     const activeRunText = gameState.floorRun.active
       ? `Активный спуск: этаж ${gameState.floorRun.currentFloor}`
       : 'Активный спуск: нет';
@@ -282,18 +284,16 @@ export class CampScene extends Phaser.Scene {
     const text = [
       `Рекорд этажа: ${gameState.highestClearedFloor}`,
       `Пройдено ярусов: ${gameState.highestClearedTier}`,
-      `Следующий ярус: ${nextTier}`,
+      `Следующий ярус: ${gameState.highestClearedTier + 1}`,
       activeRunText,
-    ].join('  •  ');
+    ].join('\n');
 
-    this.add.text(width / 2, y, text, {
+    this.add.text(width / 2, panelY + 18, text, {
       fontFamily: 'Arial',
-      fontSize: '15px',
-      color: '#8f806d',
+      fontSize: '17px',
+      color: '#d8c7a3',
       align: 'center',
-      wordWrap: {
-        width: 560,
-      },
+      lineSpacing: 5,
     }).setOrigin(0.5);
   }
 
