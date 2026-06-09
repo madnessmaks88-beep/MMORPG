@@ -8,7 +8,6 @@ import { trackEnemyKilled, trackGoldEarned } from '../systems/QuestSystem';
 import { getRandomLootItem } from '../data/items';
 import {
   restoreEnergy,
-  useHealingPotion,
 } from '../systems/BattleSystem';
 import {
   gameState,
@@ -65,6 +64,8 @@ export class BattleScene extends Phaser.Scene {
   private energyText!: Phaser.GameObjects.Text;
   private potionText!: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
+
+  private actionButtons: Phaser.GameObjects.GameObject[] = [];
 
   private playerHpBar!: Phaser.GameObjects.Rectangle;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
@@ -165,14 +166,22 @@ export class BattleScene extends Phaser.Scene {
 
   private createActionButtons() {
     const { width } = this.scale;
-
-    createPanel(this, width / 2, 1060, 620, 300, {
+    
+    this.actionButtons.forEach(object => {
+      object.destroy();
+    });
+  
+    this.actionButtons = [];
+  
+    const panel = createPanel(this, width / 2, 1060, 620, 300, {
       alpha: 0.86,
       stroke: true,
       warm: false,
     });
-
-    createButton(
+  
+    this.actionButtons.push(panel);
+  
+    const attackButton = createButton(
       this,
       width / 2,
       920,
@@ -181,8 +190,14 @@ export class BattleScene extends Phaser.Scene {
       540,
       54
     );
-
-    createButton(
+  
+    this.actionButtons.push(
+      attackButton.shadow,
+      attackButton.bg,
+      attackButton.label
+    );
+  
+    const powerButton = createButton(
       this,
       width / 2,
       982,
@@ -194,13 +209,19 @@ export class BattleScene extends Phaser.Scene {
         disabled: player.energy < 2,
       }
     );
-
+  
+    this.actionButtons.push(
+      powerButton.shadow,
+      powerButton.bg,
+      powerButton.label
+    );
+  
     const desperateText =
       this.desperateStrikeCooldown > 0
         ? `Отчаянный удар  •  КД ${this.desperateStrikeCooldown}`
         : 'Отчаянный удар  •  3 энергии';
-
-    createButton(
+  
+    const desperateButton = createButton(
       this,
       width / 2,
       1044,
@@ -215,8 +236,14 @@ export class BattleScene extends Phaser.Scene {
           this.desperateStrikeCooldown > 0,
       }
     );
-
-    createButton(
+  
+    this.actionButtons.push(
+      desperateButton.shadow,
+      desperateButton.bg,
+      desperateButton.label
+    );
+  
+    const defendButton = createButton(
       this,
       width / 2,
       1106,
@@ -225,8 +252,14 @@ export class BattleScene extends Phaser.Scene {
       540,
       54
     );
-
-    createButton(
+  
+    this.actionButtons.push(
+      defendButton.shadow,
+      defendButton.bg,
+      defendButton.label
+    );
+  
+    const potionButton = createButton(
       this,
       width / 2,
       1168,
@@ -238,22 +271,28 @@ export class BattleScene extends Phaser.Scene {
         disabled: player.potions <= 0,
       }
     );
+  
+    this.actionButtons.push(
+      potionButton.shadow,
+      potionButton.bg,
+      potionButton.label
+    );
   }
 
   private handleDefend() {
     if (this.isBattleEnded || this.isBusy) {
       return;
     }
-  
+
     this.isBusy = true;
-  
+
     restoreEnergy(player, 1);
-  
+
     const playerActionText = 'Ты занял защитную стойку.\nЭнергия восстановлена на 1.';
-  
+
     this.logText.setText(playerActionText);
     this.updateTexts();
-  
+
     this.time.delayedCall(450, () => {
       this.enemyTurn(playerActionText, true);
     });
@@ -975,25 +1014,43 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handlePotion() {
-    if (!this.canAct()) return;
+    if (this.isBattleEnded || this.isBusy) {
+      return;
+    }
 
     if (player.potions <= 0) {
       this.logText.setText('Зелий больше нет.');
+      this.updateTexts();
+      return;
+    }
+
+    const stats = this.getBattleStats();
+
+    if (player.hp >= stats.maxHp) {
+      this.logText.setText('HP уже полное. Зелье не потрачено.');
+      this.updateTexts();
       return;
     }
 
     this.isBusy = true;
 
-    const healAmount = useHealingPotion(player);
+    player.potions = Math.max(0, player.potions - 1);
 
-    this.showFloatingText(
-      this.playerCard.x,
-      this.playerCard.y - 55,
-      `+${healAmount}`,
-      '#75d184'
-    );
+    const healAmount = Math.floor(stats.maxHp * 0.35);
+    player.hp = Math.min(stats.maxHp, player.hp + healAmount);
 
-    this.enemyTurn(`Ты выпиваешь зелье и восстанавливаешь ${healAmount} HP.`);
+    const playerActionText = `Ты выпил зелье и восстановил ${healAmount} HP.`;
+
+    this.logText.setText(playerActionText);
+
+    this.updateTexts();
+    this.createActionButtons();
+
+    void saveGameAsync();
+
+    this.time.delayedCall(450, () => {
+      this.enemyTurn(playerActionText);
+    });
   }
 
   private enemyTurn(playerActionText: string, isDefending = false) {
@@ -1023,6 +1080,7 @@ export class BattleScene extends Phaser.Scene {
         this.updateTexts();
         this.tickDesperateStrikeCooldown();
         this.isBusy = false;
+        this.createActionButtons();
 
         return;
       }
@@ -1088,6 +1146,7 @@ export class BattleScene extends Phaser.Scene {
       this.updateTexts();
       this.tickDesperateStrikeCooldown();
       this.isBusy = false;
+      this.createActionButtons();
     });
   }
 
@@ -1097,30 +1156,28 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private canAct(): boolean {
-    return !this.isBattleEnded && !this.isBusy;
-  }
-
   private updateTexts() {
     const stats = this.getBattleStats();
-
-    player.hp = Math.min(player.hp, stats.maxHp);
+    
+    player.hp = Phaser.Math.Clamp(player.hp, 0, stats.maxHp);
     player.energy = Phaser.Math.Clamp(player.energy, 0, stats.maxEnergy);
-
+    player.potions = Math.max(0, player.potions);
+    
     this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
     this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
+    
     this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
-
+    
     if (this.potionText) {
       this.potionText.setText(`Зелья: ${player.potions}`);
     }
-
+  
     const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
     const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
     const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
-
-    this.playerHpBar.width = 520 * playerHpRatio;
-    this.enemyHpBar.width = 520 * enemyHpRatio;
-    this.energyBar.width = 520 * energyRatio;
+  
+    this.playerHpBar.displayWidth = 520 * playerHpRatio;
+    this.enemyHpBar.displayWidth = 520 * enemyHpRatio;
+    this.energyBar.displayWidth = 520 * energyRatio;
   }
 }
