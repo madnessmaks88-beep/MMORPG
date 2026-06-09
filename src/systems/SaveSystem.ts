@@ -112,6 +112,9 @@ function fixMissingPlayerFields() {
   if (player.agility === undefined) player.agility = 5;
   if (player.luck === undefined) player.luck = 5;
 
+  if (player.strength === undefined) player.strength = player.attack ?? 11;
+  if (player.intelligence === undefined) player.intelligence = 11;
+
   if (!player.inventory) player.inventory = [];
   if (!player.equipment) player.equipment = {};
 }
@@ -155,6 +158,10 @@ function fixMissingGameStateFields() {
 
   if (!gameState.unlockedDungeonIds) {
     gameState.unlockedDungeonIds = ['old_catacombs'];
+  }
+
+  if (gameState.lastCampRestAt === undefined) {
+    gameState.lastCampRestAt = 0;
   }
 
   if (!gameState.questProgress) {

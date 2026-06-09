@@ -11,6 +11,9 @@ export const gameState = {
   currentRoomIndex: 0,
   dungeonCompleted: false,
   unlockedDungeonIds: ['old_catacombs'],
+
+  lastCampRestAt: 0,
+
   questProgress: {
     enemiesKilled: 0,
     chestsOpened: 0,

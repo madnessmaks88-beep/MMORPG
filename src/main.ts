@@ -10,6 +10,7 @@ import { DungeonSelectScene } from './scenes/DungeonSelectScene';
 import { ShopScene } from './scenes/ShopScene';
 import { QuestScene } from './scenes/QuestScene';
 import { ForgeScene } from './scenes/ForgeScene';
+import { RaceSelectScene } from './scenes/RaceSelectScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -19,6 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'app',
   scene: [
     BootScene,
+    RaceSelectScene,
     MainMenuScene,
     CampScene,
     DungeonSelectScene,

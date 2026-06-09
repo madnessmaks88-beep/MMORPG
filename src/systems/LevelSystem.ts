@@ -20,16 +20,24 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
     player.level += 1;
     levelsGained += 1;
 
-    player.expToNextLevel = Math.floor(player.expToNextLevel * 1.35);
+    player.expToNextLevel = Math.floor(player.expToNextLevel * 1.55);
 
-    player.maxHp += 18;
-    player.attack += 3;
-    player.defense += 1;
+    player.maxHp += 10;
+    player.attack += 1;
 
-    player.agility += 1;
-    player.luck += 1;
+    if (player.level % 2 === 0) {
+      player.defense += 1;
+    }
+
+    if (player.level % 2 === 0) {
+      player.agility += 1;
+    }
 
     if (player.level % 3 === 0) {
+      player.luck += 1;
+    }
+
+    if (player.level % 4 === 0) {
       player.maxEnergy += 1;
     }
   }
@@ -55,28 +63,33 @@ export function createLevelUpText(result: LevelUpResult): string {
   }
 
   if (result.levelsGained === 1) {
-    return [
+    const lines = [
       `Новый уровень: ${result.newLevel}`,
       '',
-      '+18 к максимальному HP',
-      '+3 к атаке',
-      '+1 к защите',
-      '+1 к ловкости',
-      '+1 к удаче',
-      result.newLevel % 3 === 0 ? '+1 к максимальной энергии' : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+      '+10 к максимальному HP',
+      '+1 к атаке',
+    ];
+
+    if (result.newLevel % 2 === 0) {
+      lines.push('+1 к защите');
+      lines.push('+1 к ловкости');
+    }
+
+    if (result.newLevel % 3 === 0) {
+      lines.push('+1 к удаче');
+    }
+
+    if (result.newLevel % 4 === 0) {
+      lines.push('+1 к максимальной энергии');
+    }
+
+    return lines.join('\n');
   }
 
   return [
     `Получено уровней: ${result.levelsGained}`,
     `Новый уровень: ${result.newLevel}`,
     '',
-    `+${18 * result.levelsGained} к максимальному HP`,
-    `+${3 * result.levelsGained} к атаке`,
-    `+${result.levelsGained} к защите`,
-    `+${result.levelsGained} к ловкости`,
-    `+${result.levelsGained} к удаче`,
+    'Характеристики немного выросли.',
   ].join('\n');
 }

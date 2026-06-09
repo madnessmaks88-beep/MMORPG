@@ -245,18 +245,18 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private openChest() {
-    const gold = Phaser.Math.Between(12, 28);
+    const gold = Phaser.Math.Between(6, 16);
 
     player.gold += gold;
 
     trackChestOpened();
     trackGoldEarned(gold);
 
-    const expResult = addExperience(player, 12);
+    const expResult = addExperience(player, 6);
 
     let itemText = '';
 
-    if (rollItemDrop(player, 0.45)) {
+    if (rollItemDrop(player, 0.25)) {
       const item = getRandomLootItem();
 
       addItemToInventory(player, item.id);
@@ -275,7 +275,7 @@ export class DungeonScene extends Phaser.Scene {
     void saveGameAsync();
 
     this.showMessage(
-      `Ты открыл сундук.\n\nЗолото: +${gold}\nОпыт: +12${itemText}${levelText}`,
+      `Ты открыл сундук.\n\nЗолото: +${gold}\nОпыт: +6${itemText}${levelText}`,
       () => {
         this.scene.restart();
       }

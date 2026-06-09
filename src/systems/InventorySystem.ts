@@ -234,9 +234,9 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
     agility: player.agility,
     luck: player.luck,
 
-    dodgeChance: Math.min(0.35, player.agility * 0.015),
-    trapDodgeChance: Math.min(0.45, player.agility * 0.02),
-    lootChanceBonus: Math.min(0.35, player.luck * 0.015),
+    dodgeChance: Math.min(0.22, player.agility * 0.01),
+    trapDodgeChance: Math.min(0.30, player.agility * 0.012),
+    lootChanceBonus: Math.min(0.20, player.luck * 0.01),
   };
 
   // дальше твой код с экипировкой

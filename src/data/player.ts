@@ -1,3 +1,5 @@
+import type { RaceId } from './races';
+
 export type EquipmentSlot = 'weapon' | 'armor' | 'trinket';
 
 export type PlayerEquipment = {
@@ -14,6 +16,9 @@ export type InventoryItem = {
 
 export type PlayerData = {
   name: string;
+
+  raceId?: RaceId;
+
   level: number;
   exp: number;
   expToNextLevel: number;
@@ -34,15 +39,21 @@ export type PlayerData = {
   agility: number;
   luck: number;
 
+  strength: number;
+  intelligence: number;
+
   inventory: InventoryItem[];
   equipment: PlayerEquipment;
 };
 
 export const player: PlayerData = {
   name: 'Безымянный',
+
+  raceId: undefined,
+
   level: 1,
   exp: 0,
-  expToNextLevel: 50,
+  expToNextLevel: 70,
   gold: 0,
 
   hp: 100,
@@ -59,6 +70,9 @@ export const player: PlayerData = {
 
   agility: 5,
   luck: 5,
+
+  strength: 11,
+  intelligence: 11,
 
   inventory: [],
   equipment: {},

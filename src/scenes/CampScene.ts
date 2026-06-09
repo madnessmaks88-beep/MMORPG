@@ -6,8 +6,11 @@ import { createBottomNav } from '../ui/createBottomNav';
 import { getPlayerStats } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
+import { gameState } from '../data/gameState';
 
 export class CampScene extends Phaser.Scene {
+  private readonly campfireCooldownMs = 5 * 60 * 1000;
+
   constructor() {
     super('CampScene');
   }
@@ -212,25 +215,110 @@ export class CampScene extends Phaser.Scene {
       76
     );
 
+    const restCooldownLeft = this.getCampfireCooldownLeft();
+
+    const restButtonText =
+      restCooldownLeft > 0
+        ? `Костёр: ${this.formatCooldown(restCooldownLeft)}`
+        : 'Отдохнуть у костра';
+
     createButton(
       this,
       width / 2,
       996,
-      'Отдохнуть у костра',
+      restButtonText,
       () => {
+        const cooldownLeft = this.getCampfireCooldownLeft();
+      
+        if (cooldownLeft > 0) {
+          this.showRestCooldownMessage(cooldownLeft);
+          return;
+        }
+      
         const stats = getPlayerStats(player);
-
+      
         player.hp = stats.maxHp;
         player.energy = player.maxEnergy;
         player.potions = Math.max(player.potions, 2);
-
+      
+        gameState.lastCampRestAt = Date.now();
+      
         void saveGameAsync();
-
+      
         this.showRestMessage();
       },
       540,
       76
     );
+  }
+
+  private getCampfireCooldownLeft() {
+    const now = Date.now();
+    const elapsed = now - gameState.lastCampRestAt;
+    
+    return Math.max(0, this.campfireCooldownMs - elapsed);
+  }
+  
+  private formatCooldown(ms: number) {
+    const totalSeconds = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+  
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+  
+  private showRestCooldownMessage(cooldownLeft: number) {
+    const { width, height } = this.scale;
+  
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
+      .setDepth(100);
+  
+    const panel = this.add.rectangle(width / 2, height / 2, 560, 260, 0x171313)
+      .setStrokeStyle(3, 0x8b5a2b)
+      .setDepth(101);
+  
+    const title = this.add.text(width / 2, height / 2 - 80, 'Костёр ещё не готов', {
+      fontFamily: 'Arial',
+      fontSize: '32px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
+  
+    const text = this.add.text(
+      width / 2,
+      height / 2 - 5,
+      `Ты уже недавно отдыхал.\n\nДо следующего отдыха: ${this.formatCooldown(cooldownLeft)}`,
+      {
+        fontFamily: 'Arial',
+        fontSize: '23px',
+        color: '#d8c7a3',
+        align: 'center',
+        lineSpacing: 8,
+      }
+    ).setOrigin(0.5).setDepth(102);
+  
+    const closeBg = this.add.rectangle(width / 2, height / 2 + 90, 240, 58, 0x241515)
+      .setStrokeStyle(2, 0x8b5a2b)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
+  
+    const closeText = this.add.text(width / 2, height / 2 + 90, 'Понятно', {
+      fontFamily: 'Arial',
+      fontSize: '24px',
+      color: '#f0d58a',
+    }).setOrigin(0.5).setDepth(103);
+  
+    closeBg.on('pointerdown', () => {
+      overlay.destroy();
+      panel.destroy();
+      title.destroy();
+      text.destroy();
+      closeBg.destroy();
+      closeText.destroy();
+    
+      this.scene.restart();
+    });
   }
 
   private showRestMessage() {
