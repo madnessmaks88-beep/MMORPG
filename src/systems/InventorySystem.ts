@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import type { InventoryItem, PlayerData } from '../data/player';
+import type { EquipmentSlot, InventoryItem, PlayerData } from '../data/player';
 import type { ItemData } from '../data/items';
 import { getItemById } from '../data/items';
 
@@ -295,10 +295,10 @@ export function getRarityText(item: ItemData): string {
   return 'Проклятый';
 }
 
-export function getSlotText(item: ItemData): string {
-  if (item.slot === 'weapon') return 'Оружие';
-  if (item.slot === 'armor') return 'Броня';
-  return 'Амулет';
+export function getSlotText(slot: EquipmentSlot): string {
+  if (slot === 'weapon') return 'Оружие';
+  if (slot === 'armor') return 'Броня';
+  return 'Талисман';
 }
 
 export function createItemStatsText(inventoryItem: InventoryItem): string {
@@ -387,24 +387,36 @@ export function sellItem(
 export function getRarityColor(item: ItemData): string {
   if (item.rarity === 'common') return '#b8aa91';
   if (item.rarity === 'rare') return '#70a6ff';
-  if (item.rarity === 'epic') return '#b46cff';
-  return '#ff4d4d';
+  if (item.rarity === 'epic') return '#c084fc';
+  
+
+  return '#b8aa91';
+}
+
+export function getRarityColorHex(item: ItemData): number {
+  if (item.rarity === 'common') return 0xb8aa91;
+  if (item.rarity === 'rare') return 0x70a6ff;
+  if (item.rarity === 'epic') return 0xc084fc;
+  
+
+  return 0xb8aa91;
 }
 
 export function getRarityStrokeColor(item: ItemData): number {
-  if (item.rarity === 'common') return 0x8f826d;
-  if (item.rarity === 'rare') return 0x70a6ff;
-  if (item.rarity === 'epic') return 0xb46cff;
-  return 0xff4d4d;
+  if (item.rarity === 'common') return 0x6f6658;
+  if (item.rarity === 'rare') return 0x3f6fa8;
+  if (item.rarity === 'epic') return 0x7c3fb0;
+
+  return 0x6f6658;
 }
 
 export function getRarityNameWithColor(item: ItemData): string {
   return getRarityText(item);
 }
 
-export function getSlotIcon(item: ItemData): string {
-  if (item.slot === 'weapon') return '⚔';
-  if (item.slot === 'armor') return '🛡';
+export function getSlotIcon(slot: EquipmentSlot): string {
+  if (slot === 'weapon') return '⚔';
+  if (slot === 'armor') return '🛡';
   return '◆';
 }
 

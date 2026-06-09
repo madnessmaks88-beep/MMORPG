@@ -12,6 +12,15 @@ import { getCachedVKUser } from '../systems/VKBridgeSystem';
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
+
 export class CampScene extends Phaser.Scene {
   private readonly campfireCooldownMs = 5 * 60 * 1000;
 
@@ -20,8 +29,10 @@ export class CampScene extends Phaser.Scene {
   }
 
   create() {
-    this.createBackground();
-    this.createHeader();
+    createSceneBackground(this);
+    createTitle(this, 'Лагерь у входа', 'Тихое место перед спуском в катакомбы');
+
+    this.createPlayerLine();
     this.createHeroSummary();
     this.createMainActions();
     this.createRunInfo();
@@ -31,53 +42,16 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createBackground() {
-    const { width, height } = this.scale;
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x070605);
-    this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.94);
-
-    this.add.circle(width / 2, 190, 155, 0x2a1209, 0.28);
-    this.add.circle(width / 2, 190, 105, 0x7a2b14, 0.18);
-    this.add.circle(width / 2, 190, 58, 0xf0a348, 0.12);
-    this.add.circle(width / 2, 190, 28, 0xf0d58a, 0.08);
-
-    for (let i = 0; i < 46; i++) {
-      const x = Phaser.Math.Between(24, width - 24);
-      const y = Phaser.Math.Between(30, height - 125);
-      const size = Phaser.Math.Between(1, 3);
-
-      this.add.circle(x, y, size, 0xd8b56d, 0.045);
-    }
-
-    this.add.rectangle(width / 2, height - 105, width, 210, 0x090706, 0.34);
-    this.add.rectangle(width / 2, height - 55, width - 36, 92, 0x000000, 0.16);
-  }
-
-  private createHeader() {
+  private createPlayerLine() {
     const { width } = this.scale;
 
     const vkUser = getCachedVKUser();
     const vkName = vkUser ? vkUser.first_name : 'локальный режим';
 
-    this.add.text(width / 2, 48, 'Лагерь у входа', {
-      fontFamily: 'Arial',
-      fontSize: '40px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 88, `Игрок: ${vkName}`, {
-      fontFamily: 'Arial',
-      fontSize: '17px',
-      color: '#9c8f7a',
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 126, 'Тихое место перед спуском в катакомбы', {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#70675a',
+    this.add.text(width / 2, 122, `Игрок: ${vkName}`, {
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.textMuted,
     }).setOrigin(0.5);
   }
 
@@ -85,29 +59,40 @@ export class CampScene extends Phaser.Scene {
     const { width } = this.scale;
 
     const race = player.raceId ? getRaceById(player.raceId) : null;
+
     const relicNames = player.relicIds
       .map(id => getRelicById(id)?.name)
       .filter(Boolean);
 
     const panelY = 270;
 
-    this.add.rectangle(width / 2, panelY + 4, 620, 220, 0x000000, 0.22);
+    createPanel(this, width / 2, panelY, 620, 220, {
+      alpha: 0.88,
+      stroke: true,
+      warm: true,
+    });
 
-    this.add.rectangle(width / 2, panelY, 620, 220, 0x0d0d0d, 0.92)
-      .setStrokeStyle(2, 0x8b5a2b, 0.65);
+    this.add.circle(width / 2, panelY - 72, 34, 0x2a1d13, 1)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.55);
 
-    this.add.text(width / 2, panelY - 78, player.name, {
-      fontFamily: 'Arial',
-      fontSize: '32px',
-      color: '#f0d58a',
+    this.add.text(width / 2, panelY - 72, '◆', {
+      fontFamily: UI.font.body,
+      fontSize: '28px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, panelY - 25, player.name, {
+      fontFamily: UI.font.title,
+      fontSize: '31px',
+      color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, panelY - 42, race ? race.name : 'Раса не выбрана', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#d8c7a3',
+    this.add.text(width / 2, panelY + 10, race ? race.name : 'Раса не выбрана', {
+      fontFamily: UI.font.body,
+      fontSize: '19px',
+      color: UI.colors.text,
     }).setOrigin(0.5);
 
     const summary = [
@@ -116,46 +101,36 @@ export class CampScene extends Phaser.Scene {
       `Зелья: ${player.potions}`,
     ].join('  •  ');
 
-    this.add.text(width / 2, panelY + 24, summary, {
-      fontFamily: 'Arial',
-      fontSize: '19px',
-      color: '#d8c7a3',
-      align: 'center',
-    }).setOrigin(0.5);
+    createSmallText(this, width / 2, panelY + 48, summary, {
+      fontSize: '18px',
+      color: UI.colors.text,
+      width: 560,
+    });
 
     const relicText =
       relicNames.length > 0
         ? `Реликвии: ${relicNames.join(', ')}`
         : 'Реликвии: нет';
 
-    this.add.text(width / 2, panelY + 66, relicText, {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: relicNames.length > 0 ? '#f0d58a' : '#70675a',
-      align: 'center',
-      wordWrap: {
-        width: 540,
-      },
-    }).setOrigin(0.5);
+    createSmallText(this, width / 2, panelY + 82, relicText, {
+      fontSize: '15px',
+      color: relicNames.length > 0 ? '#f0d58a' : UI.colors.textMuted,
+      width: 560,
+    });
   }
 
   private createMainActions() {
     const { width } = this.scale;
 
-    const panelY = 620;
+    const panelY = 615;
 
-    this.add.rectangle(width / 2, panelY + 5, 620, 430, 0x000000, 0.24);
+    createPanel(this, width / 2, panelY, 620, 415, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
 
-    this.add.rectangle(width / 2, panelY, 620, 430, 0x0d0d0d, 0.90)
-      .setStrokeStyle(2, 0x8b5a2b, 0.5);
-
-    this.add.text(width / 2, panelY - 180, 'Что делаем?', {
-      fontFamily: 'Arial',
-      fontSize: '31px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+    createSectionTitle(this, width / 2, panelY - 170, 'Действия');
 
     const hasActiveRun =
       gameState.floorRun.active &&
@@ -165,7 +140,7 @@ export class CampScene extends Phaser.Scene {
       ? `Продолжить спуск: этаж ${gameState.floorRun.currentFloor}`
       : 'Войти в катакомбы';
 
-    let y = panelY - 112;
+    let y = panelY - 104;
 
     createButton(
       this,
@@ -196,7 +171,10 @@ export class CampScene extends Phaser.Scene {
           this.showLeaveRunMessage();
         },
         540,
-        56
+        56,
+        {
+          danger: true,
+        }
       );
 
       y += 66;
@@ -269,14 +247,18 @@ export class CampScene extends Phaser.Scene {
   private createRunInfo() {
     const { width } = this.scale;
 
-    const panelY = 900;
+    const panelY = 905;
 
-    this.add.rectangle(width / 2, panelY, 620, 135, 0x0d0d0d, 0.72);
+    createPanel(this, width / 2, panelY, 620, 130, {
+      alpha: 0.68,
+      stroke: false,
+      warm: true,
+    });
 
-    this.add.text(width / 2, panelY - 42, 'Прогресс', {
-      fontFamily: 'Arial',
-      fontSize: '23px',
-      color: '#f0d58a',
+    this.add.text(width / 2, panelY - 40, 'Прогресс спуска', {
+      fontFamily: UI.font.title,
+      fontSize: '22px',
+      color: UI.colors.goldText,
     }).setOrigin(0.5);
 
     const activeRunText = gameState.floorRun.active
@@ -291,11 +273,11 @@ export class CampScene extends Phaser.Scene {
     ].join('\n');
 
     this.add.text(width / 2, panelY + 18, text, {
-      fontFamily: 'Arial',
-      fontSize: '17px',
-      color: '#d8c7a3',
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.text,
       align: 'center',
-      lineSpacing: 5,
+      lineSpacing: 4,
     }).setOrigin(0.5);
   }
 
@@ -351,22 +333,24 @@ export class CampScene extends Phaser.Scene {
   private showMessage(title: string, message: string) {
     const { width } = this.scale;
 
-    const overlay = this.add.rectangle(width / 2, 610, 620, 280, 0x050505, 0.98)
-      .setStrokeStyle(3, 0xf0d58a)
-      .setDepth(100);
+    createPanel(this, width / 2, 610, 620, 280, {
+      alpha: 0.98,
+      stroke: true,
+      warm: true,
+    }).setDepth(100);
 
     const titleText = this.add.text(width / 2, 535, title, {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.title,
       fontSize: '30px',
-      color: '#f0d58a',
+      color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(101);
 
     const messageText = this.add.text(width / 2, 610, message, {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.body,
       fontSize: '21px',
-      color: '#d8c7a3',
+      color: UI.colors.text,
       align: 'center',
       wordWrap: {
         width: 540,
@@ -374,93 +358,87 @@ export class CampScene extends Phaser.Scene {
       lineSpacing: 7,
     }).setOrigin(0.5).setDepth(101);
 
-    const okButton = this.add.rectangle(width / 2, 705, 220, 54, 0x241515)
-      .setStrokeStyle(2, 0xf0d58a)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(101);
+    const button = createButton(
+      this,
+      width / 2,
+      705,
+      'Понятно',
+      () => {
+        this.scene.restart();
+      },
+      220,
+      54
+    );
 
-    const okText = this.add.text(width / 2, 705, 'Понятно', {
-      fontFamily: 'Arial',
-      fontSize: '21px',
-      color: '#f0d58a',
-    }).setOrigin(0.5).setDepth(102);
+    button.bg.setDepth(101);
+    button.shadow.setDepth(100);
+    button.label.setDepth(102);
 
-    okButton.on('pointerdown', () => {
-      overlay.destroy();
-      titleText.destroy();
-      messageText.destroy();
-      okButton.destroy();
-      okText.destroy();
-
-      this.scene.restart();
-    });
+    titleText.setDepth(102);
+    messageText.setDepth(102);
   }
 
   private showConfirmMessage(title: string, message: string, onConfirm: () => void) {
     const { width } = this.scale;
 
-    const overlay = this.add.rectangle(width / 2, 610, 620, 320, 0x050505, 0.98)
-      .setStrokeStyle(3, 0xf0d58a)
-      .setDepth(100);
+    createPanel(this, width / 2, 610, 620, 320, {
+      alpha: 0.98,
+      stroke: true,
+      warm: true,
+    }).setDepth(100);
 
-    const titleText = this.add.text(width / 2, 510, title, {
-      fontFamily: 'Arial',
+    this.add.text(width / 2, 510, title, {
+      fontFamily: UI.font.title,
       fontSize: '30px',
-      color: '#f0d58a',
+      color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(101);
+    }).setOrigin(0.5).setDepth(102);
 
-    const messageText = this.add.text(width / 2, 590, message, {
-      fontFamily: 'Arial',
+    this.add.text(width / 2, 590, message, {
+      fontFamily: UI.font.body,
       fontSize: '21px',
-      color: '#d8c7a3',
+      color: UI.colors.text,
       align: 'center',
       wordWrap: {
         width: 540,
       },
       lineSpacing: 7,
-    }).setOrigin(0.5).setDepth(101);
-
-    const cancelButton = this.add.rectangle(width / 2 - 125, 715, 220, 54, 0x151515)
-      .setStrokeStyle(2, 0x8b5a2b)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(101);
-
-    const confirmButton = this.add.rectangle(width / 2 + 125, 715, 220, 54, 0x241515)
-      .setStrokeStyle(2, 0xf0d58a)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(101);
-
-    const cancelText = this.add.text(width / 2 - 125, 715, 'Отмена', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#d8c7a3',
     }).setOrigin(0.5).setDepth(102);
 
-    const confirmText = this.add.text(width / 2 + 125, 715, 'Выйти', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#f0d58a',
-    }).setOrigin(0.5).setDepth(102);
+    const cancel = createButton(
+      this,
+      width / 2 - 125,
+      715,
+      'Отмена',
+      () => {
+        this.scene.restart();
+      },
+      220,
+      54
+    );
 
-    const destroyAll = () => {
-      overlay.destroy();
-      titleText.destroy();
-      messageText.destroy();
-      cancelButton.destroy();
-      confirmButton.destroy();
-      cancelText.destroy();
-      confirmText.destroy();
-    };
+    const confirm = createButton(
+      this,
+      width / 2 + 125,
+      715,
+      'Выйти',
+      () => {
+        onConfirm();
+      },
+      220,
+      54,
+      {
+        danger: true,
+      }
+    );
 
-    cancelButton.on('pointerdown', () => {
-      destroyAll();
-    });
+    cancel.shadow.setDepth(100);
+    cancel.bg.setDepth(101);
+    cancel.label.setDepth(102);
 
-    confirmButton.on('pointerdown', () => {
-      destroyAll();
-      onConfirm();
-    });
+    confirm.shadow.setDepth(100);
+    confirm.bg.setDepth(101);
+    confirm.label.setDepth(102);
   }
 }

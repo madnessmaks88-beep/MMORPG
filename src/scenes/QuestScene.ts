@@ -1,15 +1,31 @@
 import Phaser from 'phaser';
 
-import { quests } from '../data/quests';
-import { createButton } from '../ui/createButton';
-import { createBottomNav } from '../ui/createBottomNav';
+import { gameState } from '../data/gameState';
+
 import {
   claimQuestReward,
+  getQuests,
   getQuestProgressValue,
-  isQuestClaimed,
   isQuestCompleted,
+  isQuestClaimed,
 } from '../systems/QuestSystem';
 import { saveGameAsync } from '../systems/SaveSystem';
+
+import { createButton } from '../ui/createButton';
+import { createBottomNav } from '../ui/createBottomNav';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
+
+type QuestData = ReturnType<typeof getQuests>[number];
+
+
 
 export class QuestScene extends Phaser.Scene {
   constructor() {
@@ -17,119 +33,194 @@ export class QuestScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    createSceneBackground(this);
+    createTitle(this, 'Задания', 'Поручения лагеря и награды за спуск');
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
-
-    this.add.text(width / 2, 70, 'Задания', {
-      fontFamily: 'Arial',
-      fontSize: '56px',
-      color: '#d8b56d',
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 125, 'Тьма любит тех, кто возвращается снова.', {
-      fontFamily: 'Arial',
-      fontSize: '23px',
-      color: '#9c8f7a',
-      align: 'center',
-    }).setOrigin(0.5);
-
-    quests.forEach((quest, index) => {
-      const y = 240 + index * 205;
-      const progress = getQuestProgressValue(quest);
-      const completed = isQuestCompleted(quest);
-      const claimed = isQuestClaimed(quest.id);
-
-      this.add.rectangle(width / 2, y, 620, 170, 0x171313);
-      this.add.rectangle(width / 2, y, 580, 130, 0x121212);
-
-      this.add.text(80, y - 60, quest.title, {
-        fontFamily: 'Arial',
-        fontSize: '28px',
-        color: completed ? '#d8b56d' : '#e6d2aa',
-      });
-
-      this.add.text(80, y - 25, quest.description, {
-        fontFamily: 'Arial',
-        fontSize: '19px',
-        color: '#b8aa91',
-        wordWrap: {
-          width: 390,
-        },
-      });
-
-      this.add.text(80, y + 32, `Прогресс: ${Math.min(progress, quest.target)}/${quest.target}`, {
-        fontFamily: 'Arial',
-        fontSize: '20px',
-        color: completed ? '#75d184' : '#8f826d',
-      });
-
-      this.add.text(
-        80,
-        y + 60,
-        `Награда: ${quest.rewardGold} золота, ${quest.rewardExp} опыта${quest.rewardPotions ? `, ${quest.rewardPotions} зелья` : ''}`,
-        {
-          fontFamily: 'Arial',
-          fontSize: '18px',
-          color: '#70675a',
-        }
-      );
-
-      if (claimed) {
-        this.add.text(520, y, 'Получено', {
-          fontFamily: 'Arial',
-          fontSize: '22px',
-          color: '#70675a',
-        }).setOrigin(0.5);
-
-        return;
-      }
-
-      if (!completed) {
-        this.add.text(520, y, 'Не готово', {
-          fontFamily: 'Arial',
-          fontSize: '22px',
-          color: '#5d554c',
-        }).setOrigin(0.5);
-
-        return;
-      }
-
-      createButton(this, 520, y, 'Забрать', () => {
-        const message = claimQuestReward(quest.id);
-        void saveGameAsync();
-        this.showMessage(message);
-      }, 170, 58);
-    });
+    this.createProgressPanel();
+    this.createQuestList();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
     });
   }
 
-  private showMessage(message: string) {
-    const { width, height } = this.scale;
+  private createProgressPanel() {
+    const { width } = this.scale;
 
-    this.children.removeAll();
+    const panelY = 180;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+    createPanel(this, width / 2, panelY, 620, 135, {
+      alpha: 0.72,
+      stroke: false,
+      warm: true,
+    });
 
-    this.add.rectangle(width / 2, height / 2, 620, 430, 0x181414);
-    this.add.rectangle(width / 2, height / 2, 580, 390, 0x0d0d0d);
-
-    this.add.text(width / 2, height / 2 - 55, message, {
-      fontFamily: 'Arial',
-      fontSize: '28px',
-      color: '#e6d2aa',
-      align: 'center',
-      lineSpacing: 8,
-      wordWrap: {
-        width: 520,
-      },
+    this.add.text(width / 2, panelY - 42, 'Общий прогресс', {
+      fontFamily: UI.font.title,
+      fontSize: '23px',
+      color: UI.colors.goldText,
     }).setOrigin(0.5);
 
-    createButton(this, width / 2, height / 2 + 145, 'Продолжить', () => {
-      this.scene.restart();
-    }, 440, 70);
+    const text = [
+      `Побеждено врагов: ${gameState.questProgress.enemiesKilled}`,
+      `Открыто сундуков: ${gameState.questProgress.chestsOpened}`,
+      `Заработано золота: ${gameState.questProgress.goldEarned}`,
+      `Пройдено подземелий: ${gameState.questProgress.dungeonsCompleted}`,
+    ].join('\n');
+
+    this.add.text(width / 2, panelY + 22, text, {
+      fontFamily: UI.font.body,
+      fontSize: '17px',
+      color: UI.colors.text,
+      align: 'center',
+      lineSpacing: 5,
+    }).setOrigin(0.5);
+  }
+
+  private createQuestList() {
+    const { width } = this.scale;
+
+    const panelY = 620;
+
+    createPanel(this, width / 2, panelY, 620, 650, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 285, 'Список заданий');
+
+    const questList = getQuests();
+
+  if (questList.length === 0) {
+      createSmallText(
+        this,
+        width / 2,
+        panelY,
+        'Заданий пока нет.',
+        {
+          fontSize: '20px',
+          color: UI.colors.textMuted,
+          width: 540,
+        }
+      );
+
+      return;
+    }
+
+    const visibleQuests = questList.slice(0, 5);
+
+    visibleQuests.forEach((quest: QuestData, index: number) => {
+      this.createQuestCard(quest, panelY - 205 + index * 108);
+    });
+
+    if (questList.length > visibleQuests.length) {
+      createSmallText(
+        this,
+        width / 2,
+        panelY + 285,
+        `Показано ${visibleQuests.length} из ${questList.length}. Позже добавим прокрутку.`,
+        {
+          fontSize: '15px',
+          color: UI.colors.textMuted,
+          width: 540,
+        }
+      );
+    }
+  }
+
+  private createQuestCard(quest: QuestData, y: number) {
+    const { width } = this.scale;
+
+    const completed = isQuestCompleted(quest);
+    const claimed = isQuestClaimed(quest.id);
+
+    const strokeColor = claimed
+      ? 0x3a2518
+      : completed
+        ? 0x75d184
+        : UI.colors.goldDark;
+
+    const titleColor = claimed
+      ? UI.colors.textMuted
+      : completed
+        ? UI.colors.green
+        : UI.colors.goldText;
+
+    this.add.rectangle(width / 2, y + 4, 560, 94, 0x000000, 0.22);
+
+    this.add.rectangle(width / 2, y, 560, 94, 0x14100d, 0.86)
+      .setStrokeStyle(2, strokeColor, completed ? 0.75 : 0.45);
+
+    this.add.circle(width / 2 - 245, y, 26, completed ? 0x1c3a24 : 0x2a1d13, 1)
+      .setStrokeStyle(2, strokeColor, 0.65);
+
+    this.add.text(width / 2 - 245, y, claimed ? '✓' : completed ? '!' : '◆', {
+      fontFamily: UI.font.body,
+      fontSize: '22px',
+      color: claimed ? UI.colors.textMuted : completed ? UI.colors.green : UI.colors.goldText,
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2 - 205, y - 28, quest.title, {
+      fontFamily: UI.font.title,
+      fontSize: '18px',
+      color: titleColor,
+    }).setOrigin(0, 0.5);
+
+    this.add.text(width / 2 - 205, y, quest.description, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.text,
+      wordWrap: {
+        width: 300,
+      },
+    }).setOrigin(0, 0.5);
+
+    const progressValue = getQuestProgressValue(quest);
+    const progressText = `${progressValue}/${quest.target}`;
+
+    this.add.text(width / 2 - 205, y + 28, progressText, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: completed ? UI.colors.green : UI.colors.textMuted,
+    }).setOrigin(0, 0.5);
+
+    const rewardText = `+${quest.rewardGold} золота`;
+
+    this.add.text(width / 2 + 115, y - 22, rewardText, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.goldText,
+      align: 'center',
+    }).setOrigin(0.5);
+
+    const buttonText = claimed
+      ? 'Получено'
+      : completed
+        ? 'Забрать'
+        : 'Не готово';
+
+    createButton(
+      this,
+      width / 2 + 205,
+      y + 20,
+      buttonText,
+      () => {
+        if (!completed || claimed) {
+          return;
+        }
+
+        claimQuestReward(quest.id);
+        void saveGameAsync();
+
+        this.scene.restart();
+      },
+      125,
+      38,
+      {
+        small: true,
+        disabled: !completed || claimed,
+      }
+    );
   }
 }

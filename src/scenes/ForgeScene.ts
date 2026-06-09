@@ -1,257 +1,249 @@
 import Phaser from 'phaser';
 
-import { player } from '../data/player';
-
-import { createButton } from '../ui/createButton';
-import { createBottomNav } from '../ui/createBottomNav';
+import { player, type InventoryItem } from '../data/player';
 
 import {
   createItemStatsText,
   getBaseItemFromInventoryItem,
   getItemUpgradeLevel,
-  getPlayerStats,
-  getRarityColor,
+  getRarityColorHex,
   getRarityStrokeColor,
-  getRarityText,
   getSlotIcon,
   getSlotText,
   getUpgradeCost,
+  isItemEquipped,
   upgradeItem,
 } from '../systems/InventorySystem';
 
 import { saveGameAsync } from '../systems/SaveSystem';
 
+import { createButton } from '../ui/createButton';
+import { createBottomNav } from '../ui/createBottomNav';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
+
 export class ForgeScene extends Phaser.Scene {
-  private currentPage = 0;
-  private readonly itemsPerPage = 5;
 
   constructor() {
     super('ForgeScene');
   }
 
-  init(data: { page?: number }) {
-    this.currentPage = data.page ?? 0;
-  }
-
   create() {
-    const { width, height } = this.scale;
-    const stats = getPlayerStats(player);
+    createSceneBackground(this);
+    createTitle(this, 'Кузница', 'Улучшение найденного снаряжения');
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
-
-    this.add.text(width / 2, 65, 'Кузница', {
-      fontFamily: 'Arial',
-      fontSize: '56px',
-      color: '#d8b56d',
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 122, 'Железо помнит боль. Золото заставляет его стать сильнее.', {
-      fontFamily: 'Arial',
-      fontSize: '22px',
-      color: '#9c8f7a',
-      align: 'center',
-      wordWrap: {
-        width: 600,
-      },
-    }).setOrigin(0.5);
-
-    this.add.rectangle(width / 2, 220, 620, 100, 0x171313);
-
-    this.add.text(
-      width / 2,
-      220,
-      `Золото: ${player.gold}\nАтака: ${stats.attack}    Защита: ${stats.defense}    HP: ${stats.maxHp}`,
-      {
-        fontFamily: 'Arial',
-        fontSize: '23px',
-        color: '#e6d2aa',
-        align: 'center',
-        lineSpacing: 7,
-      }
-    ).setOrigin(0.5);
-
-    this.add.text(width / 2, 315, 'Предметы для улучшения', {
-      fontFamily: 'Arial',
-      fontSize: '32px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
-
-    this.createUpgradeList();
+    this.createGoldPanel();
+    this.createItemList();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
     });
   }
 
-  private createUpgradeList() {
+  private createGoldPanel() {
     const { width } = this.scale;
 
-    if (player.inventory.length === 0) {
-      this.add.rectangle(width / 2, 650, 620, 300, 0x121212);
+    createPanel(this, width / 2, 170, 620, 110, {
+      alpha: 0.72,
+      stroke: false,
+      warm: true,
+    });
 
-      this.add.text(width / 2, 650, 'У тебя нет предметов.\nНайди лут в катакомбах.', {
-        fontFamily: 'Arial',
-        fontSize: '28px',
-        color: '#8f826d',
-        align: 'center',
-        lineSpacing: 8,
-      }).setOrigin(0.5);
+    this.add.text(width / 2, 145, 'Ресурсы героя', {
+      fontFamily: UI.font.title,
+      fontSize: '23px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, 190, `Золото: ${player.gold}`, {
+      fontFamily: UI.font.body,
+      fontSize: '24px',
+      color: UI.colors.text,
+    }).setOrigin(0.5);
+  }
+
+  private createItemList() {
+    const { width } = this.scale;
+
+    const panelY = 645;
+
+    createPanel(this, width / 2, panelY, 620, 760, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 345, 'Снаряжение');
+
+    if (player.inventory.length === 0) {
+      createSmallText(
+        this,
+        width / 2,
+        panelY,
+        'В сумке пока нет предметов.\nИх можно найти в катакомбах или купить в лавке.',
+        {
+          fontSize: '20px',
+          color: UI.colors.textMuted,
+          width: 540,
+        }
+      );
 
       return;
     }
 
-    const totalPages = Math.max(1, Math.ceil(player.inventory.length / this.itemsPerPage));
+    const visibleItems = player.inventory.slice(0, 7);
 
-    if (this.currentPage > totalPages - 1) {
-      this.currentPage = totalPages - 1;
-    }
-
-    if (this.currentPage < 0) {
-      this.currentPage = 0;
-    }
-
-    const startIndex = this.currentPage * this.itemsPerPage;
-    const visibleItems = player.inventory.slice(startIndex, startIndex + this.itemsPerPage);
-
-    visibleItems.forEach((inventoryItem, index) => {
-      const item = getBaseItemFromInventoryItem(inventoryItem);
-
-      if (!item) {
-        return;
-      }
-
-      const y = 400 + index * 105;
-      const upgradeLevel = getItemUpgradeLevel(inventoryItem);
-      const cost = getUpgradeCost(inventoryItem);
-      const statsText = createItemStatsText(inventoryItem);
-      const isMax = upgradeLevel >= 5;
-
-      const itemBg = this.add.rectangle(width / 2, y, 620, 88, 0x121212);
-      itemBg.setStrokeStyle(2, getRarityStrokeColor(item));
-
-      this.add.text(75, y, getSlotIcon(item), {
-        fontFamily: 'Arial',
-        fontSize: '34px',
-        color: getRarityColor(item),
-      }).setOrigin(0.5);
-
-      this.add.text(
-        115,
-        y - 24,
-        `${item.name} +${upgradeLevel}`,
-        {
-          fontFamily: 'Arial',
-          fontSize: '20px',
-          color: getRarityColor(item),
-          wordWrap: {
-            width: 360,
-          },
-        }
-      ).setOrigin(0, 0.5);
-
-      this.add.text(
-        115,
-        y + 2,
-        `${getSlotText(item)} • ${getRarityText(item)}`,
-        {
-          fontFamily: 'Arial',
-          fontSize: '17px',
-          color: '#8f826d',
-        }
-      ).setOrigin(0, 0.5);
-
-      this.add.text(
-        115,
-        y + 27,
-        statsText,
-        {
-          fontFamily: 'Arial',
-          fontSize: '17px',
-          color: '#b8aa91',
-          wordWrap: {
-            width: 360,
-          },
-        }
-      ).setOrigin(0, 0.5);
-
-      if (isMax) {
-        this.add.text(560, y, 'MAX', {
-          fontFamily: 'Arial',
-          fontSize: '21px',
-          color: '#d8b56d',
-        }).setOrigin(0.5);
-
-        return;
-      }
-
-      createButton(this, 560, y, `${cost} зол.`, () => {
-        const result = upgradeItem(player, inventoryItem.instanceId);
-
-        void saveGameAsync();
-
-        this.showMessage(result.message);
-      }, 135, 52);
+    visibleItems.forEach((inventoryItem: InventoryItem, index: number) => {
+      this.createItemCard(inventoryItem, panelY - 260 + index * 88);
     });
 
-    this.createPageControls(totalPages);
+    if (player.inventory.length > visibleItems.length) {
+      createSmallText(
+        this,
+        width / 2,
+        panelY + 330,
+        `Показано ${visibleItems.length} из ${player.inventory.length}. Позже добавим прокрутку.`,
+        {
+          fontSize: '15px',
+          color: UI.colors.textMuted,
+          width: 540,
+        }
+      );
+    }
   }
 
-  private createPageControls(totalPages: number) {
+  private createItemCard(inventoryItem: InventoryItem, y: number) {
     const { width } = this.scale;
 
-    const y = 1085;
+    const item = getBaseItemFromInventoryItem(inventoryItem);
 
-    createButton(this, 160, y, '<', () => {
-      if (this.currentPage <= 0) {
-        return;
-      }
+    if (!item) {
+      return;
+    }
 
-      this.scene.restart({
-        page: this.currentPage - 1,
-      });
-    }, 120, 52);
+    const equipped = isItemEquipped(player, inventoryItem.instanceId);
+    const upgradeLevel = getItemUpgradeLevel(inventoryItem);
+    const upgradeCost = getUpgradeCost(inventoryItem);
+    const canUpgrade = player.gold >= upgradeCost;
 
-    this.add.text(width / 2, y, `Страница ${this.currentPage + 1}/${totalPages}`, {
-      fontFamily: 'Arial',
-      fontSize: '24px',
-      color: '#e6d2aa',
+    const rarityColor = getRarityColorHex(item);
+    const rarityStrokeColor = getRarityStrokeColor(item);
+
+    this.add.rectangle(width / 2, y + 4, 560, 76, 0x000000, 0.22);
+
+    this.add.rectangle(width / 2, y, 560, 76, 0x14100d, 0.86)
+      .setStrokeStyle(2, rarityStrokeColor, 0.55);
+
+    this.add.circle(width / 2 - 245, y, 24, rarityColor, 0.92)
+      .setStrokeStyle(2, rarityStrokeColor, 0.7);
+
+    this.add.text(width / 2 - 245, y, getSlotIcon(item.slot), {
+      fontFamily: UI.font.body,
+      fontSize: '18px',
+      color: '#ffffff',
     }).setOrigin(0.5);
 
-    createButton(this, width - 160, y, '>', () => {
-      if (this.currentPage >= totalPages - 1) {
-        return;
-      }
+    const equippedText = equipped ? '  •  надето' : '';
 
-      this.scene.restart({
-        page: this.currentPage + 1,
-      });
-    }, 120, 52);
+    this.add.text(width / 2 - 205, y - 20, `${item.name} +${upgradeLevel}${equippedText}`, {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: equipped ? UI.colors.goldText : UI.colors.text,
+    }).setOrigin(0, 0.5);
+
+    this.add.text(width / 2 - 205, y + 2, `${getSlotText(item.slot)} • ${createItemStatsText(inventoryItem)}`, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: 290,
+      },
+    }).setOrigin(0, 0.5);
+
+    this.add.text(width / 2 - 205, y + 24, `Цена улучшения: ${upgradeCost} золота`, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: canUpgrade ? UI.colors.textMuted : UI.colors.red,
+    }).setOrigin(0, 0.5);
+
+    createButton(
+      this,
+      width / 2 + 205,
+      y + 5,
+      'Улучшить',
+      () => {
+        this.handleUpgrade(inventoryItem);
+      },
+      130,
+      42,
+      {
+        small: true,
+        disabled: !canUpgrade,
+      }
+    );
+  }
+
+  private handleUpgrade(inventoryItem: InventoryItem) {
+    const result = upgradeItem(player, inventoryItem.instanceId);
+
+    if (!result.success) {
+      this.showMessage(result.message ?? 'Не удалось улучшить предмет.');
+      return;
+    }
+
+    void saveGameAsync();
+
+    this.showMessage(result.message ?? 'Предмет улучшен.');
   }
 
   private showMessage(message: string) {
-    const { width, height } = this.scale;
+    const { width } = this.scale;
 
-    this.children.removeAll();
+    createPanel(this, width / 2, 610, 600, 240, {
+      alpha: 0.98,
+      stroke: true,
+      warm: true,
+    }).setDepth(100);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+    this.add.text(width / 2, 550, 'Кузница', {
+      fontFamily: UI.font.title,
+      fontSize: '30px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
 
-    this.add.rectangle(width / 2, height / 2, 620, 330, 0x181414);
-    this.add.rectangle(width / 2, height / 2, 580, 290, 0x0d0d0d);
-
-    this.add.text(width / 2, height / 2 - 35, message, {
-      fontFamily: 'Arial',
-      fontSize: '29px',
-      color: '#e6d2aa',
+    this.add.text(width / 2, 615, message, {
+      fontFamily: UI.font.body,
+      fontSize: '21px',
+      color: UI.colors.text,
       align: 'center',
       wordWrap: {
         width: 520,
       },
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(102);
 
-    createButton(this, width / 2, height / 2 + 105, 'Продолжить', () => {
-      this.scene.restart({
-        page: this.currentPage,
-      });
-    }, 440, 70);
+    const ok = createButton(
+      this,
+      width / 2,
+      700,
+      'Понятно',
+      () => {
+        this.scene.restart();
+      },
+      220,
+      54
+    );
+
+    ok.shadow.setDepth(100);
+    ok.bg.setDepth(101);
+    ok.label.setDepth(102);
   }
 }

@@ -1,9 +1,20 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { races } from '../data/races';
-import type { RaceData } from '../data/races';
+import { races, type RaceData } from '../data/races';
+
 import { saveGameAsync } from '../systems/SaveSystem';
+
+import { createButton } from '../ui/createButton';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
 
 export class RaceSelectScene extends Phaser.Scene {
   constructor() {
@@ -11,151 +22,166 @@ export class RaceSelectScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    createSceneBackground(this);
+    createTitle(this, 'Создание героя', 'Выбери происхождение перед первым спуском');
 
-    this.createBackground();
-
-    this.add.text(width / 2, 50, 'Выбор расы', {
-      fontFamily: 'Arial',
-      fontSize: '48px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 96, 'Выбери происхождение героя', {
-      fontFamily: 'Arial',
-      fontSize: '22px',
-      color: '#9c8f7a',
-    }).setOrigin(0.5);
-
-    races.forEach((race, index) => {
-      this.createRaceCard(width / 2, 610 + index * 900, race);
-    });
-
-    this.add.text(width / 2, height - 60, 'Позже здесь появятся другие расы', {
-      fontFamily: 'Arial',
-      fontSize: '19px',
-      color: '#70675a',
-    }).setOrigin(0.5);
+    this.createIntroPanel();
+    this.createRaceCards();
   }
 
-  private createBackground() {
-    const { width, height } = this.scale;
+  private createIntroPanel() {
+    const { width } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
-    this.add.rectangle(width / 2, height / 2, width, height, 0x120d0b, 0.9);
+    createPanel(this, width / 2, 170, 620, 120, {
+      alpha: 0.72,
+      stroke: false,
+      warm: true,
+    });
 
-    for (let i = 0; i < 30; i++) {
-      const x = Phaser.Math.Between(0, width);
-      const y = Phaser.Math.Between(0, height);
-      const radius = Phaser.Math.Between(1, 3);
+    createSmallText(
+      this,
+      width / 2,
+      170,
+      'Раса определяет стартовые характеристики, пассивную способность и особый активный навык.',
+      {
+        fontSize: '18px',
+        color: UI.colors.text,
+        width: 540,
+      }
+    );
+  }
 
-      this.add.circle(x, y, radius, 0xd8b56d, 0.08);
+  private createRaceCards() {
+    const { width } = this.scale;
+
+    const panelY = 660;
+
+    createPanel(this, width / 2, panelY, 620, 760, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 345, 'Доступные расы');
+
+    if (races.length === 0) {
+      createSmallText(this, width / 2, panelY, 'Расы пока не добавлены.', {
+        fontSize: '20px',
+        color: UI.colors.textMuted,
+        width: 540,
+      });
+
+      return;
+    }
+
+    races.slice(0, 3).forEach((race: RaceData, index: number) => {
+      this.createRaceCard(race, panelY - 215 + index * 220);
+    });
+
+    if (races.length > 3) {
+      createSmallText(
+        this,
+        width / 2,
+        panelY + 330,
+        `Показано 3 из ${races.length}. Позже добавим прокрутку.`,
+        {
+          fontSize: '15px',
+          color: UI.colors.textMuted,
+          width: 540,
+        }
+      );
     }
   }
 
-  private createRaceCard(x: number, y: number, race: RaceData) {
-	 const card = this.add.rectangle(x, y, 620, 880, 0x171313, 0.96)
-	   .setStrokeStyle(3, 0x8b5a2b)
-	   .setInteractive({ useHandCursor: true });
+  private createRaceCard(race: RaceData, y: number) {
+    const { width } = this.scale;
 
-	 this.add.rectangle(x, y - 360, 540, 105, 0x0d0d0d, 0.9)
-	   .setStrokeStyle(2, 0x2a2117);
+    this.add.rectangle(width / 2, y + 5, 560, 190, 0x000000, 0.24);
 
-	 this.add.text(x, y - 385, race.name, {
-	   fontFamily: 'Arial',
-	   fontSize: '34px',
-	   color: '#f0d58a',
-	   stroke: '#000000',
-	   strokeThickness: 4,
-	 }).setOrigin(0.5);
+    this.add.rectangle(width / 2, y, 560, 190, 0x14100d, 0.9)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.55);
 
-	 this.add.text(x, y - 342, race.description, {
-	   fontFamily: 'Arial',
-	   fontSize: '16px',
-	   color: '#d8c7a3',
-	   align: 'center',
-	   wordWrap: {
-	     width: 480,
-	   },
-	 }).setOrigin(0.5);
+    this.add.circle(width / 2 - 245, y - 52, 30, 0x2a1d13, 1)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.75);
 
-	 this.add.text(x - 245, y - 270, 'Характеристики', {
-	   fontFamily: 'Arial',
-	   fontSize: '23px',
-	   color: '#f0d58a',
-	 }).setOrigin(0, 0.5);
+    this.add.text(width / 2 - 245, y - 52, '◆', {
+      fontFamily: UI.font.body,
+      fontSize: '24px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5);
 
-	 const statsText = [
-	   `HP: ${race.hp}`,
-	   `Защита: ${race.defense}`,
-	   `Ловкость: ${race.agility}`,
-	   `Сила: ${race.strength}`,
-	   `Удача: ${race.luck}`,
-	   `Интеллект: ${race.intelligence}`,
-	 ].join('\n');
+    this.add.text(width / 2 - 205, y - 70, race.name, {
+      fontFamily: UI.font.title,
+      fontSize: '24px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0, 0.5);
 
-	 this.add.text(x - 245, y - 230, statsText, {
-	   fontFamily: 'Arial',
-	   fontSize: '19px',
-	   color: '#d8c7a3',
-	   lineSpacing: 5,
-	 }).setOrigin(0, 0);
+    this.add.text(width / 2 - 205, y - 38, race.description, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.text,
+      wordWrap: {
+        width: 330,
+      },
+    }).setOrigin(0, 0.5);
 
-	 this.add.text(x - 245, y - 45, `Пассивный навык: ${race.passiveName}`, {
-	   fontFamily: 'Arial',
-	   fontSize: '21px',
-	   color: '#75d184',
-	 }).setOrigin(0, 0.5);
+    const statsText = [
+      `HP: ${race.hp * 10}`,
+      `Сила: ${race.strength}`,
+      `Защита: ${race.defense}`,
+      `Ловкость: ${race.agility}`,
+      `Интеллект: ${race.intelligence}`,
+      `Удача: ${race.luck}`,
+    ].join('  •  ');
 
-	 this.add.text(x - 245, y - 10, race.passiveDescription, {
-	   fontFamily: 'Arial',
-	   fontSize: '16px',
-	   color: '#d8c7a3',
-	   wordWrap: {
-	     width: 500,
-	   },
-	   lineSpacing: 4,
-	 }).setOrigin(0, 0);
+    this.add.text(width / 2 - 245, y + 18, statsText, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: 490,
+      },
+    }).setOrigin(0, 0.5);
 
-	 this.add.text(x - 245, y + 125, `Активный навык: ${race.activeName}`, {
-	   fontFamily: 'Arial',
-	   fontSize: '21px',
-	   color: '#70a6ff',
-	 }).setOrigin(0, 0.5);
+    this.add.text(width / 2 - 245, y + 52, `Пассивка: ${race.passiveName}`, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.green,
+      wordWrap: {
+        width: 330,
+      },
+    }).setOrigin(0, 0.5);
 
-	 this.add.text(x - 245, y + 160, race.activeDescription, {
-	   fontFamily: 'Arial',
-	   fontSize: '16px',
-	   color: '#d8c7a3',
-	   wordWrap: {
-	     width: 500,
-	   },
-	   lineSpacing: 4,
-	 }).setOrigin(0, 0);
+    this.add.text(width / 2 - 245, y + 78, `Навык: ${race.activeName}`, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.blue,
+      wordWrap: {
+        width: 330,
+      },
+    }).setOrigin(0, 0.5);
 
-	 const buttonBg = this.add.rectangle(x, y + 350, 420, 70, 0x241515)
-	   .setStrokeStyle(2, 0xf0d58a)
-	   .setInteractive({ useHandCursor: true });
-
-	 this.add.text(x, y + 350, 'Выбрать человека', {
-	   fontFamily: 'Arial',
-	   fontSize: '25px',
-	   color: '#f0d58a',
-	 }).setOrigin(0.5);
-
-	 const selectRace = () => {
-	   this.selectRace(race);
-	 };
-
-	 card.on('pointerdown', selectRace);
-	 buttonBg.on('pointerdown', selectRace);
-	}
+    createButton(
+      this,
+      width / 2 + 205,
+      y + 56,
+      'Выбрать',
+      () => {
+        this.selectRace(race);
+      },
+      130,
+      48,
+      {
+        small: true,
+      }
+    );
+  }
 
   private selectRace(race: RaceData) {
     player.raceId = race.id;
-		player.name = race.name;
+    player.name = race.name;
 
     player.maxHp = race.hp * 10;
     player.hp = player.maxHp;

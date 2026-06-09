@@ -77,3 +77,7 @@ export function claimQuestReward(questId: string): string {
 Опыт: +${quest.rewardExp}
 Зелья: +${quest.rewardPotions ?? 0}${levelText}`;
 }
+
+export function getQuests() {
+  return quests;
+}

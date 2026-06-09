@@ -8,12 +8,21 @@ import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   addItemToInventory,
-  getPlayerStats,
   getRarityColor,
   getRarityText,
 } from '../systems/InventorySystem';
 
 import { saveGameAsync } from '../systems/SaveSystem';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
+
 
 export class ShopScene extends Phaser.Scene {
   constructor() {
@@ -21,255 +30,199 @@ export class ShopScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
-    const stats = getPlayerStats(player);
+    createSceneBackground(this);
+    createTitle(this, 'Лавка снабжения', 'Покупка зелий и полезных вещей перед спуском');
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
-
-    this.createBackground();
-
-    this.add.text(width / 2, 65, 'Магазин', {
-      fontFamily: 'Arial',
-      fontSize: '56px',
-      color: '#d8b56d',
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 120, 'Лавка умирающего света', {
-      fontFamily: 'Arial',
-      fontSize: '23px',
-      color: '#9c8f7a',
-      align: 'center',
-    }).setOrigin(0.5);
-
-    this.createMerchantCard();
-
-    this.createGoldPanel(stats);
-
-    this.add.text(width / 2, 445, 'Товары', {
-      fontFamily: 'Arial',
-      fontSize: '34px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
-
+    this.createGoldPanel();
     this.createShopItems();
-
-    this.add.text(
-      width / 2,
-      1080,
-      'Лишний лут можно продать в инвентаре.\nКузница усилит найденное снаряжение.',
-      {
-        fontFamily: 'Arial',
-        fontSize: '21px',
-        color: '#70675a',
-        align: 'center',
-        lineSpacing: 7,
-        wordWrap: {
-          width: 580,
-        },
-      }
-    ).setOrigin(0.5);
 
     createBottomNav(this, {
       activeScene: 'ShopScene',
     });
   }
 
-  private createBackground() {
-    const { width, height } = this.scale;
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x0a0808);
-
-    for (let i = 0; i < 24; i++) {
-      const x = Phaser.Math.Between(20, width - 20);
-      const y = Phaser.Math.Between(150, height - 160);
-      const size = Phaser.Math.Between(1, 3);
-      const alpha = Phaser.Math.FloatBetween(0.05, 0.14);
-
-      this.add.circle(x, y, size, 0xd8b56d, alpha);
-    }
-
-    this.add.rectangle(width / 2, 520, 620, 760, 0x111111, 0.72);
-    this.add.rectangle(width / 2, 520, 580, 720, 0x0a0a0a, 0.68);
-  }
-
-  private createMerchantCard() {
+  private createGoldPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 250, 620, 200, 0x171313);
-    const inner = this.add.rectangle(width / 2, 250, 580, 160, 0x121212);
-    inner.setStrokeStyle(2, 0x8b5a2b);
+    const panelY = 180;
 
-    this.add.text(160, 230, '☽', {
-      fontFamily: 'Arial',
-      fontSize: '62px',
-      color: '#d8b56d',
+    createPanel(this, width / 2, panelY, 620, 135, {
+      alpha: 0.72,
+      stroke: false,
+      warm: true,
+    });
+
+    this.add.text(width / 2, panelY - 38, 'Твои ресурсы', {
+      fontFamily: UI.font.title,
+      fontSize: '23px',
+      color: UI.colors.goldText,
     }).setOrigin(0.5);
 
-    this.add.text(390, 210, 'Старый торговец', {
-      fontFamily: 'Arial',
-      fontSize: '30px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
-
-    this.add.text(
-      390,
-      265,
-      '“Золото пахнет одинаково —\nи у живых, и у мёртвых.”',
-      {
-        fontFamily: 'Arial',
-        fontSize: '21px',
-        color: '#9c8f7a',
-        align: 'center',
-        lineSpacing: 6,
-      }
-    ).setOrigin(0.5);
-  }
-
-  private createGoldPanel(stats: ReturnType<typeof getPlayerStats>) {
-    const { width } = this.scale;
-
-    this.add.rectangle(width / 2, 375, 620, 90, 0x171313);
-
-    this.add.text(
+    createSmallText(
+      this,
       width / 2,
-      375,
-      `Золото: ${player.gold}     Зелья: ${player.potions}\nHP: ${player.hp}/${stats.maxHp}     Атака: ${stats.attack}`,
+      panelY + 18,
+      `Золото: ${player.gold}\nЗелья здоровья: ${player.potions}`,
       {
-        fontFamily: 'Arial',
-        fontSize: '23px',
-        color: '#e6d2aa',
-        align: 'center',
-        lineSpacing: 7,
+        fontSize: '19px',
+        color: UI.colors.text,
+        width: 540,
       }
-    ).setOrigin(0.5);
+    );
   }
 
   private createShopItems() {
     const { width } = this.scale;
 
-    this.createShopCard({
-      y: 535,
-      icon: '🧪',
-      title: 'Зелье лечения',
-      description: 'Восстанавливает здоровье в бою.',
-      priceText: '10 золота',
+    const panelY = 575;
+
+    createPanel(this, width / 2, panelY, 620, 560, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 235, 'Товары');
+
+    this.createShopItemCard({
+      y: panelY - 150,
+      icon: '✚',
+      title: 'Зелье здоровья',
+      description: 'Полезно в бою. Лучше всегда иметь запас.',
+      price: 25,
+      buttonText: 'Купить',
       onBuy: () => {
         this.buyPotion();
       },
     });
 
-    this.createShopCard({
-      y: 640,
-      icon: '🎲',
+    this.createShopItemCard({
+      y: panelY - 25,
+      icon: '✦',
       title: 'Случайный предмет',
-      description: 'Оружие, броня или амулет случайной редкости.',
-      priceText: '60 золота',
+      description: 'Можно получить оружие, броню или талисман.',
+      price: 80,
+      buttonText: 'Купить',
       onBuy: () => {
         this.buyRandomItem();
       },
     });
 
-    this.createShopCard({
-      y: 745,
-      icon: '❤',
-      title: 'Усилить здоровье',
-      description: 'Навсегда увеличивает максимальное здоровье.',
-      priceText: '35 золота',
+    this.createShopItemCard({
+      y: panelY + 100,
+      icon: '♥',
+      title: 'Улучшение здоровья',
+      description: 'Навсегда увеличивает максимальное HP героя.',
+      price: 120,
+      buttonText: 'Улучшить',
       onBuy: () => {
         this.buyHpUpgrade();
       },
     });
 
-    this.createShopCard({
-      y: 850,
-      icon: '⚔',
-      title: 'Усилить атаку',
-      description: 'Навсегда увеличивает базовую атаку героя.',
-      priceText: '45 золота',
-      onBuy: () => {
-        this.buyAttackUpgrade();
-      },
-    });
-
-    this.add.rectangle(width / 2, 960, 620, 85, 0x121212);
-    this.add.text(
+    createSmallText(
+      this,
       width / 2,
-      960,
-      'Совет: сначала купи пару зелий,\nа потом трать золото на кузницу.',
+      panelY + 220,
+      'Новые товары и улучшения позже можно добавить в кузницу или редкую лавку.',
       {
-        fontFamily: 'Arial',
-        fontSize: '21px',
-        color: '#8f826d',
-        align: 'center',
-        lineSpacing: 6,
+        fontSize: '15px',
+        color: UI.colors.textMuted,
+        width: 540,
       }
-    ).setOrigin(0.5);
+    );
   }
 
-  private createShopCard(options: {
+  private createShopItemCard(config: {
     y: number;
     icon: string;
     title: string;
     description: string;
-    priceText: string;
+    price: number;
+    buttonText: string;
     onBuy: () => void;
   }) {
     const { width } = this.scale;
 
-    const bg = this.add.rectangle(width / 2, options.y, 620, 88, 0x121212);
-    bg.setStrokeStyle(2, 0x8b5a2b);
+    const canBuy = player.gold >= config.price;
 
-    this.add.text(78, options.y, options.icon, {
-      fontFamily: 'Arial',
-      fontSize: '34px',
-      color: '#d8b56d',
+    this.add.rectangle(width / 2, config.y + 4, 560, 104, 0x000000, 0.22);
+
+    this.add.rectangle(width / 2, config.y, 560, 104, 0x14100d, 0.86)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.45);
+
+    this.add.circle(width / 2 - 245, config.y, 28, 0x2a1d13, 1)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.6);
+
+    this.add.text(width / 2 - 245, config.y, config.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '24px',
+      color: UI.colors.goldText,
     }).setOrigin(0.5);
 
-    this.add.text(120, options.y - 22, options.title, {
-      fontFamily: 'Arial',
-      fontSize: '22px',
-      color: '#e6d2aa',
+    this.add.text(width / 2 - 205, config.y - 30, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '19px',
+      color: UI.colors.goldText,
     }).setOrigin(0, 0.5);
 
-    this.add.text(120, options.y + 16, options.description, {
-      fontFamily: 'Arial',
-      fontSize: '17px',
-      color: '#8f826d',
+    this.add.text(width / 2 - 205, config.y - 2, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.text,
       wordWrap: {
         width: 310,
       },
     }).setOrigin(0, 0.5);
 
-    createButton(this, 555, options.y, options.priceText, options.onBuy, 155, 52);
+    this.add.text(width / 2 - 205, config.y + 31, `Цена: ${config.price} золота`, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: canBuy ? UI.colors.textMuted : UI.colors.red,
+    }).setOrigin(0, 0.5);
+
+    createButton(
+      this,
+      width / 2 + 205,
+      config.y + 6,
+      config.buttonText,
+      config.onBuy,
+      150,
+      46,
+      {
+        small: true,
+        disabled: !canBuy,
+      }
+    );
   }
 
   private buyPotion() {
-    const cost = 10;
+    const price = 25;
 
-    if (player.gold < cost) {
-      this.showMessage('Недостаточно золота.', '#c24747');
+    if (player.gold < price) {
+      this.showMessage('Недостаточно золота.');
       return;
     }
 
-    player.gold -= cost;
+    player.gold -= price;
     player.potions += 1;
 
     void saveGameAsync();
 
-    this.showMessage('Куплено зелье лечения.', '#75d184');
+    this.showMessage('Куплено зелье здоровья.');
   }
 
   private buyRandomItem() {
-    const cost = 60;
+    const price = 80;
 
-    if (player.gold < cost) {
-      this.showMessage('Недостаточно золота.', '#c24747');
+    if (player.gold < price) {
+      this.showMessage('Недостаточно золота.');
       return;
     }
 
     const item = getRandomLootItem();
 
-    player.gold -= cost;
+    player.gold -= price;
     addItemToInventory(player, item.id);
 
     void saveGameAsync();
@@ -281,61 +234,63 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private buyHpUpgrade() {
-    const cost = 35;
+    const price = 120;
 
-    if (player.gold < cost) {
-      this.showMessage('Недостаточно золота.', '#c24747');
+    if (player.gold < price) {
+      this.showMessage('Недостаточно золота.');
       return;
     }
 
-    player.gold -= cost;
-    player.maxHp += 8;
-    player.hp += 8;
+    player.gold -= price;
+    player.maxHp += 10;
+    player.hp += 10;
 
     void saveGameAsync();
 
-    this.showMessage('Максимальное здоровье увеличено на 8.', '#75d184');
+    this.showMessage('Максимальное HP увеличено на 10.');
   }
 
-  private buyAttackUpgrade() {
-    const cost = 45;
-
-    if (player.gold < cost) {
-      this.showMessage('Недостаточно золота.', '#c24747');
-      return;
-    }
-
-    player.gold -= cost;
-    player.attack += 1;
-
-    void saveGameAsync();
-
-    this.showMessage('Базовая атака увеличена на 1.', '#75d184');
-  }
-
-  private showMessage(message: string, color = '#e6d2aa') {
-    const { width, height } = this.scale;
-
-    this.children.removeAll();
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
-
-    this.add.rectangle(width / 2, height / 2, 620, 330, 0x181414);
-    this.add.rectangle(width / 2, height / 2, 580, 290, 0x0d0d0d);
-
-    this.add.text(width / 2, height / 2 - 40, message, {
-      fontFamily: 'Arial',
-      fontSize: '28px',
-      color,
+  private showMessage(message: string, _color?: string) {
+    const { width } = this.scale;
+    
+    createPanel(this, width / 2, 610, 600, 240, {
+      alpha: 0.98,
+      stroke: true,
+      warm: true,
+    }).setDepth(100);
+  
+    this.add.text(width / 2, 550, 'Лавка', {
+      fontFamily: UI.font.title,
+      fontSize: '30px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
+  
+    this.add.text(width / 2, 615, message, {
+      fontFamily: UI.font.body,
+      fontSize: '21px',
+      color: UI.colors.text,
       align: 'center',
-      lineSpacing: 8,
       wordWrap: {
         width: 520,
       },
-    }).setOrigin(0.5);
-
-    createButton(this, width / 2, height / 2 + 105, 'Продолжить', () => {
-      this.scene.restart();
-    }, 440, 70);
+    }).setOrigin(0.5).setDepth(102);
+  
+    const ok = createButton(
+      this,
+      width / 2,
+      700,
+      'Понятно',
+      () => {
+        this.scene.restart();
+      },
+      220,
+      54
+    );
+  
+    ok.shadow.setDepth(100);
+    ok.bg.setDepth(101);
+    ok.label.setDepth(102);
   }
 }

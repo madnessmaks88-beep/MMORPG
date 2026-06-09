@@ -24,16 +24,31 @@ import {
 } from '../systems/InventorySystem';
 import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
 
+import { createButton } from '../ui/createButton';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createTitle,
+} from '../ui/theme';
+
+
+
 
 type BattleStats = {
   maxHp: number;
+  maxEnergy: number;
+
   attack: number;
   defense: number;
   critChance: number;
+
   agility: number;
   luck: number;
   strength: number;
   intelligence: number;
+
   dodgeChance: number;
   trapDodgeChance: number;
   lootChanceBonus: number;
@@ -54,10 +69,6 @@ export class BattleScene extends Phaser.Scene {
   private playerHpBar!: Phaser.GameObjects.Rectangle;
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
   private energyBar!: Phaser.GameObjects.Rectangle;
-
-  private powerButtonBg!: Phaser.GameObjects.Rectangle;
-  private bloodButtonBg!: Phaser.GameObjects.Rectangle;
-  private potionButtonBg!: Phaser.GameObjects.Rectangle;
 
   private returnToDungeon = false;
   private isBattleEnded = false;
@@ -91,134 +102,134 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+  const { width } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+  const floor = gameState.floorRun.currentFloor || 1;
+  const room = getCurrentRoom();
 
-    const floor = gameState.floorRun.currentFloor || 1;
-    const room = getCurrentRoom();
+  createSceneBackground(this);
 
-    this.add.text(width / 2, 60, `Бой — этаж ${floor}`, {
-      fontFamily: 'Arial',
-      fontSize: '46px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
+  createTitle(
+    this,
+    `Бой — этаж ${floor}`,
+    room ? room.title : `${player.name} против ${this.enemy.name}`
+  );
 
-    this.add.text(width / 2, 105, room ? room.title : this.enemy.name, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#9c8f7a',
-    }).setOrigin(0.5);
+  createPanel(this, width / 2, 185, 620, 150, {
+    alpha: 0.72,
+    stroke: false,
+    warm: true,
+  });
 
-    this.add.rectangle(width / 2, 185, 620, 175, 0x171313);
-    this.add.rectangle(width / 2, 185, 580, 135, 0x0d0d0d);
+  this.createStatusBars();
 
-    this.createStatusBars();
+  this.createBattleBackground();
 
-    this.createBattleBackground();
+  this.enemyCard = this.createFighterCard(
+    width / 2,
+    430,
+    this.enemy.name,
+    '☠',
+    0x241515
+  );
 
-    this.enemyCard = this.createFighterCard(
-      width / 2,
-      430,
-      this.enemy.name,
-      '☠',
-      0x241515
-    );
+  this.playerCard = this.createFighterCard(
+    width / 2,
+    685,
+    player.name,
+    '🗡',
+    0x151b24
+  );
 
-    this.playerCard = this.createFighterCard(
-      width / 2,
-      685,
-      player.name,
-      '🗡',
-      0x151b24
-    );
+  createPanel(this, width / 2, 830, 620, 135, {
+    alpha: 0.68,
+    stroke: false,
+    warm: true,
+  });
 
-      this.logText = this.add.text(width / 2, 830, 'Выбери действие.', {
-      fontFamily: 'Arial',
-      fontSize: '25px',
-      color: '#b8aa91',
-      align: 'center',
-      wordWrap: {
-        width: 620,
-      },
-      lineSpacing: 6,
-    }).setOrigin(0.5);
+  this.logText = this.add.text(width / 2, 830, 'Выбери действие.', {
+    fontFamily: UI.font.body,
+    fontSize: '22px',
+    color: UI.colors.text,
+    align: 'center',
+    wordWrap: {
+      width: 580,
+    },
+    lineSpacing: 6,
+  }).setOrigin(0.5);
 
-    this.createActionButtons();
+  this.createActionButtons();
 
-    this.updateTexts();
-  }
+  this.updateTexts();
+}
 
   private createActionButtons() {
-    this.createSkillButton(
-      220,
-      980,
+    const { width } = this.scale;
+
+    createPanel(this, width / 2, 1060, 620, 300, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createButton(
+      this,
+      width / 2,
+      920,
       'Атака',
-      '0 EN',
       () => {
         this.handleAttack();
-      }
+      },
+      540,
+      54
     );
 
-    this.powerButtonBg = this.createSkillButton(
-      500,
-      980,
+    createButton(
+      this,
+      width / 2,
+      982,
       'Сильный удар',
-      '2 EN',
       () => {
         this.handlePowerAttack();
       },
+      540,
+      54,
       {
         disabled: player.energy < 2,
       }
     );
 
-    this.bloodButtonBg = this.createSkillButton(
-      220,
-      1060,
+    createButton(
+      this,
+      width / 2,
+      1044,
       'Кровавый удар',
-      '1 EN',
       () => {
         this.handleBloodStrike();
       },
+      540,
+      54,
       {
-        disabled: player.energy < 1,
+        disabled: player.hp <= 10,
+        danger: true,
       }
     );
 
-    this.createSkillButton(
-      500,
-      1060,
-      'Защита',
-      '0 EN',
-      () => {
-        this.handleDefend();
-      }
-    );
-
-    this.potionButtonBg = this.createSkillButton(
-      220,
-      1140,
-      'Зелье',
-      `🧪 ${player.potions}`,
-      () => {
-        this.handlePotion();
-      },
-      {
-        disabled: player.potions <= 0,
-      }
-    );
-
-    this.createSkillButton(
-      500,
-      1140,
-      'Отчаянный удар',
+    const desperateText =
       this.desperateStrikeCooldown > 0
-        ? `КД ${this.desperateStrikeCooldown}`
-        : '3 EN',
-      () => this.handleDesperateStrike(),
+        ? `Отчаянный удар: КД ${this.desperateStrikeCooldown}`
+        : 'Отчаянный удар';
+
+    createButton(
+      this,
+      width / 2,
+      1106,
+      desperateText,
+      () => {
+        this.handleDesperateStrike();
+      },
+      540,
+      54,
       {
         disabled:
           player.raceId !== 'human' ||
@@ -226,7 +237,24 @@ export class BattleScene extends Phaser.Scene {
           this.desperateStrikeCooldown > 0,
       }
     );
+
+    createButton(
+      this,
+      width / 2,
+      1168,
+      `Зелье здоровья: ${player.potions}`,
+      () => {
+        this.handlePotion();
+      },
+      540,
+      54,
+      {
+        disabled: player.potions <= 0,
+      }
+    );
   }
+
+  
 
   private createScaledEnemy(enemy: EnemyData): EnemyData {
     const floor = gameState.floorRun.currentFloor || 1;
@@ -309,6 +337,8 @@ export class BattleScene extends Phaser.Scene {
 
      attack: stats.attack + bonus.attack,
      defense: stats.defense + bonus.defense,
+
+     maxEnergy: stats.maxEnergy,
 
      strength: battleStrength,
      agility: battleAgility,
@@ -434,6 +464,7 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+
   private checkHumanPassive() {
     if (player.raceId !== 'human') {
       return '';
@@ -528,84 +559,6 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private updateActionButtons() {
-    this.setSkillButtonState(this.powerButtonBg, player.energy >= 2);
-    this.setSkillButtonState(this.bloodButtonBg, player.energy >= 1);
-    this.setSkillButtonState(this.potionButtonBg, player.potions > 0);
-  }
-
-  private setSkillButtonState(
-    bg: Phaser.GameObjects.Rectangle,
-    enabled: boolean
-  ) {
-    bg.setFillStyle(enabled ? 0x241515 : 0x121212);
-    bg.setStrokeStyle(2, enabled ? 0x8b5a2b : 0x3b3028);
-  }
-
-  private createSkillButton(
-    x: number,
-    y: number,
-    title: string,
-    subtitle: string,
-    onClick: () => void,
-    options: {
-      width?: number;
-      height?: number;
-      disabled?: boolean;
-    } = {}
-  ) {
-    const buttonWidth = options.width ?? 290;
-    const buttonHeight = options.height ?? 64;
-    const disabled = options.disabled ?? false;
-
-    const container = this.add.container(x, y);
-
-    const bg = this.add.rectangle(
-      0,
-      0,
-      buttonWidth,
-      buttonHeight,
-      disabled ? 0x121212 : 0x241515
-    );
-
-    bg.setStrokeStyle(2, disabled ? 0x3b3028 : 0x8b5a2b);
-
-    const titleText = this.add.text(0, -11, title, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: disabled ? '#5d554c' : '#e6d2aa',
-      align: 'center',
-    }).setOrigin(0.5);
-
-    const subtitleText = this.add.text(0, 15, subtitle, {
-      fontFamily: 'Arial',
-      fontSize: '15px',
-      color: disabled ? '#4f4940' : '#8f826d',
-      align: 'center',
-    }).setOrigin(0.5);
-
-    container.add([bg, titleText, subtitleText]);
-
-    bg.setInteractive({ useHandCursor: !disabled });
-
-    bg.on('pointerover', () => {
-      if (!disabled) {
-        bg.setFillStyle(0x3a2020);
-      }
-    });
-
-    bg.on('pointerout', () => {
-      bg.setFillStyle(disabled ? 0x121212 : 0x241515);
-    });
-
-    bg.on('pointerdown', () => {
-      if (!disabled) {
-        onClick();
-      }
-    });
-
-    return bg;
-  }
 
   private createStatusBars() {
     const { width } = this.scale;
@@ -672,22 +625,6 @@ export class BattleScene extends Phaser.Scene {
     }).setOrigin(1, 0.5);
   }
 
-  private setBarValue(
-    bar: Phaser.GameObjects.Rectangle,
-    current: number,
-    max: number,
-    fullWidth = 430
-  ) {
-    const percent = Phaser.Math.Clamp(current / max, 0, 1);
-    const targetWidth = Math.max(0, fullWidth * percent);
-
-    this.tweens.add({
-      targets: bar,
-      width: targetWidth,
-      duration: 220,
-      ease: 'Power2',
-    });
-  }
 
   private createFighterCard(
     x: number,
@@ -696,30 +633,106 @@ export class BattleScene extends Phaser.Scene {
     icon: string,
     color: number
   ) {
+    const isEnemy = icon === '☠';
+  
     const container = this.add.container(x, y);
-
-    const shadow = this.add.rectangle(0, 12, 400, 150, 0x000000, 0.35);
-    const bg = this.add.rectangle(0, 0, 400, 150, color);
-    bg.setStrokeStyle(3, 0x8b5a2b);
-
-    const iconText = this.add.text(0, -20, icon, {
-      fontFamily: 'Arial',
-      fontSize: '62px',
-      color: '#d8b56d',
+  
+    const strokeColor = isEnemy ? 0x6b2a2a : UI.colors.goldDark;
+    const iconColor = isEnemy ? UI.colors.red : UI.colors.goldText;
+    const titleColor = isEnemy ? UI.colors.red : UI.colors.goldText;
+  
+    const shadow = this.add.rectangle(0, 6, 620, 190, 0x000000, 0.24);
+  
+    const bg = this.add.rectangle(0, 0, 620, 190, color, 0.88)
+      .setStrokeStyle(2, strokeColor, 0.6);
+  
+    const iconBg = this.add.circle(-245, -35, 38, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
+      .setStrokeStyle(2, strokeColor, 0.65);
+  
+    const iconText = this.add.text(-245, -35, icon, {
+      fontFamily: UI.font.body,
+      fontSize: '31px',
+      color: iconColor,
     }).setOrigin(0.5);
-
-    const nameText = this.add.text(0, 50, name, {
-      fontFamily: 'Arial',
+  
+    const nameText = this.add.text(-190, -58, name, {
+      fontFamily: UI.font.title,
       fontSize: '25px',
-      color: '#e6d2aa',
-      align: 'center',
-      wordWrap: {
-        width: 380,
-      },
-    }).setOrigin(0.5);
-
-    container.add([shadow, bg, iconText, nameText]);
-
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0, 0.5);
+  
+    const hpText = this.add.text(-190, -18, '', {
+      fontFamily: UI.font.body,
+      fontSize: '18px',
+      color: UI.colors.text,
+    }).setOrigin(0, 0.5);
+  
+    const extraText = this.add.text(-190, 24, '', {
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.textMuted,
+    }).setOrigin(0, 0.5);
+  
+    const barBack = this.add.rectangle(0, 72, 520, 10, 0x080808, 0.9);
+    const hpBar = this.add.rectangle(-260, 72, 520, 10, isEnemy ? 0xff6b6b : 0x75d184, 0.95)
+      .setOrigin(0, 0.5);
+  
+    const energyBack = this.add.rectangle(0, 92, 520, 8, 0x080808, isEnemy ? 0 : 0.9);
+    const energyBar = this.add.rectangle(-260, 92, 520, 8, 0x70a6ff, isEnemy ? 0 : 0.9)
+      .setOrigin(0, 0.5);
+  
+    container.add([
+      shadow,
+      bg,
+      iconBg,
+      iconText,
+      nameText,
+      hpText,
+      extraText,
+      barBack,
+      hpBar,
+      energyBack,
+      energyBar,
+    ]);
+  
+    if (isEnemy) {
+      this.enemyHpText = hpText;
+      this.enemyHpBar = hpBar;
+    
+      extraText.setText(`Атака: ${this.enemy.attack}  •  Защита: ${this.enemy.defense}`);
+    } else {
+      this.playerHpText = hpText;
+      this.playerHpBar = hpBar;
+      this.energyBar = energyBar;
+    
+      this.energyText = extraText;
+    
+      const stats = this.getBattleStats();
+    
+      this.potionText = this.add.text(245, 10, `Зелья: ${player.potions}`, {
+        fontFamily: UI.font.body,
+        fontSize: '16px',
+        color: UI.colors.textMuted,
+        align: 'right',
+      }).setOrigin(1, 0.5);
+    
+      const statsText = this.add.text(245, -34, [
+        `Атака: ${stats.attack}`,
+        `Защита: ${stats.defense}`,
+        `Крит: ${Math.round(stats.critChance * 100)}%`,
+      ].join('\n'), {
+        fontFamily: UI.font.body,
+        fontSize: '16px',
+        color: UI.colors.textMuted,
+        align: 'right',
+        lineSpacing: 4,
+      }).setOrigin(1, 0.5);
+    
+      container.add([this.potionText, statsText]);
+    }
+  
     return container;
   }
 
@@ -955,21 +968,6 @@ export class BattleScene extends Phaser.Scene {
     this.enemyTurn(actionText);
   }
 
-  private handleDefend() {
-    if (!this.canAct()) return;
-    
-    this.isBusy = true;
-    
-    this.showFloatingText(
-      this.playerCard.x,
-      this.playerCard.y - 55,
-      'Защита',
-      '#70a6ff'
-    );
-  
-    this.enemyTurn('Ты поднимаешь оружие и готовишься принять удар.', true);
-  }
-
   private handleVictory(playerActionText: string) {
     if (this.isBattleEnded) {
       return;
@@ -1163,19 +1161,19 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateTexts() {
-    const stats = getPlayerStats(player);
- 
-    this.playerHpText.setText(`HP ${player.hp}/${stats.maxHp}`);
-    this.enemyHpText.setText(`HP ${this.enemy.hp}/${this.enemy.maxHp}`);
-    this.energyText.setText(`EN ${player.energy}/${player.maxEnergy}`);
-    this.potionText.setText(`🧪 ${player.potions}`);
- 
-    this.setBarValue(this.playerHpBar, player.hp, stats.maxHp);
-    this.setBarValue(this.enemyHpBar, this.enemy.hp, this.enemy.maxHp);
-    this.setBarValue(this.energyBar, player.energy, player.maxEnergy);
+   const stats = this.getBattleStats();
 
-    if (this.powerButtonBg && this.bloodButtonBg && this.potionButtonBg) {
-      this.updateActionButtons();
-    }
+   this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
+   this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
+   this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
+   this.potionText.setText(`Зелья: ${player.potions}`);
+
+   const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
+   const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
+   const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
+
+   this.playerHpBar.width = 520 * playerHpRatio;
+   this.enemyHpBar.width = 520 * enemyHpRatio;
+   this.energyBar.width = 520 * energyRatio;
   }
 }

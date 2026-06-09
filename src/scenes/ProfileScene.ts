@@ -6,7 +6,17 @@ import { getRaceById } from '../data/races';
 import { getRelicById } from '../data/relics';
 
 import { getPlayerStats } from '../systems/InventorySystem';
+
 import { createBottomNav } from '../ui/createBottomNav';
+
+import {
+  UI,
+  createPanel,
+  createSceneBackground,
+  createSectionTitle,
+  createSmallText,
+  createTitle,
+} from '../ui/theme';
 
 export class ProfileScene extends Phaser.Scene {
   constructor() {
@@ -14,29 +24,11 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   create() {
-    const { width } = this.scale;
+    createSceneBackground(this);
+    createTitle(this, 'Профиль героя', 'Путь того, кто спускается ниже');
 
-    const stats = getPlayerStats(player);
-    const race = player.raceId ? getRaceById(player.raceId) : null;
-
-    this.createBackground();
-
-    this.add.text(width / 2, 55, 'Профиль героя', {
-      fontFamily: 'Arial',
-      fontSize: '42px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, 98, 'Путь того, кто спускается ниже', {
-      fontFamily: 'Arial',
-      fontSize: '19px',
-      color: '#9c8f7a',
-    }).setOrigin(0.5);
-
-    this.createHeroPanel(race?.name ?? 'Не выбрана');
-    this.createStatsPanel(stats);
+    this.createHeroPanel();
+    this.createStatsPanel();
     this.createProgressPanel();
     this.createRelicsPanel();
 
@@ -45,68 +37,64 @@ export class ProfileScene extends Phaser.Scene {
     });
   }
 
-  private createBackground() {
-	  const { width, height } = this.scale;
-
-	  this.add.rectangle(width / 2, height / 2, width, height, 0x070605);
-	  this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.94);
-
-	  this.add.circle(width / 2, 170, 150, 0x2a1209, 0.24);
-	  this.add.circle(width / 2, 170, 90, 0x7a2b14, 0.14);
-
-	  for (let i = 0; i < 40; i++) {
-	    const x = Phaser.Math.Between(24, width - 24);
-	    const y = Phaser.Math.Between(30, height - 125);
-	    const size = Phaser.Math.Between(1, 3);
-
-	    this.add.circle(x, y, size, 0xd8b56d, 0.045);
-	  }
-
-	  this.add.rectangle(width / 2, height - 105, width, 210, 0x090706, 0.34);
-	  this.add.rectangle(width / 2, height - 55, width - 36, 92, 0x000000, 0.16);
-	}
-
-  private createHeroPanel(raceName: string) {
+  private createHeroPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 190, 600, 130, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b, 0.55);
+    const race = player.raceId ? getRaceById(player.raceId) : null;
 
-    this.add.text(width / 2, 150, player.name, {
-      fontFamily: 'Arial',
-      fontSize: '32px',
-      color: '#f0d58a',
+    const panelY = 205;
+
+    createPanel(this, width / 2, panelY, 620, 165, {
+      alpha: 0.88,
+      stroke: true,
+      warm: true,
+    });
+
+    this.add.circle(width / 2, panelY - 48, 32, 0x2a1d13, 1)
+      .setStrokeStyle(2, UI.colors.goldDark, 0.55);
+
+    this.add.text(width / 2, panelY - 48, '◆', {
+      fontFamily: UI.font.body,
+      fontSize: '27px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, panelY - 8, player.name, {
+      fontFamily: UI.font.title,
+      fontSize: '31px',
+      color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5);
 
     const text = [
-      `Раса: ${raceName}`,
+      `Раса: ${race?.name ?? 'Не выбрана'}`,
       `Уровень: ${player.level}`,
       `Опыт: ${player.exp}/${player.expToNextLevel}`,
       `Золото: ${player.gold}`,
-    ].join('\n');
+    ].join('  •  ');
 
-    this.add.text(width / 2, 215, text, {
-      fontFamily: 'Arial',
-      fontSize: '19px',
-      color: '#d8c7a3',
-      align: 'center',
-      lineSpacing: 5,
-    }).setOrigin(0.5);
+    createSmallText(this, width / 2, panelY + 45, text, {
+      fontSize: '16px',
+      color: UI.colors.text,
+      width: 560,
+    });
   }
 
-  private createStatsPanel(stats: ReturnType<typeof getPlayerStats>) {
+  private createStatsPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 400, 600, 260, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b, 0.55);
+    const stats = getPlayerStats(player);
 
-    this.add.text(width / 2, 295, 'Характеристики', {
-      fontFamily: 'Arial',
-      fontSize: '27px',
-      color: '#f0d58a',
-    }).setOrigin(0.5);
+    const panelY = 430;
+
+    createPanel(this, width / 2, panelY, 620, 285, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 112, 'Характеристики');
 
     const leftStats = [
       `HP: ${player.hp}/${stats.maxHp}`,
@@ -125,17 +113,15 @@ export class ProfileScene extends Phaser.Scene {
       `Интеллект: ${stats.intelligence}`,
     ].join('\n');
 
-    this.add.text(width / 2 - 250, 345, leftStats, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#d8c7a3',
-      lineSpacing: 7,
-    }).setOrigin(0, 0);
+    this.createStatColumn(width / 2 - 250, panelY - 55, leftStats);
+    this.createStatColumn(width / 2 + 25, panelY - 55, rightStats);
+  }
 
-    this.add.text(width / 2 + 20, 345, rightStats, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#d8c7a3',
+  private createStatColumn(x: number, y: number, text: string) {
+    this.add.text(x, y, text, {
+      fontFamily: UI.font.body,
+      fontSize: '19px',
+      color: UI.colors.text,
       lineSpacing: 7,
     }).setOrigin(0, 0);
   }
@@ -143,55 +129,65 @@ export class ProfileScene extends Phaser.Scene {
   private createProgressPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 610, 600, 145, 0x0d0d0d, 0.82);
+    const panelY = 660;
 
-    this.add.text(width / 2, 560, 'Прогресс спуска', {
-      fontFamily: 'Arial',
-      fontSize: '27px',
-      color: '#f0d58a',
+    createPanel(this, width / 2, panelY, 620, 145, {
+      alpha: 0.68,
+      stroke: false,
+      warm: true,
+    });
+
+    this.add.text(width / 2, panelY - 42, 'Прогресс спуска', {
+      fontFamily: UI.font.title,
+      fontSize: '23px',
+      color: UI.colors.goldText,
     }).setOrigin(0.5);
 
-    const nextTier = gameState.highestClearedTier + 1;
+    const activeRunText = gameState.floorRun.active
+      ? `Активный спуск: этаж ${gameState.floorRun.currentFloor}`
+      : 'Активный спуск: нет';
 
     const text = [
       `Рекорд этажа: ${gameState.highestClearedFloor}`,
       `Пройдено ярусов: ${gameState.highestClearedTier}`,
-      `Следующий ярус: ${nextTier}`,
-      `Активный забег: ${gameState.floorRun.active ? `этаж ${gameState.floorRun.currentFloor}` : 'нет'}`,
+      `Следующий ярус: ${gameState.highestClearedTier + 1}`,
+      activeRunText,
     ].join('\n');
 
-    this.add.text(width / 2, 625, text, {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#d8c7a3',
+    this.add.text(width / 2, panelY + 18, text, {
+      fontFamily: UI.font.body,
+      fontSize: '17px',
+      color: UI.colors.text,
       align: 'center',
-      lineSpacing: 6,
+      lineSpacing: 5,
     }).setOrigin(0.5);
   }
 
   private createRelicsPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 835, 600, 250, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b, 0.55);
+    const panelY = 870;
 
-    this.add.text(width / 2, 735, 'Реликвии', {
-      fontFamily: 'Arial',
-      fontSize: '27px',
-      color: '#f0d58a',
-    }).setOrigin(0.5);
+    createPanel(this, width / 2, panelY, 620, 250, {
+      alpha: 0.86,
+      stroke: true,
+      warm: false,
+    });
+
+    createSectionTitle(this, width / 2, panelY - 95, 'Реликвии');
 
     if (player.relicIds.length === 0) {
-      this.add.text(width / 2, 835, 'Реликвий пока нет.\nПобеди финального босса яруса, чтобы получить первую.', {
-        fontFamily: 'Arial',
-        fontSize: '20px',
-        color: '#70675a',
-        align: 'center',
-        wordWrap: {
+      createSmallText(
+        this,
+        width / 2,
+        panelY + 20,
+        'Реликвий пока нет.\nПобеди финального босса яруса, чтобы получить первую.',
+        {
+          fontSize: '19px',
+          color: UI.colors.textMuted,
           width: 520,
-        },
-        lineSpacing: 7,
-      }).setOrigin(0.5);
+        }
+      );
 
       return;
     }
@@ -208,13 +204,13 @@ export class ProfileScene extends Phaser.Scene {
       })
       .join('\n\n');
 
-    this.add.text(width / 2, 850, relicTexts, {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#d8c7a3',
+    this.add.text(width / 2, panelY + 20, relicTexts, {
+      fontFamily: UI.font.body,
+      fontSize: '17px',
+      color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 520,
+        width: 540,
       },
       lineSpacing: 6,
     }).setOrigin(0.5);

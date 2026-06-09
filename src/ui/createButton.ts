@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { UI } from './theme';
 
 export function createButton(
   scene: Phaser.Scene,
@@ -6,37 +7,74 @@ export function createButton(
   y: number,
   text: string,
   onClick: () => void,
-  width = 460,
-  height = 72
+  width = 500,
+  height = 64,
+  options?: {
+    disabled?: boolean;
+    small?: boolean;
+    danger?: boolean;
+  }
 ) {
-  const button = scene.add.container(x, y);
+  const disabled = options?.disabled ?? false;
+  const danger = options?.danger ?? false;
 
-  const bg = scene.add.rectangle(0, 0, width, height, 0x241515);
-  bg.setStrokeStyle(2, 0x8b5a2b);
+  const baseColor = disabled
+    ? 0x151515
+    : danger
+      ? 0x2a1010
+      : 0x21150f;
 
-  const label = scene.add.text(0, 0, text, {
-    fontFamily: 'Arial',
-    fontSize: '26px',
-    color: '#e6d2aa',
-  });
+  const strokeColor = disabled
+    ? 0x333333
+    : danger
+      ? 0xff6b6b
+      : UI.colors.goldDark;
 
-  label.setOrigin(0.5);
+  const textColor = disabled
+    ? '#555555'
+    : danger
+      ? '#ffb3b3'
+      : UI.colors.text;
 
-  button.add([bg, label]);
+  const shadow = scene.add.rectangle(x, y + 5, width, height, 0x000000, 0.28);
 
-  bg.setInteractive({ useHandCursor: true });
+  const bg = scene.add.rectangle(x, y, width, height, baseColor, 0.96)
+    .setStrokeStyle(2, strokeColor, disabled ? 0.45 : 0.8);
 
-  bg.on('pointerover', () => {
-    bg.setFillStyle(0x3a2020);
-  });
+  const label = scene.add.text(x, y, text, {
+    fontFamily: UI.font.body,
+    fontSize: options?.small ? '17px' : '20px',
+    color: textColor,
+  }).setOrigin(0.5);
 
-  bg.on('pointerout', () => {
-    bg.setFillStyle(0x241515);
-  });
+  if (!disabled) {
+    bg.setInteractive({ useHandCursor: true });
 
-  bg.on('pointerdown', () => {
-    onClick();
-  });
+    bg.on('pointerover', () => {
+      bg.setFillStyle(danger ? 0x3a1515 : 0x2c1d14, 1);
+      label.setColor(danger ? '#ffd0d0' : '#f0d58a');
+    });
 
-  return button;
+    bg.on('pointerout', () => {
+      bg.setFillStyle(baseColor, 0.96);
+      label.setColor(textColor);
+    });
+
+    bg.on('pointerdown', () => {
+      bg.setScale(0.985);
+      label.setScale(0.985);
+    });
+
+    bg.on('pointerup', () => {
+      bg.setScale(1);
+      label.setScale(1);
+      onClick();
+    });
+  }
+
+  return {
+    shadow,
+    bg,
+    label,
+  };
 }
