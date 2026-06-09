@@ -10,6 +10,8 @@ import { getPlayerStats } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
 
+import { getRelicById } from '../data/relics';
+
 export class CampScene extends Phaser.Scene {
   private readonly campfireCooldownMs = 5 * 60 * 1000;
 
@@ -192,6 +194,25 @@ export class CampScene extends Phaser.Scene {
       color: '#d8c7a3',
       lineSpacing: 6,
     }).setOrigin(0, 0);
+
+    const relicNames = player.relicIds
+      .map(id => getRelicById(id)?.name)
+      .filter(Boolean);
+      
+    const relicText =
+      relicNames.length > 0
+        ? `Реликвии: ${relicNames.join(', ')}`
+        : 'Реликвии: нет';
+      
+    this.add.text(width / 2, cardY + 105, relicText, {
+      fontFamily: 'Arial',
+      fontSize: '16px',
+      color: relicNames.length > 0 ? '#f0d58a' : '#70675a',
+      align: 'center',
+      wordWrap: {
+        width: 540,
+      },
+    }).setOrigin(0.5);
   }
 
   private createActionCards() {
@@ -316,14 +337,14 @@ export class CampScene extends Phaser.Scene {
 
   private showLeaveRunMessage() {
     const { width, height } = this.scale;
-    
+
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.68)
       .setDepth(100);
-    
+
     const panel = this.add.rectangle(width / 2, height / 2, 580, 340, 0x171313)
       .setStrokeStyle(3, 0x8b5a2b)
       .setDepth(101);
-    
+
     const title = this.add.text(width / 2, height / 2 - 110, 'Покинуть спуск?', {
       fontFamily: 'Arial',
       fontSize: '34px',
@@ -331,7 +352,7 @@ export class CampScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(102);
-  
+
     const text = this.add.text(
       width / 2,
       height / 2 - 25,
@@ -344,29 +365,29 @@ export class CampScene extends Phaser.Scene {
         lineSpacing: 7,
       }
     ).setOrigin(0.5).setDepth(102);
-  
+
     const leaveBg = this.add.rectangle(width / 2 - 145, height / 2 + 105, 240, 58, 0x2a1111)
       .setStrokeStyle(2, 0xff6b6b)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
-  
+
     const leaveText = this.add.text(width / 2 - 145, height / 2 + 105, 'Покинуть', {
       fontFamily: 'Arial',
       fontSize: '22px',
       color: '#ff6b6b',
     }).setOrigin(0.5).setDepth(103);
-  
+
     const cancelBg = this.add.rectangle(width / 2 + 145, height / 2 + 105, 240, 58, 0x241515)
       .setStrokeStyle(2, 0xf0d58a)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
-  
+
     const cancelText = this.add.text(width / 2 + 145, height / 2 + 105, 'Остаться', {
       fontFamily: 'Arial',
       fontSize: '22px',
       color: '#f0d58a',
     }).setOrigin(0.5).setDepth(103);
-  
+
     const closeModal = () => {
       overlay.destroy();
       panel.destroy();
@@ -377,18 +398,18 @@ export class CampScene extends Phaser.Scene {
       cancelBg.destroy();
       cancelText.destroy();
     };
-  
+
     cancelBg.on('pointerdown', () => {
       closeModal();
     });
-  
+
     leaveBg.on('pointerdown', () => {
       resetFloorRun();
-    
+
       void saveGameAsync();
-    
+
       closeModal();
-    
+
       this.scene.restart();
     });
   }

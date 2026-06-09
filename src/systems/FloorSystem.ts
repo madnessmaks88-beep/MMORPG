@@ -5,6 +5,7 @@ import {
   getCurrentTierByFloor,
   getTierEndFloor,
   isTierBossFloor,
+  getTierStartFloor,
   type FloorModifier,
   type FloorRoom,
 } from '../data/gameState';
@@ -97,6 +98,7 @@ export function getFloorDescription(floor: number) {
 
 export function startFloorRun(floor: number) {
   const modifier = getFloorModifier(floor);
+  const tier = getCurrentTierByFloor(floor);
 
   gameState.floorRun.active = true;
   gameState.floorRun.currentFloor = floor;
@@ -104,6 +106,9 @@ export function startFloorRun(floor: number) {
   gameState.floorRun.modifier = modifier;
   gameState.floorRun.rooms = generateFloorRooms(floor, modifier);
   gameState.floorRun.rewardClaimed = false;
+
+  gameState.floorRun.runType = 'tier';
+  gameState.floorRun.targetTier = tier;
 
   gameState.floorRun.monstersDefeated = 0;
   gameState.floorRun.chestsOpened = 0;
@@ -455,4 +460,59 @@ export function getFloorModifierDescription(modifier: FloorModifier) {
   }
 
   return 'Стандартная зачистка этажа.';
+}
+export function canStartTier(tier: number) {
+  if (tier <= 1) {
+    return true;
+  }
+
+  return gameState.highestClearedTier >= tier - 1;
+}
+
+export function getHighestUnlockedTier() {
+  return gameState.highestClearedTier + 1;
+}
+
+export function startTierRun(tier: number) {
+  const startFloor = getTierStartFloor(tier);
+
+  startFloorRun(startFloor);
+
+  gameState.floorRun.runType = 'tier';
+  gameState.floorRun.targetTier = tier;
+}
+
+export function startTierGateBoss(targetTier: number) {
+  const previousTier = targetTier - 1;
+  const bossFloor = getTierEndFloor(previousTier);
+
+  gameState.floorRun.active = true;
+  gameState.floorRun.currentFloor = bossFloor;
+  gameState.floorRun.currentRoomIndex = 0;
+  gameState.floorRun.modifier = 'tier_boss';
+
+  gameState.floorRun.runType = 'tier_gate';
+  gameState.floorRun.targetTier = targetTier;
+
+  gameState.floorRun.rooms = [
+    {
+      id: `tier_${previousTier}_gate_boss`,
+      type: 'tier_boss',
+      title: `Испытание ${previousTier}-го яруса`,
+      description:
+        'Чтобы попасть в следующий ярус напрямую, нужно снова победить финального босса прошлого яруса.',
+      enemyId: pickTierBoss(bossFloor),
+      completed: false,
+    },
+  ];
+
+  gameState.floorRun.rewardClaimed = true;
+
+  gameState.floorRun.monstersDefeated = 0;
+  gameState.floorRun.chestsOpened = 0;
+  gameState.floorRun.trapsTriggered = 0;
+  gameState.floorRun.goldEarned = 0;
+  gameState.floorRun.expEarned = 0;
+
+  gameState.currentRoomIndex = 0;
 }

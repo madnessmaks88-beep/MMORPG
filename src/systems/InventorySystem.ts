@@ -4,6 +4,8 @@ import type { InventoryItem, PlayerData } from '../data/player';
 import type { ItemData } from '../data/items';
 import { getItemById } from '../data/items';
 
+import { getRelicById } from '../data/relics';
+
 export type PlayerStats = {
   maxHp: number;
   attack: number;
@@ -12,6 +14,10 @@ export type PlayerStats = {
 
   agility: number;
   luck: number;
+
+  strength: number;
+  intelligence: number;
+  maxEnergy: number;
 
   dodgeChance: number;
   trapDodgeChance: number;
@@ -227,19 +233,57 @@ export function getItemBonusWithUpgrade(
 export function getPlayerStats(player: PlayerData): PlayerStats {
   const stats: PlayerStats = {
     maxHp: player.maxHp,
+    maxEnergy: player.maxEnergy,
+
     attack: player.attack,
     defense: player.defense,
     critChance: player.critChance,
 
     agility: player.agility,
     luck: player.luck,
+    strength: player.strength,
+    intelligence: player.intelligence,
 
-    dodgeChance: Math.min(0.22, player.agility * 0.01),
-    trapDodgeChance: Math.min(0.30, player.agility * 0.012),
-    lootChanceBonus: Math.min(0.20, player.luck * 0.01),
+    dodgeChance: 0,
+    trapDodgeChance: 0,
+    lootChanceBonus: 0,
   };
 
-  // дальше твой код с экипировкой
+  const equippedItems = getEquippedInventoryItems(player);
+
+  for (const inventoryItem of equippedItems) {
+    const bonus = getItemBonusWithUpgrade(inventoryItem);
+
+    stats.maxHp += bonus.bonusHp;
+    stats.attack += bonus.bonusAttack;
+    stats.defense += bonus.bonusDefense;
+    stats.critChance += bonus.bonusCritChance;
+  }
+
+  for (const relicId of player.relicIds) {
+    const relic = getRelicById(relicId);
+
+    if (!relic) {
+      continue;
+    }
+
+    stats.maxHp += relic.bonusHp ?? 0;
+    stats.maxEnergy += relic.bonusEnergy ?? 0;
+
+    stats.attack += relic.bonusAttack ?? 0;
+    stats.defense += relic.bonusDefense ?? 0;
+
+    stats.agility += relic.bonusAgility ?? 0;
+    stats.luck += relic.bonusLuck ?? 0;
+    stats.strength += relic.bonusStrength ?? 0;
+    stats.intelligence += relic.bonusIntelligence ?? 0;
+  }
+
+  stats.critChance = Math.min(0.75, stats.critChance);
+
+  stats.dodgeChance = Math.min(0.22, stats.agility * 0.01);
+  stats.trapDodgeChance = Math.min(0.30, stats.agility * 0.012);
+  stats.lootChanceBonus = Math.min(0.20, stats.luck * 0.01);
 
   return stats;
 }

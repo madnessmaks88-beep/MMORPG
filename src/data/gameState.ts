@@ -39,6 +39,9 @@ export type FloorRun = {
   rewardClaimed: boolean;
   modifier: FloorModifier;
 
+  runType: 'tier' | 'tier_gate';
+  targetTier: number;
+
   monstersDefeated: number;
   chestsOpened: number;
   trapsTriggered: number;
@@ -54,6 +57,9 @@ export function createEmptyFloorRun(): FloorRun {
     rooms: [],
     rewardClaimed: false,
     modifier: 'normal',
+
+    runType: 'tier',
+    targetTier: 1,
 
     monstersDefeated: 0,
     chestsOpened: 0,

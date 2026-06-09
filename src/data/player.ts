@@ -1,4 +1,5 @@
 import type { RaceId } from './races';
+import type { RelicId } from './relics';
 
 export type EquipmentSlot = 'weapon' | 'armor' | 'trinket';
 
@@ -42,6 +43,8 @@ export type PlayerData = {
   strength: number;
   intelligence: number;
 
+  relicIds: RelicId[];
+
   inventory: InventoryItem[];
   equipment: PlayerEquipment;
 };
@@ -73,6 +76,8 @@ export const player: PlayerData = {
 
   strength: 11,
   intelligence: 11,
+
+  relicIds: [],
 
   inventory: [],
   equipment: {},

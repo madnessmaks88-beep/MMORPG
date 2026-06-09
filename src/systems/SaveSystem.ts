@@ -3,7 +3,11 @@ import Phaser from 'phaser';
 import { player } from '../data/player';
 import type { InventoryItem } from '../data/player';
 
-import { createEmptyFloorRun, gameState } from '../data/gameState';
+import {
+  createEmptyFloorRun,
+  gameState,
+  getCurrentTierByFloor,
+} from '../data/gameState';
 import { vkStorageGet, vkStorageSet } from './VKBridgeSystem';
 
 const SAVE_KEY = 'below_ashes_save_v3';
@@ -117,6 +121,8 @@ function fixMissingPlayerFields() {
   if (player.strength === undefined) player.strength = player.attack ?? 11;
   if (player.intelligence === undefined) player.intelligence = 11;
 
+  if (!player.relicIds) player.relicIds = [];
+
   if (!player.inventory) player.inventory = [];
   if (!player.equipment) player.equipment = {};
 }
@@ -177,21 +183,6 @@ function fixMissingGameStateFields() {
     gameState.floorRun.rewardClaimed = false;
   }
 
-  gameState.floorRun = {
-    active: false,
-    currentFloor: 1,
-    currentRoomIndex: 0,
-    rooms: [],
-    rewardClaimed: false,
-    modifier: 'normal',
-
-    monstersDefeated: 0,
-    chestsOpened: 0,
-    trapsTriggered: 0,
-    goldEarned: 0,
-    expEarned: 0,
-  };
-
   if (!gameState.floorRun) {
     gameState.floorRun = createEmptyFloorRun();
   }
@@ -238,6 +229,16 @@ function fixMissingGameStateFields() {
 
   if (gameState.floorRun.expEarned === undefined) {
     gameState.floorRun.expEarned = 0;
+  }
+
+  if (!gameState.floorRun.runType) {
+    gameState.floorRun.runType = 'tier';
+  }
+
+  if (gameState.floorRun.targetTier === undefined) {
+    gameState.floorRun.targetTier = getCurrentTierByFloor(
+      gameState.floorRun.currentFloor || 1
+    );
   }
 
   if (!gameState.questProgress) {

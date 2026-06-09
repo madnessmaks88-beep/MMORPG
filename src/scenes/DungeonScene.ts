@@ -9,6 +9,8 @@ import {
   resetFloorRun,
 } from '../data/gameState';
 
+import { createRelicBonusText, giveRelicForTier } from '../systems/RelicSystem';
+
 import {
   completeCurrentFloor,
   getCurrentRoom,
@@ -458,6 +460,12 @@ export class DungeonScene extends Phaser.Scene {
 
     completeCurrentFloor();
 
+    if (gameState.floorRun.runType === 'tier_gate') {
+      void saveGameAsync();
+      this.showTierGateCompleted();
+      return;
+    }
+
     let rewardText = '';
 
     if (!gameState.floorRun.rewardClaimed) {
@@ -526,10 +534,73 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+  private showTierGateCompleted() {
+    const targetTier = gameState.floorRun.targetTier;
+    const startFloor = (targetTier - 1) * 25 + 1;
+
+    const { width } = this.scale;
+
+    this.add.rectangle(width / 2, 555, 620, 430, 0x0d0d0d, 0.96)
+      .setStrokeStyle(3, 0xf0d58a);
+
+    this.add.text(width / 2, 390, 'Путь открыт', {
+      fontFamily: 'Arial',
+      fontSize: '42px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+
+    this.add.text(
+      width / 2,
+      500,
+      `Ты снова победил финального босса прошлого яруса.\nТеперь можно начать ${targetTier}-й ярус с ${startFloor} этажа.`,
+      {
+        fontFamily: 'Arial',
+        fontSize: '23px',
+        color: '#d8c7a3',
+        align: 'center',
+        wordWrap: {
+          width: 560,
+        },
+        lineSpacing: 8,
+      }
+    ).setOrigin(0.5);
+
+    this.createLargeButton(width / 2, 650, `Начать ${targetTier}-й ярус`, () => {
+      startFloorRun(startFloor);
+
+      void saveGameAsync();
+
+      this.scene.restart();
+    });
+
+    this.createLargeButton(width / 2, 735, 'Вернуться в город', () => {
+      resetFloorRun();
+
+      void saveGameAsync();
+
+      this.scene.start('CampScene');
+    });
+  }
+
   private showTierCompleted(rewardText: string) {
     const floor = gameState.floorRun.currentFloor;
     const tier = getCurrentTierByFloor(floor);
     const nextFloor = floor + 1;
+
+    const relic = giveRelicForTier(tier);
+
+    let relicText = '';
+
+    if (relic) {
+      relicText =
+        `\n\nПолучена реликвия: ${relic.name}\n` +
+        `${relic.description}\n` +
+        `Бонус: ${createRelicBonusText(relic)}`;
+    }
+
+    void saveGameAsync();
 
     const { width } = this.scale;
 
@@ -560,7 +631,7 @@ export class DungeonScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    this.add.text(width / 2, 480, rewardText, {
+    this.add.text(width / 2, 480, rewardText + relicText, {
       fontFamily: 'Arial',
       fontSize: '18px',
       color: '#d8c7a3',
