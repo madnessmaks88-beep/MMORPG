@@ -46,27 +46,31 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   private createBackground() {
-    const { width, height } = this.scale;
+	  const { width, height } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
-    this.add.rectangle(width / 2, height / 2, width, height, 0x100c0a, 0.94);
+	  this.add.rectangle(width / 2, height / 2, width, height, 0x070605);
+	  this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.94);
 
-    for (let i = 0; i < 34; i++) {
-      const x = Phaser.Math.Between(35, width - 35);
-      const y = Phaser.Math.Between(35, height - 160);
-      const size = Phaser.Math.Between(1, 3);
+	  this.add.circle(width / 2, 170, 150, 0x2a1209, 0.24);
+	  this.add.circle(width / 2, 170, 90, 0x7a2b14, 0.14);
 
-      this.add.circle(x, y, size, 0xd8b56d, 0.055);
-    }
+	  for (let i = 0; i < 40; i++) {
+	    const x = Phaser.Math.Between(24, width - 24);
+	    const y = Phaser.Math.Between(30, height - 125);
+	    const size = Phaser.Math.Between(1, 3);
 
-    this.add.rectangle(width / 2, height - 160, width, 300, 0x050505, 0.55);
-  }
+	    this.add.circle(x, y, size, 0xd8b56d, 0.045);
+	  }
+
+	  this.add.rectangle(width / 2, height - 105, width, 210, 0x090706, 0.34);
+	  this.add.rectangle(width / 2, height - 55, width - 36, 92, 0x000000, 0.16);
+	}
 
   private createHeroPanel(raceName: string) {
     const { width } = this.scale;
 
     this.add.rectangle(width / 2, 190, 600, 130, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b);
+      .setStrokeStyle(2, 0x8b5a2b, 0.55);
 
     this.add.text(width / 2, 150, player.name, {
       fontFamily: 'Arial',
@@ -96,7 +100,7 @@ export class ProfileScene extends Phaser.Scene {
     const { width } = this.scale;
 
     this.add.rectangle(width / 2, 400, 600, 260, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b);
+      .setStrokeStyle(2, 0x8b5a2b, 0.55);
 
     this.add.text(width / 2, 295, 'Характеристики', {
       fontFamily: 'Arial',
@@ -139,8 +143,7 @@ export class ProfileScene extends Phaser.Scene {
   private createProgressPanel() {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 610, 600, 145, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b);
+    this.add.rectangle(width / 2, 610, 600, 145, 0x0d0d0d, 0.82);
 
     this.add.text(width / 2, 560, 'Прогресс спуска', {
       fontFamily: 'Arial',
@@ -170,7 +173,7 @@ export class ProfileScene extends Phaser.Scene {
     const { width } = this.scale;
 
     this.add.rectangle(width / 2, 835, 600, 250, 0x0d0d0d, 0.94)
-      .setStrokeStyle(2, 0x8b5a2b);
+      .setStrokeStyle(2, 0x8b5a2b, 0.55);
 
     this.add.text(width / 2, 735, 'Реликвии', {
       fontFamily: 'Arial',

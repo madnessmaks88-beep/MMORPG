@@ -37,20 +37,21 @@ export class CampScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height / 2, width, height, 0x070605);
     this.add.rectangle(width / 2, height / 2, width, height, 0x120d0a, 0.94);
 
+    this.add.circle(width / 2, 190, 155, 0x2a1209, 0.28);
+    this.add.circle(width / 2, 190, 105, 0x7a2b14, 0.18);
+    this.add.circle(width / 2, 190, 58, 0xf0a348, 0.12);
+    this.add.circle(width / 2, 190, 28, 0xf0d58a, 0.08);
+
     for (let i = 0; i < 46; i++) {
       const x = Phaser.Math.Between(24, width - 24);
-      const y = Phaser.Math.Between(30, height - 145);
+      const y = Phaser.Math.Between(30, height - 125);
       const size = Phaser.Math.Between(1, 3);
 
-      this.add.circle(x, y, size, 0xd8b56d, 0.055);
+      this.add.circle(x, y, size, 0xd8b56d, 0.045);
     }
 
-    this.add.circle(width / 2, 186, 120, 0x9b3519, 0.13);
-    this.add.circle(width / 2, 186, 70, 0xf0a348, 0.12);
-    this.add.circle(width / 2, 186, 34, 0xf0d58a, 0.08);
-
-    this.add.rectangle(width / 2, height - 160, width, 300, 0x050505, 0.58);
-    this.add.rectangle(width / 2, height - 112, width, 2, 0x8b5a2b, 0.7);
+    this.add.rectangle(width / 2, height - 105, width, 210, 0x090706, 0.34);
+    this.add.rectangle(width / 2, height - 55, width - 36, 92, 0x000000, 0.16);
   }
 
   private createHeader() {
@@ -90,8 +91,10 @@ export class CampScene extends Phaser.Scene {
 
     const panelY = 270;
 
-    this.add.rectangle(width / 2, panelY, 620, 220, 0x0d0d0d, 0.96)
-      .setStrokeStyle(2, 0x8b5a2b);
+    this.add.rectangle(width / 2, panelY + 4, 620, 220, 0x000000, 0.22);
+
+    this.add.rectangle(width / 2, panelY, 620, 220, 0x0d0d0d, 0.92)
+      .setStrokeStyle(2, 0x8b5a2b, 0.65);
 
     this.add.text(width / 2, panelY - 78, player.name, {
       fontFamily: 'Arial',
@@ -106,8 +109,6 @@ export class CampScene extends Phaser.Scene {
       fontSize: '20px',
       color: '#d8c7a3',
     }).setOrigin(0.5);
-
-    this.add.rectangle(width / 2, panelY - 12, 540, 1, 0x8b5a2b, 0.45);
 
     const summary = [
       `Уровень ${player.level}`,
@@ -143,8 +144,10 @@ export class CampScene extends Phaser.Scene {
 
     const panelY = 620;
 
-    this.add.rectangle(width / 2, panelY, 620, 430, 0x0d0d0d, 0.95)
-      .setStrokeStyle(2, 0x8b5a2b);
+    this.add.rectangle(width / 2, panelY + 5, 620, 430, 0x000000, 0.24);
+
+    this.add.rectangle(width / 2, panelY, 620, 430, 0x0d0d0d, 0.90)
+      .setStrokeStyle(2, 0x8b5a2b, 0.5);
 
     this.add.text(width / 2, panelY - 180, 'Что делаем?', {
       fontFamily: 'Arial',
@@ -268,8 +271,7 @@ export class CampScene extends Phaser.Scene {
 
     const panelY = 900;
 
-    this.add.rectangle(width / 2, panelY, 620, 135, 0x0d0d0d, 0.92)
-      .setStrokeStyle(2, 0x3a2518);
+    this.add.rectangle(width / 2, panelY, 620, 135, 0x0d0d0d, 0.72);
 
     this.add.text(width / 2, panelY - 42, 'Прогресс', {
       fontFamily: 'Arial',

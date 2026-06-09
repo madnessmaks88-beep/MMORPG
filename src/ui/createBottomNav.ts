@@ -23,14 +23,13 @@ export function createBottomNav(
   const disabledMessage =
     options.disabledMessage ?? 'Сейчас нельзя перейти в этот раздел.';
 
-  const navHeight = 118;
+  const navHeight = 112;
   const navY = height - navHeight / 2;
 
-  scene.add.rectangle(width / 2, navY, width, navHeight, 0x070707, 0.98)
-    .setDepth(900)
-    .setStrokeStyle(2, 0x3a2518);
+  scene.add.rectangle(width / 2, navY + 6, width - 28, navHeight - 18, 0x0b0908, 0.88)
+    .setDepth(900);
 
-  scene.add.rectangle(width / 2, height - navHeight, width, 2, 0x8b5a2b, 0.75)
+  scene.add.rectangle(width / 2, navY + 6, width - 44, navHeight - 32, 0x17100c, 0.72)
     .setDepth(901);
 
   const items: NavItem[] = [
@@ -65,53 +64,62 @@ export function createBottomNav(
 
   items.forEach((item, index) => {
     const x = positions[index];
+
     const isActive = activeScene === item.scene;
     const isDisabled = disabledScenes.includes(item.scene);
 
-    const buttonWidth = 150;
-    const buttonHeight = 84;
+    const buttonWidth = 142;
+    const buttonHeight = 78;
 
-    const bgColor = isActive ? 0x2a1d12 : 0x111111;
-    const bgAlpha = isActive ? 1 : 0.92;
+    const bgColor = isActive ? 0x2b1d13 : 0x15110e;
+    const bgAlpha = isActive ? 0.98 : 0.76;
 
-    const strokeColor = isActive ? 0xf0d58a : 0x4a3324;
+    const strokeColor = isActive ? 0xf0d58a : 0x000000;
+    const strokeAlpha = isActive ? 0.9 : 0;
+
     const iconColor = isDisabled
-      ? '#555555'
+      ? '#4d4d4d'
       : isActive
         ? '#f0d58a'
-        : '#d8c7a3';
+        : '#cbb895';
 
     const labelColor = isDisabled
-      ? '#555555'
+      ? '#4d4d4d'
       : isActive
         ? '#f0d58a'
-        : '#a99a83';
+        : '#9f9078';
+
+    const shadow = scene.add.rectangle(x, navY + 4, buttonWidth, buttonHeight, 0x000000, 0.25)
+      .setDepth(902);
 
     const button = scene.add.rectangle(x, navY, buttonWidth, buttonHeight, bgColor, bgAlpha)
-      .setDepth(902)
-      .setStrokeStyle(2, strokeColor)
+      .setDepth(903)
       .setInteractive({ useHandCursor: !isDisabled });
 
-    scene.add.text(x, navY - 16, item.icon, {
+    if (isActive) {
+      button.setStrokeStyle(2, strokeColor, strokeAlpha);
+    }
+
+    scene.add.text(x, navY - 17, item.icon, {
       fontFamily: 'Arial',
       fontSize: '23px',
       color: iconColor,
-    }).setOrigin(0.5).setDepth(903);
+    }).setOrigin(0.5).setDepth(904);
 
     scene.add.text(x, navY + 18, item.label, {
       fontFamily: 'Arial',
       fontSize: '15px',
       color: labelColor,
-    }).setOrigin(0.5).setDepth(903);
+    }).setOrigin(0.5).setDepth(904);
 
     if (isActive) {
-      scene.add.circle(x, navY - 42, 4, 0xf0d58a, 1)
-        .setDepth(904);
+      scene.add.circle(x, navY - 41, 4, 0xf0d58a, 0.95)
+        .setDepth(905);
     }
 
     button.on('pointerdown', () => {
       if (isDisabled) {
-        const toast = scene.add.text(width / 2, height - 150, disabledMessage, {
+        const toast = scene.add.text(width / 2, height - 145, disabledMessage, {
           fontFamily: 'Arial',
           fontSize: '18px',
           color: '#ffb3b3',
@@ -135,5 +143,7 @@ export function createBottomNav(
 
       scene.scene.start(item.scene);
     });
+
+    shadow.setInteractive(false);
   });
 }
