@@ -3,10 +3,10 @@ import Phaser from 'phaser';
 import { player } from '../data/player';
 import type { InventoryItem } from '../data/player';
 
-import { gameState } from '../data/gameState';
+import { createEmptyFloorRun, gameState } from '../data/gameState';
 import { vkStorageGet, vkStorageSet } from './VKBridgeSystem';
 
-const SAVE_KEY = 'below_ashes_save_v2';
+const SAVE_KEY = 'below_ashes_save_v3';
 
 type SaveData = {
   player: typeof player;
@@ -23,7 +23,7 @@ export function saveGame() {
 }
 
 export function loadGame() {
-  localStorage.removeItem('below_ashes_save_v1');
+  localStorage.removeItem('below_ashes_save_v2');
 
   const rawSave = localStorage.getItem(SAVE_KEY);
 
@@ -164,6 +164,80 @@ function fixMissingGameStateFields() {
 
   if (gameState.lastCampRestAt === undefined) {
     gameState.lastCampRestAt = 0;
+  }
+
+  if (gameState.highestClearedFloor === undefined) {
+    gameState.highestClearedFloor = 0;
+  }
+
+  if (gameState.highestClearedTier === undefined) {
+    gameState.highestClearedTier = 0;
+  }
+  if (gameState.floorRun.rewardClaimed === undefined) {
+    gameState.floorRun.rewardClaimed = false;
+  }
+
+  gameState.floorRun = {
+    active: false,
+    currentFloor: 1,
+    currentRoomIndex: 0,
+    rooms: [],
+    rewardClaimed: false,
+    modifier: 'normal',
+
+    monstersDefeated: 0,
+    chestsOpened: 0,
+    trapsTriggered: 0,
+    goldEarned: 0,
+    expEarned: 0,
+  };
+
+  if (!gameState.floorRun) {
+    gameState.floorRun = createEmptyFloorRun();
+  }
+
+  if (gameState.floorRun.active === undefined) {
+    gameState.floorRun.active = false;
+  }
+
+  if (gameState.floorRun.currentFloor === undefined) {
+    gameState.floorRun.currentFloor = 1;
+  }
+
+  if (gameState.floorRun.currentRoomIndex === undefined) {
+    gameState.floorRun.currentRoomIndex = 0;
+  }
+
+  if (!gameState.floorRun.rooms) {
+    gameState.floorRun.rooms = [];
+  }
+
+  if (gameState.floorRun.rewardClaimed === undefined) {
+    gameState.floorRun.rewardClaimed = false;
+  }
+
+  if (!gameState.floorRun.modifier) {
+    gameState.floorRun.modifier = 'normal';
+  }
+
+  if (gameState.floorRun.monstersDefeated === undefined) {
+    gameState.floorRun.monstersDefeated = 0;
+  }
+
+  if (gameState.floorRun.chestsOpened === undefined) {
+    gameState.floorRun.chestsOpened = 0;
+  }
+
+  if (gameState.floorRun.trapsTriggered === undefined) {
+    gameState.floorRun.trapsTriggered = 0;
+  }
+
+  if (gameState.floorRun.goldEarned === undefined) {
+    gameState.floorRun.goldEarned = 0;
+  }
+
+  if (gameState.floorRun.expEarned === undefined) {
+    gameState.floorRun.expEarned = 0;
   }
 
   if (!gameState.questProgress) {

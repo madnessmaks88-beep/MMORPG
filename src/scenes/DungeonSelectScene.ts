@@ -1,10 +1,20 @@
 import Phaser from 'phaser';
 
-import { dungeons } from '../data/dungeons';
 import { player } from '../data/player';
-import { isDungeonUnlocked, resetDungeonProgress } from '../data/gameState';
+import { gameState } from '../data/gameState';
 
-import { createButton } from '../ui/createButton';
+import {
+  canStartFloor,
+  getFloorPreview,
+  getFloorRequirement,
+  getFloorTitle,
+  startFloorRun,
+} from '../systems/FloorSystem';
+
+import { getPlayerStats } from '../systems/InventorySystem';
+import { saveGameAsync } from '../systems/SaveSystem';
+
+
 import { createBottomNav } from '../ui/createBottomNav';
 
 export class DungeonSelectScene extends Phaser.Scene {
@@ -13,37 +23,26 @@ export class DungeonSelectScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
+    const { width } = this.scale;
 
     this.createBackground();
 
-    this.add.text(width / 2, 65, 'Выбор спуска', {
+    this.add.text(width / 2, 58, 'Спуск в глубины', {
       fontFamily: 'Arial',
-      fontSize: '52px',
-      color: '#d8b56d',
+      fontSize: '44px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 120, 'Каждая дверь вниз требует свою цену.', {
+    this.add.text(width / 2, 105, 'Выбери этаж для зачистки', {
       fontFamily: 'Arial',
-      fontSize: '23px',
+      fontSize: '21px',
       color: '#9c8f7a',
-      align: 'center',
-      wordWrap: {
-        width: 600,
-      },
     }).setOrigin(0.5);
 
-    this.add.rectangle(width / 2, 205, 620, 85, 0x171313);
-
-    this.add.text(width / 2, 205, `Уровень героя: ${player.level}`, {
-      fontFamily: 'Arial',
-      fontSize: '25px',
-      color: '#e6d2aa',
-    }).setOrigin(0.5);
-
-    this.createDungeonCards();
+    this.createProgressPanel();
+    this.createFloorCards();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
@@ -53,125 +52,177 @@ export class DungeonSelectScene extends Phaser.Scene {
   private createBackground() {
     const { width, height } = this.scale;
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x070707);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x100c0a, 0.92);
 
-    for (let i = 0; i < 28; i++) {
-      const x = Phaser.Math.Between(20, width - 20);
-      const y = Phaser.Math.Between(150, height - 160);
+    for (let i = 0; i < 34; i++) {
+      const x = Phaser.Math.Between(40, width - 40);
+      const y = Phaser.Math.Between(30, height - 160);
       const size = Phaser.Math.Between(1, 3);
-      const alpha = Phaser.Math.FloatBetween(0.05, 0.14);
 
-      this.add.circle(x, y, size, 0xd8b56d, alpha);
+      this.add.circle(x, y, size, 0xd8b56d, 0.06);
     }
 
-    this.add.rectangle(width / 2, 575, 620, 780, 0x111111, 0.72);
-    this.add.rectangle(width / 2, 575, 580, 740, 0x0a0a0a, 0.68);
+    this.add.rectangle(width / 2, height - 160, width, 300, 0x050505, 0.5);
   }
 
-  private createDungeonCards() {
+  private createProgressPanel() {
     const { width } = this.scale;
 
-    dungeons.forEach((dungeon, index) => {
-      const y = 350 + index * 230;
+    const currentAvailableFloor = gameState.highestClearedFloor + 1;
+    const currentTier = Math.ceil(currentAvailableFloor / 25);
 
-      const unlocked = isDungeonUnlocked(dungeon.id);
-      const isTooHard = player.level < dungeon.recommendedLevel;
+    this.add.rectangle(width / 2, 195, 610, 130, 0x0d0d0d, 0.92)
+      .setStrokeStyle(2, 0x8b5a2b);
 
-      let strokeColor = 0x8b5a2b;
-      let titleColor = '#e6d2aa';
-      let statusText = 'Доступно';
-      let statusColor = '#75d184';
-      let icon = '▣';
-
-      if (isTooHard && unlocked) {
-        strokeColor = 0xc24747;
-        statusText = 'Опасно';
-        statusColor = '#c24747';
-      }
-
-      if (!unlocked) {
-        strokeColor = 0x3b3028;
-        titleColor = '#5d554c';
-        statusText = 'Закрыто';
-        statusColor = '#5d554c';
-        icon = '×';
-      }
-
-      if (dungeon.id === 'old_catacombs') {
-        icon = '☠';
-      }
-
-      if (dungeon.id === 'rotten_mines') {
-        icon = '⚒';
-      }
-
-      if (dungeon.id === 'hall_of_nameless') {
-        icon = '♛';
-      }
-
-      const outer = this.add.rectangle(width / 2, y, 620, 195, unlocked ? 0x171313 : 0x0f0f0f);
-      outer.setStrokeStyle(2, strokeColor);
-
-      this.add.rectangle(width / 2, y, 580, 155, unlocked ? 0x121212 : 0x0a0a0a);
-
-      this.add.text(95, y, icon, {
-        fontFamily: 'Arial',
-        fontSize: '44px',
-        color: unlocked ? '#d8b56d' : '#4f4940',
-      }).setOrigin(0.5);
-
-      this.add.text(145, y - 62, dungeon.name, {
-        fontFamily: 'Arial',
-        fontSize: '29px',
-        color: titleColor,
-      });
-
-      this.add.text(145, y - 22, dungeon.description, {
-        fontFamily: 'Arial',
-        fontSize: '18px',
-        color: unlocked ? '#b8aa91' : '#4f4940',
-        wordWrap: {
-          width: 350,
-        },
-        lineSpacing: 4,
-      });
-
-      this.add.text(145, y + 52, `Рекомендуемый уровень: ${dungeon.recommendedLevel}`, {
-        fontFamily: 'Arial',
-        fontSize: '19px',
-        color: isTooHard && unlocked ? '#c24747' : '#8f826d',
-      });
-
-      this.add.text(520, y - 48, statusText, {
-        fontFamily: 'Arial',
-        fontSize: '21px',
-        color: statusColor,
-      }).setOrigin(0.5);
-
-      if (!unlocked) {
-        this.add.text(520, y + 18, '???', {
-          fontFamily: 'Arial',
-          fontSize: '30px',
-          color: '#3b3028',
-        }).setOrigin(0.5);
-
-        return;
-      }
-
-      createButton(this, 520, y + 35, 'Войти', () => {
-        resetDungeonProgress(dungeon.id);
-        this.scene.start('DungeonScene');
-      }, 155, 56);
-    });
-
-    this.add.text(width / 2, 1055, 'Новые ярусы открываются после победы над боссом.', {
+    this.add.text(width / 2, 155, 'Прогресс спуска', {
       fontFamily: 'Arial',
-      fontSize: '21px',
-      color: '#70675a',
+      fontSize: '25px',
+      color: '#f0d58a',
+    }).setOrigin(0.5);
+
+    const text = [
+      `Пройдено этажей: ${gameState.highestClearedFloor}`,
+      `Пройдено ярусов: ${gameState.highestClearedTier}`,
+      `Следующий этаж: ${currentAvailableFloor}`,
+      `Текущий ярус: ${currentTier}`,
+    ].join('\n');
+
+    this.add.text(width / 2, 215, text, {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#d8c7a3',
+      align: 'center',
+      lineSpacing: 5,
+    }).setOrigin(0.5);
+  }
+
+  private createFloorCards() {
+    const nextFloor = gameState.highestClearedFloor + 1;
+
+    const floorsToShow = [
+      Math.max(1, nextFloor - 1),
+      nextFloor,
+      nextFloor + 1,
+    ];
+
+    const uniqueFloors = [...new Set(floorsToShow)];
+
+    uniqueFloors.forEach((floor, index) => {
+      this.createFloorCard(floor, 380 + index * 250);
+    });
+  }
+
+  private createFloorCard(floor: number, y: number) {
+    const { width } = this.scale;
+
+    const stats = getPlayerStats(player);
+    const requirement = getFloorRequirement(floor);
+    const preview = getFloorPreview(floor);
+    const isAvailable = canStartFloor(floor);
+    const isCleared = gameState.highestClearedFloor >= floor;
+
+    const cardColor = isCleared ? 0x111811 : isAvailable ? 0x171313 : 0x111111;
+    const strokeColor = isCleared ? 0x75d184 : isAvailable ? 0x8b5a2b : 0x444444;
+
+    this.add.rectangle(width / 2, y, 610, 225, cardColor, 0.95)
+      .setStrokeStyle(2, strokeColor);
+
+    this.add.text(width / 2, y - 78, getFloorTitle(floor), {
+      fontFamily: 'Arial',
+      fontSize: '27px',
+      color: isCleared ? '#75d184' : isAvailable ? '#f0d58a' : '#777777',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
+    const status = isCleared
+      ? 'Пройден'
+      : isAvailable
+        ? 'Доступен'
+        : 'Закрыт';
+
+    this.add.text(width / 2, y - 42, status, {
+      fontFamily: 'Arial',
+      fontSize: '19px',
+      color: isCleared ? '#75d184' : isAvailable ? '#d8c7a3' : '#666666',
+    }).setOrigin(0.5);
+
+    const requirementText = [
+      `Рек. уровень: ${requirement.level} / твой: ${player.level}`,
+      `Рек. атака: ${requirement.attack} / твоя: ${stats.attack}`,
+      `Рек. защита: ${requirement.defense} / твоя: ${stats.defense}`,
+      `Рек. HP: ${requirement.hp} / твоё: ${stats.maxHp}`,
+    ].join('\n');
+
+    this.add.text(width / 2 - 270, y - 8, requirementText, {
+      fontFamily: 'Arial',
+      fontSize: '17px',
+      color: isAvailable ? '#d8c7a3' : '#666666',
+      lineSpacing: 4,
+    }).setOrigin(0, 0);
+
+    const previewText = [
+      preview.modifierName,
+      preview.modifierDescription,
+      '',
+      `Комнат: ${preview.rooms}`,
+      `Монстры: ${preview.monsters}`,
+      `Особая: ${preview.special}`,
+      `Босс: ${preview.boss}`,
+      '',
+      preview.danger,
+    ].join('\n');
+
+    this.add.text(width / 2 + 55, y - 10, previewText, {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: isAvailable ? this.getDangerColor(floor) : '#666666',
       align: 'center',
       wordWrap: {
-        width: 560,
+        width: 245,
       },
+      lineSpacing: 3,
     }).setOrigin(0.5);
+
+    if (isAvailable) {
+      const buttonText = isCleared ? 'Пройти снова' : 'Начать этаж';
+
+      const buttonBg = this.add.rectangle(width / 2 + 190, y + 72, 210, 48, 0x241515)
+        .setStrokeStyle(2, 0xf0d58a)
+        .setInteractive({ useHandCursor: true });
+
+      this.add.text(width / 2 + 190, y + 72, buttonText, {
+        fontFamily: 'Arial',
+        fontSize: '18px',
+        color: '#f0d58a',
+      }).setOrigin(0.5);
+
+      buttonBg.on('pointerdown', () => {
+        startFloorRun(floor);
+        void saveGameAsync();
+
+        this.scene.start('DungeonScene');
+      });
+    } else {
+      this.add.text(width / 2 + 190, y + 72, 'Сначала пройди\nпредыдущий этаж', {
+        fontFamily: 'Arial',
+        fontSize: '16px',
+        color: '#666666',
+        align: 'center',
+      }).setOrigin(0.5);
+    }
+  }
+
+  private getDangerColor(floor: number) {
+    if (floor % 25 === 0) {
+      return '#ff4d4d';
+    }
+
+    if (floor % 5 === 0) {
+      return '#f0d58a';
+    }
+
+    return '#9c8f7a';
   }
 }

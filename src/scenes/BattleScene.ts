@@ -10,7 +10,11 @@ import {
   restoreEnergy,
   useHealingPotion,
 } from '../systems/BattleSystem';
-import { goToNextRoom } from '../data/gameState';
+import {
+  gameState,
+  goToNextRoom,
+  resetFloorRun,
+} from '../data/gameState';
 import { addExperience, createLevelUpText } from '../systems/LevelSystem';
 import {
   addItemToInventory,
@@ -18,6 +22,8 @@ import {
   getRarityText,
   rollItemDrop,
 } from '../systems/InventorySystem';
+import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
+
 
 type BattleStats = {
   maxHp: number;
@@ -68,13 +74,11 @@ export class BattleScene extends Phaser.Scene {
     const foundEnemy = enemies.find(enemy => enemy.id === data.enemyId);
 
     if (!foundEnemy) {
-      throw new Error(`Enemy with id ${data.enemyId} not found`);
+      this.scene.start('DungeonScene');
+      return;
     }
 
-    this.enemy = {
-      ...foundEnemy,
-      hp: foundEnemy.maxHp,
-    };
+    this.enemy = this.createScaledEnemy(foundEnemy);
 
     this.returnToDungeon = data.returnToDungeon ?? false;
     this.isBattleEnded = false;
@@ -91,10 +95,21 @@ export class BattleScene extends Phaser.Scene {
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x080808);
 
-    this.add.text(width / 2, 60, 'Бой', {
+    const floor = gameState.floorRun.currentFloor || 1;
+    const room = getCurrentRoom();
+
+    this.add.text(width / 2, 60, `Бой — этаж ${floor}`, {
       fontFamily: 'Arial',
-      fontSize: '54px',
-      color: '#d8b56d',
+      fontSize: '46px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+
+    this.add.text(width / 2, 105, room ? room.title : this.enemy.name, {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#9c8f7a',
     }).setOrigin(0.5);
 
     this.add.rectangle(width / 2, 185, 620, 175, 0x171313);
@@ -211,6 +226,73 @@ export class BattleScene extends Phaser.Scene {
           this.desperateStrikeCooldown > 0,
       }
     );
+  }
+
+  private createScaledEnemy(enemy: EnemyData): EnemyData {
+    const floor = gameState.floorRun.currentFloor || 1;
+    const room = getCurrentRoom();
+    const modifier = gameState.floorRun.modifier;
+
+    let multiplier = 1 + (floor - 1) * 0.08;
+
+    if (room?.type === 'elite') {
+      multiplier *= 1.25;
+    }
+
+    if (room?.type === 'boss') {
+      multiplier *= 1.55;
+    }
+
+    if (room?.type === 'tier_boss') {
+      multiplier *= 2.2;
+    }
+
+    if (modifier === 'elite' && room?.type === 'elite') {
+      multiplier *= 1.15;
+    }
+
+    if (modifier === 'cursed') {
+      multiplier *= 1.25;
+    }
+
+    if (modifier === 'tier_boss') {
+      multiplier *= 1.2;
+    }
+
+    const scaledMaxHp = Math.floor(enemy.maxHp * multiplier);
+    const scaledAttack = Math.floor(enemy.attack * multiplier);
+    const scaledDefense = Math.floor(enemy.defense * multiplier);
+
+    let rewardMultiplier = 1 + floor * 0.07;
+
+    if (modifier === 'elite') {
+      rewardMultiplier += 0.15;
+    }
+
+    if (modifier === 'cursed') {
+      rewardMultiplier += 0.25;
+    }
+
+    if (room?.type === 'boss') {
+      rewardMultiplier += 0.2;
+    }
+
+    if (room?.type === 'tier_boss') {
+      rewardMultiplier += 0.45;
+    }
+
+    const scaledExp = Math.floor(enemy.expReward * rewardMultiplier);
+    const scaledGold = Math.floor(enemy.goldReward * rewardMultiplier);
+
+    return {
+      ...enemy,
+      maxHp: scaledMaxHp,
+      hp: scaledMaxHp,
+      attack: scaledAttack,
+      defense: scaledDefense,
+      expReward: scaledExp,
+      goldReward: scaledGold,
+    };
   }
 
   private getBattleStats(): BattleStats {
@@ -903,6 +985,10 @@ export class BattleScene extends Phaser.Scene {
     trackEnemyKilled();
     trackGoldEarned(gold);
 
+    gameState.floorRun.monstersDefeated += 1;
+    gameState.floorRun.goldEarned += gold;
+    gameState.floorRun.expEarned += this.enemy.expReward;
+
     const expResult = addExperience(player, this.enemy.expReward);
 
     let lootText = '';
@@ -936,6 +1022,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.time.delayedCall(2200, () => {
       if (this.returnToDungeon) {
+        markCurrentRoomCompleted();
         goToNextRoom();
 
         void saveGameAsync();
@@ -1045,8 +1132,10 @@ export class BattleScene extends Phaser.Scene {
          player.hp = freshStats.maxHp;
          player.energy = player.maxEnergy;
 
-         void saveGameAsync();
+         resetFloorRun();
 
+         void saveGameAsync();
+        
          this.scene.start('CampScene');
        });
 

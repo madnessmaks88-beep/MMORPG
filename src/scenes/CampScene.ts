@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { gameState } from '../data/gameState';
+import { gameState, resetFloorRun } from '../data/gameState';
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
@@ -197,22 +197,66 @@ export class CampScene extends Phaser.Scene {
   private createActionCards() {
     const { width } = this.scale;
 
+    const hasActiveRun =
+    gameState.floorRun.active &&
+    gameState.floorRun.rooms.length > 0;
+
+    const questsY = hasActiveRun ? 710 : 650;
+    const forgeY = hasActiveRun ? 790 : 730;
+    const restY = hasActiveRun ? 870 : 810;
+    
+    const dungeonButtonText = hasActiveRun
+      ? `Продолжить спуск: этаж ${gameState.floorRun.currentFloor}`
+      : 'Войти в катакомбы';
+
+      if (hasActiveRun) {
+        createButton(
+          this,
+          width / 2,
+          635,
+          'Покинуть спуск',
+          () => {
+            this.showLeaveRunMessage();
+          },
+          540,
+          58
+        );
+      }
+
     createButton(
       this,
       width / 2,
       570,
-      'Войти в катакомбы',
+      dungeonButtonText,
       () => {
+        if (hasActiveRun) {
+          this.scene.start('DungeonScene');
+          return;
+        }
+      
         this.scene.start('DungeonSelectScene');
       },
       540,
       68
     );
 
+    if (hasActiveRun) {
+      this.add.text(
+        width / 2,
+        615,
+        `Комната ${gameState.floorRun.currentRoomIndex + 1}/${gameState.floorRun.rooms.length}`,
+        {
+          fontFamily: 'Arial',
+          fontSize: '16px',
+          color: '#9c8f7a',
+        }
+      ).setOrigin(0.5);
+    }
+
     createButton(
       this,
       width / 2,
-      650,
+      questsY,
       'Задания',
       () => {
         this.scene.start('QuestScene');
@@ -224,7 +268,7 @@ export class CampScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
-      730,
+      forgeY,
       'Кузница',
       () => {
         this.scene.start('ForgeScene');
@@ -243,7 +287,7 @@ export class CampScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
-      810,
+      restY,
       restButtonText,
       () => {
         const cooldownLeft = this.getCampfireCooldownLeft();
@@ -268,6 +312,85 @@ export class CampScene extends Phaser.Scene {
       540,
       68
     );
+  }
+
+  private showLeaveRunMessage() {
+    const { width, height } = this.scale;
+    
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.68)
+      .setDepth(100);
+    
+    const panel = this.add.rectangle(width / 2, height / 2, 580, 340, 0x171313)
+      .setStrokeStyle(3, 0x8b5a2b)
+      .setDepth(101);
+    
+    const title = this.add.text(width / 2, height / 2 - 110, 'Покинуть спуск?', {
+      fontFamily: 'Arial',
+      fontSize: '34px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
+  
+    const text = this.add.text(
+      width / 2,
+      height / 2 - 25,
+      `Текущий забег будет сброшен.\n\nЭтаж: ${gameState.floorRun.currentFloor}\nКомната: ${gameState.floorRun.currentRoomIndex + 1}/${gameState.floorRun.rooms.length}`,
+      {
+        fontFamily: 'Arial',
+        fontSize: '22px',
+        color: '#d8c7a3',
+        align: 'center',
+        lineSpacing: 7,
+      }
+    ).setOrigin(0.5).setDepth(102);
+  
+    const leaveBg = this.add.rectangle(width / 2 - 145, height / 2 + 105, 240, 58, 0x2a1111)
+      .setStrokeStyle(2, 0xff6b6b)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
+  
+    const leaveText = this.add.text(width / 2 - 145, height / 2 + 105, 'Покинуть', {
+      fontFamily: 'Arial',
+      fontSize: '22px',
+      color: '#ff6b6b',
+    }).setOrigin(0.5).setDepth(103);
+  
+    const cancelBg = this.add.rectangle(width / 2 + 145, height / 2 + 105, 240, 58, 0x241515)
+      .setStrokeStyle(2, 0xf0d58a)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(102);
+  
+    const cancelText = this.add.text(width / 2 + 145, height / 2 + 105, 'Остаться', {
+      fontFamily: 'Arial',
+      fontSize: '22px',
+      color: '#f0d58a',
+    }).setOrigin(0.5).setDepth(103);
+  
+    const closeModal = () => {
+      overlay.destroy();
+      panel.destroy();
+      title.destroy();
+      text.destroy();
+      leaveBg.destroy();
+      leaveText.destroy();
+      cancelBg.destroy();
+      cancelText.destroy();
+    };
+  
+    cancelBg.on('pointerdown', () => {
+      closeModal();
+    });
+  
+    leaveBg.on('pointerdown', () => {
+      resetFloorRun();
+    
+      void saveGameAsync();
+    
+      closeModal();
+    
+      this.scene.restart();
+    });
   }
 
   private getCampfireCooldownLeft() {
