@@ -42,7 +42,7 @@ export class CampScene extends Phaser.Scene {
       136,
       vkUser
         ? `Игрок VK: ${vkUser.first_name} ${vkUser.last_name}`
-        : 'Локальный режим',
+        : 'Локальны режим',
       {
         fontFamily: 'Arial',
         fontSize: '18px',
@@ -255,28 +255,28 @@ export class CampScene extends Phaser.Scene {
   private getCampfireCooldownLeft() {
     const now = Date.now();
     const elapsed = now - gameState.lastCampRestAt;
-    
+
     return Math.max(0, this.campfireCooldownMs - elapsed);
   }
-  
+
   private formatCooldown(ms: number) {
     const totalSeconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-  
+
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
-  
+
   private showRestCooldownMessage(cooldownLeft: number) {
     const { width, height } = this.scale;
-  
+
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
       .setDepth(100);
-  
+
     const panel = this.add.rectangle(width / 2, height / 2, 560, 260, 0x171313)
       .setStrokeStyle(3, 0x8b5a2b)
       .setDepth(101);
-  
+
     const title = this.add.text(width / 2, height / 2 - 80, 'Костёр ещё не готов', {
       fontFamily: 'Arial',
       fontSize: '32px',
@@ -284,7 +284,7 @@ export class CampScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(102);
-  
+
     const text = this.add.text(
       width / 2,
       height / 2 - 5,
@@ -297,18 +297,18 @@ export class CampScene extends Phaser.Scene {
         lineSpacing: 8,
       }
     ).setOrigin(0.5).setDepth(102);
-  
+
     const closeBg = this.add.rectangle(width / 2, height / 2 + 90, 240, 58, 0x241515)
       .setStrokeStyle(2, 0x8b5a2b)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
-  
+
     const closeText = this.add.text(width / 2, height / 2 + 90, 'Понятно', {
       fontFamily: 'Arial',
       fontSize: '24px',
       color: '#f0d58a',
     }).setOrigin(0.5).setDepth(103);
-  
+
     closeBg.on('pointerdown', () => {
       overlay.destroy();
       panel.destroy();
@@ -316,7 +316,7 @@ export class CampScene extends Phaser.Scene {
       text.destroy();
       closeBg.destroy();
       closeText.destroy();
-    
+
       this.scene.restart();
     });
   }
