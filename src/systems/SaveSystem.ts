@@ -6,7 +6,7 @@ import type { InventoryItem } from '../data/player';
 import { gameState } from '../data/gameState';
 import { vkStorageGet, vkStorageSet } from './VKBridgeSystem';
 
-const SAVE_KEY = 'below_ashes_save_v1';
+const SAVE_KEY = 'below_ashes_save_v2';
 
 type SaveData = {
   player: typeof player;
@@ -23,6 +23,8 @@ export function saveGame() {
 }
 
 export function loadGame() {
+  localStorage.removeItem('below_ashes_save_v1');
+
   const rawSave = localStorage.getItem(SAVE_KEY);
 
   if (!rawSave) {

@@ -155,6 +155,7 @@ export class RaceSelectScene extends Phaser.Scene {
 
   private selectRace(race: RaceData) {
     player.raceId = race.id;
+		player.name = race.name;
 
     player.maxHp = race.hp * 10;
     player.hp = player.maxHp;
