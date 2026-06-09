@@ -11,23 +11,24 @@ type NavItem = {
   scene: string;
 };
 
-export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions = {}) {
+export function createBottomNav(
+  scene: Phaser.Scene,
+  options: BottomNavOptions = {}
+) {
   const { width, height } = scene.scale;
 
   const activeScene = options.activeScene;
   const disabledScenes = options.disabledScenes ?? [];
   const disabledMessage =
-    options.disabledMessage ?? 'Нельзя выйти отсюда прямо сейчас.';
+    options.disabledMessage ?? 'Сейчас нельзя перейти в этот раздел.';
 
-  const navHeight = 130;
+  const navHeight = 112;
   const navY = height - navHeight / 2;
 
-  scene.add.rectangle(width / 2, navY, width, navHeight, 0x080808, 0.96)
-    .setStrokeStyle(2, 0x2a2117)
-    .setDepth(900);
+  scene.add.rectangle(width / 2, navY, width, navHeight, 0x090909, 0.96)
+    .setStrokeStyle(2, 0x3a2518);
 
-  scene.add.rectangle(width / 2, height - navHeight, width, 2, 0x8b5a2b, 0.65)
-    .setDepth(901);
+  scene.add.rectangle(width / 2, height - navHeight, width, 2, 0x8b5a2b, 0.7);
 
   const items: NavItem[] = [
     {
@@ -35,8 +36,12 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions =
       scene: 'ShopScene',
     },
     {
-      label: 'Главный\nэкран',
+      label: 'Город',
       scene: 'CampScene',
+    },
+    {
+      label: 'Герой',
+      scene: 'ProfileScene',
     },
     {
       label: 'Инвентарь',
@@ -45,9 +50,10 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions =
   ];
 
   const positions = [
-    width * 0.18,
-    width * 0.5,
-    width * 0.82,
+    width * 0.14,
+    width * 0.38,
+    width * 0.62,
+    width * 0.86,
   ];
 
   items.forEach((item, index) => {
@@ -55,78 +61,45 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions =
     const isActive = activeScene === item.scene;
     const isDisabled = disabledScenes.includes(item.scene);
 
-    const buttonBg = scene.add.rectangle(
-      x,
-      navY,
-      185,
-      82,
-      isActive ? 0x2a1d13 : isDisabled ? 0x111111 : 0x171313,
-      1
-    )
-      .setStrokeStyle(2, isActive ? 0xf0d58a : isDisabled ? 0x444444 : 0x8b5a2b)
-      .setInteractive({ useHandCursor: !isActive && !isDisabled })
-      .setDepth(902);
+    const bgColor = isActive ? 0x2a1d12 : 0x151515;
+    const strokeColor = isActive ? 0xf0d58a : 0x4a3324;
+    const textColor = isDisabled
+      ? '#555555'
+      : isActive
+        ? '#f0d58a'
+        : '#d8c7a3';
 
-    const label = scene.add.text(x, navY, item.label, {
+    const button = scene.add.rectangle(x, navY, 150, 76, bgColor, 0.96)
+      .setStrokeStyle(2, strokeColor)
+      .setInteractive({ useHandCursor: !isDisabled });
+
+    scene.add.text(x, navY, item.label, {
       fontFamily: 'Arial',
-      fontSize: item.scene === 'CampScene' ? '18px' : '20px',
-      color: isActive ? '#f0d58a' : isDisabled ? '#666666' : '#d8c7a3',
-      align: 'center',
-      lineSpacing: -4,
-    })
-      .setOrigin(0.5)
-      .setDepth(903);
+      fontSize: '17px',
+      color: textColor,
+    }).setOrigin(0.5);
 
-    if (isDisabled) {
-      buttonBg.on('pointerdown', () => {
-        showSmallNavMessage(scene, disabledMessage);
-      });
+    button.on('pointerdown', () => {
+      if (isDisabled) {
+        scene.add.text(width / 2, height - 150, disabledMessage, {
+          fontFamily: 'Arial',
+          fontSize: '18px',
+          color: '#ffb3b3',
+          backgroundColor: '#000000',
+          padding: {
+            x: 12,
+            y: 8,
+          },
+        }).setOrigin(0.5).setDepth(1000);
 
-      return;
-    }
+        return;
+      }
 
-    if (!isActive) {
-      buttonBg.on('pointerover', () => {
-        buttonBg.setFillStyle(0x241515);
-        label.setColor('#f0d58a');
-      });
+      if (isActive) {
+        return;
+      }
 
-      buttonBg.on('pointerout', () => {
-        buttonBg.setFillStyle(0x171313);
-        label.setColor('#d8c7a3');
-      });
-
-      buttonBg.on('pointerdown', () => {
-        scene.scene.start(item.scene);
-      });
-    }
-  });
-}
-
-function showSmallNavMessage(scene: Phaser.Scene, message: string) {
-  const { width, height } = scene.scale;
-
-  const panel = scene.add.rectangle(width / 2, height - 190, 560, 70, 0x171313, 0.96)
-    .setStrokeStyle(2, 0x8b5a2b)
-    .setDepth(1000);
-
-  const text = scene.add.text(width / 2, height - 190, message, {
-    fontFamily: 'Arial',
-    fontSize: '20px',
-    color: '#f0d58a',
-    align: 'center',
-  })
-    .setOrigin(0.5)
-    .setDepth(1001);
-
-  scene.tweens.add({
-    targets: [panel, text],
-    alpha: 0,
-    delay: 1300,
-    duration: 300,
-    onComplete: () => {
-      panel.destroy();
-      text.destroy();
-    },
+      scene.scene.start(item.scene);
+    });
   });
 }

@@ -11,6 +11,7 @@ import { ShopScene } from './scenes/ShopScene';
 import { QuestScene } from './scenes/QuestScene';
 import { ForgeScene } from './scenes/ForgeScene';
 import { RaceSelectScene } from './scenes/RaceSelectScene';
+import { ProfileScene } from './scenes/ProfileScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -30,6 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
     ShopScene,
     QuestScene,
     ForgeScene,
+    ProfileScene,
   ],
   scale: {
     mode: Phaser.Scale.FIT,
