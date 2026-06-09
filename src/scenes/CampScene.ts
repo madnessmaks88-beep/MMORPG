@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
+import { gameState } from '../data/gameState';
+
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
+
 import { getPlayerStats } from '../systems/InventorySystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
-import { gameState } from '../data/gameState';
 
 export class CampScene extends Phaser.Scene {
   private readonly campfireCooldownMs = 5 * 60 * 1000;
@@ -22,36 +24,36 @@ export class CampScene extends Phaser.Scene {
 
     this.createBackground();
 
-    this.add.text(width / 2, 58, 'Лагерь у входа', {
+    this.add.text(width / 2, 45, 'Лагерь у входа', {
       fontFamily: 'Arial',
-      fontSize: '46px',
+      fontSize: '38px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 5,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 106, 'Последнее тёплое место перед тьмой.', {
+    this.add.text(width / 2, 83, 'Последнее тёплое место перед тьмой.', {
       fontFamily: 'Arial',
-      fontSize: '21px',
+      fontSize: '18px',
       color: '#9c8f7a',
       align: 'center',
     }).setOrigin(0.5);
 
     this.add.text(
       width / 2,
-      136,
+      110,
       vkUser
         ? `Игрок VK: ${vkUser.first_name} ${vkUser.last_name}`
-        : 'Локальны режим',
+        : 'Локальный режим',
       {
         fontFamily: 'Arial',
-        fontSize: '18px',
+        fontSize: '16px',
         color: vkUser ? '#75d184' : '#70675a',
         align: 'center',
       }
     ).setOrigin(0.5);
 
-    this.createCampfire(width / 2, 230);
+    this.createCampfire(width / 2, 185);
     this.createHeroCard(stats);
     this.createActionCards();
 
@@ -64,51 +66,54 @@ export class CampScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x090909);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x130d0b, 0.9);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x160f0c, 0.75);
+    this.add.circle(width / 2, 185, 160, 0xe0772f, 0.04);
+    this.add.circle(width / 2, 185, 95, 0xf0d58a, 0.05);
 
-    for (let i = 0; i < 26; i++) {
-      const x = Phaser.Math.Between(0, width);
-      const y = Phaser.Math.Between(0, height);
+    for (let i = 0; i < 32; i++) {
+      const x = Phaser.Math.Between(40, width - 40);
+      const y = Phaser.Math.Between(40, height - 170);
       const size = Phaser.Math.Between(1, 3);
 
-      this.add.circle(x, y, size, 0xd8b56d, 0.08);
+      this.add.circle(x, y, size, 0xd8b56d, 0.06);
     }
 
-    this.add.rectangle(width / 2, height - 170, width, 300, 0x050505, 0.45);
+    this.add.rectangle(width / 2, height - 165, width, 280, 0x050505, 0.5);
+    this.add.rectangle(width / 2, height - 130, width, 2, 0x8b5a2b, 0.6);
   }
 
   private createCampfire(x: number, y: number) {
-    this.add.ellipse(x, y + 58, 250, 70, 0x000000, 0.35);
+    this.add.ellipse(x, y + 48, 210, 55, 0x000000, 0.35);
 
-    this.add.circle(x, y, 115, 0xe0772f, 0.08);
-    this.add.circle(x, y, 75, 0xf0d58a, 0.1);
+    this.add.circle(x, y, 95, 0xe0772f, 0.08);
+    this.add.circle(x, y, 62, 0xf0d58a, 0.1);
 
-    this.add.rectangle(x - 35, y + 40, 100, 18, 0x4a2a16).setAngle(-18);
-    this.add.rectangle(x + 35, y + 40, 100, 18, 0x4a2a16).setAngle(18);
+    this.add.rectangle(x - 30, y + 34, 88, 15, 0x4a2a16).setAngle(-18);
+    this.add.rectangle(x + 30, y + 34, 88, 15, 0x4a2a16).setAngle(18);
 
     const flame1 = this.add.triangle(
       x,
-      y + 18,
+      y + 12,
       0,
-      95,
-      38,
+      78,
+      34,
       0,
-      76,
-      95,
+      68,
+      78,
       0xc24747,
       0.95
     ).setOrigin(0.5);
 
     const flame2 = this.add.triangle(
       x,
-      y + 5,
+      y + 2,
       0,
-      72,
-      30,
+      58,
+      25,
       0,
-      60,
-      72,
+      50,
+      58,
       0xe0772f,
       0.95
     ).setOrigin(0.5);
@@ -117,11 +122,11 @@ export class CampScene extends Phaser.Scene {
       x,
       y,
       0,
-      48,
-      20,
+      38,
+      17,
       0,
-      40,
-      48,
+      34,
+      38,
       0xf0d58a,
       0.95
     ).setOrigin(0.5);
@@ -139,24 +144,32 @@ export class CampScene extends Phaser.Scene {
   private createHeroCard(stats: ReturnType<typeof getPlayerStats>) {
     const { width } = this.scale;
 
-    this.add.rectangle(width / 2, 500, 620, 350, 0x0d0d0d, 0.92);
-    this.add.rectangle(width / 2, 500, 590, 320, 0x171313, 0.95)
+    const cardY = 385;
+
+    this.add.rectangle(width / 2, cardY, 600, 260, 0x0d0d0d, 0.92)
       .setStrokeStyle(2, 0x8b5a2b);
 
-    this.add.text(width / 2, 360, player.name, {
+    this.add.rectangle(width / 2, cardY - 100, 560, 48, 0x171313, 0.95)
+      .setStrokeStyle(1, 0x2a2117);
+
+    this.add.text(width / 2, cardY - 100, player.name, {
       fontFamily: 'Arial',
-      fontSize: '34px',
+      fontSize: '30px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5);
 
-    const statsText = [
+    const leftStats = [
       `Уровень: ${player.level}`,
       `Опыт: ${player.exp}/${player.expToNextLevel}`,
       `Золото: ${player.gold}`,
       `HP: ${player.hp}/${stats.maxHp}`,
       `Энергия: ${player.energy}/${player.maxEnergy}`,
+      `Зелья: ${player.potions}`,
+    ].join('\n');
+
+    const rightStats = [
       `Атака: ${stats.attack}`,
       `Защита: ${stats.defense}`,
       `Крит: ${Math.round(stats.critChance * 100)}%`,
@@ -164,16 +177,21 @@ export class CampScene extends Phaser.Scene {
       `Уклонение: ${Math.round(stats.dodgeChance * 100)}%`,
       `Удача: ${stats.luck}`,
       `Добыча: +${Math.round(stats.lootChanceBonus * 100)}%`,
-      `Зелья: ${player.potions}`,
     ].join('\n');
 
-    this.add.text(width / 2, 520, statsText, {
+    this.add.text(width / 2 - 240, cardY - 48, leftStats, {
       fontFamily: 'Arial',
-      fontSize: '22px',
+      fontSize: '19px',
       color: '#d8c7a3',
-      align: 'center',
-      lineSpacing: 4,
-    }).setOrigin(0.5);
+      lineSpacing: 6,
+    }).setOrigin(0, 0);
+
+    this.add.text(width / 2 + 25, cardY - 48, rightStats, {
+      fontFamily: 'Arial',
+      fontSize: '19px',
+      color: '#d8c7a3',
+      lineSpacing: 6,
+    }).setOrigin(0, 0);
   }
 
   private createActionCards() {
@@ -182,37 +200,37 @@ export class CampScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
-      720,
+      570,
       'Войти в катакомбы',
       () => {
         this.scene.start('DungeonSelectScene');
       },
       540,
-      76
+      68
     );
 
     createButton(
       this,
       width / 2,
-      812,
+      650,
       'Задания',
       () => {
         this.scene.start('QuestScene');
       },
       540,
-      76
+      68
     );
 
     createButton(
       this,
       width / 2,
-      904,
+      730,
       'Кузница',
       () => {
         this.scene.start('ForgeScene');
       },
       540,
-      76
+      68
     );
 
     const restCooldownLeft = this.getCampfireCooldownLeft();
@@ -225,30 +243,30 @@ export class CampScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
-      996,
+      810,
       restButtonText,
       () => {
         const cooldownLeft = this.getCampfireCooldownLeft();
-      
+
         if (cooldownLeft > 0) {
           this.showRestCooldownMessage(cooldownLeft);
           return;
         }
-      
+
         const stats = getPlayerStats(player);
-      
+
         player.hp = stats.maxHp;
         player.energy = player.maxEnergy;
         player.potions = Math.max(player.potions, 2);
-      
+
         gameState.lastCampRestAt = Date.now();
-      
+
         void saveGameAsync();
-      
+
         this.showRestMessage();
       },
       540,
-      76
+      68
     );
   }
 
@@ -267,17 +285,17 @@ export class CampScene extends Phaser.Scene {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  private showRestCooldownMessage(cooldownLeft: number) {
+  private showRestMessage() {
     const { width, height } = this.scale;
 
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
       .setDepth(100);
 
-    const panel = this.add.rectangle(width / 2, height / 2, 560, 260, 0x171313)
+    const panel = this.add.rectangle(width / 2, height / 2, 560, 280, 0x171313)
       .setStrokeStyle(3, 0x8b5a2b)
       .setDepth(101);
 
-    const title = this.add.text(width / 2, height / 2 - 80, 'Костёр ещё не готов', {
+    const title = this.add.text(width / 2, height / 2 - 80, 'Отдых у костра', {
       fontFamily: 'Arial',
       fontSize: '32px',
       color: '#f0d58a',
@@ -287,25 +305,25 @@ export class CampScene extends Phaser.Scene {
 
     const text = this.add.text(
       width / 2,
-      height / 2 - 5,
-      `Ты уже недавно отдыхал.\n\nДо следующего отдыха: ${this.formatCooldown(cooldownLeft)}`,
+      height / 2,
+      'Ты восстановил здоровье и энергию.\nЗелья пополнены минимум до 2.',
       {
         fontFamily: 'Arial',
-        fontSize: '23px',
+        fontSize: '22px',
         color: '#d8c7a3',
         align: 'center',
         lineSpacing: 8,
       }
     ).setOrigin(0.5).setDepth(102);
 
-    const closeBg = this.add.rectangle(width / 2, height / 2 + 90, 240, 58, 0x241515)
+    const closeBg = this.add.rectangle(width / 2, height / 2 + 88, 250, 58, 0x241515)
       .setStrokeStyle(2, 0x8b5a2b)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
 
-    const closeText = this.add.text(width / 2, height / 2 + 90, 'Понятно', {
+    const closeText = this.add.text(width / 2, height / 2 + 88, 'Хорошо', {
       fontFamily: 'Arial',
-      fontSize: '24px',
+      fontSize: '23px',
       color: '#f0d58a',
     }).setOrigin(0.5).setDepth(103);
 
@@ -321,19 +339,19 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private showRestMessage() {
+  private showRestCooldownMessage(cooldownLeft: number) {
     const { width, height } = this.scale;
 
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.65)
       .setDepth(100);
 
-    const panel = this.add.rectangle(width / 2, height / 2, 560, 300, 0x171313)
+    const panel = this.add.rectangle(width / 2, height / 2, 560, 260, 0x171313)
       .setStrokeStyle(3, 0x8b5a2b)
       .setDepth(101);
 
-    const title = this.add.text(width / 2, height / 2 - 85, 'Отдых у костра', {
+    const title = this.add.text(width / 2, height / 2 - 78, 'Костёр ещё не готов', {
       fontFamily: 'Arial',
-      fontSize: '34px',
+      fontSize: '31px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 4,
@@ -341,25 +359,25 @@ export class CampScene extends Phaser.Scene {
 
     const text = this.add.text(
       width / 2,
-      height / 2,
-      'Ты восстановил здоровье и энергию.\nЗелья пополнены минимум до 2.',
+      height / 2 - 5,
+      `Ты уже недавно отдыхал.\n\nДо следующего отдыха: ${this.formatCooldown(cooldownLeft)}`,
       {
         fontFamily: 'Arial',
-        fontSize: '23px',
+        fontSize: '22px',
         color: '#d8c7a3',
         align: 'center',
         lineSpacing: 8,
       }
     ).setOrigin(0.5).setDepth(102);
 
-    const closeBg = this.add.rectangle(width / 2, height / 2 + 95, 260, 60, 0x241515)
+    const closeBg = this.add.rectangle(width / 2, height / 2 + 88, 240, 58, 0x241515)
       .setStrokeStyle(2, 0x8b5a2b)
       .setInteractive({ useHandCursor: true })
       .setDepth(102);
 
-    const closeText = this.add.text(width / 2, height / 2 + 95, 'Хорошо', {
+    const closeText = this.add.text(width / 2, height / 2 + 88, 'Понятно', {
       fontFamily: 'Arial',
-      fontSize: '24px',
+      fontSize: '23px',
       color: '#f0d58a',
     }).setOrigin(0.5).setDepth(103);
 
