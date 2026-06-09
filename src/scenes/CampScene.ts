@@ -179,14 +179,14 @@ export class CampScene extends Phaser.Scene {
       `Добыча: +${Math.round(stats.lootChanceBonus * 100)}%`,
     ].join('\n');
 
-    this.add.text(width / 2 - 240, cardY - 53, leftStats, {
+    this.add.text(width / 2 - 240, cardY - 57, leftStats, {
       fontFamily: 'Arial',
       fontSize: '19px',
       color: '#d8c7a3',
       lineSpacing: 6,
     }).setOrigin(0, 0);
 
-    this.add.text(width / 2 + 25, cardY - 53, rightStats, {
+    this.add.text(width / 2 + 25, cardY - 57, rightStats, {
       fontFamily: 'Arial',
       fontSize: '19px',
       color: '#d8c7a3',
