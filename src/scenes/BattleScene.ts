@@ -634,27 +634,27 @@ export class BattleScene extends Phaser.Scene {
     color: number
   ) {
     const isEnemy = icon === '☠';
-  
+
     const container = this.add.container(x, y);
-  
+
     const strokeColor = isEnemy ? 0x6b2a2a : UI.colors.goldDark;
     const iconColor = isEnemy ? UI.colors.red : UI.colors.goldText;
     const titleColor = isEnemy ? UI.colors.red : UI.colors.goldText;
-  
+
     const shadow = this.add.rectangle(0, 6, 620, 190, 0x000000, 0.24);
-  
+
     const bg = this.add.rectangle(0, 0, 620, 190, color, 0.88)
       .setStrokeStyle(2, strokeColor, 0.6);
-  
+
     const iconBg = this.add.circle(-245, -35, 38, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
       .setStrokeStyle(2, strokeColor, 0.65);
-  
+
     const iconText = this.add.text(-245, -35, icon, {
       fontFamily: UI.font.body,
       fontSize: '31px',
       color: iconColor,
     }).setOrigin(0.5);
-  
+
     const nameText = this.add.text(-190, -58, name, {
       fontFamily: UI.font.title,
       fontSize: '25px',
@@ -662,27 +662,27 @@ export class BattleScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0, 0.5);
-  
+
     const hpText = this.add.text(-190, -18, '', {
       fontFamily: UI.font.body,
       fontSize: '18px',
       color: UI.colors.text,
     }).setOrigin(0, 0.5);
-  
+
     const extraText = this.add.text(-190, 24, '', {
       fontFamily: UI.font.body,
       fontSize: '16px',
       color: UI.colors.textMuted,
     }).setOrigin(0, 0.5);
-  
+
     const barBack = this.add.rectangle(0, 72, 520, 10, 0x080808, 0.9);
     const hpBar = this.add.rectangle(-260, 72, 520, 10, isEnemy ? 0xff6b6b : 0x75d184, 0.95)
       .setOrigin(0, 0.5);
-  
+
     const energyBack = this.add.rectangle(0, 92, 520, 8, 0x080808, isEnemy ? 0 : 0.9);
     const energyBar = this.add.rectangle(-260, 92, 520, 8, 0x70a6ff, isEnemy ? 0 : 0.9)
       .setOrigin(0, 0.5);
-  
+
     container.add([
       shadow,
       bg,
@@ -696,28 +696,28 @@ export class BattleScene extends Phaser.Scene {
       energyBack,
       energyBar,
     ]);
-  
+
     if (isEnemy) {
       this.enemyHpText = hpText;
       this.enemyHpBar = hpBar;
-    
+
       extraText.setText(`Атака: ${this.enemy.attack}  •  Защита: ${this.enemy.defense}`);
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
       this.energyBar = energyBar;
-    
+
       this.energyText = extraText;
-    
+
       const stats = this.getBattleStats();
-    
+
       this.potionText = this.add.text(245, 10, `Зелья: ${player.potions}`, {
         fontFamily: UI.font.body,
         fontSize: '16px',
         color: UI.colors.textMuted,
         align: 'right',
       }).setOrigin(1, 0.5);
-    
+
       const statsText = this.add.text(245, -34, [
         `Атака: ${stats.attack}`,
         `Защита: ${stats.defense}`,
@@ -729,10 +729,10 @@ export class BattleScene extends Phaser.Scene {
         align: 'right',
         lineSpacing: 4,
       }).setOrigin(1, 0.5);
-    
+
       container.add([this.potionText, statsText]);
     }
-  
+
     return container;
   }
 
@@ -1162,16 +1162,19 @@ export class BattleScene extends Phaser.Scene {
 
   private updateTexts() {
    const stats = this.getBattleStats();
-
+    
    this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
    this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
    this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
-   this.potionText.setText(`Зелья: ${player.potions}`);
-
+    
+   if (this.potionText) {
+     this.potionText.setText(`Зелья: ${player.potions}`);
+   }
+  
    const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
    const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
    const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
-
+  
    this.playerHpBar.width = 520 * playerHpRatio;
    this.enemyHpBar.width = 520 * enemyHpRatio;
    this.energyBar.width = 520 * energyRatio;

@@ -10,13 +10,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create() {
-    try {
-      await initVKBridge();
-      await getVKUser();
-      await loadGameAsync();
-    } catch (error) {
-      console.warn('Boot loading failed. Starting game anyway.', error);
-    }
+    await initVKBridge();
+    await getVKUser();
+
+    await loadGameAsync();
 
     if (!player.raceId) {
       this.scene.start('RaceSelectScene');

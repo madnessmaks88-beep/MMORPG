@@ -1,106 +1,82 @@
-import Phaser from 'phaser';
-
-import { player } from '../data/player';
-import type { InventoryItem } from '../data/player';
+import { player, type PlayerData } from '../data/player';
 
 import {
-  createEmptyFloorRun,
   gameState,
+  createEmptyFloorRun,
   getCurrentTierByFloor,
+  type FloorRun,
+  type QuestProgress,
 } from '../data/gameState';
-import { vkStorageGet, vkStorageSet } from './VKBridgeSystem';
+
+import {
+  isVKBridgeReady,
+  vkStorageGet,
+  vkStorageSet,
+} from './VKBridgeSystem';
 
 const SAVE_KEY = 'below_ashes_save_v3';
 
 type SaveData = {
-  player: typeof player;
-  gameState: typeof gameState;
+  version: number;
+  player: PlayerData;
+  gameState: {
+    currentDungeonId: string;
+    currentRoomIndex: number;
+    dungeonCompleted: boolean;
+    unlockedDungeonIds: string[];
+
+    lastCampRestAt: number;
+
+    highestClearedFloor: number;
+    highestClearedTier: number;
+
+    floorRun: FloorRun;
+
+    questProgress: QuestProgress;
+  };
 };
 
-export function saveGame() {
-  const saveData: SaveData = {
-    player,
-    gameState,
+function createSaveData(): SaveData {
+  return {
+    version: 3,
+    player: structuredClone(player),
+    gameState: {
+      currentDungeonId: gameState.currentDungeonId,
+      currentRoomIndex: gameState.currentRoomIndex,
+      dungeonCompleted: gameState.dungeonCompleted,
+      unlockedDungeonIds: [...gameState.unlockedDungeonIds],
+
+      lastCampRestAt: gameState.lastCampRestAt,
+
+      highestClearedFloor: gameState.highestClearedFloor,
+      highestClearedTier: gameState.highestClearedTier,
+
+      floorRun: structuredClone(gameState.floorRun),
+
+      questProgress: structuredClone(gameState.questProgress),
+    },
   };
-
-  localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
 }
 
-export function loadGame() {
-  localStorage.removeItem('below_ashes_save_v2');
-
-  const rawSave = localStorage.getItem(SAVE_KEY);
-
-  if (!rawSave) {
-    fixMissingPlayerFields();
-    fixMissingGameStateFields();
-    return false;
+function applySaveData(saveData: Partial<SaveData>) {
+  if (saveData.player) {
+    Object.assign(player, saveData.player);
   }
 
-  try {
-    const saveData = JSON.parse(rawSave) as Partial<SaveData>;
-
-    if (saveData.player) {
-      Object.assign(player, saveData.player);
-    }
-
-    if (saveData.gameState) {
-      Object.assign(gameState, saveData.gameState);
-    }
-
-    fixMissingPlayerFields();
-    fixInventoryAfterLoad();
-    fixMissingGameStateFields();
-
-    return true;
-  } catch (error) {
-    console.warn('Save loading failed.', error);
-
-    fixMissingPlayerFields();
-    fixMissingGameStateFields();
-
-    return false;
-  }
-}
-
-export async function saveGameAsync() {
-  saveGame();
-
-  const rawSave = localStorage.getItem(SAVE_KEY);
-
-  if (!rawSave) {
-    return;
+  if (saveData.gameState) {
+    Object.assign(gameState, saveData.gameState);
   }
 
-  await vkStorageSet(SAVE_KEY, rawSave);
-}
-
-export async function loadGameAsync() {
-  try {
-    const vkSave = await vkStorageGet(SAVE_KEY);
-
-    if (vkSave) {
-      localStorage.setItem(SAVE_KEY, vkSave);
-    }
-  } catch (error) {
-    console.warn('VK save loading failed. Loading local save.', error);
-  }
-
-  return loadGame();
-}
-
-export function clearSave() {
-  localStorage.removeItem(SAVE_KEY);
-}
-
-export function resetSave() {
-  clearSave();
+  fixMissingPlayerFields();
+  fixMissingGameStateFields();
 }
 
 function fixMissingPlayerFields() {
+  if (player.name === undefined) player.name = 'Безымянный';
+
   if (player.level === undefined) player.level = 1;
   if (player.exp === undefined) player.exp = 0;
-  if (player.expToNextLevel === undefined) player.expToNextLevel = 50;
+  if (player.expToNextLevel === undefined) player.expToNextLevel = 70;
   if (player.gold === undefined) player.gold = 0;
 
   if (player.maxHp === undefined) player.maxHp = 100;
@@ -117,7 +93,6 @@ function fixMissingPlayerFields() {
 
   if (player.agility === undefined) player.agility = 5;
   if (player.luck === undefined) player.luck = 5;
-
   if (player.strength === undefined) player.strength = player.attack ?? 11;
   if (player.intelligence === undefined) player.intelligence = 11;
 
@@ -127,119 +102,38 @@ function fixMissingPlayerFields() {
   if (!player.equipment) player.equipment = {};
 }
 
-function fixInventoryAfterLoad() {
-  const oldItemUpgrades = (player as any).itemUpgrades ?? {};
-
-  player.inventory = player.inventory.map((item: string | InventoryItem) => {
-    if (typeof item === 'string') {
-      return {
-        instanceId: `${item}_${Date.now()}_${Phaser.Math.Between(1000, 9999)}`,
-        itemId: item,
-        upgradeLevel: oldItemUpgrades[item] ?? 0,
-      };
-    }
-
-    return {
-      instanceId:
-        item.instanceId ||
-        `${item.itemId}_${Date.now()}_${Phaser.Math.Between(1000, 9999)}`,
-      itemId: item.itemId,
-      upgradeLevel: item.upgradeLevel ?? 0,
-    };
-  });
-
-  delete (player as any).itemUpgrades;
-}
-
 function fixMissingGameStateFields() {
-  if (!gameState.currentDungeonId) {
-    gameState.currentDungeonId = 'old_catacombs';
-  }
+  if (!gameState.currentDungeonId) gameState.currentDungeonId = 'tower_depths';
+  if (gameState.currentRoomIndex === undefined) gameState.currentRoomIndex = 0;
+  if (gameState.dungeonCompleted === undefined) gameState.dungeonCompleted = false;
+  if (!gameState.unlockedDungeonIds) gameState.unlockedDungeonIds = ['tower_depths'];
 
-  if (gameState.currentRoomIndex === undefined) {
-    gameState.currentRoomIndex = 0;
-  }
+  if (gameState.lastCampRestAt === undefined) gameState.lastCampRestAt = 0;
 
-  if (gameState.dungeonCompleted === undefined) {
-    gameState.dungeonCompleted = false;
-  }
-
-  if (!gameState.unlockedDungeonIds) {
-    gameState.unlockedDungeonIds = ['old_catacombs'];
-  }
-
-  if (gameState.lastCampRestAt === undefined) {
-    gameState.lastCampRestAt = 0;
-  }
-
-  if (gameState.highestClearedFloor === undefined) {
-    gameState.highestClearedFloor = 0;
-  }
-
-  if (gameState.highestClearedTier === undefined) {
-    gameState.highestClearedTier = 0;
-  }
-  if (gameState.floorRun.rewardClaimed === undefined) {
-    gameState.floorRun.rewardClaimed = false;
-  }
+  if (gameState.highestClearedFloor === undefined) gameState.highestClearedFloor = 0;
+  if (gameState.highestClearedTier === undefined) gameState.highestClearedTier = 0;
 
   if (!gameState.floorRun) {
     gameState.floorRun = createEmptyFloorRun();
   }
 
-  if (gameState.floorRun.active === undefined) {
-    gameState.floorRun.active = false;
-  }
+  if (gameState.floorRun.active === undefined) gameState.floorRun.active = false;
+  if (gameState.floorRun.currentFloor === undefined) gameState.floorRun.currentFloor = 1;
+  if (gameState.floorRun.currentRoomIndex === undefined) gameState.floorRun.currentRoomIndex = 0;
+  if (!gameState.floorRun.rooms) gameState.floorRun.rooms = [];
+  if (gameState.floorRun.rewardClaimed === undefined) gameState.floorRun.rewardClaimed = false;
+  if (!gameState.floorRun.modifier) gameState.floorRun.modifier = 'normal';
 
-  if (gameState.floorRun.currentFloor === undefined) {
-    gameState.floorRun.currentFloor = 1;
-  }
-
-  if (gameState.floorRun.currentRoomIndex === undefined) {
-    gameState.floorRun.currentRoomIndex = 0;
-  }
-
-  if (!gameState.floorRun.rooms) {
-    gameState.floorRun.rooms = [];
-  }
-
-  if (gameState.floorRun.rewardClaimed === undefined) {
-    gameState.floorRun.rewardClaimed = false;
-  }
-
-  if (!gameState.floorRun.modifier) {
-    gameState.floorRun.modifier = 'normal';
-  }
-
-  if (gameState.floorRun.monstersDefeated === undefined) {
-    gameState.floorRun.monstersDefeated = 0;
-  }
-
-  if (gameState.floorRun.chestsOpened === undefined) {
-    gameState.floorRun.chestsOpened = 0;
-  }
-
-  if (gameState.floorRun.trapsTriggered === undefined) {
-    gameState.floorRun.trapsTriggered = 0;
-  }
-
-  if (gameState.floorRun.goldEarned === undefined) {
-    gameState.floorRun.goldEarned = 0;
-  }
-
-  if (gameState.floorRun.expEarned === undefined) {
-    gameState.floorRun.expEarned = 0;
-  }
-
-  if (!gameState.floorRun.runType) {
-    gameState.floorRun.runType = 'tier';
-  }
-
+  if (!gameState.floorRun.runType) gameState.floorRun.runType = 'tier';
   if (gameState.floorRun.targetTier === undefined) {
-    gameState.floorRun.targetTier = getCurrentTierByFloor(
-      gameState.floorRun.currentFloor || 1
-    );
+    gameState.floorRun.targetTier = getCurrentTierByFloor(gameState.floorRun.currentFloor || 1);
   }
+
+  if (gameState.floorRun.monstersDefeated === undefined) gameState.floorRun.monstersDefeated = 0;
+  if (gameState.floorRun.chestsOpened === undefined) gameState.floorRun.chestsOpened = 0;
+  if (gameState.floorRun.trapsTriggered === undefined) gameState.floorRun.trapsTriggered = 0;
+  if (gameState.floorRun.goldEarned === undefined) gameState.floorRun.goldEarned = 0;
+  if (gameState.floorRun.expEarned === undefined) gameState.floorRun.expEarned = 0;
 
   if (!gameState.questProgress) {
     gameState.questProgress = {
@@ -251,23 +145,68 @@ function fixMissingGameStateFields() {
     };
   }
 
-  if (gameState.questProgress.enemiesKilled === undefined) {
-    gameState.questProgress.enemiesKilled = 0;
+  if (gameState.questProgress.enemiesKilled === undefined) gameState.questProgress.enemiesKilled = 0;
+  if (gameState.questProgress.chestsOpened === undefined) gameState.questProgress.chestsOpened = 0;
+  if (gameState.questProgress.dungeonsCompleted === undefined) gameState.questProgress.dungeonsCompleted = 0;
+  if (gameState.questProgress.goldEarned === undefined) gameState.questProgress.goldEarned = 0;
+  if (!gameState.questProgress.claimedQuestIds) gameState.questProgress.claimedQuestIds = [];
+}
+
+export async function saveGameAsync() {
+  const saveData = createSaveData();
+  const json = JSON.stringify(saveData);
+
+  localStorage.setItem(SAVE_KEY, json);
+
+  if (isVKBridgeReady()) {
+    await vkStorageSet(SAVE_KEY, json);
+  }
+}
+
+export async function loadGameAsync() {
+  let rawSave = localStorage.getItem(SAVE_KEY);
+
+  if (!rawSave && isVKBridgeReady()) {
+    rawSave = await vkStorageGet(SAVE_KEY);
+
+    if (rawSave) {
+      localStorage.setItem(SAVE_KEY, rawSave);
+    }
   }
 
-  if (gameState.questProgress.chestsOpened === undefined) {
-    gameState.questProgress.chestsOpened = 0;
+  if (!rawSave) {
+    fixMissingPlayerFields();
+    fixMissingGameStateFields();
+    return;
   }
 
-  if (gameState.questProgress.dungeonsCompleted === undefined) {
-    gameState.questProgress.dungeonsCompleted = 0;
-  }
+  try {
+    const saveData = JSON.parse(rawSave) as Partial<SaveData>;
+    applySaveData(saveData);
+  } catch {
+    console.warn('Save loading failed. Save file is corrupted.');
 
-  if (gameState.questProgress.goldEarned === undefined) {
-    gameState.questProgress.goldEarned = 0;
+    fixMissingPlayerFields();
+    fixMissingGameStateFields();
   }
+}
 
-  if (!gameState.questProgress.claimedQuestIds) {
-    gameState.questProgress.claimedQuestIds = [];
+export function saveGame() {
+  void saveGameAsync();
+}
+
+export function loadGame() {
+  void loadGameAsync();
+}
+
+export function clearSave() {
+  localStorage.removeItem(SAVE_KEY);
+
+  if (isVKBridgeReady()) {
+    void vkStorageSet(SAVE_KEY, '');
   }
+}
+
+export function resetSave() {
+  clearSave();
 }
