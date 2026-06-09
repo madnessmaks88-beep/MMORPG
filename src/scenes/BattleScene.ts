@@ -176,10 +176,8 @@ export class BattleScene extends Phaser.Scene {
       this,
       width / 2,
       920,
-      'Атака',
-      () => {
-        this.handleAttack();
-      },
+      'Атака  •  0 энергии',
+      () => this.handleAttack(),
       540,
       54
     );
@@ -188,10 +186,8 @@ export class BattleScene extends Phaser.Scene {
       this,
       width / 2,
       982,
-      'Сильный удар',
-      () => {
-        this.handlePowerAttack();
-      },
+      'Сильный удар  •  2 энергии',
+      () => this.handlePowerAttack(),
       540,
       54,
       {
@@ -199,35 +195,17 @@ export class BattleScene extends Phaser.Scene {
       }
     );
 
+    const desperateText =
+      this.desperateStrikeCooldown > 0
+        ? `Отчаянный удар  •  КД ${this.desperateStrikeCooldown}`
+        : 'Отчаянный удар  •  3 энергии';
+
     createButton(
       this,
       width / 2,
       1044,
-      'Кровавый удар',
-      () => {
-        this.handleBloodStrike();
-      },
-      540,
-      54,
-      {
-        disabled: player.hp <= 10,
-        danger: true,
-      }
-    );
-
-    const desperateText =
-      this.desperateStrikeCooldown > 0
-        ? `Отчаянный удар: КД ${this.desperateStrikeCooldown}`
-        : 'Отчаянный удар';
-
-    createButton(
-      this,
-      width / 2,
-      1106,
       desperateText,
-      () => {
-        this.handleDesperateStrike();
-      },
+      () => this.handleDesperateStrike(),
       540,
       54,
       {
@@ -241,17 +219,44 @@ export class BattleScene extends Phaser.Scene {
     createButton(
       this,
       width / 2,
+      1106,
+      'Защита  •  +1 энергия',
+      () => this.handleDefend(),
+      540,
+      54
+    );
+
+    createButton(
+      this,
+      width / 2,
       1168,
-      `Зелье здоровья: ${player.potions}`,
-      () => {
-        this.handlePotion();
-      },
+      `Зелье здоровья  •  ${player.potions}`,
+      () => this.handlePotion(),
       540,
       54,
       {
         disabled: player.potions <= 0,
       }
     );
+  }
+
+  private handleDefend() {
+    if (this.isBattleEnded || this.isBusy) {
+      return;
+    }
+  
+    this.isBusy = true;
+  
+    restoreEnergy(player, 1);
+  
+    const playerActionText = 'Ты занял защитную стойку.\nЭнергия восстановлена на 1.';
+  
+    this.logText.setText(playerActionText);
+    this.updateTexts();
+  
+    this.time.delayedCall(450, () => {
+      this.enemyTurn(playerActionText, true);
+    });
   }
 
   
@@ -680,7 +685,8 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     const energyBack = this.add.rectangle(0, 92, 520, 8, 0x080808, isEnemy ? 0 : 0.9);
-    const energyBar = this.add.rectangle(-260, 92, 520, 8, 0x70a6ff, isEnemy ? 0 : 0.9)
+
+    const energyBar = this.add.rectangle(-260, 92, 520, 8, 0x70a6ff, isEnemy ? 0 : 0.95)
       .setOrigin(0, 0.5);
 
     container.add([
@@ -758,21 +764,6 @@ export class BattleScene extends Phaser.Scene {
       ease: 'Power2',
       onComplete: () => {
         floatingText.destroy();
-      },
-    });
-  }
-
-  private flashScreen(color = 0xc24747, alpha = 0.35) {
-    const { width, height } = this.scale;
-
-    const flash = this.add.rectangle(width / 2, height / 2, width, height, color, alpha);
-
-    this.tweens.add({
-      targets: flash,
-      alpha: 0,
-      duration: 260,
-      onComplete: () => {
-        flash.destroy();
       },
     });
   }
@@ -918,56 +909,6 @@ export class BattleScene extends Phaser.Scene {
     this.enemyTurn(actionText);
   }
 
-  private handleBloodStrike() {
-    if (this.isBusy || this.isBattleEnded) {
-      return;
-    }
-
-    if (player.energy < 1) {
-      this.logText.setText('Недостаточно энергии.');
-      return;
-    }
-
-    this.isBusy = true;
-
-    player.energy -= 1;
-
-    const stats = this.getBattleStats();
-
-    const damage = Math.max(
-      1,
-      Math.floor((stats.attack + Phaser.Math.Between(-2, 3)) * 1.2)
-    );
-
-    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
-
-    const heal = Math.max(3, Math.floor(damage * 0.35));
-    player.hp = Math.min(stats.maxHp, player.hp + heal);
-
-    this.animatePlayerAttack();
-    this.animateHit(this.enemyCard);
-
-    this.showFloatingText(this.enemyCard.x, this.enemyCard.y - 55, `-${damage}`, '#ff6b6b');
-    this.showFloatingText(this.playerCard.x, this.playerCard.y - 55, `+${heal}`, '#75d184');
-
-    let actionText = `Кровавый удар наносит ${damage} урона.\nТы восстановил ${heal} HP.`;
-
-    const passiveText = this.checkHumanPassive();
-
-    if (passiveText) {
-      actionText += passiveText;
-    }
-
-    this.updateTexts();
-
-    if (this.enemy.hp <= 0) {
-      this.handleVictory(actionText);
-      return;
-    }
-
-    this.enemyTurn(actionText);
-  }
-
   private handleVictory(playerActionText: string) {
     if (this.isBattleEnded) {
       return;
@@ -1056,98 +997,98 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private enemyTurn(playerActionText: string, isDefending = false) {
-   this.updateTexts();
+    this.updateTexts();
 
-   this.time.delayedCall(500, () => {
-     this.animateEnemyAttack();
+    this.time.delayedCall(500, () => {
+      this.animateEnemyAttack();
 
-     const stats = this.getBattleStats();
+      const stats = this.getBattleStats();
 
-     if (Math.random() < stats.dodgeChance) {
-       this.showFloatingText(
-         this.playerCard.x,
-         this.playerCard.y - 55,
-         'УКЛОНЕНИЕ',
-         '#70a6ff'
-       );
+      if (Math.random() < stats.dodgeChance) {
+        this.showFloatingText(
+          this.playerCard.x,
+          this.playerCard.y - 55,
+          'УКЛОНЕНИЕ',
+          '#70a6ff'
+        );
 
-       restoreEnergy(player, 1);
+        restoreEnergy(player, 1);
 
-       const passiveText = this.checkHumanPassive();
+        const passiveText = this.checkHumanPassive();
 
-       this.logText.setText(
-         `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.${passiveText}`
-       );
+        this.logText.setText(
+          `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.${passiveText}`
+        );
 
-       this.updateTexts();
-       this.tickDesperateStrikeCooldown();
-       this.isBusy = false;
+        this.updateTexts();
+        this.tickDesperateStrikeCooldown();
+        this.isBusy = false;
 
-       return;
-     }
+        return;
+      }
 
-     let damage = Math.max(
-       1,
-       this.enemy.attack + Phaser.Math.Between(-2, 3) - stats.defense
-     );
+      let damage = Math.max(
+        1,
+        this.enemy.attack + Phaser.Math.Between(-2, 3) - stats.defense
+      );
 
-     if (isDefending) {
-       damage = Math.max(1, Math.floor(damage * 0.45));
-     }
+      if (isDefending) {
+        damage = Math.max(1, Math.floor(damage * 0.45));
+      }
 
-     player.hp = Math.max(0, player.hp - damage);
+      player.hp = Math.max(0, player.hp - damage);
 
-     this.showFloatingText(
-       this.playerCard.x,
-       this.playerCard.y - 55,
-       `-${damage}`,
-       isDefending ? '#70a6ff' : '#ff6b6b'
-     );
+      this.showFloatingText(
+        this.playerCard.x,
+        this.playerCard.y - 55,
+        `-${damage}`,
+        isDefending ? '#70a6ff' : '#ff6b6b'
+      );
 
-     this.animateHit(this.playerCard);
-     this.shakeBattle();
+      this.animateHit(this.playerCard);
+      this.shakeBattle();
 
-     if (!isDefending) {
-       this.flashScreen(0xc24747, 0.25);
-     }
+      restoreEnergy(player, 1);
 
-     restoreEnergy(player, 1);
+      const passiveText = this.checkHumanPassive();
 
-     const passiveText = this.checkHumanPassive();
+      if (player.hp <= 0) {
+        this.isBattleEnded = true;
 
-     if (player.hp <= 0) {
-       this.isBattleEnded = true;
+        this.logText.setText(
+          isDefending
+            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.\n\nТы пал в катакомбах...`
+            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\n\nТы пал в катакомбах...`
+        );
 
-       this.logText.setText(
-         `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\n\nТы пал в катакомбах...`
-       );
+        this.updateTexts();
 
-       this.updateTexts();
+        this.time.delayedCall(2000, () => {
+          const freshStats = getPlayerStats(player);
 
-       this.time.delayedCall(2000, () => {
-         const freshStats = getPlayerStats(player);
+          player.hp = freshStats.maxHp;
+          player.energy = freshStats.maxEnergy;
 
-         player.hp = freshStats.maxHp;
-         player.energy = player.maxEnergy;
+          resetFloorRun();
 
-         resetFloorRun();
+          void saveGameAsync();
 
-         void saveGameAsync();
-        
-         this.scene.start('CampScene');
-       });
+          this.scene.start('CampScene');
+        });
 
-       return;
-     }
+        return;
+      }
 
-     this.logText.setText(
-       `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\nЭнергия восстановлена на 1.${passiveText}`
-     );
+      this.logText.setText(
+        isDefending
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.\nЭнергия восстановлена на 1.${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\nЭнергия восстановлена на 1.${passiveText}`
+      );
 
-     this.updateTexts();
-     this.tickDesperateStrikeCooldown();
-     this.isBusy = false;
-   });
+      this.updateTexts();
+      this.tickDesperateStrikeCooldown();
+      this.isBusy = false;
+    });
   }
 
   private tickDesperateStrikeCooldown() {
@@ -1161,22 +1102,25 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateTexts() {
-   const stats = this.getBattleStats();
-    
-   this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
-   this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
-   this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
-    
-   if (this.potionText) {
-     this.potionText.setText(`Зелья: ${player.potions}`);
-   }
-  
-   const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
-   const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
-   const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
-  
-   this.playerHpBar.width = 520 * playerHpRatio;
-   this.enemyHpBar.width = 520 * enemyHpRatio;
-   this.energyBar.width = 520 * energyRatio;
+    const stats = this.getBattleStats();
+
+    player.hp = Math.min(player.hp, stats.maxHp);
+    player.energy = Phaser.Math.Clamp(player.energy, 0, stats.maxEnergy);
+
+    this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
+    this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
+    this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
+
+    if (this.potionText) {
+      this.potionText.setText(`Зелья: ${player.potions}`);
+    }
+
+    const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
+    const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
+    const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
+
+    this.playerHpBar.width = 520 * playerHpRatio;
+    this.enemyHpBar.width = 520 * enemyHpRatio;
+    this.energyBar.width = 520 * energyRatio;
   }
 }
