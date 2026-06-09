@@ -89,9 +89,6 @@ export function createBottomNav(
         ? '#f0d58a'
         : '#9f9078';
 
-    const shadow = scene.add.rectangle(x, navY + 4, buttonWidth, buttonHeight, 0x000000, 0.25)
-      .setDepth(902);
-
     const button = scene.add.rectangle(x, navY, buttonWidth, buttonHeight, bgColor, bgAlpha)
       .setDepth(903)
       .setInteractive({ useHandCursor: !isDisabled });
@@ -143,7 +140,5 @@ export function createBottomNav(
 
       scene.scene.start(item.scene);
     });
-
-    shadow.setInteractive(false);
   });
 }
