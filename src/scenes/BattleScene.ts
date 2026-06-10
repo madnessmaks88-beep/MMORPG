@@ -81,6 +81,8 @@ export class BattleScene extends Phaser.Scene {
   private readonly desperateStrikeEnergyCost = 3;
   private readonly desperateStrikeCooldownTurns = 2;
 
+  
+
   constructor() {
     super('BattleScene');
   }

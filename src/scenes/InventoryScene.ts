@@ -52,6 +52,10 @@ export class InventoryScene extends Phaser.Scene {
 
 	private initialInventoryScrollY = 0;
 
+	private isDraggingInventory = false;
+	private dragStartY = 0;
+	private dragStartScrollY = 0;
+
   constructor() {
     super('InventoryScene');
 
@@ -340,6 +344,8 @@ export class InventoryScene extends Phaser.Scene {
 
 	  this.renderInventoryItems();
 
+		this.createInventoryTouchScrollZone();
+
 	  this.input.off('wheel');
 
 	  this.input.on(
@@ -383,6 +389,64 @@ export class InventoryScene extends Phaser.Scene {
 	      danger: true,
 	    }
 	  );
+	}
+
+	private createInventoryTouchScrollZone() {
+	  const { width } = this.scale;
+		
+	  const zone = this.add.zone(
+	    width / 2,
+	    this.inventoryListTop + this.inventoryListHeight / 2,
+	    600,
+	    this.inventoryListHeight
+	  );
+	
+	  zone.setInteractive();
+	
+	  zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+	    if (this.inventoryMaxScrollY <= 0) {
+	      return;
+	    }
+		
+	    if (this.isItemInfoOpen) {
+	      return;
+	    }
+		
+	    this.isDraggingInventory = true;
+	    this.dragStartY = pointer.y;
+	    this.dragStartScrollY = this.inventoryTargetScrollY;
+	  });
+	
+	  zone.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+	    if (!this.isDraggingInventory) {
+	      return;
+	    }
+		
+	    if (this.isItemInfoOpen) {
+	      return;
+	    }
+		
+	    const dragDistance = pointer.y - this.dragStartY;
+		
+	    this.inventoryTargetScrollY = Phaser.Math.Clamp(
+	      this.dragStartScrollY - dragDistance,
+	      0,
+	      this.inventoryMaxScrollY
+	    );
+		
+	    this.inventoryScrollY = this.inventoryTargetScrollY;
+	    this.renderInventoryItems();
+	  });
+	
+	  zone.on('pointerup', () => {
+	    this.isDraggingInventory = false;
+	  });
+	
+	  zone.on('pointerupoutside', () => {
+	    this.isDraggingInventory = false;
+	  });
+	
+	  zone.setDepth(9);
 	}
 
 	private renderInventoryItems() {
@@ -444,6 +508,10 @@ export class InventoryScene extends Phaser.Scene {
 	  if (this.isItemInfoOpen) {
 	    return;
 	  }
+
+		if (this.isDraggingInventory) {
+		  return;
+		}
 
 	  const oldScrollY = this.inventoryScrollY;
 
