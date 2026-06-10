@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { player, type InventoryItem } from '../data/player';
+import { player, type EquipmentSlot, type InventoryItem } from '../data/player';
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 import { saveGameAsync } from '../systems/SaveSystem';
@@ -8,15 +8,17 @@ import { saveGameAsync } from '../systems/SaveSystem';
 import {
   equipItem,
   getBaseItemFromInventoryItem,
-  getEquippedInventoryItems,
+  getItemSellPrice,
   getPlayerStats,
+  getRarityColorHex,
   getRarityStrokeColor,
   getRarityText,
   getSlotIcon,
   getSlotText,
   isItemEquipped,
-	getRarityColorHex,
-	getItemSellPrice,
+  sellItem,
+  unequipItem,
+	createItemStatsText,
 } from '../systems/InventorySystem';
 
 import {
@@ -29,16 +31,36 @@ import {
 } from '../ui/theme';
 
 export class InventoryScene extends Phaser.Scene {
-  private currentPage = 0;
-  private itemsPerPage = 4;
+	
+	private isItemInfoOpen = false;
+
+	
+
+	private itemInfoContainer?: Phaser.GameObjects.Container;
+
+	private inventoryContainer!: Phaser.GameObjects.Container;
+
+	private inventoryScrollY = 0;
+	private inventoryTargetScrollY = 0;
+	private inventoryMaxScrollY = 0;
+
+	private inventoryListTop = 0;
+	private inventoryListHeight = 0;
+	private inventoryListBottom = 0;
+
+	private inventoryLastRenderedScrollY = -1;
+
+	private initialInventoryScrollY = 0;
 
   constructor() {
     super('InventoryScene');
+
+		
   }
 
-  init(data?: { page?: number }) {
-    this.currentPage = data?.page ?? 0;
-  }
+	init(data?: { inventoryScrollY?: number }) {
+	  this.initialInventoryScrollY = data?.inventoryScrollY ?? 0;
+	}
 
   create() {
 	  createSceneBackground(this);
@@ -91,236 +113,80 @@ export class InventoryScene extends Phaser.Scene {
   private createEquipmentPanel() {
 	  const { width } = this.scale;
 
-	  const panelY = 360;
+	  const panelY = 340;
 
-	  createPanel(this, width / 2, panelY, 620, 185, {
-	    alpha: 0.86,
+	  createPanel(this, width / 2, panelY, 620, 170, {
+	    alpha: 0.78,
 	    stroke: true,
 	    warm: false,
 	  });
 
 	  createSectionTitle(this, width / 2, panelY - 65, 'Экипировка');
 
-	  const equippedItems = getEquippedInventoryItems(player);
+	  this.createEquipmentSlot('weapon', panelY - 15);
+	  this.createEquipmentSlot('armor', panelY + 25);
+	  this.createEquipmentSlot('trinket', panelY + 65);
+	}
 
-	  if (equippedItems.length === 0) {
-	    createSmallText(this, width / 2, panelY + 20, 'Снаряжение не надето.', {
-	      fontSize: '19px',
-	      color: UI.colors.textMuted,
-	      width: 540,
-	    });
-
-	    return;
+	private closeItemInfo() {
+	  if (this.itemInfoContainer) {
+	    this.itemInfoContainer.destroy(true);
+	    this.itemInfoContainer = undefined;
 	  }
 
-	  const text = equippedItems
-	    .map(inventoryItem => {
-	      const item = getBaseItemFromInventoryItem(inventoryItem);
+	  this.isItemInfoOpen = false;
+	}
 
-	      if (!item) {
-	        return '';
-	      }
+	private createEquipmentSlot(slot: EquipmentSlot, y: number) {
+	  const { width } = this.scale;
 
-	      const upgrade = inventoryItem.upgradeLevel > 0
-	        ? ` +${inventoryItem.upgradeLevel}`
-	        : '';
+	  const instanceId = player.equipment[slot];
 
-	      return `${getSlotText(item.slot)}: ${item.name}${upgrade}`;
-	    })
-	    .filter(Boolean)
-	    .join('\n');
+	  const inventoryItem = instanceId
+	    ? player.inventory.find(item => item.instanceId === instanceId)
+	    : undefined;
 
-	  this.add.text(width / 2, panelY + 25, text, {
+	  const item = inventoryItem
+	    ? getBaseItemFromInventoryItem(inventoryItem)
+	    : undefined;
+
+	  const slotName = getSlotText(slot);
+
+	  const text = item
+	    ? `${slotName}: ${item.name} +${inventoryItem?.upgradeLevel ?? 0}  —  нажми, чтобы снять`
+	    : `${slotName}: пусто`;
+
+	  const color = item ? UI.colors.goldText : UI.colors.textMuted;
+
+	  const line = this.add.text(width / 2, y, text, {
 	    fontFamily: UI.font.body,
-	    fontSize: '18px',
-	    color: UI.colors.text,
+	    fontSize: '16px',
+	    color,
 	    align: 'center',
-	    wordWrap: {
-	      width: 540,
-	    },
-	    lineSpacing: 7,
 	  }).setOrigin(0.5);
-	}
 
-  private createInventoryList() {
-	  const { width } = this.scale;
-
-	  const panelY = 715;
-
-	  createPanel(this, width / 2, panelY, 620, 470, {
-	    alpha: 0.86,
-	    stroke: true,
-	    warm: false,
-	  });
-
-	  createSectionTitle(this, width / 2, panelY - 205, 'Предметы');
-
-		createButton(
-		  this,
-		  width / 2,
-		  panelY + 285,
-		  'Продать обычные ненадетые предметы',
-		  () => {
-		    this.showMassSellConfirm();
-		  },
-		  500,
-		  48,
-		  {
-		    small: true,
-		    danger: true,
-		  }
-		);
-
-	  if (player.inventory.length === 0) {
-	    createSmallText(
-	      this,
-	      width / 2,
-	      panelY,
-	      'В сумке пока пусто.\nПредметы можно найти в сундуках и после боя.',
-	      {
-	        fontSize: '20px',
-	        color: UI.colors.textMuted,
-	        width: 540,
-	      }
-	    );
-
+	  if (!item || !inventoryItem) {
 	    return;
 	  }
 
-	  const visibleItems = player.inventory.slice(0, 5);
-
-	  visibleItems.forEach((inventoryItem, index) => {
-	    this.createInventoryItemCard(inventoryItem, panelY - 145 + index * 72);
+	  line.setInteractive({
+	    useHandCursor: true,
 	  });
 
-	  if (player.inventory.length > visibleItems.length) {
-	    createSmallText(
-	      this,
-	      width / 2,
-	      panelY + 210,
-	      `Показано ${visibleItems.length} из ${player.inventory.length}. Позже добавим прокрутку.`,
-	      {
-	        fontSize: '15px',
-	        color: UI.colors.textMuted,
-	        width: 540,
-	      }
-	    );
-	  }
-		this.createPageControls();
+	  line.on('pointerover', () => {
+	    line.setColor(UI.colors.red);
+	  });
+
+	  line.on('pointerout', () => {
+	    line.setColor(color);
+	  });
+
+	  line.on('pointerup', () => {
+	    this.showUnequipConfirm(slot, inventoryItem);
+	  });
 	}
 
-	private createInventoryItemCard(inventoryItem: InventoryItem, y: number) {
-	  const { width } = this.scale;
-
-	  const item = getBaseItemFromInventoryItem(inventoryItem);
-
-	  if (!item) {
-	    return;
-	  }
-
-	  const isEquipped = isItemEquipped(player, inventoryItem.instanceId);
-
-	  const rarityColor = getRarityColorHex(item);
-		const rarityStrokeColor = getRarityStrokeColor(item);
-
-	  this.add.rectangle(width / 2, y + 3, 560, 62, 0x000000, 0.22);
-
-	  this.add.rectangle(width / 2, y, 560, 62, 0x14100d, 0.86)
-	    .setStrokeStyle(2, rarityStrokeColor, 0.55);
-
-	  this.add.circle(width / 2 - 250, y, 22, rarityColor, 0.92)
-	    .setStrokeStyle(2, rarityStrokeColor, 0.7);
-
-	  this.add.text(width / 2 - 250, y, getSlotIcon(item.slot), {
-	    fontFamily: UI.font.body,
-	    fontSize: '17px',
-	    color: '#ffffff',
-	  }).setOrigin(0.5);
-
-	  const upgrade = inventoryItem.upgradeLevel > 0
-	    ? ` +${inventoryItem.upgradeLevel}`
-	    : '';
-
-	  this.add.text(width / 2 - 215, y - 13, `${item.name}${upgrade}`, {
-	    fontFamily: UI.font.body,
-	    fontSize: '17px',
-	    color: isEquipped ? UI.colors.goldText : UI.colors.text,
-	  }).setOrigin(0, 0.5);
-
-	  this.add.text(width / 2 - 215, y + 14, `${getSlotText(item.slot)} • ${getRarityText(item)}`, {
-	    fontFamily: UI.font.body,
-	    fontSize: '14px',
-	    color: UI.colors.textMuted,
-	  }).setOrigin(0, 0.5);
-
-	  const buttonText = isEquipped ? 'Надето' : 'Надеть';
-
-	  const button = this.add.rectangle(width / 2 + 220, y, 100, 38, isEquipped ? 0x1c3a24 : 0x21150f, 0.92)
-	    .setStrokeStyle(2, isEquipped ? 0x75d184 : UI.colors.goldDark, 0.65)
-	    .setInteractive({ useHandCursor: !isEquipped });
-
-	  this.add.text(width / 2 + 220, y, buttonText, {
-	    fontFamily: UI.font.body,
-	    fontSize: '14px',
-	    color: isEquipped ? UI.colors.green : UI.colors.goldText,
-	  }).setOrigin(0.5);
-
-	  if (!isEquipped) {
-	    button.on('pointerdown', () => {
-	      equipItem(player, inventoryItem.instanceId);
-
-	      void saveGameAsync();
-
-	      this.scene.restart();
-	    });
-	  }
-	}
-
-  private createPageControls() {
-    const { width } = this.scale;
-
-    const totalPages = Math.max(1, Math.ceil(player.inventory.length / this.itemsPerPage));
-
-    this.add.text(width / 2, 1000, `Страница ${this.currentPage + 1}/${totalPages}`, {
-      fontFamily: 'Arial',
-      fontSize: '22px',
-      color: '#d8c7a3',
-    }).setOrigin(0.5);
-
-    createButton(
-      this,
-      190,
-      1055,
-      'Назад',
-      () => {
-        if (this.currentPage > 0) {
-          this.scene.restart({
-            page: this.currentPage - 1,
-          });
-        }
-      },
-      220,
-      60
-    );
-
-    createButton(
-      this,
-      530,
-      1055,
-      'Далее',
-      () => {
-        if (this.currentPage < totalPages - 1) {
-          this.scene.restart({
-            page: this.currentPage + 1,
-          });
-        }
-      },
-      220,
-      60
-    );
-  }
-
-	private showSellConfirm(inventoryItem: InventoryItem) {
+	private showUnequipConfirm(slot: EquipmentSlot, inventoryItem: InventoryItem) {
 	  const { width, height } = this.scale;
 
 	  const item = getBaseItemFromInventoryItem(inventoryItem);
@@ -329,18 +195,16 @@ export class InventoryScene extends Phaser.Scene {
 	    return;
 	  }
 
-	  const sellPrice = getItemSellPrice(item);
-
 	  this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
 	    .setDepth(100);
 
-	  createPanel(this, width / 2, height / 2, 610, 340, {
+	  createPanel(this, width / 2, height / 2, 610, 320, {
 	    alpha: 0.98,
 	    stroke: true,
 	    warm: true,
 	  }).setDepth(101);
 
-	  this.add.text(width / 2, height / 2 - 110, 'Продать предмет?', {
+	  this.add.text(width / 2, height / 2 - 105, 'Снять предмет?', {
 	    fontFamily: UI.font.title,
 	    fontSize: '30px',
 	    color: UI.colors.goldText,
@@ -350,8 +214,8 @@ export class InventoryScene extends Phaser.Scene {
 
 	  this.add.text(
 	    width / 2,
-	    height / 2 - 35,
-	    `${item.name} +${inventoryItem.upgradeLevel}\n\nТы получишь: ${sellPrice} золота`,
+	    height / 2 - 25,
+	    `${item.name} +${inventoryItem.upgradeLevel}\n\nПредмет останется в сумке.`,
 	    {
 	      fontFamily: UI.font.body,
 	      fontSize: '20px',
@@ -367,19 +231,19 @@ export class InventoryScene extends Phaser.Scene {
 	  const yes = createButton(
 	    this,
 	    width / 2,
-	    height / 2 + 65,
-	    'Продать',
+	    height / 2 + 75,
+	    'Снять',
 	    () => {
-	      this.showSellConfirm(inventoryItem);
+	      unequipItem(player, slot);
 
-	      void saveGameAsync();
-	      this.scene.restart();
+				void saveGameAsync();
+							
+				this.scene.restart({
+				  inventoryScrollY: this.inventoryTargetScrollY,
+				});
 	    },
 	    360,
-	    54,
-	    {
-	      danger: true,
-	    }
+	    54
 	  );
 
 	  yes.shadow.setDepth(101);
@@ -389,7 +253,7 @@ export class InventoryScene extends Phaser.Scene {
 	  const no = createButton(
 	    this,
 	    width / 2,
-	    height / 2 + 135,
+	    height / 2 + 140,
 	    'Отмена',
 	    () => {
 	      this.scene.restart();
@@ -401,6 +265,661 @@ export class InventoryScene extends Phaser.Scene {
 	  no.shadow.setDepth(101);
 	  no.bg.setDepth(102);
 	  no.label.setDepth(103);
+	}
+
+  private createInventoryList() {
+	  const { width } = this.scale;
+
+	  const itemSpacing = 70;
+
+		const panelY = 760;
+		const panelHeight = 650;
+
+		const titleY = panelY - 270;
+
+		this.inventoryListTop = panelY - 205;
+		this.inventoryListHeight = 455;
+		this.inventoryListBottom = this.inventoryListTop + this.inventoryListHeight;
+
+		const massSellY = panelY + 310;
+
+	  createPanel(this, width / 2, panelY, 620, panelHeight, {
+	    alpha: 0.86,
+	    stroke: true,
+	    warm: false,
+	  });
+
+	  createSectionTitle(
+	    this,
+	    width / 2,
+	    titleY,
+	    `Предметы: ${player.inventory.length}`
+	  );
+
+	  if (player.inventory.length === 0) {
+	    createSmallText(
+	      this,
+	      width / 2,
+	      panelY,
+	      'В сумке пока нет предметов.\nИх можно найти в катакомбах или купить в лавке.',
+	      {
+	        fontSize: '20px',
+	        color: UI.colors.textMuted,
+	        width: 540,
+	      }
+	    );
+
+	    return;
+	  }
+
+	  this.inventoryScrollY = this.initialInventoryScrollY;
+	  this.inventoryTargetScrollY = this.initialInventoryScrollY;
+	  this.inventoryLastRenderedScrollY = -1;
+
+	  this.inventoryContainer = this.add.container(0, 0);
+
+	  const topPadding = 42;
+	  const contentHeight = topPadding + player.inventory.length * itemSpacing;
+
+	  this.inventoryMaxScrollY = Math.max(
+	    0,
+	    contentHeight - this.inventoryListHeight
+	  );
+
+	  this.inventoryScrollY = Phaser.Math.Clamp(
+	    this.inventoryScrollY,
+	    0,
+	    this.inventoryMaxScrollY
+	  );
+
+	  this.inventoryTargetScrollY = Phaser.Math.Clamp(
+	    this.inventoryTargetScrollY,
+	    0,
+	    this.inventoryMaxScrollY
+	  );
+
+	  this.renderInventoryItems();
+
+	  this.input.off('wheel');
+
+	  this.input.on(
+	    'wheel',
+	    (
+	      _pointer: Phaser.Input.Pointer,
+	      _gameObjects: Phaser.GameObjects.GameObject[],
+	      _deltaX: number,
+	      deltaY: number
+	    ) => {
+	      if (this.inventoryMaxScrollY <= 0) {
+	        return;
+	      }
+
+	      this.inventoryTargetScrollY = Phaser.Math.Clamp(
+	        this.inventoryTargetScrollY + deltaY * 0.45,
+	        0,
+	        this.inventoryMaxScrollY
+	      );
+	    }
+	  );
+
+	  createPanel(this, width / 2, massSellY, 620, 82, {
+	    alpha: 0.78,
+	    stroke: true,
+	    warm: true,
+	  });
+
+	  createButton(
+	    this,
+	    width / 2,
+	    massSellY,
+	    'Продать обычные ненадетые предметы',
+	    () => {
+	      this.showMassSellConfirm();
+	    },
+	    500,
+	    46,
+	    {
+	      small: true,
+	      danger: true,
+	    }
+	  );
+	}
+
+	private renderInventoryItems() {
+	  if (!this.inventoryContainer) {
+	    return;
+	  }
+
+	  this.inventoryContainer.removeAll(true);
+
+	  const itemSpacing = 70;
+	  const topPadding = 42;
+	  const cardHalfHeight = 32;
+
+	  const fadeZone = 70;
+
+	  player.inventory.forEach((inventoryItem: InventoryItem, index: number) => {
+	    const y =
+	      this.inventoryListTop +
+	      topPadding +
+	      index * itemSpacing -
+	      this.inventoryScrollY;
+
+	    // Карточка далеко выше зоны — не рисуем
+	    if (y + cardHalfHeight < this.inventoryListTop - fadeZone) {
+	      return;
+	    }
+
+	    // Карточка далеко ниже зоны — не рисуем
+	    if (y - cardHalfHeight > this.inventoryListBottom + fadeZone) {
+	      return;
+	    }
+
+	    let alpha = 1;
+
+	    // Плавное исчезновение сверху
+	    if (y - cardHalfHeight < this.inventoryListTop) {
+	      const distance = y + cardHalfHeight - this.inventoryListTop;
+	      alpha = Phaser.Math.Clamp(distance / fadeZone, 0, 1);
+	    }
+
+	    // Плавное исчезновение снизу
+	    if (y + cardHalfHeight > this.inventoryListBottom) {
+	      const distance = this.inventoryListBottom - (y - cardHalfHeight);
+	      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
+	    }
+
+	    this.createInventoryItemCard(inventoryItem, y, alpha);
+	  });
+
+	  this.inventoryLastRenderedScrollY = this.inventoryScrollY;
+	}
+
+
+	update() {
+	  if (!this.inventoryContainer) {
+	    return;
+	  }
+
+	  if (this.isItemInfoOpen) {
+	    return;
+	  }
+
+	  const oldScrollY = this.inventoryScrollY;
+
+	  if (Math.abs(this.inventoryScrollY - this.inventoryTargetScrollY) < 0.5) {
+	    this.inventoryScrollY = this.inventoryTargetScrollY;
+	  } else {
+	    this.inventoryScrollY = Phaser.Math.Linear(
+	      this.inventoryScrollY,
+	      this.inventoryTargetScrollY,
+	      0.18
+	    );
+	  }
+
+	  const scrollChanged = Math.abs(oldScrollY - this.inventoryScrollY) > 0.25;
+	  const renderChanged =
+	    Math.abs(this.inventoryLastRenderedScrollY - this.inventoryScrollY) > 0.75;
+
+	  if (scrollChanged && renderChanged) {
+	    this.renderInventoryItems();
+	  }
+	}
+
+	private createInventoryItemCard(
+	  inventoryItem: InventoryItem,
+	  y: number,
+	  alpha = 1
+	) {
+	  const { width } = this.scale;
+
+	  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	  if (!item) {
+	    return;
+	  }
+
+	  const isEquipped = isItemEquipped(player, inventoryItem.instanceId);
+
+	  const rarityColor = getRarityColorHex(item);
+	  const rarityStrokeColor = getRarityStrokeColor(item);
+
+	  const shadow = this.add.rectangle(width / 2, y + 4, 560, 60, 0x000000, 0.22);
+
+		const bg = this.add.rectangle(width / 2, y, 560, 60, 0x14100d, 0.86)
+	    .setStrokeStyle(2, rarityStrokeColor, 0.55);
+
+			bg.setInteractive({
+			  useHandCursor: true,
+			});
+
+			bg.on('pointerover', () => {
+			  bg.setFillStyle(0x1f1712, 0.95);
+			});
+
+			bg.on('pointerout', () => {
+			  bg.setFillStyle(0x14100d, 0.86);
+			});
+
+			bg.on('pointerup', () => {
+			  if (this.isItemInfoOpen) {
+			    return;
+			  }
+			
+			  this.showItemInfo(inventoryItem);
+			});
+
+	  const iconBg = this.add.circle(width / 2 - 250, y, 22, rarityColor, 0.92)
+	    .setStrokeStyle(2, rarityStrokeColor, 0.7);
+
+	  const icon = this.add.text(width / 2 - 250, y, getSlotIcon(item.slot), {
+	    fontFamily: UI.font.body,
+	    fontSize: '17px',
+	    color: '#ffffff',
+	  }).setOrigin(0.5);
+
+	  const upgrade = inventoryItem.upgradeLevel > 0 ? ` +${inventoryItem.upgradeLevel}` : '';
+
+	  const title = this.add.text(width / 2 - 215, y - 14, `${item.name}${upgrade}`, {
+	    fontFamily: UI.font.body,
+	    fontSize: '16px',
+	    color: isEquipped ? UI.colors.goldText : UI.colors.text,
+	  }).setOrigin(0, 0.5);
+
+	  const subtitle = this.add.text(
+	    width / 2 - 215,
+	    y + 13,
+	    `${getSlotText(item.slot)} • ${getRarityText(item)}`,
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '13px',
+	      color: UI.colors.textMuted,
+	    }
+	  ).setOrigin(0, 0.5);
+
+	  const equipButton = createButton(
+	    this,
+	    width / 2 + 145,
+	    y,
+	    isEquipped ? 'Надето' : 'Надеть',
+	    () => {
+	      if (isEquipped) {
+	        return;
+	      }
+
+	      equipItem(player, inventoryItem.instanceId);
+				void saveGameAsync();
+
+				this.scene.restart({
+				  inventoryScrollY: this.inventoryTargetScrollY,
+				});
+	    },
+	    88,
+	    34,
+	    {
+	      small: true,
+	      disabled: isEquipped,
+	    }
+	  );
+
+	  const sellButton = createButton(
+	    this,
+	    width / 2 + 245,
+	    y,
+	    'Продать',
+	    () => {
+	      this.showSellConfirm(inventoryItem);
+	    },
+	    88,
+	    34,
+	    {
+	      small: true,
+	      danger: true,
+	      disabled: isEquipped,
+	    }
+	  );
+
+	  const cardObjects: Phaser.GameObjects.GameObject[] = [
+		  shadow,
+		  bg,
+		  iconBg,
+		  icon,
+		  title,
+		  subtitle,
+		  equipButton.shadow,
+		  equipButton.bg,
+		  equipButton.label,
+		  sellButton.shadow,
+		  sellButton.bg,
+		  sellButton.label,
+		];
+
+		cardObjects.forEach(object => {
+		  const alphaObject = object as Phaser.GameObjects.GameObject & {
+		    setAlpha: (alpha: number) => void;
+		  };
+		
+		  alphaObject.setAlpha(alpha);
+		});
+
+		// Если карточка почти исчезла, отключаем клики,
+		// чтобы нельзя было нажать на полупрозрачный предмет у края списка
+		if (alpha < 0.65) {
+		  bg.disableInteractive();
+		  equipButton.bg.disableInteractive();
+		  sellButton.bg.disableInteractive();
+		}
+
+		this.inventoryContainer.add(cardObjects);
+	}
+
+	private showItemInfo(inventoryItem: InventoryItem) {
+	  if (this.isItemInfoOpen) {
+	    return;
+	  }
+
+	  this.isItemInfoOpen = true;
+
+	  const { width, height } = this.scale;
+
+	  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	  if (!item) {
+	    this.isItemInfoOpen = false;
+	    return;
+	  }
+
+	  const equipped = isItemEquipped(player, inventoryItem.instanceId);
+	  const sellPrice = getItemSellPrice(item);
+
+	  const rarityColor = getRarityColorHex(item);
+	  const rarityStrokeColor = getRarityStrokeColor(item);
+
+	  const container = this.add.container(0, 0).setDepth(1000);
+	  this.itemInfoContainer = container;
+
+	  const overlay = this.add.rectangle(
+	    width / 2,
+	    height / 2,
+	    width,
+	    height,
+	    0x000000,
+	    0.72
+	  ).setInteractive();
+
+	  const panelShadow = this.add.rectangle(
+	    width / 2,
+	    height / 2 + 6,
+	    620,
+	    520,
+	    0x000000,
+	    0.35
+	  );
+
+	  const panel = this.add.rectangle(
+	    width / 2,
+	    height / 2,
+	    620,
+	    520,
+	    0x17100c,
+	    0.98
+	  )
+	    .setStrokeStyle(3, UI.colors.goldDark, 0.9)
+	    .setInteractive();
+
+	  const iconBg = this.add.circle(width / 2, height / 2 - 185, 34, rarityColor, 0.95)
+	    .setStrokeStyle(3, rarityStrokeColor, 0.9);
+
+	  const icon = this.add.text(width / 2, height / 2 - 185, getSlotIcon(item.slot), {
+	    fontFamily: UI.font.body,
+	    fontSize: '28px',
+	    color: '#ffffff',
+	  }).setOrigin(0.5);
+
+	  const title = this.add.text(
+	    width / 2,
+	    height / 2 - 130,
+	    `${item.name} +${inventoryItem.upgradeLevel}`,
+	    {
+	      fontFamily: UI.font.title,
+	      fontSize: '28px',
+	      color: UI.colors.goldText,
+	      stroke: '#000000',
+	      strokeThickness: 4,
+	      align: 'center',
+	      wordWrap: {
+	        width: 540,
+	      },
+	    }
+	  ).setOrigin(0.5);
+
+	  const typeText = this.add.text(
+	    width / 2,
+	    height / 2 - 88,
+	    `${getSlotText(item.slot)} • ${getRarityText(item)}`,
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '18px',
+	      color: UI.colors.textMuted,
+	      align: 'center',
+	    }
+	  ).setOrigin(0.5);
+
+	  const description = this.add.text(
+	    width / 2,
+	    height / 2 - 30,
+	    item.description,
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '18px',
+	      color: UI.colors.text,
+	      align: 'center',
+	      lineSpacing: 5,
+	      wordWrap: {
+	        width: 530,
+	      },
+	    }
+	  ).setOrigin(0.5);
+
+	  const statsText = this.add.text(
+	    width / 2,
+	    height / 2 + 50,
+	    [
+	      `Характеристики: ${createItemStatsText(inventoryItem)}`,
+	      `Цена продажи: ${sellPrice} золота`,
+	      equipped ? 'Статус: надето' : 'Статус: в сумке',
+	    ].join('\n'),
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '18px',
+	      color: UI.colors.goldText,
+	      align: 'center',
+	      lineSpacing: 7,
+	      wordWrap: {
+	        width: 530,
+	      },
+	    }
+	  ).setOrigin(0.5);
+
+	  const equipButton = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 145,
+	    equipped ? 'Уже надето' : 'Надеть',
+	    () => {
+	      if (equipped) {
+	        return;
+	      }
+
+	      equipItem(player, inventoryItem.instanceId);
+				void saveGameAsync();
+
+				const savedScrollY = this.inventoryTargetScrollY;
+
+				this.closeItemInfo();
+
+				this.scene.restart({
+				  inventoryScrollY: savedScrollY,
+				});
+	    },
+	    360,
+	    50,
+	    {
+	      small: true,
+	      disabled: equipped,
+	    }
+	  );
+
+	  const sellButton = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 205,
+	    'Продать',
+	    () => {
+	      this.closeItemInfo();
+	      this.showSellConfirm(inventoryItem);
+	    },
+	    360,
+	    50,
+	    {
+	      small: true,
+	      danger: true,
+	      disabled: equipped,
+	    }
+	  );
+
+	  const closeButton = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 265,
+	    'Закрыть',
+	    () => {
+	      this.closeItemInfo();
+	    },
+	    360,
+	    50,
+	    {
+	      small: true,
+	    }
+	  );
+
+	  container.add([
+	    overlay,
+	    panelShadow,
+	    panel,
+	    iconBg,
+	    icon,
+	    title,
+	    typeText,
+	    description,
+	    statsText,
+
+	    equipButton.shadow,
+	    equipButton.bg,
+	    equipButton.label,
+
+	    sellButton.shadow,
+	    sellButton.bg,
+	    sellButton.label,
+
+	    closeButton.shadow,
+	    closeButton.bg,
+	    closeButton.label,
+	  ]);
+	}
+
+	private showSellConfirm(inventoryItem: InventoryItem) {
+	 const { width, height } = this.scale;
+
+	 const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	 if (!item) {
+	   return;
+	 }
+
+	 if (isItemEquipped(player, inventoryItem.instanceId)) {
+	   this.showMessage('Сначала сними предмет, потом его можно будет продать.');
+	   return;
+	 }
+
+	 const sellPrice = getItemSellPrice(item);
+
+	 this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
+	   .setDepth(100);
+
+	 createPanel(this, width / 2, height / 2, 610, 340, {
+	   alpha: 0.98,
+	   stroke: true,
+	   warm: true,
+	 }).setDepth(101);
+
+	 this.add.text(width / 2, height / 2 - 110, 'Продать предмет?', {
+	   fontFamily: UI.font.title,
+	   fontSize: '30px',
+	   color: UI.colors.goldText,
+	   stroke: '#000000',
+	   strokeThickness: 4,
+	 }).setOrigin(0.5).setDepth(102);
+
+	 this.add.text(
+	   width / 2,
+	   height / 2 - 35,
+	   `${item.name} +${inventoryItem.upgradeLevel}\n\nТы получишь: ${sellPrice} золота`,
+	   {
+	     fontFamily: UI.font.body,
+	     fontSize: '20px',
+	     color: UI.colors.text,
+	     align: 'center',
+	     lineSpacing: 6,
+	     wordWrap: {
+	       width: 520,
+	     },
+	   }
+	 ).setOrigin(0.5).setDepth(102);
+
+	 const yes = createButton(
+	   this,
+	   width / 2,
+	   height / 2 + 65,
+	   'Продать',
+	   () => {
+	     const result = sellItem(player, inventoryItem.instanceId);
+
+	     if (!result.success) {
+	       this.showMessage(result.message ?? 'Не удалось продать предмет.');
+	       return;
+	     }
+
+	     void saveGameAsync();
+
+	     this.scene.restart();
+	   },
+	   360,
+	   54,
+	   {
+	     danger: true,
+	   }
+	 );
+
+	 yes.shadow.setDepth(101);
+	 yes.bg.setDepth(102);
+	 yes.label.setDepth(103);
+
+	 const no = createButton(
+	   this,
+	   width / 2,
+	   height / 2 + 135,
+	   'Отмена',
+	   () => {
+	     this.scene.restart();
+	   },
+	   360,
+	   54
+	 );
+
+	 no.shadow.setDepth(101);
+	 no.bg.setDepth(102);
+	 no.label.setDepth(103);
 	}
 
 	private showMassSellConfirm() {
@@ -538,5 +1057,66 @@ export class InventoryScene extends Phaser.Scene {
 	  void saveGameAsync();
 
 	  this.scene.restart();
+	}
+
+	private showMessage(message: string) {
+	  const { width, height } = this.scale;
+
+	  const overlay = this.add.rectangle(
+	    width / 2,
+	    height / 2,
+	    width,
+	    height,
+	    0x000000,
+	    0.72
+	  ).setDepth(100);
+
+	  const panel = createPanel(this, width / 2, height / 2, 610, 300, {
+	    alpha: 0.98,
+	    stroke: true,
+	    warm: true,
+	  }).setDepth(101);
+
+	  const titleText = this.add.text(width / 2, height / 2 - 95, 'Сумка', {
+	    fontFamily: UI.font.title,
+	    fontSize: '30px',
+	    color: UI.colors.goldText,
+	    stroke: '#000000',
+	    strokeThickness: 4,
+	  }).setOrigin(0.5).setDepth(102);
+
+	  const messageText = this.add.text(width / 2, height / 2 - 15, message, {
+	    fontFamily: UI.font.body,
+	    fontSize: '20px',
+	    color: UI.colors.text,
+	    align: 'center',
+	    lineSpacing: 6,
+	    wordWrap: {
+	      width: 520,
+	    },
+	  }).setOrigin(0.5).setDepth(102);
+
+	  const ok = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 95,
+	    'Понятно',
+	    () => {
+	      overlay.destroy();
+	      panel.destroy();
+	      titleText.destroy();
+	      messageText.destroy();
+
+	      ok.shadow.destroy();
+	      ok.bg.destroy();
+	      ok.label.destroy();
+	    },
+	    260,
+	    54
+	  );
+
+	  ok.shadow.setDepth(101);
+	  ok.bg.setDepth(102);
+	  ok.label.setDepth(103);
 	}
 }

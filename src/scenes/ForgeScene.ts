@@ -18,7 +18,8 @@ import {
 import { saveGameAsync } from '../systems/SaveSystem';
 
 import { createButton } from '../ui/createButton';
-import { createBottomNav } from '../ui/createBottomNav';
+
+import { createBackToMainButton } from '../ui/createBackToMainButton';
 
 import {
   UI,
@@ -38,13 +39,11 @@ export class ForgeScene extends Phaser.Scene {
   create() {
     createSceneBackground(this);
     createTitle(this, 'Кузница', 'Улучшение найденного снаряжения');
-
+    
     this.createGoldPanel();
     this.createItemList();
-
-    createBottomNav(this, {
-      activeScene: 'CampScene',
-    });
+    
+    createBackToMainButton(this);
   }
 
   private createGoldPanel() {

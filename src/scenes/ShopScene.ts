@@ -4,7 +4,6 @@ import { player } from '../data/player';
 import { getRandomLootItem } from '../data/items';
 
 import { createButton } from '../ui/createButton';
-import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   addItemToInventory,
@@ -23,6 +22,8 @@ import {
   createTitle,
 } from '../ui/theme';
 
+import { createBackToMainButton } from '../ui/createBackToMainButton';
+
 
 export class ShopScene extends Phaser.Scene {
   constructor() {
@@ -36,9 +37,7 @@ export class ShopScene extends Phaser.Scene {
     this.createGoldPanel();
     this.createShopItems();
 
-    createBottomNav(this, {
-      activeScene: 'ShopScene',
-    });
+    createBackToMainButton(this);
   }
 
   private createGoldPanel() {
@@ -117,25 +116,6 @@ export class ShopScene extends Phaser.Scene {
           maxQuantity: 1,
           onConfirm: () => {
             this.buyRandomItem();
-          },
-        });
-      },
-    });
-
-    this.createShopItemCard({
-      y: panelY + 100,
-      icon: '♥',
-      title: 'Улучшение здоровья',
-      description: 'Навсегда увеличивает максимальное HP героя.',
-      price: 120,
-      buttonText: 'Улучшить',
-      onBuy: () => {
-        this.showBuyQuantityConfirm({
-          title: 'Улучшение здоровья',
-          price: 120,
-          maxQuantity: 1,
-          onConfirm: () => {
-            this.buyHpUpgrade();
           },
         });
       },
@@ -253,23 +233,6 @@ export class ShopScene extends Phaser.Scene {
       `Получен ${getRarityText(item).toLowerCase()} предмет:\n${item.name} +0`,
       getRarityColor(item)
     );
-  }
-
-  private buyHpUpgrade() {
-    const price = 120;
-
-    if (player.gold < price) {
-      this.showMessage('Недостаточно золота.');
-      return;
-    }
-
-    player.gold -= price;
-    player.maxHp += 10;
-    player.hp += 10;
-
-    void saveGameAsync();
-
-    this.showMessage('Максимальное HP увеличено на 10.');
   }
 
   private showMessage(message: string, _color?: string) {

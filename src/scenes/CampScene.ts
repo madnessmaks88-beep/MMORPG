@@ -13,6 +13,12 @@ import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 
 import {
+  getQuests,
+  isQuestCompleted,
+  isQuestClaimed,
+} from '../systems/QuestSystem';
+
+import {
   UI,
   createPanel,
   createSceneBackground,
@@ -23,6 +29,9 @@ import {
 
 export class CampScene extends Phaser.Scene {
   private readonly campfireCooldownMs = 5 * 60 * 1000;
+
+  private restButtonLabel?: Phaser.GameObjects.Text;
+  private campfireTimerEvent?: Phaser.Time.TimerEvent;
 
   constructor() {
     super('CampScene');
@@ -53,6 +62,44 @@ export class CampScene extends Phaser.Scene {
       fontSize: '16px',
       color: UI.colors.textMuted,
     }).setOrigin(0.5);
+  }
+
+  private hasClaimableQuests() {
+    return getQuests().some(quest => {
+      return isQuestCompleted(quest) && !isQuestClaimed(quest.id);
+    });
+  }
+
+  private getRestButtonText() {
+    const cooldownLeft = this.getCampfireCooldownLeft();
+
+    return cooldownLeft > 0
+      ? `Костёр: ${this.formatCooldown(cooldownLeft)}`
+      : 'Отдохнуть у костра';
+  }
+
+  private updateCampfireButtonText() {
+    if (!this.restButtonLabel) {
+      return;
+    }
+
+    this.restButtonLabel.setText(this.getRestButtonText());
+  }
+
+  private startCampfireTimer() {
+    if (this.campfireTimerEvent) {
+      this.campfireTimerEvent.remove(false);
+    }
+
+    this.updateCampfireButtonText();
+
+    this.campfireTimerEvent = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        this.updateCampfireButtonText();
+      },
+    });
   }
 
   private createHeroSummary() {
@@ -122,25 +169,26 @@ export class CampScene extends Phaser.Scene {
   private createMainActions() {
     const { width } = this.scale;
 
-    const panelY = 615;
+    const hasActiveRun =
+      gameState.floorRun.active &&
+      gameState.floorRun.rooms.length > 0;
 
-    createPanel(this, width / 2, panelY, 620, 415, {
+    const panelY = 615;
+    const panelHeight = hasActiveRun ? 550 : 495;
+
+    createPanel(this, width / 2, panelY, 620, panelHeight, {
       alpha: 0.86,
       stroke: true,
       warm: false,
     });
 
-    createSectionTitle(this, width / 2, panelY - 170, 'Действия');
-
-    const hasActiveRun =
-      gameState.floorRun.active &&
-      gameState.floorRun.rooms.length > 0;
+    createSectionTitle(this, width / 2, panelY - panelHeight / 2 + 38, 'Действия');
 
     const dungeonButtonText = hasActiveRun
       ? `Продолжить спуск: этаж ${gameState.floorRun.currentFloor}`
       : 'Войти в катакомбы';
 
-    let y = panelY - 104;
+    let y = panelY - panelHeight / 2 + 105;
 
     createButton(
       this,
@@ -156,10 +204,10 @@ export class CampScene extends Phaser.Scene {
         this.scene.start('DungeonSelectScene');
       },
       540,
-      62
+      58
     );
 
-    y += 72;
+    y += 66;
 
     if (hasActiveRun) {
       createButton(
@@ -171,28 +219,73 @@ export class CampScene extends Phaser.Scene {
           this.showLeaveRunMessage();
         },
         540,
-        56,
+        54,
         {
           danger: true,
         }
       );
 
-      y += 66;
+      y += 62;
     }
 
     createButton(
       this,
       width / 2,
       y,
-      'Задания',
+      'Лавка снабжения',
+      () => {
+        this.scene.start('ShopScene');
+      },
+      540,
+      54
+    );
+
+    y += 62;
+
+    createButton(
+      this,
+      width / 2,
+      y,
+      'Тренировочная площадка',
+      () => {
+        this.scene.start('TrainingScene');
+      },
+      540,
+      54
+    );
+
+    y += 62;
+
+    const hasQuestReward = this.hasClaimableQuests();
+
+    const questButton = createButton(
+      this,
+      width / 2,
+      y,
+      hasQuestReward ? 'Задания  •  Есть награда!' : 'Задания',
       () => {
         this.scene.start('QuestScene');
       },
       540,
-      56
+      54
     );
+    
+    if (hasQuestReward) {
+      questButton.bg.setFillStyle(0x263a1f, 0.98);
+      questButton.bg.setStrokeStyle(3, UI.colors.greenHex, 0.95);
+    
+      questButton.label.setColor(UI.colors.green);
+    
+      this.tweens.add({
+        targets: questButton.bg,
+        alpha: 0.72,
+        duration: 650,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
 
-    y += 66;
+    y += 62;
 
     createButton(
       this,
@@ -203,45 +296,43 @@ export class CampScene extends Phaser.Scene {
         this.scene.start('ForgeScene');
       },
       540,
-      56
+      54
     );
 
-    y += 66;
+    y += 62;
 
-    const cooldownLeft = this.getCampfireCooldownLeft();
-    const restButtonText =
-      cooldownLeft > 0
-        ? `Костёр: ${this.formatCooldown(cooldownLeft)}`
-        : 'Отдохнуть у костра';
-
-    createButton(
+    const restButton = createButton(
       this,
       width / 2,
       y,
-      restButtonText,
+      this.getRestButtonText(),
       () => {
         const currentCooldownLeft = this.getCampfireCooldownLeft();
-
+      
         if (currentCooldownLeft > 0) {
           this.showRestCooldownMessage(currentCooldownLeft);
           return;
         }
-
+      
         const stats = getPlayerStats(player);
-
+      
         player.hp = stats.maxHp;
         player.energy = stats.maxEnergy;
         player.potions = Math.max(player.potions, 2);
-
+      
         gameState.lastCampRestAt = Date.now();
-
+      
         void saveGameAsync();
-
+      
+        this.updateCampfireButtonText();
         this.showRestMessage();
       },
       540,
       56
     );
+
+    this.restButtonLabel = restButton.label;
+    this.startCampfireTimer();
   }
 
   private createRunInfo() {

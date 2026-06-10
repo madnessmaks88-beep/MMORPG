@@ -28,7 +28,6 @@ import { createButton } from '../ui/createButton';
 import {
   UI,
   createPanel,
-  createSceneBackground,
   createTitle,
 } from '../ui/theme';
 
@@ -112,7 +111,7 @@ export class BattleScene extends Phaser.Scene {
   const floor = gameState.floorRun.currentFloor || 1;
   const room = getCurrentRoom();
 
-  createSceneBackground(this);
+  this.createBattleBackground();
 
   createTitle(
     this,
@@ -126,13 +125,11 @@ export class BattleScene extends Phaser.Scene {
     warm: true,
   });
 
-  this.createStatusBars();
-
   this.createBattleBackground();
 
   this.enemyCard = this.createFighterCard(
     width / 2,
-    430,
+    245,
     this.enemy.name,
     '☠',
     0x241515
@@ -140,19 +137,19 @@ export class BattleScene extends Phaser.Scene {
 
   this.playerCard = this.createFighterCard(
     width / 2,
-    685,
+    520,
     player.name,
     '🗡',
     0x151b24
   );
 
-  createPanel(this, width / 2, 830, 620, 135, {
+  createPanel(this, width / 2, 770, 620, 135, {
     alpha: 0.68,
     stroke: false,
     warm: true,
   });
 
-  this.logText = this.add.text(width / 2, 830, 'Выбери действие.', {
+  this.logText = this.add.text(width / 2, 770, 'Выбери действие.', {
     fontFamily: UI.font.body,
     fontSize: '22px',
     color: UI.colors.text,
@@ -282,6 +279,8 @@ export class BattleScene extends Phaser.Scene {
       potionButton.label
     );
   }
+
+  
 
   private handlePowerAttack() {
     if (this.isBattleEnded || this.isBusy) {
@@ -529,48 +528,147 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createBattleBackground() {
-    const { width } = this.scale;
+    const { width, height } = this.scale;
 
-    // Общая тёмная арена
-    this.add.rectangle(width / 2, 545, 620, 470, 0x101010);
-    this.add.rectangle(width / 2, 545, 580, 430, 0x161313);
+    // основной фон
+    this.add.rectangle(width / 2, height / 2, width, height, 0x050403, 1);
 
-    // Каменная задняя стена
-    this.add.rectangle(width / 2, 430, 540, 165, 0x0d0d0d);
-    this.add.rectangle(width / 2, 430, 500, 125, 0x141111);
+    // дальняя красная дымка
+    this.add.circle(width / 2, 155, 260, 0x301008, 0.34);
+    this.add.circle(width / 2, 190, 180, 0x5c1a0d, 0.2);
+    this.add.circle(width / 2, 220, 90, 0xb9481a, 0.08);
 
-    // Нижняя площадка героя
-    this.add.rectangle(width / 2, 685, 540, 165, 0x0d1116);
-    this.add.rectangle(width / 2, 685, 500, 125, 0x121822);
+    // задняя стена арены
+    this.add.rectangle(width / 2, 355, 650, 520, 0x0b0807, 0.92)
+      .setStrokeStyle(2, 0x332013, 0.7);
 
-    // Разделительная линия между врагом и героем
-    this.add.rectangle(width / 2, 555, 520, 3, 0x8b5a2b, 0.45);
+    // верхняя тёмная арка
+    this.add.ellipse(width / 2, 250, 500, 300, 0x120b08, 0.78)
+      .setStrokeStyle(2, 0x2e1a10, 0.45);
 
-    // Каменные блоки на фоне
-    for (let i = 0; i < 8; i++) {
-      const x = 120 + i * 70;
+    this.add.ellipse(width / 2, 275, 330, 210, 0x080605, 0.88)
+      .setStrokeStyle(2, 0x28170f, 0.35);
 
-      this.add.rectangle(x, 360, 58, 24, 0x1b1715, 0.55);
-      this.add.rectangle(x + 24, 470, 58, 24, 0x1b1715, 0.4);
+    // камни на задней стене
+    const brickRows = [
+      { y: 165, count: 5, offset: 0 },
+      { y: 215, count: 6, offset: -45 },
+      { y: 265, count: 5, offset: 0 },
+      { y: 315, count: 6, offset: -45 },
+      { y: 365, count: 5, offset: 0 },
+    ];
+
+    brickRows.forEach(row => {
+      for (let i = 0; i < row.count; i++) {
+        const brickWidth = 92;
+        const brickHeight = 34;
+
+        const x =
+          width / 2 -
+          ((row.count - 1) * brickWidth) / 2 +
+          i * brickWidth +
+          row.offset;
+
+        this.add.rectangle(x, row.y, brickWidth - 6, brickHeight, 0x120d0a, 0.42)
+          .setStrokeStyle(1, 0x2a1b12, 0.26);
+      }
+    });
+
+    // боковые колонны
+    this.add.rectangle(96, 405, 58, 500, 0x0e0a08, 0.9)
+      .setStrokeStyle(2, 0x2a1a10, 0.55);
+
+    this.add.rectangle(width - 96, 405, 58, 500, 0x0e0a08, 0.9)
+      .setStrokeStyle(2, 0x2a1a10, 0.55);
+
+    this.add.rectangle(96, 155, 76, 36, 0x17100c, 0.92)
+      .setStrokeStyle(2, 0x3c2515, 0.55);
+
+    this.add.rectangle(width - 96, 155, 76, 36, 0x17100c, 0.92)
+      .setStrokeStyle(2, 0x3c2515, 0.55);
+
+    // красное свечение за врагом
+    this.add.circle(width / 2, 245, 165, 0x781d12, 0.12);
+    this.add.circle(width / 2, 245, 95, 0xff5a2a, 0.055);
+
+    // пол арены
+    this.add.rectangle(width / 2, 625, 650, 230, 0x0d0907, 0.96)
+      .setStrokeStyle(2, 0x372114, 0.7);
+
+    // перспектива пола
+    const floorTopY = 520;
+    const floorBottomY = 735;
+
+    for (let i = 0; i < 9; i++) {
+      const xTop = 150 + i * 52;
+      const xBottom = 70 + i * 72;
+
+      const line = this.add.line(
+        0,
+        0,
+        xTop,
+        floorTopY,
+        xBottom,
+        floorBottomY,
+        0x2a1a10,
+        0.38
+      );
+
+      line.setOrigin(0, 0);
     }
 
-    // Тёмные боковые края
-    this.add.rectangle(85, 545, 35, 420, 0x050505, 0.55);
-    this.add.rectangle(width - 85, 545, 35, 420, 0x050505, 0.55);
+    for (let i = 0; i < 5; i++) {
+      const y = floorTopY + i * 43;
 
-    // Факелы
-    this.createTorch(130, 390);
-    this.createTorch(width - 130, 390);
-
-    // Лёгкий туман/пыль
-    for (let i = 0; i < 18; i++) {
-      const x = Phaser.Math.Between(110, width - 110);
-      const y = Phaser.Math.Between(340, 760);
-      const radius = Phaser.Math.Between(1, 3);
-      const alpha = Phaser.Math.FloatBetween(0.05, 0.13);
-
-      this.add.circle(x, y, radius, 0xd8b56d, alpha);
+      this.add.line(
+        0,
+        0,
+        95,
+        y,
+        width - 95,
+        y,
+        0x2a1a10,
+        0.32
+      ).setOrigin(0, 0);
     }
+
+    // передняя тень пола
+    this.add.rectangle(width / 2, 735, 650, 80, 0x050403, 0.48);
+
+    // мягкий туман
+    for (let i = 0; i < 9; i++) {
+      const x = Phaser.Math.Between(90, width - 90);
+      const y = Phaser.Math.Between(430, 720);
+      const radius = Phaser.Math.Between(42, 95);
+
+      this.add.circle(x, y, radius, 0x8a6a48, 0.025);
+    }
+
+    // пепел / искры
+    for (let i = 0; i < 55; i++) {
+      const x = Phaser.Math.Between(28, width - 28);
+      const y = Phaser.Math.Between(70, height - 210);
+      const size = Phaser.Math.Between(1, 3);
+      const alpha = Phaser.Math.FloatBetween(0.035, 0.09);
+
+      this.add.circle(x, y, size, 0xd8b56d, alpha);
+    }
+
+    // несколько красных искр ближе к центру
+    for (let i = 0; i < 16; i++) {
+      const x = Phaser.Math.Between(width / 2 - 190, width / 2 + 190);
+      const y = Phaser.Math.Between(150, 520);
+      const size = Phaser.Math.Between(1, 2);
+
+      this.add.circle(x, y, size, 0xff6b35, 0.12);
+    }
+
+    // затемнение под интерфейсом кнопок
+    this.add.rectangle(width / 2, height - 160, width, 330, 0x040302, 0.58);
+
+    // лёгкая виньетка по бокам
+    this.add.rectangle(28, height / 2, 56, height, 0x000000, 0.32);
+    this.add.rectangle(width - 28, height / 2, 56, height, 0x000000, 0.32);
   }
 
 
@@ -620,118 +718,6 @@ export class BattleScene extends Phaser.Scene {
       agility: 2,
       intelligence: 2,
     };
-  }
-
-  private createTorch(x: number, y: number) {
-    this.add.rectangle(x, y + 35, 12, 55, 0x4a2a16);
-    this.add.rectangle(x, y + 8, 34, 10, 0x3a2014);
-
-    const glow = this.add.circle(x, y - 12, 58, 0xe0772f, 0.08);
-
-    const outerFlame = this.add.triangle(
-      x,
-      y - 15,
-      0,
-      44,
-      24,
-      0,
-      48,
-      44,
-      0xc24747,
-      0.85
-    ).setOrigin(0.5);
-
-    const innerFlame = this.add.triangle(
-      x,
-      y - 8,
-      0,
-      30,
-      16,
-      0,
-      32,
-      30,
-      0xf0d58a,
-      0.95
-    ).setOrigin(0.5);
-
-    this.tweens.add({
-      targets: [outerFlame, innerFlame, glow],
-      scaleX: 1.08,
-      scaleY: 0.94,
-      alpha: {
-        from: 0.85,
-        to: 1,
-      },
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-    });
-  }
-
-
-  private createStatusBars() {
-    const { width } = this.scale;
-
-    const barX = 150;
-    const barWidth = 430;
-
-    this.add.text(85, 125, 'Герой', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#e6d2aa',
-    }).setOrigin(0, 0.5);
-
-    this.add.rectangle(barX, 150, barWidth, 22, 0x2a1111).setOrigin(0, 0.5);
-    this.playerHpBar = this.add.rectangle(barX, 150, barWidth, 22, 0xc24747).setOrigin(0, 0.5);
-
-    this.playerHpText = this.add.text(barX + barWidth / 2, 150, '', {
-      fontFamily: 'Arial',
-      fontSize: '17px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
-
-    this.add.text(85, 185, 'Враг', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#e6d2aa',
-    }).setOrigin(0, 0.5);
-
-    this.add.rectangle(barX, 210, barWidth, 22, 0x2a1111).setOrigin(0, 0.5);
-    this.enemyHpBar = this.add.rectangle(barX, 210, barWidth, 22, 0xc24747).setOrigin(0, 0.5);
-
-    this.enemyHpText = this.add.text(barX + barWidth / 2, 210, '', {
-      fontFamily: 'Arial',
-      fontSize: '17px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
-
-    this.add.text(85, 245, 'Энергия', {
-      fontFamily: 'Arial',
-      fontSize: '20px',
-      color: '#e6d2aa',
-    }).setOrigin(0, 0.5);
-
-    this.add.rectangle(barX, 270, barWidth, 20, 0x101b2a).setOrigin(0, 0.5);
-    this.energyBar = this.add.rectangle(barX, 270, barWidth, 20, 0x70a6ff).setOrigin(0, 0.5);
-
-    this.energyText = this.add.text(barX + barWidth / 2, 270, '', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
-
-    this.potionText = this.add.text(width - 75, 125, '', {
-      fontFamily: 'Arial',
-      fontSize: '22px',
-      color: '#75d184',
-      align: 'right',
-    }).setOrigin(1, 0.5);
   }
 
 
