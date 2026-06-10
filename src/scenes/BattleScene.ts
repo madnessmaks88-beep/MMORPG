@@ -147,6 +147,7 @@ export class BattleScene extends Phaser.Scene {
     this.enemy.name,
     isBoss ? '♛' : '☠',
     isBoss ? 0x3a120c : 0x241515,
+    true,
     isBoss
   );
 
@@ -156,6 +157,7 @@ export class BattleScene extends Phaser.Scene {
     player.name,
     '🗡',
     0x151b24,
+    false,
     false
   );
 
@@ -741,19 +743,23 @@ export class BattleScene extends Phaser.Scene {
     name: string,
     icon: string,
     color: number,
+    isEnemy: boolean,
     isBoss = false
   ) {
-
     const cardWidth = isBoss ? 660 : 600;
     const cardHeight = isBoss ? 245 : 190;
     const strokeWidth = isBoss ? 4 : 2;
     const strokeAlpha = isBoss ? 0.95 : 0.55;
     const bgAlpha = isBoss ? 0.97 : 0.92;
-    const isEnemy = icon === '☠';
 
     const container = this.add.container(x, y);
 
-    const strokeColor = isEnemy ? 0x6b2a2a : UI.colors.goldDark;
+    const strokeColor = isEnemy
+      ? isBoss
+        ? 0xff6b35
+        : 0x6b2a2a
+      : UI.colors.goldDark;
+
     const iconColor = isEnemy ? UI.colors.red : UI.colors.goldText;
     const titleColor = isEnemy ? UI.colors.red : UI.colors.goldText;
 
@@ -804,14 +810,37 @@ export class BattleScene extends Phaser.Scene {
       color: UI.colors.textMuted,
     }).setOrigin(0, 0.5);
 
-    const barBack = this.add.rectangle(0, 72, 520, 10, 0x080808, 0.9);
-    const hpBar = this.add.rectangle(-260, 72, 520, 10, isEnemy ? 0xff6b6b : 0x75d184, 0.95)
-      .setOrigin(0, 0.5);
-
-    const energyBack = this.add.rectangle(0, 92, 520, 8, 0x080808, isEnemy ? 0 : 0.9);
-
-    const energyBar = this.add.rectangle(-260, 92, 520, 8, 0x70a6ff, isEnemy ? 0 : 0.95)
-      .setOrigin(0, 0.5);
+    const hpBarY = isBoss ? 88 : 72;
+    const energyBarY = isBoss ? 108 : 92;
+      
+    const barBack = this.add.rectangle(0, hpBarY, 520, 10, 0x080808, 0.9);
+      
+    const hpBar = this.add.rectangle(
+      -260,
+      hpBarY,
+      520,
+      10,
+      isEnemy ? 0xff6b6b : 0x75d184,
+      0.95
+    ).setOrigin(0, 0.5);
+    
+    const energyBack = this.add.rectangle(
+      0,
+      energyBarY,
+      520,
+      8,
+      0x080808,
+      isEnemy ? 0 : 0.9
+    );
+    
+    const energyBar = this.add.rectangle(
+      -260,
+      energyBarY,
+      520,
+      8,
+      0x70a6ff,
+      isEnemy ? 0 : 0.95
+    ).setOrigin(0, 0.5);
 
     container.add([
       shadow,
@@ -1178,37 +1207,37 @@ export class BattleScene extends Phaser.Scene {
 
   private updateTexts() {
    const stats = this.getBattleStats();
-    
+
    player.hp = Phaser.Math.Clamp(player.hp, 0, stats.maxHp);
    player.energy = Phaser.Math.Clamp(player.energy, 0, stats.maxEnergy);
    player.potions = Math.max(0, player.potions);
-    
+
    if (this.playerHpText) {
      this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
    }
-  
+
    if (this.enemyHpText) {
      this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
    }
-  
+
    if (this.energyText) {
      this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
    }
-  
+
    if (this.potionText) {
      this.potionText.setText(`Зелья: ${player.potions}`);
    }
-  
+
    if (this.playerHpBar) {
      const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
      this.playerHpBar.displayWidth = 520 * playerHpRatio;
    }
-  
+
    if (this.enemyHpBar) {
      const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
      this.enemyHpBar.displayWidth = 520 * enemyHpRatio;
    }
-  
+
    if (this.energyBar) {
      const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
      this.energyBar.displayWidth = 520 * energyRatio;
