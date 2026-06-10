@@ -16,6 +16,7 @@ import {
   getSlotText,
   isItemEquipped,
 	getRarityColorHex,
+	getItemSellPrice,
 } from '../systems/InventorySystem';
 
 import {
@@ -153,6 +154,22 @@ export class InventoryScene extends Phaser.Scene {
 	  });
 
 	  createSectionTitle(this, width / 2, panelY - 205, 'Предметы');
+
+		createButton(
+		  this,
+		  width / 2,
+		  panelY + 285,
+		  'Продать обычные ненадетые предметы',
+		  () => {
+		    this.showMassSellConfirm();
+		  },
+		  500,
+		  48,
+		  {
+		    small: true,
+		    danger: true,
+		  }
+		);
 
 	  if (player.inventory.length === 0) {
 	    createSmallText(
@@ -302,4 +319,224 @@ export class InventoryScene extends Phaser.Scene {
       60
     );
   }
+
+	private showSellConfirm(inventoryItem: InventoryItem) {
+	  const { width, height } = this.scale;
+
+	  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	  if (!item) {
+	    return;
+	  }
+
+	  const sellPrice = getItemSellPrice(item);
+
+	  this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
+	    .setDepth(100);
+
+	  createPanel(this, width / 2, height / 2, 610, 340, {
+	    alpha: 0.98,
+	    stroke: true,
+	    warm: true,
+	  }).setDepth(101);
+
+	  this.add.text(width / 2, height / 2 - 110, 'Продать предмет?', {
+	    fontFamily: UI.font.title,
+	    fontSize: '30px',
+	    color: UI.colors.goldText,
+	    stroke: '#000000',
+	    strokeThickness: 4,
+	  }).setOrigin(0.5).setDepth(102);
+
+	  this.add.text(
+	    width / 2,
+	    height / 2 - 35,
+	    `${item.name} +${inventoryItem.upgradeLevel}\n\nТы получишь: ${sellPrice} золота`,
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '20px',
+	      color: UI.colors.text,
+	      align: 'center',
+	      lineSpacing: 6,
+	      wordWrap: {
+	        width: 520,
+	      },
+	    }
+	  ).setOrigin(0.5).setDepth(102);
+
+	  const yes = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 65,
+	    'Продать',
+	    () => {
+	      this.showSellConfirm(inventoryItem);
+
+	      void saveGameAsync();
+	      this.scene.restart();
+	    },
+	    360,
+	    54,
+	    {
+	      danger: true,
+	    }
+	  );
+
+	  yes.shadow.setDepth(101);
+	  yes.bg.setDepth(102);
+	  yes.label.setDepth(103);
+
+	  const no = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 135,
+	    'Отмена',
+	    () => {
+	      this.scene.restart();
+	    },
+	    360,
+	    54
+	  );
+
+	  no.shadow.setDepth(101);
+	  no.bg.setDepth(102);
+	  no.label.setDepth(103);
+	}
+
+	private showMassSellConfirm() {
+	  const { width, height } = this.scale;
+
+	  const itemsToSell = player.inventory.filter(inventoryItem => {
+	    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	    if (!item) {
+	      return false;
+	    }
+
+	    if (isItemEquipped(player, inventoryItem.instanceId)) {
+	      return false;
+	    }
+
+	    return item.rarity === 'common';
+	  });
+
+	  const totalGold = itemsToSell.reduce((sum, inventoryItem) => {
+		  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+		  if (!item) {
+		    return sum;
+		  }
+		
+		  return sum + getItemSellPrice(item);
+		}, 0);
+
+	  this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
+	    .setDepth(100);
+
+	  createPanel(this, width / 2, height / 2, 610, 360, {
+	    alpha: 0.98,
+	    stroke: true,
+	    warm: true,
+	  }).setDepth(101);
+
+	  this.add.text(width / 2, height / 2 - 120, 'Массовая продажа', {
+	    fontFamily: UI.font.title,
+	    fontSize: '30px',
+	    color: UI.colors.goldText,
+	    stroke: '#000000',
+	    strokeThickness: 4,
+	  }).setOrigin(0.5).setDepth(102);
+
+	  this.add.text(
+	    width / 2,
+	    height / 2 - 35,
+	    itemsToSell.length > 0
+	      ? `Будут проданы все ненадетые обычные предметы.\n\nПредметов: ${itemsToSell.length}\nТы получишь: ${totalGold} золота`
+	      : 'Нет обычных ненадетых предметов для продажи.',
+	    {
+	      fontFamily: UI.font.body,
+	      fontSize: '20px',
+	      color: UI.colors.text,
+	      align: 'center',
+	      lineSpacing: 6,
+	      wordWrap: {
+	        width: 520,
+	      },
+	    }
+	  ).setOrigin(0.5).setDepth(102);
+
+	  const yes = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 75,
+	    'Продать всё',
+	    () => {
+	      this.massSellCommonItems();
+	    },
+	    360,
+	    54,
+	    {
+	      danger: true,
+	      disabled: itemsToSell.length === 0,
+	    }
+	  );
+
+	  yes.shadow.setDepth(101);
+	  yes.bg.setDepth(102);
+	  yes.label.setDepth(103);
+
+	  const no = createButton(
+	    this,
+	    width / 2,
+	    height / 2 + 145,
+	    'Отмена',
+	    () => {
+	      this.scene.restart();
+	    },
+	    360,
+	    54
+	  );
+
+	  no.shadow.setDepth(101);
+	  no.bg.setDepth(102);
+	  no.label.setDepth(103);
+	}
+
+	private massSellCommonItems() {
+	  const itemsToSell = player.inventory.filter(inventoryItem => {
+	    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	    if (!item) {
+	      return false;
+	    }
+
+	    if (isItemEquipped(player, inventoryItem.instanceId)) {
+	      return false;
+	    }
+
+	    return item.rarity === 'common';
+	  });
+
+	  let totalGold = 0;
+
+	  for (const inventoryItem of itemsToSell) {
+	    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	    if (!item) {
+	      continue;
+	    }
+
+	    totalGold += getItemSellPrice(item);
+
+	    player.inventory = player.inventory.filter(itemInInventory => {
+	      return itemInInventory.instanceId !== inventoryItem.instanceId;
+	    });
+	  }
+
+	  player.gold += totalGold;
+
+	  void saveGameAsync();
+
+	  this.scene.restart();
+	}
 }

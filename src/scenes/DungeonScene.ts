@@ -49,6 +49,8 @@ import { saveGameAsync } from '../systems/SaveSystem';
 import { trackChestOpened, trackGoldEarned } from '../systems/QuestSystem';
 
 export class DungeonScene extends Phaser.Scene {
+
+  private modalObjects: Phaser.GameObjects.GameObject[] = [];
   
   constructor() {
     super('DungeonScene');
@@ -434,8 +436,8 @@ export class DungeonScene extends Phaser.Scene {
       void saveGameAsync();
 
       this.showMessage(
-        'Ловушка обезврежена',
-        'Ты заметил ловушку вовремя и прошёл дальше.',
+        'Проклятая ловушка',
+        `Ты встретил проклятую ловушку.\n\nЛовкость помогла увернуться.\nУрон: 0.`,
         () => {
           this.scene.restart();
         }
@@ -483,8 +485,8 @@ export class DungeonScene extends Phaser.Scene {
     void saveGameAsync();
 
     this.showMessage(
-      'Ловушка',
-      `Ты попал в ловушку.\nПолучено урона: ${damage}`,
+      'Проклятая ловушка',
+      `Ты встретил проклятую ловушку.\n\nЛовкость не помогла увернуться.\nУрон: ${damage}.`,
       () => {
         this.scene.restart();
       }
@@ -727,54 +729,100 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
-  private showMessage(title: string, message: string, onClose?: () => void) {
-    const { width } = this.scale;
+  private showMessage(title: string, message: string, onContinue?: () => void) {
+    const { width, height } = this.scale;
 
-    createPanel(this, width / 2, 610, 620, 320, {
-      alpha: 0.98,
-      stroke: true,
-      warm: true,
-    }).setDepth(100);
+    // Удаляем старое модальное окно, если оно уже было
+    this.modalObjects.forEach(object => {
+      object.destroy();
+    });
 
-    this.add.text(width / 2, 510, title, {
+    this.modalObjects = [];
+
+    const overlay = this.add.rectangle(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      0x000000,
+      0.72
+    ).setDepth(100);
+
+    const panelShadow = this.add.rectangle(
+      width / 2,
+      height / 2 + 6,
+      590,
+      330,
+      0x000000,
+      0.35
+    ).setDepth(101);
+
+    const panel = this.add.rectangle(
+      width / 2,
+      height / 2,
+      590,
+      330,
+      0x17100c,
+      0.98
+    )
+      .setStrokeStyle(3, UI.colors.goldDark, 0.9)
+      .setDepth(102);
+
+    const titleText = this.add.text(width / 2, height / 2 - 115, title, {
       fontFamily: UI.font.title,
-      fontSize: '31px',
+      fontSize: '30px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(102);
+      align: 'center',
+    }).setOrigin(0.5).setDepth(103);
 
-    this.add.text(width / 2, 600, message, {
+    const messageText = this.add.text(width / 2, height / 2 - 25, message, {
       fontFamily: UI.font.body,
       fontSize: '20px',
       color: UI.colors.text,
       align: 'center',
+      lineSpacing: 10,
       wordWrap: {
-        width: 540,
+        width: 500,
+        useAdvancedWrap: true,
       },
-      lineSpacing: 7,
-    }).setOrigin(0.5).setDepth(102);
+    }).setOrigin(0.5).setDepth(103);
 
-    const ok = createButton(
+    const button = createButton(
       this,
       width / 2,
-      735,
+      height / 2 + 115,
       'Продолжить',
       () => {
-        if (onClose) {
-          onClose();
-          return;
-        }
+        this.modalObjects.forEach(object => {
+          object.destroy();
+        });
 
-        this.scene.restart();
+        this.modalObjects = [];
+
+        if (onContinue) {
+          onContinue();
+        }
       },
-      260,
+      300,
       56
     );
 
-    ok.shadow.setDepth(100);
-    ok.bg.setDepth(101);
-    ok.label.setDepth(102);
+    button.shadow.setDepth(102);
+    button.bg.setDepth(103);
+    button.label.setDepth(104);
+
+    this.modalObjects.push(
+      overlay,
+      panelShadow,
+      panel,
+      titleText,
+      messageText,
+      button.shadow,
+      button.bg,
+      button.label
+    );
   }
 
   private getRoomIcon(type: string) {

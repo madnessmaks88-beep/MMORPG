@@ -92,7 +92,14 @@ export class ShopScene extends Phaser.Scene {
       price: 25,
       buttonText: 'Купить',
       onBuy: () => {
-        this.buyPotion();
+        this.showBuyQuantityConfirm({
+          title: 'Зелье здоровья',
+          price: 25,
+          maxQuantity: Math.max(1, Math.floor(player.gold / 25)),
+          onConfirm: quantity => {
+            this.buyPotion(quantity);
+          },
+        });
       },
     });
 
@@ -104,7 +111,14 @@ export class ShopScene extends Phaser.Scene {
       price: 80,
       buttonText: 'Купить',
       onBuy: () => {
-        this.buyRandomItem();
+        this.showBuyQuantityConfirm({
+          title: 'Случайный предмет',
+          price: 80,
+          maxQuantity: 1,
+          onConfirm: () => {
+            this.buyRandomItem();
+          },
+        });
       },
     });
 
@@ -116,7 +130,14 @@ export class ShopScene extends Phaser.Scene {
       price: 120,
       buttonText: 'Улучшить',
       onBuy: () => {
-        this.buyHpUpgrade();
+        this.showBuyQuantityConfirm({
+          title: 'Улучшение здоровья',
+          price: 120,
+          maxQuantity: 1,
+          onConfirm: () => {
+            this.buyHpUpgrade();
+          },
+        });
       },
     });
 
@@ -196,20 +217,21 @@ export class ShopScene extends Phaser.Scene {
     );
   }
 
-  private buyPotion() {
-    const price = 25;
+  private buyPotion(quantity = 1) {
+   const price = 25;
+   const totalPrice = price * quantity;
 
-    if (player.gold < price) {
-      this.showMessage('Недостаточно золота.');
-      return;
-    }
+   if (player.gold < totalPrice) {
+     this.showMessage('Недостаточно золота.');
+     return;
+   }
 
-    player.gold -= price;
-    player.potions += 1;
+   player.gold -= totalPrice;
+   player.potions += quantity;
 
-    void saveGameAsync();
+   void saveGameAsync();
 
-    this.showMessage('Куплено зелье здоровья.');
+   this.showMessage(`Куплено зелий: ${quantity}.`);
   }
 
   private buyRandomItem() {
@@ -293,4 +315,143 @@ export class ShopScene extends Phaser.Scene {
     ok.bg.setDepth(101);
     ok.label.setDepth(102);
   }
+  private showBuyQuantityConfirm(config: {
+    title: string;
+    price: number;
+    minQuantity?: number;
+    maxQuantity: number;
+    onConfirm: (quantity: number) => void;
+  }) {
+    const { width, height } = this.scale;
+
+    let quantity = config.minQuantity ?? 1;
+
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.72)
+      .setDepth(100);
+
+    const panel = createPanel(this, width / 2, height / 2, 610, 400, {
+      alpha: 0.98,
+      stroke: true,
+      warm: true,
+    }).setDepth(101);
+
+    const titleText = this.add.text(width / 2, height / 2 - 135, 'Подтверждение покупки', {
+      fontFamily: UI.font.title,
+      fontSize: '29px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(102);
+
+    const itemText = this.add.text(width / 2, height / 2 - 75, config.title, {
+      fontFamily: UI.font.body,
+      fontSize: '22px',
+      color: UI.colors.text,
+    }).setOrigin(0.5).setDepth(102);
+
+    const quantityText = this.add.text(width / 2, height / 2 - 15, '', {
+      fontFamily: UI.font.body,
+      fontSize: '24px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5).setDepth(102);
+
+    const priceText = this.add.text(width / 2, height / 2 + 25, '', {
+      fontFamily: UI.font.body,
+      fontSize: '19px',
+      color: UI.colors.textMuted,
+    }).setOrigin(0.5).setDepth(102);
+
+    const refreshText = () => {
+      const totalPrice = config.price * quantity;
+
+      quantityText.setText(`Количество: ${quantity}`);
+      priceText.setText(`Итого: ${totalPrice} золота`);
+    };
+
+    const close = () => {
+      overlay.destroy();
+      panel.destroy();
+      titleText.destroy();
+      itemText.destroy();
+      quantityText.destroy();
+      priceText.destroy();
+
+      minus.shadow.destroy();
+      minus.bg.destroy();
+      minus.label.destroy();
+
+      plus.shadow.destroy();
+      plus.bg.destroy();
+      plus.label.destroy();
+
+      buy.shadow.destroy();
+      buy.bg.destroy();
+      buy.label.destroy();
+
+      cancel.shadow.destroy();
+      cancel.bg.destroy();
+      cancel.label.destroy();
+    };
+
+    const minus = createButton(
+      this,
+      width / 2 - 145,
+      height / 2 + 85,
+      '-',
+      () => {
+        quantity = Math.max(config.minQuantity ?? 1, quantity - 1);
+        refreshText();
+      },
+      90,
+      50
+    );
+
+    const plus = createButton(
+      this,
+      width / 2 + 145,
+      height / 2 + 85,
+      '+',
+      () => {
+        quantity = Math.min(config.maxQuantity, quantity + 1);
+        refreshText();
+      },
+      90,
+      50
+    );
+
+    const buy = createButton(
+      this,
+      width / 2,
+      height / 2 + 150,
+      'Купить',
+      () => {
+        config.onConfirm(quantity);
+        close();
+      },
+      260,
+      54
+    );
+
+    const cancel = createButton(
+      this,
+      width / 2,
+      height / 2 + 215,
+      'Отмена',
+      () => {
+        close();
+      },
+      260,
+      54
+    );
+
+    for (const button of [minus, plus, buy, cancel]) {
+      button.shadow.setDepth(101);
+      button.bg.setDepth(102);
+      button.label.setDepth(103);
+    }
+
+    refreshText();
+  }
+
+  
 }

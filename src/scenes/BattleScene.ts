@@ -78,6 +78,10 @@ export class BattleScene extends Phaser.Scene {
   private humanPassiveActivated = false;
   private desperateStrikeCooldown = 0;
 
+  private readonly powerAttackEnergyCost = 2;
+  private readonly desperateStrikeEnergyCost = 3;
+  private readonly desperateStrikeCooldownTurns = 2;
+
   constructor() {
     super('BattleScene');
   }
@@ -279,6 +283,42 @@ export class BattleScene extends Phaser.Scene {
     );
   }
 
+  private handlePowerAttack() {
+    if (this.isBattleEnded || this.isBusy) {
+      return;
+    }
+
+    if (player.energy < this.powerAttackEnergyCost) {
+      this.logText.setText('Недостаточно энергии для сильного удара.');
+      return;
+    }
+
+    this.isBusy = true;
+
+    player.energy -= this.powerAttackEnergyCost;
+
+    const stats = this.getBattleStats();
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1.65,
+      varianceMin: -1,
+      varianceMax: 5,
+    });
+
+    const isCrit = Math.random() < stats.critChance;
+    const finalDamage = isCrit ? Math.floor(damage * 1.5) : damage;
+
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
+
+    const playerActionText = isCrit
+      ? `Критический сильный удар! Ты наносишь ${finalDamage} урона.`
+      : `Ты наносишь сильный удар на ${finalDamage} урона.`;
+
+    this.afterPlayerAttack(playerActionText);
+  }
+
   private handleDefend() {
     if (this.isBattleEnded || this.isBusy) {
       return;
@@ -395,7 +435,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleDesperateStrike() {
-    if (this.isBusy || this.isBattleEnded) {
+    if (this.isBattleEnded || this.isBusy) {
       return;
     }
 
@@ -405,62 +445,87 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.desperateStrikeCooldown > 0) {
-      this.logText.setText(`Отчаянный удар ещё не готов. Осталось ходов: ${this.desperateStrikeCooldown}.`);
+      this.logText.setText(`Отчаянный удар перезаряжается: ${this.desperateStrikeCooldown} хода.`);
       return;
     }
 
-    if (player.energy < 3) {
-      this.logText.setText('Недостаточно энергии для Отчаянного удара.');
+    if (player.energy < this.desperateStrikeEnergyCost) {
+      this.logText.setText('Недостаточно энергии для отчаянного удара.');
       return;
     }
 
     this.isBusy = true;
 
-    player.energy -= 3;
+    player.energy -= this.desperateStrikeEnergyCost;
 
     const stats = this.getBattleStats();
-    const hpLostPercent = Math.max(0, 1 - player.hp / stats.maxHp);
 
-    const lostHpPercentNumber = Math.floor(hpLostPercent * 100);
+    const hpLostRatio = 1 - player.hp / stats.maxHp;
 
-    const bonusPercent = Math.floor(lostHpPercentNumber / 2);
-    const finalPercent = 8 + bonusPercent;
+    const multiplier = 1.35 + hpLostRatio * 1.25;
 
-    const baseDamage = stats.attack;
-    const damage = Math.max(
-      1,
-      Math.floor(baseDamage * (finalPercent / 100) + baseDamage)
-    );
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier,
+      varianceMin: 0,
+      varianceMax: 6,
+    });
 
-    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
+    const finalDamage = Math.floor(damage);
 
-    this.desperateStrikeCooldown = 2;
+    this.desperateStrikeCooldown = this.desperateStrikeCooldownTurns;
 
     this.animatePlayerAttack();
-    this.animateHit(this.enemyCard);
-    this.shakeBattle(0.004, 130);
-    this.showFloatingText(this.enemyCard.x, this.enemyCard.y - 55, `-${damage}`, '#70a6ff');
+    this.damageEnemy(finalDamage);
 
-    let actionText =
+    const hpLostPercent = Math.round(hpLostRatio * 100);
+
+    const playerActionText =
       `Отчаянный удар!\n` +
-      `Потеряно HP: ${lostHpPercentNumber}%\n` +
-      `Бонус навыка: ${finalPercent}%\n` +
-      `Нанесено урона: ${damage}`;
+      `Потеряно HP: ${hpLostPercent}%.\n` +
+      `Ты наносишь ${finalDamage} урона.`;
 
-    const passiveText = this.checkHumanPassive();
+    this.afterPlayerAttack(playerActionText);
+  }
 
-    if (passiveText) {
-      actionText += passiveText;
-    }
+  private calculateDamage(config: {
+    baseDamage: number;
+    multiplier: number;
+    varianceMin: number;
+    varianceMax: number;
+  }) {
+    const rawDamage =
+      config.baseDamage * config.multiplier +
+      Phaser.Math.Between(config.varianceMin, config.varianceMax);
 
+    const reducedDamage = rawDamage - this.enemy.defense * 0.45;
+
+    return Math.max(1, Math.floor(reducedDamage));
+  }
+
+  private damageEnemy(damage: number) {
+    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
+
+    this.showFloatingText(
+      this.enemyCard.x,
+      this.enemyCard.y - 55,
+      `-${damage}`,
+      '#ff6b6b'
+    );
+
+    this.animateHit(this.enemyCard);
+  }
+
+  private afterPlayerAttack(playerActionText: string) {
     this.updateTexts();
+    this.createActionButtons();
 
     if (this.enemy.hp <= 0) {
-      this.handleVictory(actionText);
+      this.handleVictory(playerActionText);
       return;
     }
 
-    this.enemyTurn(actionText);
+    this.enemyTurn(playerActionText);
   }
 
   private createBattleBackground() {
@@ -842,110 +907,33 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleAttack() {
-    if (this.isBusy || this.isBattleEnded) {
+    if (this.isBattleEnded || this.isBusy) {
       return;
     }
 
     this.isBusy = true;
 
     const stats = this.getBattleStats();
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1,
+      varianceMin: -2,
+      varianceMax: 3,
+    });
 
     const isCrit = Math.random() < stats.critChance;
-
-    let damage = Math.max(
-      1,
-      stats.attack + Phaser.Math.Between(-2, 3)
-    );
-
-    if (isCrit) {
-      damage = Math.floor(damage * 1.7);
-    }
-
-    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
+    const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
 
     this.animatePlayerAttack();
-    this.animateHit(this.enemyCard);
-    this.showFloatingText(
-      this.enemyCard.x,
-      this.enemyCard.y - 55,
-      isCrit ? `КРИТ -${damage}` : `-${damage}`,
-      isCrit ? '#f0d58a' : '#ffffff'
-    );
 
-    let actionText = isCrit
-      ? `Ты наносишь критический удар: ${damage} урона.`
-      : `Ты наносишь ${damage} урона.`;
+    this.damageEnemy(finalDamage);
 
-    const passiveText = this.checkHumanPassive();
+    const playerActionText = isCrit
+      ? `Критическая атака! Ты наносишь ${finalDamage} урона.`
+      : `Ты атакуешь и наносишь ${finalDamage} урона.`;
 
-    if (passiveText) {
-      actionText += passiveText;
-    }
-
-    this.updateTexts();
-
-    if (this.enemy.hp <= 0) {
-      this.handleVictory(actionText);
-      return;
-    }
-
-    this.enemyTurn(actionText);
-  }
-
-  private handlePowerAttack() {
-    if (this.isBusy || this.isBattleEnded) {
-      return;
-    }
-
-    if (player.energy < 2) {
-      this.logText.setText('Недостаточно энергии.');
-      return;
-    }
-
-    this.isBusy = true;
-
-    player.energy -= 2;
-
-    const stats = this.getBattleStats();
-
-    const isCrit = Math.random() < stats.critChance + 0.05;
-
-    let damage = Math.max(
-      1,
-      Math.floor((stats.attack + Phaser.Math.Between(-2, 3)) * 1.7)
-    );
-
-    if (isCrit) {
-      damage = Math.floor(damage * 1.7);
-    }
-
-    this.enemy.hp = Math.max(0, this.enemy.hp - damage);
-
-    this.animatePlayerAttack();
-    this.animateHit(this.enemyCard);
-    this.showFloatingText(
-      this.enemyCard.x,
-      this.enemyCard.y - 55,
-      isCrit ? `КРИТ -${damage}` : `-${damage}`,
-      '#f0d58a'
-    );
-
-    let actionText = `Сильный удар наносит ${damage} урона.`;
-
-    const passiveText = this.checkHumanPassive();
-
-    if (passiveText) {
-      actionText += passiveText;
-    }
-
-    this.updateTexts();
-
-    if (this.enemy.hp <= 0) {
-      this.handleVictory(actionText);
-      return;
-    }
-
-    this.enemyTurn(actionText);
+    this.afterPlayerAttack(playerActionText);
   }
 
   private handleVictory(playerActionText: string) {
