@@ -344,7 +344,7 @@ export class InventoryScene extends Phaser.Scene {
 
 	  this.renderInventoryItems();
 
-		this.createInventoryTouchScrollZone();
+		this.createInventoryTouchScrollHandlers();
 
 	  this.input.off('wheel');
 
@@ -391,62 +391,74 @@ export class InventoryScene extends Phaser.Scene {
 	  );
 	}
 
-	private createInventoryTouchScrollZone() {
-	  const { width } = this.scale;
-		
-	  const zone = this.add.zone(
-	    width / 2,
-	    this.inventoryListTop + this.inventoryListHeight / 2,
-	    600,
-	    this.inventoryListHeight
-	  );
-	
-	  zone.setInteractive();
-	
-	  zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+	private createInventoryTouchScrollHandlers() {
+	  this.input.off('pointerdown');
+	  this.input.off('pointermove');
+	  this.input.off('pointerup');
+	  this.input.off('pointerupoutside');
+
+	  this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
 	    if (this.inventoryMaxScrollY <= 0) {
 	      return;
 	    }
-		
+
 	    if (this.isItemInfoOpen) {
 	      return;
 	    }
-		
+
+	    if (!this.isPointerInsideInventoryList(pointer)) {
+	      return;
+	    }
+
 	    this.isDraggingInventory = true;
 	    this.dragStartY = pointer.y;
 	    this.dragStartScrollY = this.inventoryTargetScrollY;
 	  });
-	
-	  zone.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+
+	  this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
 	    if (!this.isDraggingInventory) {
 	      return;
 	    }
-		
+
 	    if (this.isItemInfoOpen) {
 	      return;
 	    }
-		
+
 	    const dragDistance = pointer.y - this.dragStartY;
-		
+
 	    this.inventoryTargetScrollY = Phaser.Math.Clamp(
 	      this.dragStartScrollY - dragDistance,
 	      0,
 	      this.inventoryMaxScrollY
 	    );
-		
+
 	    this.inventoryScrollY = this.inventoryTargetScrollY;
 	    this.renderInventoryItems();
 	  });
-	
-	  zone.on('pointerup', () => {
+
+	  this.input.on('pointerup', () => {
 	    this.isDraggingInventory = false;
 	  });
-	
-	  zone.on('pointerupoutside', () => {
+
+	  this.input.on('pointerupoutside', () => {
 	    this.isDraggingInventory = false;
 	  });
-	
-	  zone.setDepth(9);
+	}
+
+	private isPointerInsideInventoryList(pointer: Phaser.Input.Pointer) {
+	  const { width } = this.scale;
+		
+	  const left = width / 2 - 300;
+	  const right = width / 2 + 300;
+	  const top = this.inventoryListTop;
+	  const bottom = this.inventoryListBottom;
+		
+	  return (
+	    pointer.x >= left &&
+	    pointer.x <= right &&
+	    pointer.y >= top &&
+	    pointer.y <= bottom
+	  );
 	}
 
 	private renderInventoryItems() {
