@@ -145,17 +145,7 @@ export const enemies: EnemyData[] = [
     expReward: 85,
     goldReward: 58,
   },
-  
-  {
-    id: 'king_under_crypt',
-    name: 'Король под склепом',
-    maxHp: 260,
-    hp: 260,
-    attack: 38,
-    defense: 22,
-    expReward: 140,
-    goldReward: 120,
-  },
+
   {
     id: 'ash_prince',
     name: 'Пепельный князь',
@@ -177,3 +167,7 @@ export const enemies: EnemyData[] = [
     goldReward: 420,
   },
 ];
+
+export function getEnemyById(id: string): EnemyData | undefined {
+  return enemies.find(enemy => enemy.id === id);
+}

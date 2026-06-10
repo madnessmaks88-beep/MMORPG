@@ -27,8 +27,9 @@ import {
   createSceneBackground,
   createSectionTitle,
   createSmallText,
-  createTitle,
 } from '../ui/theme';
+
+type InventoryCategory = 'all' | 'weapon' | 'armor' | 'potions';
 
 export class InventoryScene extends Phaser.Scene {
 	
@@ -56,61 +57,87 @@ export class InventoryScene extends Phaser.Scene {
 	private dragStartY = 0;
 	private dragStartScrollY = 0;
 
+	private selectedCategory: InventoryCategory = 'all';
+
   constructor() {
     super('InventoryScene');
 
 		
   }
 
-	init(data?: { inventoryScrollY?: number }) {
+	init(data?: {
+	  inventoryScrollY?: number;
+	  selectedCategory?: InventoryCategory;
+	}) {
 	  this.initialInventoryScrollY = data?.inventoryScrollY ?? 0;
+	  this.selectedCategory = data?.selectedCategory ?? 'all';
 	}
 
   create() {
 	  createSceneBackground(this);
-	  createTitle(this, 'Сумка героя', 'Снаряжение, добыча и найденные вещи');
 
-	  this.createStatsPanel();
+	  this.createQuickStatsPanel();
 	  this.createEquipmentPanel();
 	  this.createInventoryList();
+	  this.createCategoryTabs();
 
 	  createBottomNav(this, {
 	    activeScene: 'InventoryScene',
 	  });
 	}
 
-  private createStatsPanel() {
+	private createQuickStatsPanel() {
 	  const { width } = this.scale;
 
 	  const stats = getPlayerStats(player);
 
-	  const panelY = 185;
-
-	  createPanel(this, width / 2, panelY, 620, 145, {
-	    alpha: 0.72,
-	    stroke: false,
-	    warm: true,
+	  this.createRoundedPanel({
+	    x: width / 2,
+	    y: 112,
+	    width: 620,
+	    height: 96,
+	    radius: 26,
+	    color: 0x17100c,
+	    alpha: 0.9,
+	    strokeColor: UI.colors.goldDark,
+	    strokeAlpha: 0.5,
+	    depth: 2,
 	  });
 
-	  this.add.text(width / 2, panelY - 42, 'Краткие характеристики', {
-	    fontFamily: UI.font.title,
-	    fontSize: '23px',
-	    color: UI.colors.goldText,
-	  }).setOrigin(0.5);
 
 	  const text = [
-	    `HP: ${player.hp}/${stats.maxHp}`,
-	    `Атака: ${stats.attack}`,
-	    `Защита: ${stats.defense}`,
-	    `Крит: ${Math.round(stats.critChance * 100)}%`,
-	    `Уклонение: ${Math.round(stats.dodgeChance * 100)}%`,
-	    `Добыча: +${Math.round(stats.lootChanceBonus * 100)}%`,
+	    `HP ${player.hp}/${stats.maxHp}`,
+	    `АТК ${stats.attack}`,
+	    `ЗАЩ ${stats.defense}`,
+	    `Золото ${player.gold}`,
 	  ].join('  •  ');
 
-	  createSmallText(this, width / 2, panelY + 22, text, {
-	    fontSize: '16px',
-	    color: UI.colors.text,
-	    width: 560,
+	  this.add.text(width / 2, 110, text, {
+		  fontFamily: UI.font.body,
+		  fontSize: '22px',
+		  color: UI.colors.text,
+		  align: 'center',
+		}).setOrigin(0.5).setDepth(10);
+
+	}
+
+	private getFilteredInventoryItems() {
+	  if (this.selectedCategory === 'all') {
+	    return player.inventory;
+	  }
+
+	  if (this.selectedCategory === 'potions') {
+	    return [];
+	  }
+
+	  return player.inventory.filter(inventoryItem => {
+	    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+	    if (!item) {
+	      return false;
+	    }
+
+	    return item.slot === this.selectedCategory;
 	  });
 	}
 
@@ -119,13 +146,21 @@ export class InventoryScene extends Phaser.Scene {
 
 	  const panelY = 340;
 
-	  createPanel(this, width / 2, panelY, 620, 170, {
-	    alpha: 0.78,
-	    stroke: true,
-	    warm: false,
-	  });
+	  this.createRoundedPanel({
+		  x: width / 2,
+		  y: panelY,
+		  width: 620,
+		  height: 170,
+		  radius: 26,
+		  color: 0x100c09,
+		  alpha: 0.88,
+		  strokeColor: UI.colors.goldDark,
+		  strokeAlpha: 0.45,
+		  depth: 2,
+		});
 
-	  createSectionTitle(this, width / 2, panelY - 65, 'Экипировка');
+	  createSectionTitle(this, width / 2, panelY - 65, 'Экипировка')
+  		.setDepth(10);
 
 	  this.createEquipmentSlot('weapon', panelY - 15);
 	  this.createEquipmentSlot('armor', panelY + 25);
@@ -167,7 +202,7 @@ export class InventoryScene extends Phaser.Scene {
 	    fontSize: '16px',
 	    color,
 	    align: 'center',
-	  }).setOrigin(0.5);
+	  }).setOrigin(0.5).setDepth(10);
 
 	  if (!item || !inventoryItem) {
 	    return;
@@ -244,6 +279,7 @@ export class InventoryScene extends Phaser.Scene {
 							
 				this.scene.restart({
 				  inventoryScrollY: this.inventoryTargetScrollY,
+				  selectedCategory: this.selectedCategory,
 				});
 	    },
 	    360,
@@ -282,23 +318,34 @@ export class InventoryScene extends Phaser.Scene {
 		const titleY = panelY - 270;
 
 		this.inventoryListTop = panelY - 205;
-		this.inventoryListHeight = 455;
+		this.inventoryListHeight = 405;
 		this.inventoryListBottom = this.inventoryListTop + this.inventoryListHeight;
 
-		const massSellY = panelY + 310;
+		const massSellY = panelY + 286;
 
-	  createPanel(this, width / 2, panelY, 620, panelHeight, {
-	    alpha: 0.86,
-	    stroke: true,
-	    warm: false,
-	  });
+	  this.createRoundedPanel({
+		  x: width / 2 - 28,
+		  y: panelY,
+		  width: 560,
+		  height: panelHeight,
+		  radius: 28,
+		  color: 0x120d0a,
+		  alpha: 0.94,
+		  strokeColor: UI.colors.goldDark,
+		  strokeAlpha: 0.6,
+		  depth: 2,
+		});
 
-	  createSectionTitle(
-	    this,
-	    width / 2,
-	    titleY,
-	    `Предметы: ${player.inventory.length}`
-	  );
+	  const filteredItems = this.getFilteredInventoryItems();
+
+		createSectionTitle(
+		  this,
+		  width / 2 - 28,
+		  titleY,
+		  this.selectedCategory === 'potions'
+		    ? `Зелья: ${player.potions}`
+		    : `Предметы: ${filteredItems.length}`
+		).setDepth(10);
 
 	  if (player.inventory.length === 0) {
 	    createSmallText(
@@ -321,9 +368,10 @@ export class InventoryScene extends Phaser.Scene {
 	  this.inventoryLastRenderedScrollY = -1;
 
 	  this.inventoryContainer = this.add.container(0, 0);
+		this.inventoryContainer.setDepth(20);
 
 	  const topPadding = 42;
-	  const contentHeight = topPadding + player.inventory.length * itemSpacing;
+	  const contentHeight = topPadding + filteredItems.length * itemSpacing;
 
 	  this.inventoryMaxScrollY = Math.max(
 	    0,
@@ -368,27 +416,275 @@ export class InventoryScene extends Phaser.Scene {
 	    }
 	  );
 
-	  createPanel(this, width / 2, massSellY, 620, 82, {
-	    alpha: 0.78,
-	    stroke: true,
-	    warm: true,
+		if (this.selectedCategory === 'potions') {
+		  this.createPotionCategoryContent(panelY);
+		  return;
+		}
+
+		this.createRoundedMassSellButton({
+		  x: width / 2 - 28,
+		  y: massSellY,
+		  width: 470,
+		  height: 44,
+		  text: 'Продать обычные ненадетые',
+		  onClick: () => {
+		    this.showMassSellConfirm();
+		  },
+		});
+	}
+
+	private createRoundedMassSellButton(config: {
+	  x: number;
+	  y: number;
+	  width: number;
+	  height: number;
+	  text: string;
+	  onClick: () => void;
+	}) {
+	  const radius = 16;
+
+	  const shadow = this.add.graphics();
+	  shadow.fillStyle(0x000000, 0.28);
+	  shadow.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2 + 4,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+	  shadow.setDepth(27);
+
+	  const bg = this.add.graphics();
+	  bg.fillStyle(0x2a1010, 0.96);
+	  bg.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  bg.lineStyle(2, 0xff6b6b, 0.9);
+	  bg.strokeRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  bg.setDepth(28);
+
+	  bg.setInteractive(
+	    new Phaser.Geom.Rectangle(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height
+	    ),
+	    Phaser.Geom.Rectangle.Contains
+	  );
+
+	  const label = this.add.text(config.x, config.y, config.text, {
+	    fontFamily: UI.font.body,
+	    fontSize: '16px',
+	    color: '#ffb3b3',
+	  }).setOrigin(0.5).setDepth(29);
+
+	  bg.on('pointerover', () => {
+	    bg.clear();
+
+	    bg.fillStyle(0x3a1515, 1);
+	    bg.fillRoundedRect(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height,
+	      radius
+	    );
+
+	    bg.lineStyle(2, 0xff8a8a, 1);
+	    bg.strokeRoundedRect(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height,
+	      radius
+	    );
+
+	    label.setColor('#ffd0d0');
 	  });
 
-	  createButton(
-	    this,
-	    width / 2,
-	    massSellY,
-	    'Продать обычные ненадетые предметы',
-	    () => {
-	      this.showMassSellConfirm();
-	    },
-	    500,
-	    46,
+	  bg.on('pointerout', () => {
+	    bg.clear();
+
+	    bg.fillStyle(0x2a1010, 0.96);
+	    bg.fillRoundedRect(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height,
+	      radius
+	    );
+
+	    bg.lineStyle(2, 0xff6b6b, 0.9);
+	    bg.strokeRoundedRect(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height,
+	      radius
+	    );
+
+	    label.setColor('#ffb3b3');
+	  });
+
+	  bg.on('pointerdown', () => {
+	    config.onClick();
+	  });
+
+	  return {
+	    shadow,
+	    bg,
+	    label,
+	  };
+	}
+
+	private createCategoryTabs() {
+	  const { width } = this.scale;
+
+	  const tabs: {
+	    id: InventoryCategory;
+	    label: string;
+	    icon: string;
+	  }[] = [
 	    {
-	      small: true,
-	      danger: true,
-	    }
-	  );
+	      id: 'all',
+	      label: 'All',
+	      icon: '▦',
+	    },
+	    {
+	      id: 'weapon',
+	      label: 'Оружие',
+	      icon: '⚔',
+	    },
+	    {
+	      id: 'armor',
+	      label: 'Броня',
+	      icon: '🛡',
+	    },
+	    {
+	      id: 'potions',
+	      label: 'Зелья',
+	      icon: '✚',
+	    },
+	  ];
+
+	  const tabX = width - 46;
+	  const startY = 480;
+	  const tabHeight = 72;
+	  const tabWidth = 84;
+	  const gap = 10;
+
+	  tabs.forEach((tab, index) => {
+	    const y = startY + index * (tabHeight + gap);
+	    const isActive = this.selectedCategory === tab.id;
+
+	    const tabBg = this.createRoundedButtonBg({
+	      x: tabX,
+	      y,
+	      width: tabWidth,
+	      height: tabHeight,
+	      radius: 18,
+	      color: isActive ? 0x2b1d13 : 0x12100d,
+	      alpha: isActive ? 0.98 : 0.78,
+	      strokeColor: isActive ? UI.colors.gold : UI.colors.goldDark,
+	      strokeAlpha: isActive ? 0.9 : 0.35,
+	      strokeWidth: isActive ? 2 : 1,
+	      depth: 50,
+	    });
+
+	    const bg = tabBg.bg;
+
+	    const icon = this.add.text(tabX, y - 14, tab.icon, {
+	      fontFamily: UI.font.body,
+	      fontSize: '20px',
+	      color: isActive ? UI.colors.goldText : UI.colors.textMuted,
+	    }).setOrigin(0.5).setDepth(53);
+
+	    const label = this.add.text(tabX, y + 17, tab.label, {
+	      fontFamily: UI.font.body,
+	      fontSize: '12px',
+	      color: isActive ? UI.colors.goldText : UI.colors.textMuted,
+	    }).setOrigin(0.5).setDepth(53);
+
+	    bg.on('pointerover', () => {
+	      if (isActive) {
+	        return;
+	      }
+
+	      icon.setColor(UI.colors.goldText);
+	      label.setColor(UI.colors.goldText);
+	    });
+
+	    bg.on('pointerout', () => {
+	      if (isActive) {
+	        return;
+	      }
+
+	      icon.setColor(UI.colors.textMuted);
+	      label.setColor(UI.colors.textMuted);
+	    });
+
+	    bg.on('pointerdown', () => {
+	      if (this.selectedCategory === tab.id) {
+	        return;
+	      }
+
+	      this.selectedCategory = tab.id;
+	      this.inventoryScrollY = 0;
+	      this.inventoryTargetScrollY = 0;
+
+	      this.scene.restart({
+	        selectedCategory: this.selectedCategory,
+	        inventoryScrollY: 0,
+	      });
+	    });
+	  });
+	}
+
+	private createPotionCategoryContent(panelY: number) {
+	  const { width } = this.scale;
+
+	  this.add.rectangle(width / 2, panelY + 15, 560, 130, 0x14100d, 0.88)
+	    .setStrokeStyle(2, UI.colors.goldDark, 0.55);
+
+	  this.add.circle(width / 2 - 235, panelY + 15, 28, 0x2a1d13, 1)
+	    .setStrokeStyle(2, UI.colors.goldDark, 0.7);
+
+	  this.add.text(width / 2 - 235, panelY + 15, '✚', {
+	    fontFamily: UI.font.body,
+	    fontSize: '24px',
+	    color: UI.colors.goldText,
+	  }).setOrigin(0.5);
+
+	  this.add.text(width / 2 - 190, panelY - 10, 'Зелье здоровья', {
+	    fontFamily: UI.font.title,
+	    fontSize: '21px',
+	    color: UI.colors.goldText,
+	  }).setOrigin(0, 0.5);
+
+	  this.add.text(width / 2 - 190, panelY + 25, `Количество: ${player.potions}`, {
+	    fontFamily: UI.font.body,
+	    fontSize: '17px',
+	    color: UI.colors.text,
+	  }).setOrigin(0, 0.5);
+
+	  this.add.text(width / 2 - 190, panelY + 55, 'Восстанавливает здоровье во время боя.', {
+	    fontFamily: UI.font.body,
+	    fontSize: '14px',
+	    color: UI.colors.textMuted,
+	  }).setOrigin(0, 0.5);
 	}
 
 	private createInventoryTouchScrollHandlers() {
@@ -447,12 +743,12 @@ export class InventoryScene extends Phaser.Scene {
 
 	private isPointerInsideInventoryList(pointer: Phaser.Input.Pointer) {
 	  const { width } = this.scale;
-		
+
 	  const left = width / 2 - 300;
 	  const right = width / 2 + 300;
 	  const top = this.inventoryListTop;
 	  const bottom = this.inventoryListBottom;
-		
+
 	  return (
 	    pointer.x >= left &&
 	    pointer.x <= right &&
@@ -468,38 +764,35 @@ export class InventoryScene extends Phaser.Scene {
 
 	  this.inventoryContainer.removeAll(true);
 
-	  const itemSpacing = 70;
-	  const topPadding = 42;
-	  const cardHalfHeight = 32;
+	  const filteredItems = this.getFilteredInventoryItems();
 
+	  const itemSpacing = 70;
+	  const topPadding = 58;
+	  const cardHalfHeight = 32;
 	  const fadeZone = 70;
 
-	  player.inventory.forEach((inventoryItem: InventoryItem, index: number) => {
+	  filteredItems.forEach((inventoryItem: InventoryItem, index: number) => {
 	    const y =
 	      this.inventoryListTop +
 	      topPadding +
 	      index * itemSpacing -
 	      this.inventoryScrollY;
 
-	    // Карточка далеко выше зоны — не рисуем
 	    if (y + cardHalfHeight < this.inventoryListTop - fadeZone) {
 	      return;
 	    }
 
-	    // Карточка далеко ниже зоны — не рисуем
 	    if (y - cardHalfHeight > this.inventoryListBottom + fadeZone) {
 	      return;
 	    }
 
 	    let alpha = 1;
 
-	    // Плавное исчезновение сверху
 	    if (y - cardHalfHeight < this.inventoryListTop) {
 	      const distance = y + cardHalfHeight - this.inventoryListTop;
 	      alpha = Phaser.Math.Clamp(distance / fadeZone, 0, 1);
 	    }
 
-	    // Плавное исчезновение снизу
 	    if (y + cardHalfHeight > this.inventoryListBottom) {
 	      const distance = this.inventoryListBottom - (y - cardHalfHeight);
 	      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
@@ -559,26 +852,39 @@ export class InventoryScene extends Phaser.Scene {
 	    return;
 	  }
 
+		const upgrade =
+  	inventoryItem.upgradeLevel > 0
+  	  ? ` +${inventoryItem.upgradeLevel}`
+  	  : '';
+
 	  const isEquipped = isItemEquipped(player, inventoryItem.instanceId);
 
 	  const rarityColor = getRarityColorHex(item);
 	  const rarityStrokeColor = getRarityStrokeColor(item);
 
-	  const shadow = this.add.rectangle(width / 2, y + 4, 560, 60, 0x000000, 0.22);
+	  const cardX = width / 2 - 38;
+		const cardWidth = 500;
+		const cardHeight = 62;
 
-		const bg = this.add.rectangle(width / 2, y, 560, 60, 0x14100d, 0.86)
-	    .setStrokeStyle(2, rarityStrokeColor, 0.55);
+		const cardBg = this.createRoundedButtonBg({
+		  x: cardX,
+		  y,
+		  width: cardWidth,
+		  height: cardHeight,
+		  radius: 18,
+		  color: isEquipped ? 0x2a1d13 : 0x1a130f,
+		  alpha: isEquipped ? 0.98 : 0.96,
+		  strokeColor: isEquipped ? UI.colors.gold : rarityStrokeColor,
+		  strokeAlpha: isEquipped ? 0.95 : 0.75,
+		  strokeWidth: 2,
+		  depth: 10,
+		});
+
+		const shadow = cardBg.shadow;
+		const bg = cardBg.bg;
 
 			bg.setInteractive({
 			  useHandCursor: true,
-			});
-
-			bg.on('pointerover', () => {
-			  bg.setFillStyle(0x1f1712, 0.95);
-			});
-
-			bg.on('pointerout', () => {
-			  bg.setFillStyle(0x14100d, 0.86);
 			});
 
 			bg.on('pointerup', () => {
@@ -589,86 +895,95 @@ export class InventoryScene extends Phaser.Scene {
 			  this.showItemInfo(inventoryItem);
 			});
 
-	  const iconBg = this.add.circle(width / 2 - 250, y, 22, rarityColor, 0.92)
-	    .setStrokeStyle(2, rarityStrokeColor, 0.7);
 
-	  const icon = this.add.text(width / 2 - 250, y, getSlotIcon(item.slot), {
-	    fontFamily: UI.font.body,
-	    fontSize: '17px',
-	    color: '#ffffff',
-	  }).setOrigin(0.5);
+			const iconX = cardX - 220;
+			const textX = cardX - 185;
+			const equipX = cardX + 115;
+			const sellX = cardX + 205;
 
-	  const upgrade = inventoryItem.upgradeLevel > 0 ? ` +${inventoryItem.upgradeLevel}` : '';
+	  const iconBg = this.add.circle(iconX, y, 22, rarityColor, 0.92)
+		  .setStrokeStyle(2, rarityStrokeColor, 0.7);
 
-	  const title = this.add.text(width / 2 - 215, y - 14, `${item.name}${upgrade}`, {
-	    fontFamily: UI.font.body,
-	    fontSize: '16px',
-	    color: isEquipped ? UI.colors.goldText : UI.colors.text,
-	  }).setOrigin(0, 0.5);
+		const icon = this.add.text(iconX, y, getSlotIcon(item.slot), {
+		  fontFamily: UI.font.body,
+		  fontSize: '17px',
+		  color: '#ffffff',
+		}).setOrigin(0.5);
 
-	  const subtitle = this.add.text(
-	    width / 2 - 215,
-	    y + 13,
-	    `${getSlotText(item.slot)} • ${getRarityText(item)}`,
-	    {
-	      fontFamily: UI.font.body,
-	      fontSize: '13px',
-	      color: UI.colors.textMuted,
-	    }
-	  ).setOrigin(0, 0.5);
+		const title = this.add.text(textX, y - 14, `${item.name}${upgrade}`, {
+		  fontFamily: UI.font.body,
+		  fontSize: '16px',
+		  color: isEquipped ? UI.colors.goldText : UI.colors.text,
+		}).setOrigin(0, 0.5);
+
+		const subtitle = this.add.text(
+		  textX,
+		  y + 13,
+		  `${getSlotText(item.slot)} • ${getRarityText(item)}`,
+		  {
+		    fontFamily: UI.font.body,
+		    fontSize: '13px',
+		    color: '#b8aa91',
+		  }
+		).setOrigin(0, 0.5);
 
 	  const equipButton = createButton(
-	    this,
-	    width / 2 + 145,
-	    y,
-	    isEquipped ? 'Надето' : 'Надеть',
-	    () => {
-	      if (isEquipped) {
-	        return;
-	      }
+		  this,
+		  equipX,
+		  y,
+		  isEquipped ? 'Надето' : 'Надеть',
+		  () => {
+		    if (isEquipped) return;
+			
+		    equipItem(player, inventoryItem.instanceId);
+		    void saveGameAsync();
+			
+		    this.scene.restart({
+		      inventoryScrollY: this.inventoryTargetScrollY,
+		      selectedCategory: this.selectedCategory,
+		    });
+		  },
+		  84,
+		  34,
+		  {
+		    small: true,
+		    disabled: isEquipped,
+		  }
+		);
 
-	      equipItem(player, inventoryItem.instanceId);
-				void saveGameAsync();
+		const sellButton = createButton(
+		  this,
+		  sellX,
+		  y,
+		  'Продать',
+		  () => {
+		    this.showSellConfirm(inventoryItem);
+		  },
+		  84,
+		  34,
+		  {
+		    small: true,
+		    danger: true,
+		    disabled: isEquipped,
+		  }
+		);
 
-				this.scene.restart({
-				  inventoryScrollY: this.inventoryTargetScrollY,
-				});
-	    },
-	    88,
-	    34,
-	    {
-	      small: true,
-	      disabled: isEquipped,
-	    }
-	  );
-
-	  const sellButton = createButton(
-	    this,
-	    width / 2 + 245,
-	    y,
-	    'Продать',
-	    () => {
-	      this.showSellConfirm(inventoryItem);
-	    },
-	    88,
-	    34,
-	    {
-	      small: true,
-	      danger: true,
-	      disabled: isEquipped,
-	    }
-	  );
-
+		sellButton.shadow.setDepth(13);
+		sellButton.bg.setDepth(14);
+		sellButton.label.setDepth(15);
 	  const cardObjects: Phaser.GameObjects.GameObject[] = [
 		  shadow,
 		  bg,
+
 		  iconBg,
 		  icon,
 		  title,
 		  subtitle,
+
 		  equipButton.shadow,
 		  equipButton.bg,
 		  equipButton.label,
+
 		  sellButton.shadow,
 		  sellButton.bg,
 		  sellButton.label,
@@ -676,14 +991,12 @@ export class InventoryScene extends Phaser.Scene {
 
 		cardObjects.forEach(object => {
 		  const alphaObject = object as Phaser.GameObjects.GameObject & {
-		    setAlpha: (alpha: number) => void;
+		    setAlpha?: (alpha: number) => void;
 		  };
 		
-		  alphaObject.setAlpha(alpha);
+		  alphaObject.setAlpha?.(alpha);
 		});
 
-		// Если карточка почти исчезла, отключаем клики,
-		// чтобы нельзя было нажать на полупрозрачный предмет у края списка
 		if (alpha < 0.65) {
 		  bg.disableInteractive();
 		  equipButton.bg.disableInteractive();
@@ -691,6 +1004,135 @@ export class InventoryScene extends Phaser.Scene {
 		}
 
 		this.inventoryContainer.add(cardObjects);
+	}
+
+	private createRoundedPanel(config: {
+	  x: number;
+	  y: number;
+	  width: number;
+	  height: number;
+	  radius?: number;
+	  color?: number;
+	  alpha?: number;
+	  strokeColor?: number;
+	  strokeAlpha?: number;
+	  strokeWidth?: number;
+	  depth?: number;
+	}) {
+	  const radius = config.radius ?? 22;
+	  const color = config.color ?? 0x14100d;
+	  const alpha = config.alpha ?? 0.9;
+	  const strokeColor = config.strokeColor ?? UI.colors.goldDark;
+	  const strokeAlpha = config.strokeAlpha ?? 0.45;
+	  const strokeWidth = config.strokeWidth ?? 2;
+	  const depth = config.depth ?? 1;
+
+	  const shadow = this.add.graphics();
+	  shadow.fillStyle(0x000000, 0.28);
+	  shadow.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2 + 6,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+	  shadow.setDepth(depth);
+
+	  const panel = this.add.graphics();
+	  panel.fillStyle(color, alpha);
+	  panel.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+	  panel.strokeRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  panel.setDepth(depth + 1);
+
+	  return {
+	    shadow,
+	    panel,
+	  };
+	}
+
+
+	private createRoundedButtonBg(config: {
+	  x: number;
+	  y: number;
+	  width: number;
+	  height: number;
+	  radius?: number;
+	  color?: number;
+	  alpha?: number;
+	  strokeColor?: number;
+	  strokeAlpha?: number;
+	  strokeWidth?: number;
+	  depth?: number;
+	}) {
+	  const radius = config.radius ?? 18;
+	  const color = config.color ?? 0x14100d;
+	  const alpha = config.alpha ?? 0.9;
+	  const strokeColor = config.strokeColor ?? UI.colors.goldDark;
+	  const strokeAlpha = config.strokeAlpha ?? 0.45;
+	  const strokeWidth = config.strokeWidth ?? 2;
+	  const depth = config.depth ?? 10;
+
+	  const shadow = this.add.graphics();
+	  shadow.fillStyle(0x000000, 0.24);
+	  shadow.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2 + 4,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+	  shadow.setDepth(depth);
+
+	  const bg = this.add.graphics();
+	  bg.fillStyle(color, alpha);
+	  bg.fillRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  bg.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+	  bg.strokeRoundedRect(
+	    config.x - config.width / 2,
+	    config.y - config.height / 2,
+	    config.width,
+	    config.height,
+	    radius
+	  );
+
+	  bg.setDepth(depth + 1);
+
+	  bg.setInteractive(
+	    new Phaser.Geom.Rectangle(
+	      config.x - config.width / 2,
+	      config.y - config.height / 2,
+	      config.width,
+	      config.height
+	    ),
+	    Phaser.Geom.Rectangle.Contains
+	  );
+
+	  return {
+	    shadow,
+	    bg,
+	  };
 	}
 
 	private showItemInfo(inventoryItem: InventoryItem) {
@@ -834,12 +1276,11 @@ export class InventoryScene extends Phaser.Scene {
 	      equipItem(player, inventoryItem.instanceId);
 				void saveGameAsync();
 
-				const savedScrollY = this.inventoryTargetScrollY;
-
 				this.closeItemInfo();
 
 				this.scene.restart({
-				  inventoryScrollY: savedScrollY,
+				  inventoryScrollY: this.inventoryTargetScrollY,
+				  selectedCategory: this.selectedCategory,
 				});
 	    },
 	    360,

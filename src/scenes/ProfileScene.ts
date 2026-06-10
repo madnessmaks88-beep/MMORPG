@@ -38,55 +38,91 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   private createHeroPanel() {
-    const { width } = this.scale;
+	  const { width } = this.scale;
 
-    const race = player.raceId ? getRaceById(player.raceId) : null;
+	  const race = player.raceId ? getRaceById(player.raceId) : null;
 
-    const panelY = 205;
+	  const panelY = 245;
 
-    createPanel(this, width / 2, panelY, 620, 165, {
-      alpha: 0.88,
-      stroke: true,
-      warm: true,
-    });
+	  createPanel(this, width / 2, panelY, 620, race ? 315 : 175, {
+	    alpha: 0.88,
+	    stroke: true,
+	    warm: true,
+	  });
 
-    this.add.circle(width / 2, panelY - 48, 32, 0x2a1d13, 1)
-      .setStrokeStyle(2, UI.colors.goldDark, 0.55);
+	  this.add.circle(width / 2, panelY - 120, 32, 0x2a1d13, 1)
+	    .setStrokeStyle(2, UI.colors.goldDark, 0.55);
 
-    this.add.text(width / 2, panelY - 48, '◆', {
-      fontFamily: UI.font.body,
-      fontSize: '27px',
-      color: UI.colors.goldText,
-    }).setOrigin(0.5);
+	  this.add.text(width / 2, panelY - 120, '◆', {
+	    fontFamily: UI.font.body,
+	    fontSize: '27px',
+	    color: UI.colors.goldText,
+	  }).setOrigin(0.5);
 
-    this.add.text(width / 2, panelY - 8, player.name, {
-      fontFamily: UI.font.title,
-      fontSize: '31px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+	  this.add.text(width / 2, panelY - 80, player.name, {
+	    fontFamily: UI.font.title,
+	    fontSize: '31px',
+	    color: UI.colors.goldText,
+	    stroke: '#000000',
+	    strokeThickness: 4,
+	  }).setOrigin(0.5);
 
-    const text = [
-      `Раса: ${race?.name ?? 'Не выбрана'}`,
-      `Уровень: ${player.level}`,
-      `Опыт: ${player.exp}/${player.expToNextLevel}`,
-      `Золото: ${player.gold}`,
-    ].join('  •  ');
+	  const text = [
+	    `Раса: ${race?.name ?? 'Не выбрана'}`,
+	    `Уровень: ${player.level}`,
+	    `Опыт: ${player.exp}/${player.expToNextLevel}`,
+	    `Золото: ${player.gold}`,
+	  ].join('  •  ');
 
-    createSmallText(this, width / 2, panelY + 45, text, {
-      fontSize: '16px',
-      color: UI.colors.text,
-      width: 560,
-    });
-  }
+	  createSmallText(this, width / 2, panelY - 35, text, {
+	    fontSize: '16px',
+	    color: UI.colors.text,
+	    width: 560,
+	  });
+
+	  if (!race) {
+	    return;
+	  }
+
+	  this.add.text(width / 2 - 270, panelY + 10, `Пассивный навык: ${race.passiveName}`, {
+	    fontFamily: UI.font.title,
+	    fontSize: '17px',
+	    color: UI.colors.goldText,
+	  }).setOrigin(0, 0.5);
+
+	  this.add.text(width / 2 - 270, panelY + 43, race.passiveDescription, {
+	    fontFamily: UI.font.body,
+	    fontSize: '14px',
+	    color: UI.colors.text,
+	    wordWrap: {
+	      width: 540,
+	    },
+	    lineSpacing: 4,
+	  }).setOrigin(0, 0.5);
+
+	  this.add.text(width / 2 - 270, panelY + 105, `Активный навык: ${race.activeName}`, {
+	    fontFamily: UI.font.title,
+	    fontSize: '17px',
+	    color: UI.colors.goldText,
+	  }).setOrigin(0, 0.5);
+
+	  this.add.text(width / 2 - 270, panelY + 143, race.activeDescription, {
+	    fontFamily: UI.font.body,
+	    fontSize: '14px',
+	    color: UI.colors.text,
+	    wordWrap: {
+	      width: 540,
+	    },
+	    lineSpacing: 4,
+	  }).setOrigin(0, 0.5);
+	}
 
   private createStatsPanel() {
     const { width } = this.scale;
 
     const stats = getPlayerStats(player);
 
-    const panelY = 430;
+    const panelY = 550;
 
     createPanel(this, width / 2, panelY, 620, 285, {
       alpha: 0.86,
@@ -129,7 +165,7 @@ export class ProfileScene extends Phaser.Scene {
   private createProgressPanel() {
     const { width } = this.scale;
 
-    const panelY = 660;
+    const panelY = 780;
 
     createPanel(this, width / 2, panelY, 620, 145, {
       alpha: 0.68,
@@ -166,7 +202,7 @@ export class ProfileScene extends Phaser.Scene {
   private createRelicsPanel() {
     const { width } = this.scale;
 
-    const panelY = 870;
+    const panelY = 1010;
 
     createPanel(this, width / 2, panelY, 620, 250, {
       alpha: 0.86,

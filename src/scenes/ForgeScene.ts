@@ -19,8 +19,6 @@ import { saveGameAsync } from '../systems/SaveSystem';
 
 import { createButton } from '../ui/createButton';
 
-import { createBackToMainButton } from '../ui/createBackToMainButton';
-
 import {
   UI,
   createPanel,
@@ -43,7 +41,17 @@ export class ForgeScene extends Phaser.Scene {
     this.createGoldPanel();
     this.createItemList();
     
-    createBackToMainButton(this);
+    createButton(
+      this,
+      this.scale.width / 2,
+      1180,
+      'Вернуться в город',
+      () => {
+        this.scene.start('CampScene');
+      },
+      520,
+      56
+    );
   }
 
   private createGoldPanel() {

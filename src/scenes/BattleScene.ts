@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { enemies } from '../data/enemies';
 import type { EnemyData } from '../data/enemies';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { trackEnemyKilled, trackGoldEarned } from '../systems/QuestSystem';
@@ -30,6 +29,8 @@ import {
   createPanel,
   createTitle,
 } from '../ui/theme';
+
+import { getEnemyById } from '../data/enemies';
 
 
 
@@ -83,28 +84,39 @@ export class BattleScene extends Phaser.Scene {
 
   
 
+  
+
   constructor() {
     super('BattleScene');
   }
 
-  init(data: { enemyId: string; returnToDungeon?: boolean }) {
-    const foundEnemy = enemies.find(enemy => enemy.id === data.enemyId);
+  init(data?: { enemyId?: string; returnToDungeon?: boolean }) {
+   this.returnToDungeon = data?.returnToDungeon ?? false;
+   this.isBattleEnded = false;
+   this.isBusy = false;
 
-    if (!foundEnemy) {
-      this.scene.start('DungeonScene');
-      return;
-    }
+   this.humanPassiveActivated = false;
+   this.desperateStrikeCooldown = 0;
 
-    this.enemy = this.createScaledEnemy(foundEnemy);
+   const room = getCurrentRoom();
 
-    this.returnToDungeon = data.returnToDungeon ?? false;
-    this.isBattleEnded = false;
-    this.isBusy = false;
+   const enemyId =
+     data?.enemyId ??
+     room?.enemyId ??
+     'rotting_skeleton';
 
-    this.humanPassiveActivated = false;
-    this.desperateStrikeCooldown = 0;
+   let enemyTemplate = getEnemyById(enemyId);
 
-    player.energy = player.maxEnergy;
+   if (!enemyTemplate) {
+     console.warn('Enemy not found:', enemyId);
+     enemyTemplate = getEnemyById('rotting_skeleton');
+   }
+
+   if (!enemyTemplate) {
+     throw new Error('Fallback enemy rotting_skeleton not found');
+   }
+
+   this.enemy = this.createScaledEnemy(enemyTemplate);
   }
 
   create() {
@@ -127,14 +139,15 @@ export class BattleScene extends Phaser.Scene {
     warm: true,
   });
 
-  this.createBattleBackground();
+  const isBoss = room?.type === 'boss' || room?.type === 'tier_boss';
 
   this.enemyCard = this.createFighterCard(
     width / 2,
-    245,
+    isBoss ? 255 : 245,
     this.enemy.name,
-    '☠',
-    0x241515
+    isBoss ? '♛' : '☠',
+    isBoss ? 0x3a120c : 0x241515,
+    isBoss
   );
 
   this.playerCard = this.createFighterCard(
@@ -142,7 +155,8 @@ export class BattleScene extends Phaser.Scene {
     520,
     player.name,
     '🗡',
-    0x151b24
+    0x151b24,
+    false
   );
 
   createPanel(this, width / 2, 770, 620, 135, {
@@ -281,8 +295,6 @@ export class BattleScene extends Phaser.Scene {
       potionButton.label
     );
   }
-
-  
 
   private handlePowerAttack() {
     if (this.isBattleEnded || this.isBusy) {
@@ -728,8 +740,15 @@ export class BattleScene extends Phaser.Scene {
     y: number,
     name: string,
     icon: string,
-    color: number
+    color: number,
+    isBoss = false
   ) {
+
+    const cardWidth = isBoss ? 660 : 600;
+    const cardHeight = isBoss ? 245 : 190;
+    const strokeWidth = isBoss ? 4 : 2;
+    const strokeAlpha = isBoss ? 0.95 : 0.55;
+    const bgAlpha = isBoss ? 0.97 : 0.92;
     const isEnemy = icon === '☠';
 
     const container = this.add.container(x, y);
@@ -738,10 +757,23 @@ export class BattleScene extends Phaser.Scene {
     const iconColor = isEnemy ? UI.colors.red : UI.colors.goldText;
     const titleColor = isEnemy ? UI.colors.red : UI.colors.goldText;
 
-    const shadow = this.add.rectangle(0, 6, 620, 190, 0x000000, 0.24);
+    const shadow = this.add.rectangle(
+      0,
+      8,
+      cardWidth,
+      cardHeight,
+      0x000000,
+      isBoss ? 0.42 : 0.28
+    );
 
-    const bg = this.add.rectangle(0, 0, 620, 190, color, 0.88)
-      .setStrokeStyle(2, strokeColor, 0.6);
+    const bg = this.add.rectangle(
+      0,
+      0,
+      cardWidth,
+      cardHeight,
+      color,
+      bgAlpha
+    ).setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
 
     const iconBg = this.add.circle(-245, -35, 38, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
       .setStrokeStyle(2, strokeColor, 0.65);
@@ -794,6 +826,18 @@ export class BattleScene extends Phaser.Scene {
       energyBack,
       energyBar,
     ]);
+
+    if (isBoss) {
+      container.add(
+        this.add.text(0, -100, 'БОСС', {
+          fontFamily: UI.font.title,
+          fontSize: '24px',
+          color: '#ffb36b',
+          stroke: '#000000',
+          strokeThickness: 5,
+        }).setOrigin(0.5)
+      );
+    }
 
     if (isEnemy) {
       this.enemyHpText = hpText;
@@ -1133,27 +1177,41 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private updateTexts() {
-    const stats = this.getBattleStats();
+   const stats = this.getBattleStats();
     
-    player.hp = Phaser.Math.Clamp(player.hp, 0, stats.maxHp);
-    player.energy = Phaser.Math.Clamp(player.energy, 0, stats.maxEnergy);
-    player.potions = Math.max(0, player.potions);
+   player.hp = Phaser.Math.Clamp(player.hp, 0, stats.maxHp);
+   player.energy = Phaser.Math.Clamp(player.energy, 0, stats.maxEnergy);
+   player.potions = Math.max(0, player.potions);
     
-    this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
-    this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
-    
-    this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
-    
-    if (this.potionText) {
-      this.potionText.setText(`Зелья: ${player.potions}`);
-    }
+   if (this.playerHpText) {
+     this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
+   }
   
-    const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
-    const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
-    const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
+   if (this.enemyHpText) {
+     this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
+   }
   
-    this.playerHpBar.displayWidth = 520 * playerHpRatio;
-    this.enemyHpBar.displayWidth = 520 * enemyHpRatio;
-    this.energyBar.displayWidth = 520 * energyRatio;
+   if (this.energyText) {
+     this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
+   }
+  
+   if (this.potionText) {
+     this.potionText.setText(`Зелья: ${player.potions}`);
+   }
+  
+   if (this.playerHpBar) {
+     const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
+     this.playerHpBar.displayWidth = 520 * playerHpRatio;
+   }
+  
+   if (this.enemyHpBar) {
+     const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
+     this.enemyHpBar.displayWidth = 520 * enemyHpRatio;
+   }
+  
+   if (this.energyBar) {
+     const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
+     this.energyBar.displayWidth = 520 * energyRatio;
+   }
   }
 }

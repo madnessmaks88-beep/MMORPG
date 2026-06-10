@@ -44,7 +44,6 @@ export class CampScene extends Phaser.Scene {
     this.createPlayerLine();
     this.createHeroSummary();
     this.createMainActions();
-    this.createRunInfo();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
@@ -128,18 +127,18 @@ export class CampScene extends Phaser.Scene {
       color: UI.colors.goldText,
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, panelY - 25, player.name, {
+    const heroTitle = race && player.name === race.name
+      ? player.name
+      : race
+        ? `${player.name} • ${race.name}`
+        : player.name;
+
+    this.add.text(width / 2, panelY - 25, heroTitle, {
       fontFamily: UI.font.title,
       fontSize: '31px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, panelY + 10, race ? race.name : 'Раса не выбрана', {
-      fontFamily: UI.font.body,
-      fontSize: '19px',
-      color: UI.colors.text,
     }).setOrigin(0.5);
 
     const summary = [
@@ -148,7 +147,7 @@ export class CampScene extends Phaser.Scene {
       `Зелья: ${player.potions}`,
     ].join('  •  ');
 
-    createSmallText(this, width / 2, panelY + 48, summary, {
+    createSmallText(this, width / 2, panelY + 35, summary, {
       fontSize: '18px',
       color: UI.colors.text,
       width: 560,
@@ -159,7 +158,7 @@ export class CampScene extends Phaser.Scene {
         ? `Реликвии: ${relicNames.join(', ')}`
         : 'Реликвии: нет';
 
-    createSmallText(this, width / 2, panelY + 82, relicText, {
+    createSmallText(this, width / 2, panelY + 70, relicText, {
       fontSize: '15px',
       color: relicNames.length > 0 ? '#f0d58a' : UI.colors.textMuted,
       width: 560,
@@ -269,7 +268,7 @@ export class CampScene extends Phaser.Scene {
       540,
       54
     );
-    
+
     if (hasQuestReward) {
       questButton.bg.setFillStyle(0x263a1f, 0.98);
       questButton.bg.setStrokeStyle(3, UI.colors.greenHex, 0.95);
@@ -333,43 +332,6 @@ export class CampScene extends Phaser.Scene {
 
     this.restButtonLabel = restButton.label;
     this.startCampfireTimer();
-  }
-
-  private createRunInfo() {
-    const { width } = this.scale;
-
-    const panelY = 905;
-
-    createPanel(this, width / 2, panelY, 620, 130, {
-      alpha: 0.68,
-      stroke: false,
-      warm: true,
-    });
-
-    this.add.text(width / 2, panelY - 40, 'Прогресс спуска', {
-      fontFamily: UI.font.title,
-      fontSize: '22px',
-      color: UI.colors.goldText,
-    }).setOrigin(0.5);
-
-    const activeRunText = gameState.floorRun.active
-      ? `Активный спуск: этаж ${gameState.floorRun.currentFloor}`
-      : 'Активный спуск: нет';
-
-    const text = [
-      `Рекорд этажа: ${gameState.highestClearedFloor}`,
-      `Пройдено ярусов: ${gameState.highestClearedTier}`,
-      `Следующий ярус: ${gameState.highestClearedTier + 1}`,
-      activeRunText,
-    ].join('\n');
-
-    this.add.text(width / 2, panelY + 18, text, {
-      fontFamily: UI.font.body,
-      fontSize: '16px',
-      color: UI.colors.text,
-      align: 'center',
-      lineSpacing: 4,
-    }).setOrigin(0.5);
   }
 
   private getCampfireCooldownLeft() {
