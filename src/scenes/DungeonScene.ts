@@ -27,9 +27,7 @@ import { createButton } from '../ui/createButton';
 
 import {
   UI,
-  createPanel,
   createSceneBackground,
-  createSmallText,
 } from '../ui/theme';
 
 import { giveFloorReward } from '../systems/FloorRewardSystem';
@@ -60,6 +58,7 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     createSceneBackground(this);
+    this.createDungeonBackdrop();
 
     this.createHeader();
     this.createFloorProgress();
@@ -74,21 +73,63 @@ export class DungeonScene extends Phaser.Scene {
     const tier = getCurrentTierByFloor(floor);
     const modifierName = getFloorModifierName(gameState.floorRun.modifier);
 
-    this.add.text(width / 2, 48, `Ярус ${tier} — Этаж ${floor}`, {
-      fontFamily: UI.font.title,
-      fontSize: '31px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
+    this.createRoundedPanel({
+      x: width / 2,
+      y: 82,
+      width: 620,
+      height: 92,
+      radius: 28,
+      color: 0x0d0a08,
+      alpha: 0.92,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.45,
+      depth: 2,
+    });
 
-    this.add.text(width / 2, 92, modifierName, {
+    this.add.text(width / 2, 62, `Ярус ${tier}  •  Этаж ${floor}`, {
       fontFamily: UI.font.title,
-      fontSize: '32px',
+      fontSize: '28px',
       color: UI.colors.goldText,
       stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+      strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(6);
+
+    this.add.text(width / 2, 100, modifierName, {
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.textMuted,
+    }).setOrigin(0.5).setDepth(6);
+  }
+
+  private createDungeonBackdrop() {
+    const { width, height } = this.scale;
+
+    // Тёмная глубина
+    this.add.rectangle(width / 2, height / 2, width, height, 0x050403, 0.35).setDepth(0);
+
+    // Свет факела сверху
+    this.add.circle(width / 2, 120, 250, 0x8b4a1f, 0.06).setDepth(0);
+    this.add.circle(width / 2, 120, 120, 0xf0a040, 0.035).setDepth(0);
+
+    // Туман
+    for (let i = 0; i < 14; i += 1) {
+      const x = 45 + i * 52;
+      const y = 165 + (i % 6) * 92;
+
+      this.add.circle(x, y, 34 + (i % 4) * 8, 0xffffff, 0.013).setDepth(0);
+    }
+
+    // Нижнее затемнение под UI
+    this.add.rectangle(width / 2, height - 180, width, 330, 0x020202, 0.34).setDepth(0);
+
+    // Лёгкие частицы
+    for (let i = 0; i < 34; i += 1) {
+      const x = Phaser.Math.Between(35, width - 35);
+      const y = Phaser.Math.Between(80, height - 170);
+      const size = Phaser.Math.Between(1, 2);
+
+      this.add.circle(x, y, size, 0xd8b56d, 0.055).setDepth(1);
+    }
   }
 
   private createNextFloorInfo(y: number, nextFloor: number, x = this.scale.width / 2) {
@@ -139,19 +180,29 @@ export class DungeonScene extends Phaser.Scene {
 
     const floor = gameState.floorRun.currentFloor;
 
-    const panelY = 165;
-
-    createPanel(this, width / 2, panelY, 620, 95, {
-      alpha: 0.58,
-      stroke: false,
-      warm: true,
+    this.createRoundedPanel({
+      x: width / 2,
+      y: 178,
+      width: 620,
+      height: 94,
+      radius: 24,
+      color: 0x100c09,
+      alpha: 0.86,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.3,
+      depth: 2,
     });
 
-    createSmallText(this, width / 2, panelY, getFloorDescription(floor), {
-      fontSize: '16px',
+    this.add.text(width / 2, 178, getFloorDescription(floor), {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
       color: UI.colors.textMuted,
-      width: 540,
-    });
+      align: 'center',
+      wordWrap: {
+        width: 545,
+      },
+      lineSpacing: 2,
+    }).setOrigin(0.5).setDepth(6);
   }
 
   private getRewardLineColor(line: string) {
@@ -341,60 +392,71 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private createRoomMap() {
-    const { width } = this.scale;
+   const { width } = this.scale;
 
-    const rooms = gameState.floorRun.rooms;
-    const currentIndex = gameState.floorRun.currentRoomIndex;
+   const rooms = gameState.floorRun.rooms;
+   const currentIndex = gameState.floorRun.currentRoomIndex;
 
-    const y = 260;
-    const gap = 90;
-    const startX = width / 2 - ((rooms.length - 1) * gap) / 2;
+   const y = 315;
+   const gap = 88;
+   const startX = width / 2 - ((rooms.length - 1) * gap) / 2;
 
-    rooms.forEach((room, index) => {
-      const x = startX + index * gap;
+   this.add.text(width / 2, y - 52, 'Маршрут этажа', {
+     fontFamily: UI.font.title,
+     fontSize: '21px',
+     color: UI.colors.text,
+     stroke: '#000000',
+     strokeThickness: 4,
+   }).setOrigin(0.5).setDepth(6);
 
-      const isCompleted = room.completed || index < currentIndex;
-      const isCurrent = index === currentIndex;
-      const isLocked = index > currentIndex;
+   rooms.forEach((room, index) => {
+     const x = startX + index * gap;
 
-      const fillColor = isCompleted
-        ? 0x1c3a24
-        : isCurrent
-          ? 0x2b1d13
-          : 0x111111;
+     const isCompleted = room.completed || index < currentIndex;
+     const isCurrent = index === currentIndex;
+     const isLocked = index > currentIndex;
 
-      const strokeColor = isCompleted
-        ? 0x75d184
-        : isCurrent
-          ? UI.colors.gold
-          : 0x3a2518;
+     const fillColor = isCompleted
+       ? 0x102016
+       : isCurrent
+         ? 0x2b1d13
+         : 0x0d0d0d;
 
-      if (index > 0) {
-        this.add.rectangle(
-          x - gap / 2,
-          y,
-          gap - 38,
-          4,
-          0x3a2518,
-          0.7
-        );
-      }
+     const strokeColor = isCompleted
+       ? 0x75d184
+       : isCurrent
+         ? UI.colors.gold
+         : 0x3a2518;
 
-      this.add.circle(x, y + 4, isCurrent ? 30 : 27, 0x000000, 0.32);
+     if (index > 0) {
+       this.add.rectangle(
+         x - gap / 2,
+         y,
+         gap - 34,
+         4,
+         isCompleted ? 0x75d184 : 0x3a2518,
+         isCompleted ? 0.42 : 0.6
+       ).setDepth(4);
+     }
 
-      this.add.circle(x, y, isCurrent ? 29 : 26, fillColor, isLocked ? 0.55 : 0.98)
-        .setStrokeStyle(isCurrent ? 3 : 2, strokeColor, isCurrent ? 0.95 : 0.6);
+     this.add.circle(x, y + 5, isCurrent ? 32 : 28, 0x000000, 0.34).setDepth(4);
 
-      this.add.text(x, y, this.getRoomIcon(room.type), {
-        fontFamily: UI.font.body,
-        fontSize: isCurrent ? '25px' : '22px',
-        color: isLocked
-          ? '#555555'
-          : isCompleted
-            ? UI.colors.green
-            : UI.colors.goldText,
-      }).setOrigin(0.5);
-    });
+     this.add.circle(x, y, isCurrent ? 31 : 27, fillColor, isLocked ? 0.55 : 0.98)
+       .setStrokeStyle(isCurrent ? 3 : 2, strokeColor, isCurrent ? 0.95 : 0.58)
+       .setDepth(5);
+
+     this.add.text(x, y, this.getRoomIcon(room.type), {
+       fontFamily: UI.font.body,
+       fontSize: isCurrent ? '25px' : '21px',
+       color: isLocked
+         ? '#555555'
+         : isCompleted
+           ? UI.colors.green
+           : this.getRoomTextColor(room.type),
+       stroke: '#000000',
+       strokeThickness: 2,
+     }).setOrigin(0.5).setDepth(6);
+   });
   }
 
   private createCurrentRoom() {
@@ -412,25 +474,43 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    const panelY = 600;
-
     const isBossRoom = room.type === 'boss' || room.type === 'tier_boss';
-    const panelHeight = isBossRoom ? 470 : 410;
 
-    createPanel(this, width / 2, panelY, 620, panelHeight, {
-      alpha: 0.88,
-      stroke: true,
-      warm: isBossRoom,
+    const panelY = isBossRoom ? 720 : 695;
+    const panelHeight = isBossRoom ? 620 : 500;
+
+    this.createRoundedPanel({
+      x: width / 2,
+      y: panelY,
+      width: 620,
+      height: panelHeight,
+      radius: 36,
+      color: isBossRoom ? 0x160908 : 0x0d0a08,
+      alpha: 0.94,
+      strokeColor: this.getRoomStrokeColor(room.type),
+      strokeAlpha: isBossRoom ? 0.82 : 0.52,
+      strokeWidth: isBossRoom ? 3 : 2,
+      depth: 2,
     });
 
-    this.add.circle(width / 2, panelY - 135, 42, 0x2a1d13, 1)
-      .setStrokeStyle(2, this.getRoomStrokeColor(room.type), 0.65);
+    const iconColor = this.getRoomTextColor(room.type);
+    const strokeColor = this.getRoomStrokeColor(room.type);
 
-    this.add.text(width / 2, panelY - 135, this.getRoomIcon(room.type), {
+    const topY = panelY - panelHeight / 2;
+
+    this.add.circle(width / 2, topY + 72, 52, strokeColor, 0.11).setDepth(5);
+
+    this.add.circle(width / 2, topY + 72, 40, 0x20150f, 1)
+      .setStrokeStyle(2, strokeColor, 0.76)
+      .setDepth(6);
+
+    this.add.text(width / 2, topY + 72, this.getRoomIcon(room.type), {
       fontFamily: UI.font.body,
       fontSize: '34px',
-      color: this.getRoomTextColor(room.type),
-    }).setOrigin(0.5);
+      color: iconColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(7);
 
     const roomTitle =
       room.type === 'monster'
@@ -443,31 +523,71 @@ export class DungeonScene extends Phaser.Scene {
               ? 'Финальный босс'
               : room.title;
 
-    this.add.text(width / 2, panelY - 78, roomTitle, {
+    this.add.text(width / 2, topY + 140, roomTitle, {
       fontFamily: UI.font.title,
-      fontSize: '38px',
-      color: UI.colors.text,
+      fontSize: isBossRoom ? '36px' : '34px',
+      color: isBossRoom ? UI.colors.red : UI.colors.goldText,
       stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+      strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(7);
 
-    createSmallText(this, width / 2, panelY - 20, room.description, {
-      fontSize: '19px',
+    this.add.text(width / 2, topY + 200, room.description, {
+      fontFamily: UI.font.body,
+      fontSize: '17px',
       color: UI.colors.text,
-      width: 540,
-    });
+      align: 'center',
+      wordWrap: {
+        width: 540,
+      },
+      lineSpacing: 4,
+    }).setOrigin(0.5).setDepth(7);
 
-    createSmallText(this, width / 2, panelY + 50, this.getRoomInfo(room.type) + this.getModifierWarning(), {
-      fontSize: '16px',
-      color: UI.colors.textMuted,
-      width: 540,
-    });
+    this.createRoomInfoBox(
+      width / 2,
+      topY + 295,
+      this.getRoomInfo(room.type),
+      this.getModifierWarning()
+    );
 
-    if (room.type === 'boss' || room.type === 'tier_boss') {
-      this.createBossRequirementInfo(panelY + 130);
+    if (isBossRoom) {
+      this.createBossRequirementInfo(topY + 415);
     }
 
     this.createRoomButton(room.type, room.enemyId);
+  }
+
+  private createRoomInfoBox(
+    x: number,
+    y: number,
+    info: string,
+    modifierWarning: string
+  ) {
+    const text = `${info}${modifierWarning}`;
+
+    this.createRoundedPanel({
+      x,
+      y,
+      width: 540,
+      height: 92,
+      radius: 22,
+      color: 0x17100c,
+      alpha: 0.88,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.3,
+      strokeWidth: 1,
+      depth: 5,
+    });
+
+    this.add.text(x, y, text, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: 490,
+      },
+      lineSpacing: 3,
+    }).setOrigin(0.5).setDepth(8);
   }
 
   private createBossRequirementInfo(y: number) {
@@ -487,32 +607,43 @@ export class DungeonScene extends Phaser.Scene {
 
     const isReady = levelOk && strengthOk && hpOk;
 
-    this.add.rectangle(width / 2, y, 540, 86, isReady ? 0x102016 : 0x241010, 0.72)
-      .setStrokeStyle(2, isReady ? 0x75d184 : 0xff6b6b, 0.65);
+    this.createRoundedPanel({
+      x: width / 2,
+      y,
+      width: 540,
+      height: 82,
+      radius: 20,
+      color: isReady ? 0x102016 : 0x241010,
+      alpha: 0.88,
+      strokeColor: isReady ? 0x75d184 : 0xff6b6b,
+      strokeAlpha: 0.68,
+      strokeWidth: 2,
+      depth: 5,
+    });
 
-    this.add.text(width / 2, y - 27, 'Рекомендуется для босса', {
+    this.add.text(width / 2, y - 24, isReady ? 'Герой готов к боссу' : 'Босс опасен', {
       fontFamily: UI.font.title,
       fontSize: '17px',
       color: isReady ? UI.colors.green : UI.colors.red,
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(8);
 
     const text = [
-      `Ур. ${recommendedLevel} / ${player.level}`,
-      `Сила ${recommendedStrength} / ${stats.attack}`,
-      `HP ${recommendedHp} / ${stats.maxHp}`,
+      `Ур. ${recommendedLevel}/${player.level}`,
+      `Сила ${recommendedStrength}/${stats.attack}`,
+      `HP ${recommendedHp}/${stats.maxHp}`,
     ].join('  •  ');
 
-    this.add.text(width / 2, y + 12, text, {
+    this.add.text(width / 2, y + 15, text, {
       fontFamily: UI.font.body,
-      fontSize: '16px',
+      fontSize: '14px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
         width: 500,
       },
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(8);
   }
 
   private getRoomTextColor(type: string) {
@@ -534,89 +665,88 @@ export class DungeonScene extends Phaser.Scene {
   private createRoomButton(type: string, enemyId?: string) {
     const { width } = this.scale;
 
-    let buttonText = 'Продолжить';
-
     const isBattleRoom =
-    type === 'monster' ||
-    type === 'elite' ||
-    type === 'boss' ||
-    type === 'tier_boss';
+      type === 'monster' ||
+      type === 'elite' ||
+      type === 'boss' ||
+      type === 'tier_boss';
 
-    if (type === 'monster') buttonText = 'В бой';
-    if (type === 'elite') buttonText = 'Сразиться с элитой';
-    if (type === 'boss') buttonText = 'Войти к боссу';
-    if (type === 'tier_boss') buttonText = 'Финальный бой';
-    if (type === 'chest') buttonText = 'Открыть сундук';
-    if (type === 'trap') buttonText = 'Пройти осторожно';
+    const isBoss = type === 'boss' || type === 'tier_boss';
 
-    const buttonY =
-    type === 'boss' || type === 'tier_boss'
-      ? 815
-      : 745;
+    let buttonText = 'Продолжить';
+    let icon = '➤';
+    let description = 'Перейти дальше.';
+
+    if (type === 'monster') {
+      buttonText = 'В бой';
+      icon = '☠';
+      description = 'Обычное сражение.';
+    }
+
+    if (type === 'elite') {
+      buttonText = 'Сразиться с элитой';
+      icon = '◆';
+      description = 'Опасный враг, награда выше.';
+    }
+
+    if (type === 'boss') {
+      buttonText = 'Войти к боссу';
+      icon = '♛';
+      description = 'Финальная битва этажа.';
+    }
+
+    if (type === 'tier_boss') {
+      buttonText = 'Финальный бой';
+      icon = '♚';
+      description = 'Битва за переход в следующий ярус.';
+    }
+
+    if (type === 'chest') {
+      buttonText = 'Открыть сундук';
+      icon = '✦';
+      description = 'Золото, опыт и шанс предмета.';
+    }
+
+    if (type === 'trap') {
+      buttonText = 'Пройти осторожно';
+      icon = '!';
+      description = 'Ловкость может спасти от урона.';
+    }
 
     if (isBattleRoom) {
-  if (!enemyId) return;
+      if (!enemyId) return;
 
-  const isBoss = type === 'boss' || type === 'tier_boss';
-
-  createButton(
-      this,
-      width / 2,
-      isBoss ? 785 : 710,
-      'Подготовиться',
-      () => {
-        this.scene.start('InventoryScene', {
-          returnScene: 'DungeonScene',
-        });
-      },
-      430,
-      54
-    );
-  
-    createButton(
-      this,
-      width / 2,
-      isBoss ? 850 : 775,
-      buttonText,
-      () => {
-        this.scene.start('BattleScene', {
+      if (isBoss) {
+        this.createBossBattleButtons({
           enemyId,
-          returnToDungeon: true,
+          buttonText,
+          icon,
+          description,
         });
-      },
-      430,
-      60,
-      {
-        danger: isBoss,
+      } else {
+        this.createNormalBattleButtons({
+          enemyId,
+          buttonText,
+          icon,
+          description,
+          type,
+        });
       }
-    );
-  
-    return;
-  }
 
+      return;
+    }
 
-    createButton(
-      this,
-      width / 2,
-      buttonY,
-      buttonText,
-      () => {
-        if (
-          type === 'monster' ||
-          type === 'elite' ||
-          type === 'boss' ||
-          type === 'tier_boss'
-        ) {
-          if (!enemyId) return;
-
-          this.scene.start('BattleScene', {
-            enemyId,
-            returnToDungeon: true,
-          });
-
-          return;
-        }
-
+    this.createRoomActionButton({
+      x: width / 2,
+      y: 875,
+      width: 460,
+      height: 64,
+      icon,
+      title: buttonText,
+      subtitle: description,
+      accentColor: this.getRoomStrokeColor(type),
+      danger: type === 'trap',
+      onClick: () => {
         if (type === 'chest') {
           this.openChest();
           return;
@@ -626,12 +756,322 @@ export class DungeonScene extends Phaser.Scene {
           this.triggerTrap();
         }
       },
-      430,
-      60,
-      {
-        danger: type === 'boss' || type === 'tier_boss',
-      }
+    });
+  }
+
+  private createNormalBattleButtons(config: {
+    enemyId: string;
+    buttonText: string;
+    icon: string;
+    description: string;
+    type: string;
+  }) {
+    const { width } = this.scale;
+
+    const prepareY = 830;
+    const battleY = 900;
+
+    const prepareHeight = 56;
+    const battleHeight = 62;
+
+    const buttonWidth = 460;
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: prepareY,
+      width: buttonWidth,
+      height: prepareHeight,
+      icon: '▣',
+      title: 'Подготовиться',
+      subtitle: 'Открыть сумку перед боем',
+      accentColor: UI.colors.gold,
+      onClick: () => {
+        this.scene.start('InventoryScene', {
+          returnScene: 'DungeonScene',
+          selectedCategory: 'all',
+          inventoryScrollY: 0,
+        });
+      },
+    });
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: battleY,
+      width: buttonWidth,
+      height: battleHeight,
+      icon: config.icon,
+      title: config.buttonText,
+      subtitle: config.description,
+      accentColor: this.getRoomStrokeColor(config.type),
+      danger: false,
+      onClick: () => {
+        this.scene.start('BattleScene', {
+          enemyId: config.enemyId,
+          returnToDungeon: true,
+        });
+      },
+    });
+  }
+
+  private createBossBattleButtons(config: {
+    enemyId: string;
+    buttonText: string;
+    icon: string;
+    description: string;
+  }) {
+    const { width } = this.scale;
+
+    const prepareY = 910;
+    const battleY = 985;
+
+    const prepareHeight = 60;
+    const battleHeight = 68;
+
+    const buttonWidth = 480;
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: prepareY,
+      width: buttonWidth,
+      height: prepareHeight,
+      icon: '▣',
+      title: 'Подготовиться',
+      subtitle: 'Проверить снаряжение перед боссом',
+      accentColor: UI.colors.gold,
+      onClick: () => {
+        this.scene.start('InventoryScene', {
+          returnScene: 'DungeonScene',
+          selectedCategory: 'all',
+          inventoryScrollY: 0,
+        });
+      },
+    });
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: battleY,
+      width: buttonWidth,
+      height: battleHeight,
+      icon: config.icon,
+      title: config.buttonText,
+      subtitle: config.description,
+      accentColor: 0xff6b6b,
+      danger: true,
+      onClick: () => {
+        this.scene.start('BattleScene', {
+          enemyId: config.enemyId,
+          returnToDungeon: true,
+        });
+      },
+    });
+  }
+
+  private createRoomActionButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    subtitle: string;
+    accentColor: number;
+    danger?: boolean;
+    onClick: () => void;
+  }) {
+    const danger = config.danger ?? false;
+
+    const bgColor = danger ? 0x241010 : 0x17100c;
+    const hoverColor = danger ? 0x321515 : 0x21150f;
+    const textColor = danger ? UI.colors.red : UI.colors.goldText;
+
+    const radius = 22;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.34);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 5,
+      config.width,
+      config.height,
+      radius
     );
+    shadow.setDepth(20);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(bgColor, 0.96);
+    bg.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+    bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
+    bg.strokeRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+    bg.setDepth(21);
+
+    const iconX = config.x - config.width / 2 + 42;
+
+    this.add.circle(iconX, config.y, 23, config.accentColor, 0.15)
+      .setStrokeStyle(1, config.accentColor, 0.58)
+      .setDepth(22);
+
+    this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '20px',
+      color: textColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(23);
+
+    const titleText = this.add.text(config.x - config.width / 2 + 78, config.y - 12, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '20px',
+      color: textColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0, 0.5).setDepth(23);
+
+    this.add.text(config.x - config.width / 2 + 78, config.y + 17, config.subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: config.width - 105,
+      },
+    }).setOrigin(0, 0.5).setDepth(23);
+
+    bg.setInteractive(
+      new Phaser.Geom.Rectangle(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height
+      ),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    bg.on('pointerover', () => {
+      bg.clear();
+
+      bg.fillStyle(hoverColor, 1);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      bg.lineStyle(2, config.accentColor, 0.95);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+
+      titleText.setColor(danger ? '#ff9a9a' : UI.colors.text);
+    });
+
+    bg.on('pointerout', () => {
+      bg.clear();
+
+      bg.fillStyle(bgColor, 0.96);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+
+      titleText.setColor(textColor);
+    });
+
+    bg.on('pointerdown', () => {
+      bg.setScale(0.985);
+      titleText.setScale(0.985);
+    });
+
+    bg.on('pointerup', () => {
+      bg.setScale(1);
+      titleText.setScale(1);
+      config.onClick();
+    });
+  }
+
+  private createRoundedPanel(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius?: number;
+    color?: number;
+    alpha?: number;
+    strokeColor?: number;
+    strokeAlpha?: number;
+    strokeWidth?: number;
+    depth?: number;
+  }) {
+    const radius = config.radius ?? 24;
+    const color = config.color ?? 0x14100d;
+    const alpha = config.alpha ?? 0.92;
+    const strokeColor = config.strokeColor ?? UI.colors.goldDark;
+    const strokeAlpha = config.strokeAlpha ?? 0.45;
+    const strokeWidth = config.strokeWidth ?? 2;
+    const depth = config.depth ?? 1;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 6,
+      config.width,
+      config.height,
+      radius
+    );
+    shadow.setDepth(depth);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(color, alpha);
+    panel.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+
+    panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+    panel.strokeRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+
+    panel.setDepth(depth + 1);
+
+    return {
+      shadow,
+      panel,
+    };
   }
 
   private openChest() {
