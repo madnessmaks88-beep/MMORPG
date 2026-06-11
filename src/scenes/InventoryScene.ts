@@ -58,6 +58,8 @@ export class InventoryScene extends Phaser.Scene {
 	private dragStartY = 0;
 	private dragStartScrollY = 0;
 
+	private didDragInventory = false;
+
 	private selectedCategory: InventoryCategory = 'all';
 
   constructor() {
@@ -78,6 +80,7 @@ export class InventoryScene extends Phaser.Scene {
 	  // ВАЖНО: при каждом входе/рестарте инвентаря сбрасываем модальные окна
 	  this.isItemInfoOpen = false;
 	  this.isDraggingInventory = false;
+		this.didDragInventory = false;
 	  this.itemInfoContainer = undefined;
 	}
 
@@ -1297,6 +1300,7 @@ export class InventoryScene extends Phaser.Scene {
 	    }
 
 	    this.isDraggingInventory = true;
+	    this.didDragInventory = false;
 	    this.dragStartY = pointer.y;
 	    this.dragStartScrollY = this.inventoryTargetScrollY;
 	  });
@@ -1311,6 +1315,12 @@ export class InventoryScene extends Phaser.Scene {
 	    }
 
 	    const dragDistance = pointer.y - this.dragStartY;
+
+	    if (Math.abs(dragDistance) < 8) {
+	      return;
+	    }
+
+	    this.didDragInventory = true;
 
 	    this.inventoryTargetScrollY = Phaser.Math.Clamp(
 	      this.dragStartScrollY - dragDistance,
@@ -1328,6 +1338,7 @@ export class InventoryScene extends Phaser.Scene {
 
 	  this.input.on('pointerupoutside', () => {
 	    this.isDraggingInventory = false;
+	    this.didDragInventory = false;
 	  });
 	}
 
@@ -1473,17 +1484,29 @@ export class InventoryScene extends Phaser.Scene {
   const shadow = cardBg.shadow;
   const bg = cardBg.bg;
 
-  bg.setInteractive({
-    useHandCursor: true,
-  });
+  let actionButtonPressed = false;
 
-  bg.on('pointerup', () => {
-    if (this.isItemInfoOpen) {
-      return;
-    }
+	bg.setInteractive({
+	  useHandCursor: true,
+	});
+	
+	bg.on('pointerup', () => {
+	  if (this.isItemInfoOpen) {
+	    return;
+	  }
 
-    this.showItemInfo(inventoryItem);
-  });
+	  if (this.didDragInventory) {
+	    this.didDragInventory = false;
+	    return;
+	  }
+
+	  if (actionButtonPressed) {
+	    actionButtonPressed = false;
+	    return;
+	  }
+
+	  this.showItemInfo(inventoryItem);
+	});
 
   const iconX = cardX - 220;
   const textX = cardX - 185;
@@ -1526,7 +1549,7 @@ export class InventoryScene extends Phaser.Scene {
 
   const statsLine = this.add.text(textX, y + 24, createItemStatsText(inventoryItem), {
     fontFamily: UI.font.body,
-    fontSize: '13px',
+    fontSize: '11px',
     color: UI.colors.textMuted,
     wordWrap: {
       width: 245,
@@ -1541,6 +1564,8 @@ export class InventoryScene extends Phaser.Scene {
 	  text: isEquipped ? 'Надето' : 'Надеть',
 	  disabled: isEquipped,
 	  onClick: () => {
+	    actionButtonPressed = true;
+
 	    if (this.isItemInfoOpen) {
 	      return;
 	    }
@@ -1570,6 +1595,8 @@ export class InventoryScene extends Phaser.Scene {
 	  danger: true,
 	  disabled: isEquipped,
 	  onClick: () => {
+	    actionButtonPressed = true;
+
 	    if (this.isItemInfoOpen) {
 	      return;
 	    }
@@ -1579,21 +1606,23 @@ export class InventoryScene extends Phaser.Scene {
 	});
 
   const cardObjects: Phaser.GameObjects.GameObject[] = [
-    shadow,
-    bg,
-    iconGlow,
-    iconBg,
-    icon,
-    title,
-    subtitle,
-    statsLine,
-    equipButton.shadow,
-    equipButton.bg,
-    equipButton.label,
-    sellButton.shadow,
-    sellButton.bg,
-    sellButton.label,
-  ];
+	  shadow,
+	  bg,
+	  iconGlow,
+	  iconBg,
+	  icon,
+	  title,
+	  subtitle,
+	  statsLine,
+
+	  equipButton.shadow,
+	  equipButton.bg,
+	  equipButton.label,
+
+	  sellButton.shadow,
+	  sellButton.bg,
+	  sellButton.label,
+	];
 
   cardObjects.forEach(object => {
     const alphaObject = object as Phaser.GameObjects.GameObject & {
@@ -1604,10 +1633,10 @@ export class InventoryScene extends Phaser.Scene {
   });
 
   if (alpha < 0.65) {
-    bg.disableInteractive();
-    equipButton.bg.disableInteractive();
-    sellButton.bg.disableInteractive();
-  }
+		bg.disableInteractive();
+	  equipButton.bg.disableInteractive();
+	  sellButton.bg.disableInteractive();
+	}
 
   this.inventoryContainer.add(cardObjects);
 }

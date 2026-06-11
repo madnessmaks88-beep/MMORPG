@@ -105,18 +105,19 @@ export class ForgeScene extends Phaser.Scene {
       return;
     }
 
-    const visibleItems = player.inventory.slice(0, 7);
-
+    const forgeItems = this.getSortedForgeItems();
+    const visibleItems = forgeItems.slice(0, 7);
+      
     visibleItems.forEach((inventoryItem: InventoryItem, index: number) => {
       this.createItemCard(inventoryItem, panelY - 260 + index * 88);
     });
-
-    if (player.inventory.length > visibleItems.length) {
+    
+    if (forgeItems.length > visibleItems.length) {
       createSmallText(
         this,
         width / 2,
         panelY + 330,
-        `Показано ${visibleItems.length} из ${player.inventory.length}. Позже добавим прокрутку.`,
+        `Показано ${visibleItems.length} из ${forgeItems.length}. Позже добавим прокрутку.`,
         {
           fontSize: '15px',
           color: UI.colors.textMuted,
@@ -124,6 +125,29 @@ export class ForgeScene extends Phaser.Scene {
         }
       );
     }
+  }
+
+  private getSortedForgeItems() {
+    const slotOrder = {
+      weapon: 0,
+      armor: 1,
+      trinket: 2,
+    };
+
+    return [...player.inventory].sort((a, b) => {
+      const aEquipped = isItemEquipped(player, a.instanceId);
+      const bEquipped = isItemEquipped(player, b.instanceId);
+
+      if (aEquipped && !bEquipped) return -1;
+      if (!aEquipped && bEquipped) return 1;
+
+      const aItem = getBaseItemFromInventoryItem(a);
+      const bItem = getBaseItemFromInventoryItem(b);
+
+      if (!aItem || !bItem) return 0;
+
+      return slotOrder[aItem.slot] - slotOrder[bItem.slot];
+    });
   }
 
   private createItemCard(inventoryItem: InventoryItem, y: number) {
