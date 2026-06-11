@@ -131,14 +131,24 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
             y: 8,
           },
         }).setOrigin(0.5).setDepth(1200);
-
+      
         scene.time.delayedCall(1400, () => {
           toast.destroy();
         });
-
+      
         return;
       }
-
+    
+      if (item.scene === 'InventoryScene') {
+        scene.scene.start('InventoryScene', {
+          returnScene: 'CampScene',
+          selectedCategory: 'all',
+          inventoryScrollY: 0,
+        });
+      
+        return;
+      }
+    
       scene.scene.start(item.scene);
     });
   });

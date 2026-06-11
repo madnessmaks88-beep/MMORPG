@@ -85,6 +85,45 @@ export function unequipItem(player: PlayerData, slot: ItemData['slot']) {
   }
 }
 
+export function getWeaponTypeText(weaponType?: string): string {
+  if (weaponType === 'dagger') return 'Кинжал';
+  if (weaponType === 'axe') return 'Топор';
+  if (weaponType === 'katana') return 'Катана';
+  if (weaponType === 'hammer') return 'Молот';
+  if (weaponType === 'shield_sword') return 'Щит-меч';
+  if (weaponType === 'sword') return 'Меч';
+
+  return 'Оружие';
+}
+
+export function getWeaponTypeDescription(weaponType?: string): string {
+  if (weaponType === 'dagger') {
+    return 'Обычная атака наносит 3 быстрых удара.';
+  }
+
+  if (weaponType === 'axe') {
+    return 'Обычная атака наносит усиленный рубящий удар.';
+  }
+
+  if (weaponType === 'katana') {
+    return 'Обычная атака имеет повышенный шанс критического удара.';
+  }
+
+  if (weaponType === 'hammer') {
+    return 'Обычная атака наносит тяжёлый удар и сотрясает арену.';
+  }
+
+  if (weaponType === 'shield_sword') {
+    return 'Обычная атака слабее, но считается осторожной.';
+  }
+
+  if (weaponType === 'sword') {
+    return 'Обычная атака наносит стабильный урон.';
+  }
+
+  return '';
+}
+
 export function isItemEquipped(player: PlayerData, instanceId: string): boolean {
   return (
     player.equipment.weapon === instanceId ||
@@ -194,6 +233,38 @@ export function getEquippedInventoryItems(player: PlayerData): InventoryItem[] {
   }
 
   return result;
+}
+
+export function getEquippedWeapon(player: PlayerData): {
+  inventoryItem: InventoryItem;
+  item: ItemData;
+} | undefined {
+  const weaponInstanceId = player.equipment.weapon;
+
+  if (!weaponInstanceId) {
+    return undefined;
+  }
+
+  const inventoryItem = getInventoryItemByInstanceId(player, weaponInstanceId);
+
+  if (!inventoryItem) {
+    return undefined;
+  }
+
+  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+  if (!item) {
+    return undefined;
+  }
+
+  if (item.slot !== 'weapon') {
+    return undefined;
+  }
+
+  return {
+    inventoryItem,
+    item,
+  };
 }
 
 export function getItemBonusWithUpgrade(
@@ -323,6 +394,8 @@ export function createItemStatsText(inventoryItem: InventoryItem): string {
 
   return parts.join(', ');
 }
+
+
 
 export function getItemSellPrice(item: ItemData, upgradeLevel = 0): number {
   let basePrice = 8;

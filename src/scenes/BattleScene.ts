@@ -16,6 +16,7 @@ import {
 import { addExperience, createLevelUpText } from '../systems/LevelSystem';
 import {
   addItemToInventory,
+  getEquippedWeapon,
   getPlayerStats,
   getRarityText,
   rollItemDrop,
@@ -82,6 +83,11 @@ export class BattleScene extends Phaser.Scene {
   private readonly desperateStrikeEnergyCost = 3;
   private readonly desperateStrikeCooldownTurns = 2;
 
+  private enemyBleedTurns = 0;
+  private enemyBleedDamage = 0;
+
+  private shieldSwordGuardActive = false;
+
   
 
   
@@ -97,6 +103,10 @@ export class BattleScene extends Phaser.Scene {
 
    this.humanPassiveActivated = false;
    this.desperateStrikeCooldown = 0;
+
+   this.enemyBleedTurns = 0;
+   this.enemyBleedDamage = 0;
+   this.shieldSwordGuardActive = false;
 
    const room = getCurrentRoom();
 
@@ -201,10 +211,10 @@ export class BattleScene extends Phaser.Scene {
     this.actionButtons.push(panel);
   
     const attackButton = createButton(
-      this,
-      width / 2,
-      920,
-      'Атака  •  0 энергии',
+     this,
+     width / 2,
+     920,
+     `${this.getWeaponAttackButtonText()}  •  0 энергии`,
       () => this.handleAttack(),
       540,
       54
@@ -296,6 +306,19 @@ export class BattleScene extends Phaser.Scene {
       potionButton.bg,
       potionButton.label
     );
+  }
+
+  private getWeaponAttackButtonText() {
+    const equippedWeapon = getEquippedWeapon(player);
+    const weaponType = equippedWeapon?.item.weaponType ?? 'sword';
+
+    if (weaponType === 'dagger') return 'Быстрая атака';
+    if (weaponType === 'axe') return 'Рубящий удар';
+    if (weaponType === 'katana') return 'Режущий удар';
+    if (weaponType === 'hammer') return 'Удар молотом';
+    if (weaponType === 'shield_sword') return 'Осторожная атака';
+
+    return 'Атака';
   }
 
   private handlePowerAttack() {
@@ -531,7 +554,12 @@ export class BattleScene extends Phaser.Scene {
     this.animateHit(this.enemyCard);
   }
 
-  private afterPlayerAttack(playerActionText: string) {
+  private afterPlayerAttack(
+    playerActionText: string,
+    options?: {
+      skipEnemyTurn?: boolean;
+    }
+  ) {
     this.updateTexts();
     this.createActionButtons();
 
@@ -540,7 +568,50 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (options?.skipEnemyTurn) {
+      restoreEnergy(player, 1);
+
+      this.logText.setText(
+        `${playerActionText}\n\nВраг оглушён и пропускает ход.\nЭнергия восстановлена на 1.`
+      );
+
+      this.updateTexts();
+
+      this.time.delayedCall(650, () => {
+        this.tickDesperateStrikeCooldown();
+        this.isBusy = false;
+        this.createActionButtons();
+      });
+
+      return;
+    }
+
     this.enemyTurn(playerActionText);
+  }
+
+  private applyBleedBeforeEnemyTurn(playerActionText: string): string | undefined {
+    if (this.enemyBleedTurns <= 0 || this.enemyBleedDamage <= 0) {
+      return playerActionText;
+    }
+
+    const bleedDamage = this.enemyBleedDamage;
+
+    this.enemyBleedTurns -= 1;
+
+    this.damageEnemy(bleedDamage);
+    this.updateTexts();
+
+    const bleedText =
+      `${playerActionText}\n\n` +
+      `Кровотечение наносит ${bleedDamage} урона.` +
+      `${this.enemyBleedTurns > 0 ? `\nКровотечение осталось: ${this.enemyBleedTurns} ход.` : ''}`;
+
+    if (this.enemy.hp <= 0) {
+      this.handleVictory(bleedText);
+      return undefined;
+    }
+
+    return bleedText;
   }
 
   private createBattleBackground() {
@@ -974,25 +1045,235 @@ export class BattleScene extends Phaser.Scene {
 
     this.isBusy = true;
 
+    const equippedWeapon = getEquippedWeapon(player);
+    const weapon = equippedWeapon?.item;
+    const weaponType = weapon?.weaponType ?? 'sword';
+
+    if (weaponType === 'dagger') {
+      this.handleDaggerAttack();
+      return;
+    }
+
+    if (weaponType === 'axe') {
+      this.handleAxeAttack();
+      return;
+    }
+
+    if (weaponType === 'katana') {
+      this.handleKatanaAttack();
+      return;
+    }
+
+    if (weaponType === 'hammer') {
+      this.handleHammerAttack();
+      return;
+    }
+
+    if (weaponType === 'shield_sword') {
+      this.handleShieldSwordAttack();
+      return;
+    }
+
+    this.handleSwordAttack();
+  }
+
+  private handleSwordAttack() {
+  const stats = this.getBattleStats();
+
+  const damage = this.calculateDamage({
+    baseDamage: stats.attack,
+    multiplier: 1,
+    varianceMin: -2,
+    varianceMax: 3,
+  });
+
+  const isCrit = Math.random() < stats.critChance;
+  const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
+
+  this.animatePlayerAttack();
+  this.damageEnemy(finalDamage);
+
+  const playerActionText = isCrit
+    ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.`
+    : `Ты наносишь удар мечом: ${finalDamage} урона.`;
+
+  this.afterPlayerAttack(playerActionText);
+}
+
+  private handleDaggerAttack() {
+    const stats = this.getBattleStats();
+
+    const hits: {
+      damage: number;
+      isCrit: boolean;
+    }[] = [];
+
+    for (let i = 0; i < 3; i += 1) {
+      const damage = this.calculateDamage({
+        baseDamage: stats.attack,
+        multiplier: 0.45,
+        varianceMin: -1,
+        varianceMax: 2,
+      });
+
+      const isCrit = Math.random() < stats.critChance;
+      const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
+
+      hits.push({
+        damage: finalDamage,
+        isCrit,
+      });
+    }
+
+    let totalDamage = 0;
+    let critCount = 0;
+
+    hits.forEach((hit, index) => {
+      this.time.delayedCall(index * 170, () => {
+        if (this.enemy.hp <= 0) {
+          return;
+        }
+
+        this.animatePlayerAttack();
+        this.damageEnemy(hit.damage);
+
+        totalDamage += hit.damage;
+
+        if (hit.isCrit) {
+          critCount += 1;
+        }
+
+        this.updateTexts();
+
+        if (index === hits.length - 1) {
+          const critText =
+            critCount > 0
+              ? `\nКритических ударов: ${critCount}.`
+              : '';
+
+          const playerActionText =
+            `Кинжалы проводят серию из 3 быстрых ударов.\n` +
+            `Общий урон: ${totalDamage}.${critText}`;
+
+          this.afterPlayerAttack(playerActionText);
+        }
+      });
+    });
+  }
+
+  private handleAxeAttack() {
+    const stats = this.getBattleStats();
+    
+    const isArmoredEnemy = this.enemy.defense >= 4;
+    
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: isArmoredEnemy ? 1.42 : 1.18,
+      varianceMin: -2,
+      varianceMax: 6,
+    });
+  
+    const isCrit = Math.random() < stats.critChance;
+    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+  
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
+  
+    let playerActionText = isCrit
+      ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.`
+      : `Топор наносит тяжёлый рубящий удар: ${finalDamage} урона.`;
+  
+    if (isArmoredEnemy) {
+      playerActionText += '\nБонус топора: враг в броне, удар пробивает защиту.';
+    }
+  
+    this.afterPlayerAttack(playerActionText);
+  }
+
+  private handleKatanaAttack() {
     const stats = this.getBattleStats();
 
     const damage = this.calculateDamage({
       baseDamage: stats.attack,
-      multiplier: 1,
-      varianceMin: -2,
+      multiplier: 0.95,
+      varianceMin: 0,
+      varianceMax: 5,
+    });
+
+    const isCrit = Math.random() < stats.critChance + 0.03;
+    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+
+    const bleedDamage = Math.max(1, Math.floor(stats.attack * 0.22));
+
+    this.enemyBleedTurns = 2;
+    this.enemyBleedDamage = Math.max(this.enemyBleedDamage, bleedDamage);
+
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
+
+    const playerActionText = isCrit
+      ? `Катана наносит точный критический разрез: ${finalDamage} урона.\nВраг начинает кровоточить.`
+      : `Катана рассекает врага: ${finalDamage} урона.\nВраг начинает кровоточить.`;
+
+    this.afterPlayerAttack(playerActionText);
+  }
+
+  private handleHammerAttack() {
+    const stats = this.getBattleStats();
+    const room = getCurrentRoom();
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1.1,
+      varianceMin: -3,
+      varianceMax: 7,
+    });
+
+    const isCrit = Math.random() < stats.critChance;
+    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+
+    const isBoss = room?.type === 'boss' || room?.type === 'tier_boss';
+    const stunChance = isBoss ? 0.15 : 0.35;
+    const isStunned = Math.random() < stunChance;
+
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
+    this.shakeBattle(0.008, 220);
+
+    let playerActionText = isCrit
+      ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.`
+      : `Молот обрушивается на врага: ${finalDamage} урона.`;
+
+    if (isStunned) {
+      playerActionText += '\nВраг оглушён.';
+    }
+
+    this.afterPlayerAttack(playerActionText, {
+      skipEnemyTurn: isStunned,
+    });
+  }
+
+  private handleShieldSwordAttack() {
+    const stats = this.getBattleStats();
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 0.82,
+      varianceMin: -1,
       varianceMax: 3,
     });
 
     const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
+    const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
+
+    this.shieldSwordGuardActive = true;
 
     this.animatePlayerAttack();
-
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Критическая атака! Ты наносишь ${finalDamage} урона.`
-      : `Ты атакуешь и наносишь ${finalDamage} урона.`;
+      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.\nСледующий удар врага будет ослаблен.`
+      : `Ты атакуешь из-за щита: ${finalDamage} урона.\nСледующий удар врага будет ослаблен.`;
 
     this.afterPlayerAttack(playerActionText);
   }
@@ -1106,8 +1387,16 @@ export class BattleScene extends Phaser.Scene {
     this.updateTexts();
 
     this.time.delayedCall(500, () => {
-      this.animateEnemyAttack();
+      const bleedResultText = this.applyBleedBeforeEnemyTurn(playerActionText);
 
+      if (!bleedResultText) {
+        return;
+      }
+    
+      playerActionText = bleedResultText;
+    
+      this.animateEnemyAttack();
+    
       const stats = this.getBattleStats();
 
       if (Math.random() < stats.dodgeChance) {
@@ -1139,6 +1428,14 @@ export class BattleScene extends Phaser.Scene {
         this.enemy.attack + Phaser.Math.Between(-2, 3) - stats.defense
       );
 
+      let shieldSwordText = '';
+
+      if (this.shieldSwordGuardActive) {
+        damage = Math.max(1, Math.floor(damage * 0.6));
+        this.shieldSwordGuardActive = false;
+        shieldSwordText = '\nЩит-меч смягчил входящий удар.';
+      }
+
       if (isDefending) {
         damage = Math.max(1, Math.floor(damage * 0.45));
       }
@@ -1164,8 +1461,8 @@ export class BattleScene extends Phaser.Scene {
 
         this.logText.setText(
           isDefending
-            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.\n\nТы пал в катакомбах...`
-            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\n\nТы пал в катакомбах...`
+            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\n\nТы пал в катакомбах...`
+            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\n\nТы пал в катакомбах...`
         );
 
         this.updateTexts();
@@ -1188,8 +1485,8 @@ export class BattleScene extends Phaser.Scene {
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.\nЭнергия восстановлена на 1.${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.\nЭнергия восстановлена на 1.${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\nЭнергия восстановлена на 1.${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\nЭнергия восстановлена на 1.${passiveText}`
       );
 
       this.updateTexts();
