@@ -1356,12 +1356,137 @@ export class DungeonScene extends Phaser.Scene {
       variant: 'brown',
       depth: 120,
       onClick: () => {
-        resetFloorRun();
-        void saveGameAsync();
-        this.scene.start('CampScene');
+        this.showExitToTownConfirm();
       },
     });
   }
+
+  private showExitToTownConfirm() {
+  const { width, height } = this.scale;
+
+  const modalObjects: Phaser.GameObjects.GameObject[] = [];
+
+  const overlay = this.add.rectangle(
+    width / 2,
+    height / 2,
+    width,
+    height,
+    0x000000,
+    0.74
+  )
+    .setDepth(200)
+    .setInteractive();
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.38);
+  shadow.fillRoundedRect(
+    width / 2 - 300,
+    height / 2 - 145 + 8,
+    600,
+    290,
+    30
+  );
+  shadow.setDepth(201);
+
+  const panel = this.add.graphics();
+  panel.fillStyle(0x14100d, 0.98);
+  panel.fillRoundedRect(
+    width / 2 - 300,
+    height / 2 - 145,
+    600,
+    290,
+    30
+  );
+  panel.lineStyle(3, UI.colors.goldDark, 0.85);
+  panel.strokeRoundedRect(
+    width / 2 - 300,
+    height / 2 - 145,
+    600,
+    290,
+    30
+  );
+  panel.setDepth(202);
+
+  const glow = this.add.circle(width / 2, height / 2 - 88, 90, 0xf0a040, 0.07)
+    .setDepth(203);
+
+  const title = this.add.text(width / 2, height / 2 - 90, 'Выйти в город?', {
+    fontFamily: UI.font.title,
+    fontSize: '31px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 5,
+  }).setOrigin(0.5).setDepth(204);
+
+  const text = this.add.text(
+    width / 2,
+    height / 2 - 20,
+    'Ты покинешь подземелье и вернёшься в город.\nТекущий забег будет завершён.',
+    {
+      fontFamily: UI.font.body,
+      fontSize: '19px',
+      color: UI.colors.text,
+      align: 'center',
+      lineSpacing: 6,
+      wordWrap: {
+        width: 500,
+      },
+    }
+  ).setOrigin(0.5).setDepth(204);
+
+  const closeModal = () => {
+    modalObjects.forEach(object => {
+      object.destroy();
+    });
+  };
+
+  const cancelButton = this.createRoundedActionButton({
+    x: width / 2 - 145,
+    y: height / 2 + 90,
+    width: 230,
+    height: 54,
+    text: 'Отмена',
+    onClick: () => {
+      closeModal();
+    },
+    variant: 'brown',
+    depth: 204,
+  });
+
+  const confirmButton = this.createRoundedActionButton({
+    x: width / 2 + 145,
+    y: height / 2 + 90,
+    width: 230,
+    height: 54,
+    text: 'Да, выйти',
+    onClick: () => {
+      closeModal();
+
+      resetFloorRun();
+
+      void saveGameAsync();
+
+      this.scene.start('CampScene');
+    },
+    variant: 'green',
+    depth: 204,
+  });
+
+  modalObjects.push(
+    overlay,
+    shadow,
+    panel,
+    glow,
+    title,
+    text,
+    cancelButton.shadow,
+    cancelButton.bg,
+    cancelButton.label,
+    confirmButton.shadow,
+    confirmButton.bg,
+    confirmButton.label
+  );
+}
 
   private createResultPanel(config: {
     x: number;
