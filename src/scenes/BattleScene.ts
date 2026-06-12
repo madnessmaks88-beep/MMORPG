@@ -109,6 +109,15 @@ export class BattleScene extends Phaser.Scene {
   private playerDebuffs: ActivePlayerDebuff[] = [];
   private nextIncomingDamageBonus = 0;
 
+  private enemyInfoText?: Phaser.GameObjects.Text;
+
+  private playerDebuffText?: Phaser.GameObjects.Text;
+
+  private enemyEffectObjects: Phaser.GameObjects.GameObject[] = [];
+  private playerEffectObjects: Phaser.GameObjects.GameObject[] = [];
+
+  private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
+
   
 
   constructor() {
@@ -235,19 +244,19 @@ private getEnemyWeaknessDamageMultiplier() {
   return Phaser.Math.Clamp(multiplier, 0.65, 1.35);
 }
 
-private getEnemyWeaknessText() {
-  const weaponType = this.getCurrentWeaponType();
+  private getEnemyWeaknessText() {
+    const weaponType = this.getCurrentWeaponType();
 
-  if (this.enemy.weaknesses?.includes(weaponType)) {
-    return '\nСлабость врага: удар оказался особенно эффективен.';
+    if (this.enemy.weaknesses?.includes(weaponType)) {
+      return '\nСлабость врага: урон увеличен.';
+    }
+
+    if (this.enemy.resistances?.includes(weaponType)) {
+      return '\nСопротивление врага: урон снижен.';
+    }
+
+    return '';
   }
-
-  if (this.enemy.resistances?.includes(weaponType)) {
-    return '\nСопротивление врага: удар был менее эффективен.';
-  }
-
-  return '';
-}
 
   private createBattleHeader(title: string, subtitle: string, isBoss: boolean) {
     const { width } = this.scale;
@@ -270,6 +279,40 @@ private getEnemyWeaknessText() {
       },
     }).setOrigin(0.5).setDepth(10);
   }
+
+  private getDebuffIcon(id: EnemyDebuffId) {
+  if (id === 'bleeding') return '🩸';
+  if (id === 'poison') return '☠';
+  if (id === 'curse') return '☾';
+  if (id === 'armor_break') return '⬇';
+  if (id === 'rot') return '✚';
+  if (id === 'death_mark') return '◆';
+  if (id === 'energy_block') return '✦';
+  if (id === 'weakness') return '⚔';
+  if (id === 'agility_down') return '➤';
+  if (id === 'crit_down') return '◇';
+  if (id === 'heal_block') return '✚';
+  if (id === 'skill_cost_up') return '▲';
+
+  return '•';
+}
+
+private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
+  if (id === 'bleeding') return `Получает ${power} урона перед действием.`;
+  if (id === 'poison') return `Получает ${power} урона перед действием.`;
+  if (id === 'curse') return `Атака и защита снижены на ${power}.`;
+  if (id === 'armor_break') return `Защита снижена на ${power}.`;
+  if (id === 'rot') return `Лечение снижено на ${power}%.`;
+  if (id === 'death_mark') return `Следующий удар врага сильнее на ${power}%.`;
+  if (id === 'energy_block') return 'Восстановление энергии заблокировано.';
+  if (id === 'weakness') return `Исходящий урон снижен на ${power}%.`;
+  if (id === 'agility_down') return `Ловкость снижена на ${power}.`;
+  if (id === 'crit_down') return `Шанс крита снижен на ${power}%.`;
+  if (id === 'heal_block') return 'Нельзя использовать зелье.';
+  if (id === 'skill_cost_up') return `Навыки стоят на ${power} энергии больше.`;
+
+  return 'Неизвестный эффект.';
+}
 
   private createBattleLogPanel() {
     const { width } = this.scale;
@@ -1590,11 +1633,35 @@ private getSkillCostPenalty() {
       this.enemyHpBar = hpBar;
 
       extraText.setText(`АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}`);
+
+      this.enemyInfoText = this.add.text(-190, isBoss ? 38 : 36, this.createEnemyInfoText(), {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: UI.colors.textMuted,
+        wordWrap: {
+          width: 430,
+        },
+        lineSpacing: 3,
+      }).setOrigin(0, 0.5);
+    
+      container.add(this.enemyInfoText);
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
       this.energyBar = energyBar;
       this.energyText = extraText;
+
+      this.playerDebuffText = this.add.text(-190, 38, '', {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: '#c084fc',
+        wordWrap: {
+          width: 430,
+        },
+        lineSpacing: 3,
+      }).setOrigin(0, 0.5);
+
+      container.add(this.playerDebuffText);
 
       const stats = this.getBattleStats();
 
@@ -1622,6 +1689,339 @@ private getSkillCostPenalty() {
 
     return container;
   }
+
+  private hideTooltip() {
+  this.tooltipObjects.forEach(object => object.destroy());
+  this.tooltipObjects = [];
+}
+
+private showTooltip(x: number, y: number, title: string, description: string) {
+  this.hideTooltip();
+
+  const width = 360;
+  const height = 118;
+
+  const tooltipX = Phaser.Math.Clamp(x, 190, this.scale.width - 190);
+  const tooltipY = Phaser.Math.Clamp(y, 90, this.scale.height - 90);
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.45);
+  shadow.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2 + 5,
+    width,
+    height,
+    18
+  );
+  shadow.setDepth(300);
+
+  const bg = this.add.graphics();
+  bg.fillStyle(0x120d0a, 0.98);
+  bg.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    18
+  );
+  bg.lineStyle(2, UI.colors.goldDark, 0.85);
+  bg.strokeRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    18
+  );
+  bg.setDepth(301);
+
+  const titleText = this.add.text(tooltipX, tooltipY - 32, title, {
+    fontFamily: UI.font.title,
+    fontSize: '18px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 3,
+  }).setOrigin(0.5).setDepth(302);
+
+  const descriptionText = this.add.text(tooltipX, tooltipY + 16, description, {
+    fontFamily: UI.font.body,
+    fontSize: '14px',
+    color: UI.colors.text,
+    align: 'center',
+    wordWrap: {
+      width: width - 34,
+    },
+    lineSpacing: 4,
+  }).setOrigin(0.5).setDepth(302);
+
+  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
+}
+
+private createEffectChip(config: {
+  x: number;
+  y: number;
+  text: string;
+  icon: string;
+  color: number;
+  tooltipTitle: string;
+  tooltipDescription: string;
+  targetArray: Phaser.GameObjects.GameObject[];
+}) {
+  const chipWidth = 178;
+  const chipHeight = 34;
+  const radius = 13;
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.3);
+  shadow.fillRoundedRect(
+    config.x - chipWidth / 2,
+    config.y - chipHeight / 2 + 3,
+    chipWidth,
+    chipHeight,
+    radius
+  );
+  shadow.setDepth(45);
+
+  const bg = this.add.graphics();
+  bg.fillStyle(0x120d0a, 0.96);
+  bg.fillRoundedRect(
+    config.x - chipWidth / 2,
+    config.y - chipHeight / 2,
+    chipWidth,
+    chipHeight,
+    radius
+  );
+  bg.lineStyle(1, config.color, 0.75);
+  bg.strokeRoundedRect(
+    config.x - chipWidth / 2,
+    config.y - chipHeight / 2,
+    chipWidth,
+    chipHeight,
+    radius
+  );
+  bg.setDepth(46);
+
+  const iconText = this.add.text(config.x - chipWidth / 2 + 20, config.y, config.icon, {
+    fontFamily: UI.font.body,
+    fontSize: '14px',
+    color: UI.colors.text,
+  }).setOrigin(0.5).setDepth(47);
+
+  const labelText = this.add.text(config.x - chipWidth / 2 + 39, config.y, config.text, {
+    fontFamily: UI.font.body,
+    fontSize: '12px',
+    color: UI.colors.text,
+  }).setOrigin(0, 0.5).setDepth(47);
+
+  const hitbox = this.add.rectangle(config.x, config.y, chipWidth, chipHeight, 0x000000, 0)
+    .setDepth(48)
+    .setInteractive({ useHandCursor: true });
+
+  hitbox.on('pointerover', () => {
+    bg.clear();
+    bg.fillStyle(0x20150f, 1);
+    bg.fillRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+    bg.lineStyle(2, config.color, 1);
+    bg.strokeRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+
+    this.showTooltip(
+      config.x,
+      config.y - 82,
+      config.tooltipTitle,
+      config.tooltipDescription
+    );
+  });
+
+  hitbox.on('pointerout', () => {
+    bg.clear();
+    bg.fillStyle(0x120d0a, 0.96);
+    bg.fillRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+    bg.lineStyle(1, config.color, 0.75);
+    bg.strokeRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+
+    this.hideTooltip();
+  });
+
+  config.targetArray.push(shadow, bg, iconText, labelText, hitbox);
+}
+
+private getDebuffColor(id: EnemyDebuffId) {
+  if (id === 'bleeding') return 0xff6b6b;
+  if (id === 'poison') return 0x75d184;
+  if (id === 'curse') return 0xc084fc;
+  if (id === 'armor_break') return 0xf0d58a;
+  if (id === 'rot') return 0x8fbf6a;
+  if (id === 'death_mark') return 0xff4d4d;
+  if (id === 'energy_block') return 0x70a6ff;
+  if (id === 'weakness') return 0xd6a85a;
+  if (id === 'agility_down') return 0x70a6ff;
+  if (id === 'crit_down') return 0xc084fc;
+  if (id === 'heal_block') return 0xff9f6b;
+  if (id === 'skill_cost_up') return 0xf0d58a;
+
+  return UI.colors.gold;
+}
+
+private renderPlayerEffectChips() {
+  this.playerEffectObjects.forEach(object => object.destroy());
+  this.playerEffectObjects = [];
+
+  if (this.playerDebuffs.length === 0) {
+    return;
+  }
+
+  const startX = this.playerCard.x - 170;
+  const startY = this.playerCard.y + 38;
+
+  this.playerDebuffs.slice(0, 4).forEach((debuff, index) => {
+    const row = Math.floor(index / 2);
+    const col = index % 2;
+
+    const x = startX + col * 190;
+    const y = startY + row * 40;
+
+    this.createEffectChip({
+      x,
+      y,
+      text: `${debuff.name}: ${debuff.duration} х.`,
+      icon: this.getDebuffIcon(debuff.id),
+      color: this.getDebuffColor(debuff.id),
+      tooltipTitle: debuff.name,
+      tooltipDescription:
+        `${this.getDebuffShortDescription(debuff.id, debuff.power)}\n` +
+        `Осталось ходов: ${debuff.duration}.`,
+      targetArray: this.playerEffectObjects,
+    });
+  });
+}
+
+private renderEnemyEffectChips() {
+  this.enemyEffectObjects.forEach(object => object.destroy());
+  this.enemyEffectObjects = [];
+
+  const effects: {
+    id: EnemyDebuffId;
+    name: string;
+    duration: number;
+    power: number;
+  }[] = [];
+
+  if (this.enemyBleedTurns > 0) {
+    effects.push({
+      id: 'bleeding',
+      name: 'Кровотечение',
+      duration: this.enemyBleedTurns,
+      power: this.enemyBleedDamage,
+    });
+  }
+
+  if (effects.length === 0) {
+    return;
+  }
+
+  const startX = this.enemyCard.x - 170;
+  const startY = this.enemyCard.y + 78;
+
+  effects.slice(0, 4).forEach((effect, index) => {
+    const row = Math.floor(index / 2);
+    const col = index % 2;
+
+    const x = startX + col * 190;
+    const y = startY + row * 40;
+
+    this.createEffectChip({
+      x,
+      y,
+      text: `${effect.name}: ${effect.duration} х.`,
+      icon: this.getDebuffIcon(effect.id),
+      color: this.getDebuffColor(effect.id),
+      tooltipTitle: effect.name,
+      tooltipDescription:
+        `${this.getDebuffShortDescription(effect.id, effect.power)}\n` +
+        `Осталось ходов: ${effect.duration}.`,
+      targetArray: this.enemyEffectObjects,
+    });
+  });
+}
+
+  private createPlayerDebuffText() {
+    if (this.playerDebuffs.length === 0) {
+      return '';
+    }
+
+    return this.playerDebuffs
+      .map(debuff => `${this.getDebuffIcon(debuff.id)} ${debuff.name}: ${debuff.duration} х.`)
+      .join('\n');
+  }
+
+  private getEnemyTagText(tag: string) {
+  if (tag === 'dagger') return 'кинжал';
+  if (tag === 'axe') return 'топор';
+  if (tag === 'katana') return 'катана';
+  if (tag === 'hammer') return 'молот';
+  if (tag === 'shield_sword') return 'щит-меч';
+  if (tag === 'sword') return 'меч';
+  if (tag === 'bleed') return 'кровотечение';
+  if (tag === 'stun') return 'оглушение';
+  if (tag === 'crit') return 'крит';
+  if (tag === 'poison') return 'яд';
+  if (tag === 'curse') return 'проклятие';
+
+  return tag;
+}
+
+private createEnemyInfoText() {
+  const lines: string[] = [];
+
+  if (this.enemy.weaknesses && this.enemy.weaknesses.length > 0) {
+    const weaknesses = this.enemy.weaknesses
+      .map(tag => this.getEnemyTagText(tag))
+      .join(', ');
+
+    lines.push(`Слаб: ${weaknesses}`);
+  }
+
+  if (this.enemy.resistances && this.enemy.resistances.length > 0) {
+    const resistances = this.enemy.resistances
+      .map(tag => this.getEnemyTagText(tag))
+      .join(', ');
+
+    lines.push(`Сопр: ${resistances}`);
+  }
+
+  if (this.enemy.debuffOnHit) {
+    lines.push(`Эффект: ${this.enemy.debuffOnHit.name}`);
+  }
+
+  if (lines.length === 0) {
+    return 'Особенностей нет';
+  }
+
+  return lines.join('\n');
+}
 
   private updateStatusText() {
     if (!this.statusText) {
@@ -1662,9 +2062,9 @@ private getSkillCostPenalty() {
       statuses.push(`Адская ярость: +${this.demonRageStacks}`);
     }
 
-    this.playerDebuffs.forEach(debuff => {
-      statuses.push(`${debuff.name}: ${debuff.duration} х.`);
-    });
+    if (this.playerDebuffs.length > 0) {
+      statuses.push(`Эффекты: ${this.playerDebuffs.length}`);
+    }
 
     this.statusText.setText(
       statuses.length > 0
@@ -2100,113 +2500,114 @@ private getSkillCostPenalty() {
 
   private handleShieldSwordAttack() {
     const stats = this.getBattleStats();
-    
+
     const damage = this.calculateDamage({
       baseDamage: stats.attack,
       multiplier: 0.82,
       varianceMin: -1,
       varianceMax: 3,
     });
-  
+
     const isCrit = Math.random() < stats.critChance;
     const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
-  
+
     this.shieldSwordGuardActive = true;
-  
+
     const weaknessText = this.getEnemyWeaknessText();
-  
+
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
-  
+
     const playerActionText = isCrit
       ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`
       : `Ты атакуешь из-за щита: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`;
-  
+
     this.afterPlayerAttack(playerActionText);
   }
 
   private handleVictory(playerActionText: string) {
-  if (this.isBattleEnded) {
-    return;
-  }
-
-  this.isBattleEnded = true;
-  this.isBusy = true;
-
-  const baseGold = this.enemy.goldReward;
-
-  const gold =
-    player.raceId === 'goblin'
-      ? Math.floor(baseGold * 1.2)
-      : baseGold;
-
-  player.gold += gold;
-
-  trackEnemyKilled();
-  trackGoldEarned(gold);
-
-  gameState.floorRun.monstersDefeated += 1;
-  gameState.floorRun.goldEarned += gold;
-  gameState.floorRun.expEarned += this.enemy.expReward;
-
-  const expResult = addExperience(player, this.enemy.expReward);
-
-  const loot = rollEnemyLoot(this.enemy);
-
-  const lootText = loot.text.length > 0
-    ? `\n\nДобыча:\n${loot.text}`
-    : '';
-
-  let levelText = '';
-
-  if (expResult.leveledUp) {
-    levelText = `\n\n${createLevelUpText(expResult)}`;
-  }
-
-  let demonHealText = '';
-
-  if (player.raceId === 'demon' && this.demonHpSpentByHellfire > 0) {
-    const stats = this.getBattleStats();
-    const heal = Math.floor(this.demonHpSpentByHellfire * 0.5);
-
-    if (heal > 0) {
-      player.hp = Math.min(stats.maxHp, player.hp + heal);
-
-      demonHealText =
-        `\nДемон поглощает остатки кровавого пламени и восстанавливает ${heal} HP.`;
-    }
-
-    this.demonHpSpentByHellfire = 0;
-  }
-
-  void saveGameAsync();
-
-  this.logText.setText(
-    `${playerActionText}\n\n` +
-    `${this.enemy.name} повержен.\n` +
-    `Получено золота: ${gold}\n` +
-    `Получено опыта: ${this.enemy.expReward}` +
-    `${demonHealText}` +
-    `${lootText}` +
-    `${levelText}`
-  );
-
-  this.updateTexts();
-
-  this.time.delayedCall(2200, () => {
-    if (this.returnToDungeon) {
-      markCurrentRoomCompleted();
-      goToNextRoom();
-
-      void saveGameAsync();
-
-      this.scene.start('DungeonScene');
+    this.hideTooltip();
+    if (this.isBattleEnded) {
       return;
     }
 
-    this.scene.start('CampScene');
-  });
-}
+    this.isBattleEnded = true;
+    this.isBusy = true;
+
+    const baseGold = this.enemy.goldReward;
+
+    const gold =
+      player.raceId === 'goblin'
+        ? Math.floor(baseGold * 1.2)
+        : baseGold;
+
+    player.gold += gold;
+
+    trackEnemyKilled();
+    trackGoldEarned(gold);
+
+    gameState.floorRun.monstersDefeated += 1;
+    gameState.floorRun.goldEarned += gold;
+    gameState.floorRun.expEarned += this.enemy.expReward;
+
+    const expResult = addExperience(player, this.enemy.expReward);
+
+    const loot = rollEnemyLoot(this.enemy);
+
+    const lootText = loot.text.length > 0
+      ? `\n\nДобыча:\n${loot.text}`
+      : '';
+
+    let levelText = '';
+
+    if (expResult.leveledUp) {
+      levelText = `\n\n${createLevelUpText(expResult)}`;
+    }
+
+    let demonHealText = '';
+
+    if (player.raceId === 'demon' && this.demonHpSpentByHellfire > 0) {
+      const stats = this.getBattleStats();
+      const heal = Math.floor(this.demonHpSpentByHellfire * 0.5);
+
+      if (heal > 0) {
+        player.hp = Math.min(stats.maxHp, player.hp + heal);
+
+        demonHealText =
+          `\nДемон поглощает остатки кровавого пламени и восстанавливает ${heal} HP.`;
+      }
+
+      this.demonHpSpentByHellfire = 0;
+    }
+
+    void saveGameAsync();
+
+    this.logText.setText(
+      `${playerActionText}\n\n` +
+      `${this.enemy.name} повержен.\n` +
+      `Получено золота: ${gold}\n` +
+      `Получено опыта: ${this.enemy.expReward}` +
+      `${demonHealText}` +
+      `${lootText}` +
+      `${levelText}`
+    );
+
+    this.updateTexts();
+
+    this.time.delayedCall(2200, () => {
+      if (this.returnToDungeon) {
+        markCurrentRoomCompleted();
+        goToNextRoom();
+
+        void saveGameAsync();
+
+        this.scene.start('DungeonScene');
+        return;
+      }
+
+      this.scene.start('CampScene');
+    });
+  }
 
   private handlePotion() {
     if (this.isBattleEnded || this.isBusy) {
@@ -2473,5 +2874,17 @@ private getSkillCostPenalty() {
      const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
      this.energyBar.displayWidth = 520 * energyRatio;
    }
+
+   if (this.enemyInfoText) {
+      this.enemyInfoText.setText(this.createEnemyInfoText());
+    }
+
+    if (this.playerDebuffText) {
+      this.playerDebuffText.setText(this.createPlayerDebuffText());
+    }
+
+    this.renderPlayerEffectChips();
+    this.renderEnemyEffectChips();
+    this.updateStatusText();
   }
 }
