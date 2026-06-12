@@ -23,6 +23,7 @@ import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem
 import { rollEnemyLoot } from '../systems/LootSystem';
 import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
 import { createScaledEnemy } from '../systems/EnemyScalingSystem';
+import { getRaceById } from '../data/races';
 
 
 
@@ -117,6 +118,8 @@ export class BattleScene extends Phaser.Scene {
   private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
 
   private enemyHoverZone?: Phaser.GameObjects.Rectangle;
+
+  private playerHoverZone?: Phaser.GameObjects.Rectangle;
 
   
 
@@ -1685,7 +1688,18 @@ private getSkillCostPenalty() {
         lineSpacing: 4,
       }).setOrigin(1, 0.5);
 
-      container.add([this.potionText, statsText]);
+      this.playerHoverZone = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+
+      this.playerHoverZone.on('pointerover', () => {
+        this.showPlayerTooltip();
+      });
+
+      this.playerHoverZone.on('pointerout', () => {
+        this.hideTooltip();
+      });
+
+      container.add([this.potionText, statsText, this.playerHoverZone]);
     }
 
     return container;
@@ -1725,6 +1739,104 @@ private getSkillCostPenalty() {
     this.enemy.name,
     description
   );
+}
+
+private showPlayerTooltip() {
+  const stats = this.getBattleStats();
+  const race = player.raceId ? getRaceById(player.raceId) : undefined;
+
+  const raceName = race?.name ?? 'Раса не выбрана';
+  const raceDescription = race?.description ?? 'У героя пока нет выбранной расы.';
+
+  const passiveText = race
+    ? `${race.passiveName}\n${race.passiveDescription}`
+    : 'Нет пассивного навыка.';
+
+  const activeText = race
+    ? `${race.activeName}\n${race.activeDescription}`
+    : 'Нет активного навыка.';
+
+  const description =
+    `Раса: ${raceName}\n` +
+    `${raceDescription}\n\n` +
+    `Пассивка:\n${passiveText}\n\n` +
+    `Активный навык:\n${activeText}\n\n` +
+    `Характеристики:\n` +
+    `HP: ${player.hp}/${stats.maxHp}  •  Энергия: ${player.energy}/${stats.maxEnergy}\n` +
+    `АТК: ${stats.attack}  •  ЗАЩ: ${stats.defense}\n` +
+    `Крит: ${Math.round(stats.critChance * 100)}%  •  Уклонение: ${Math.round(stats.dodgeChance * 100)}%`;
+
+  this.showPlayerLargeTooltip(
+    this.playerCard.x,
+    this.playerCard.y - 185,
+    player.name,
+    description
+  );
+}
+
+private showPlayerLargeTooltip(x: number, y: number, title: string, description: string) {
+  this.hideTooltip();
+
+  const width = 470;
+  const height = 380;
+
+  const tooltipX = Phaser.Math.Clamp(x, 245, this.scale.width - 245);
+  const tooltipY = Phaser.Math.Clamp(y, 230, this.scale.height - 230);
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.52);
+  shadow.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2 + 6,
+    width,
+    height,
+    24
+  );
+  shadow.setDepth(300);
+
+  const bg = this.add.graphics();
+  bg.fillStyle(0x10141c, 0.98);
+  bg.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    24
+  );
+  bg.lineStyle(2, UI.colors.goldDark, 0.9);
+  bg.strokeRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    24
+  );
+  bg.setDepth(301);
+
+  const titleText = this.add.text(tooltipX, tooltipY - 158, title, {
+    fontFamily: UI.font.title,
+    fontSize: '23px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 4,
+  }).setOrigin(0.5).setDepth(302);
+
+  const descriptionText = this.add.text(
+    tooltipX - width / 2 + 24,
+    tooltipY - 120,
+    description,
+    {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.text,
+      wordWrap: {
+        width: width - 48,
+      },
+      lineSpacing: 5,
+    }
+  ).setOrigin(0, 0).setDepth(302);
+
+  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
 }
 
 private showLargeTooltip(x: number, y: number, title: string, description: string) {
