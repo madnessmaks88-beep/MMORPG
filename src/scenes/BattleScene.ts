@@ -1778,7 +1778,7 @@ private showPlayerLargeTooltip(x: number, y: number, title: string, description:
   this.hideTooltip();
 
   const width = 470;
-  const height = 380;
+  const height = 430;
 
   const tooltipX = Phaser.Math.Clamp(x, 245, this.scale.width - 245);
   const tooltipY = Phaser.Math.Clamp(y, 230, this.scale.height - 230);
