@@ -14,6 +14,12 @@ import {
   vkStorageSet,
 } from './VKBridgeSystem';
 
+function normalizePlayerSave() {
+  player.materials ??= {};
+  player.anvilLevel ??= 1;
+  player.crystalsUnlocked ??= false;
+}
+
 const SAVE_KEY = 'below_ashes_save_v3';
 
 type SaveData = {
@@ -61,6 +67,7 @@ function createSaveData(): SaveData {
 function applySaveData(saveData: Partial<SaveData>) {
   if (saveData.player) {
     Object.assign(player, saveData.player);
+    normalizePlayerSave();
   }
 
   if (saveData.gameState) {
@@ -100,6 +107,10 @@ function fixMissingPlayerFields() {
 
   if (!player.inventory) player.inventory = [];
   if (!player.equipment) player.equipment = {};
+  
+  player.materials ??= {};
+  player.anvilLevel ??= 1;
+  player.crystalsUnlocked ??= false;
 }
 
 function fixMissingGameStateFields() {
@@ -134,6 +145,8 @@ function fixMissingGameStateFields() {
   if (gameState.floorRun.trapsTriggered === undefined) gameState.floorRun.trapsTriggered = 0;
   if (gameState.floorRun.goldEarned === undefined) gameState.floorRun.goldEarned = 0;
   if (gameState.floorRun.expEarned === undefined) gameState.floorRun.expEarned = 0;
+
+  gameState.floorRun.materialsEarned ??= {};
 
   if (!gameState.questProgress) {
     gameState.questProgress = {

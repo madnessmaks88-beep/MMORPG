@@ -17,40 +17,50 @@ export type FloorRequirement = {
   hp: number;
 };
 
-const normalEnemies = [
-  'rotting_skeleton',
-  'mad_cultist',
-  'plague_rat',
-  'miner_ghoul',
+const commonEnemyIds = [
+  'bone_gnawer',
+  'crypt_crawler',
+  'grave_worm',
+  'corpse_eater',
+  'rotten_servant',
+  'bone_guard',
+  'mold_dead',
+  'sarcophagus_rat',
+  'carrion_spider',
+  'crypt_minion',
+  'deadskin',
+  'funeral_beetle',
+  'bone_breaker',
+  'coffin_scraper',
+  'infected_acolyte',
 ];
 
-const eliteEnemies = [
-  'bone_warden',
-  'mold_butcher',
-  'nameless_knight',
-  'grave_mage',
+const eliteEnemyIds = [
+  'sarcophagus_keeper',
+  'bone_executioner',
+  'crypt_butcher',
+  'buried_knight',
+  'bone_armored_guard',
+  'dead_standard_bearer',
+  'rotten_chaplain',
+  'leper_guard',
+  'crypt_torturer',
+  'bloody_gravedigger',
 ];
 
-const floorBossesTier1 = [
-  'bone_warden',
-  'mold_butcher',
-  'crypt_executioner',
-  'nameless_knight',
-  'grave_mage',
-];
-
-const floorBossesTier2 = [
-  'ash_knight',
-  'grave_abomination',
-  'forgotten_jailer',
-  'nameless_knight',
-  'grave_mage',
+const miniBossEnemyIds = [
+  'bone_abbot',
+  'sarcophagus_lord',
+  'lower_crypt_executioner',
+  'funeral_champion',
+  'bone_collector',
+  'dead_knight_varn',
+  'rotten_bishop',
+  'black_tomb_guardian',
 ];
 
 const tierBossByTier: Record<number, string> = {
-  1: 'king_under_crypt',
-  2: 'ash_prince',
-  3: 'heart_of_catacombs',
+  1: 'morvein_sealed_crypt_lord',
 };
 
 export function getFloorRequirement(floor: number): FloorRequirement {
@@ -120,153 +130,159 @@ export function startFloorRun(floor: number) {
 }
 
 export function generateFloorRooms(floor: number, modifier = getFloorModifier(floor)): FloorRoom[] {
-  const roomCount = Phaser.Math.Between(5, 6);
+  const roomCount = getRoomCountByFloor(floor);
   const rooms: FloorRoom[] = [];
 
-  const isTierBoss = isTierBossFloor(floor);
-
-  let monsterRoomsCount = roomCount - 2;
-
-  if (modifier === 'elite') {
-    monsterRoomsCount = roomCount - 3;
+  for (let index = 0; index < roomCount - 1; index += 1) {
+    rooms.push(createRandomNormalRoom(floor, index, modifier));
   }
 
-  if (modifier === 'treasure') {
-    monsterRoomsCount = roomCount - 3;
-  }
-
-  for (let i = 0; i < monsterRoomsCount; i++) {
-    rooms.push({
-      id: `floor_${floor}_monster_${i}`,
-      type: 'monster',
-      title: `Комната ${i + 1}`,
-      description: 'В темноте слышны шаги. Здесь точно кто-то есть.',
-      enemyId: pickNormalEnemy(floor),
-      completed: false,
-    });
-  }
-
-  if (modifier === 'elite') {
-    rooms.push({
-      id: `floor_${floor}_elite_1`,
-      type: 'elite',
-      title: 'Опасная комната',
-      description: 'Здесь ждёт элитный противник.',
-      enemyId: pickEliteEnemy(floor),
-      completed: false,
-    });
-
-    rooms.push({
-      id: `floor_${floor}_elite_2`,
-      type: 'elite',
-      title: 'Зал сильного врага',
-      description: 'Противник здесь заметно сильнее обычных монстров.',
-      enemyId: pickEliteEnemy(floor),
-      completed: false,
-    });
-  } else if (modifier === 'traps') {
-    rooms.push({
-      id: `floor_${floor}_trap_1`,
-      type: 'trap',
-      title: 'Подозрительный проход',
-      description: 'Плиты пола выглядят слишком ровными.',
-      completed: false,
-    });
-
-    rooms.push({
-      id: `floor_${floor}_trap_2`,
-      type: 'trap',
-      title: 'Старый механизм',
-      description: 'Ты слышишь скрежет где-то в стенах.',
-      completed: false,
-    });
-  } else if (modifier === 'treasure') {
-    rooms.push({
-      id: `floor_${floor}_chest_1`,
-      type: 'chest',
-      title: 'Забытая кладовая',
-      description: 'Среди костей и пепла виднеется старый сундук.',
-      completed: false,
-    });
-
-    rooms.push({
-      id: `floor_${floor}_chest_2`,
-      type: 'chest',
-      title: 'Спрятанный тайник',
-      description: 'Кажется, здесь кто-то давно оставил припасы.',
-      completed: false,
-    });
-  } else if (modifier === 'cursed') {
-    rooms.push({
-      id: `floor_${floor}_elite_cursed`,
-      type: 'elite',
-      title: 'Проклятый страж',
-      description: 'Сильный враг охраняет проход дальше.',
-      enemyId: pickEliteEnemy(floor),
-      completed: false,
-    });
-
-    rooms.push({
-      id: `floor_${floor}_trap_cursed`,
-      type: 'trap',
-      title: 'Проклятая ловушка',
-      description: 'Сам воздух на этом этаже пытается убить тебя.',
-      completed: false,
-    });
-  } else {
-    const specialRoom = Phaser.Math.Between(1, 100);
-
-    if (specialRoom <= 45) {
-      rooms.push({
-        id: `floor_${floor}_elite`,
-        type: 'elite',
-        title: 'Опасная комната',
-        description: 'Здесь скрывается более сильный противник.',
-        enemyId: pickEliteEnemy(floor),
-        completed: false,
-      });
-    } else if (specialRoom <= 75) {
-      rooms.push({
-        id: `floor_${floor}_chest`,
-        type: 'chest',
-        title: 'Забытая кладовая',
-        description: 'Среди костей и пепла виднеется старый сундук.',
-        completed: false,
-      });
-    } else {
-      rooms.push({
-        id: `floor_${floor}_trap`,
-        type: 'trap',
-        title: 'Подозрительный проход',
-        description: 'Плиты пола выглядят слишком ровными.',
-        completed: false,
-      });
-    }
-  }
-
-  if (isTierBoss) {
-    const tier = getCurrentTierByFloor(floor);
-    
-    rooms.push({
-      id: `floor_${floor}_tier_boss`,
-      type: 'tier_boss',
-      title: `Финальный зал ${tier}-го яруса`,
-      description: 'Воздух тяжелеет. Здесь ждёт главный босс яруса.',
-      enemyId: pickTierBoss(floor),
-      completed: false,
-    });
-  } else {
-    rooms.push({
-      id: `floor_${floor}_boss`,
-      type: 'boss',
-      title: 'Зал хранителя этажа',
-      description: 'Хранитель этажа ждёт тебя.',
-      enemyId: pickFloorBoss(floor),
-      completed: false,
-    });
-  }
+  rooms.push(createFinalRoom(floor));
 
   return rooms;
+}
+
+function getRoomCountByFloor(floor: number) {
+  const floorInsideTier = ((floor - 1) % 25) + 1;
+
+  if (floorInsideTier <= 5) {
+    return 5;
+  }
+
+  if (floorInsideTier <= 15) {
+    return 6;
+  }
+
+  return 7;
+}
+
+function getEliteChanceByFloor(floor: number) {
+  const floorInsideTier = ((floor - 1) % 25) + 1;
+
+  if (floorInsideTier <= 5) return 0.08;
+  if (floorInsideTier <= 10) return 0.14;
+  if (floorInsideTier <= 15) return 0.22;
+  if (floorInsideTier <= 20) return 0.32;
+  if (floorInsideTier <= 24) return 0.45;
+
+  return 0.5;
+}
+
+function rollNormalRoomKind(
+  modifier: FloorModifier
+): 'combat' | 'chest' | 'trap' {
+  const roll = Math.random();
+
+  if (modifier === 'treasure') {
+    if (roll < 0.52) return 'combat';
+    if (roll < 0.86) return 'chest';
+    return 'trap';
+  }
+
+  if (modifier === 'traps') {
+    if (roll < 0.58) return 'combat';
+    if (roll < 0.68) return 'chest';
+    return 'trap';
+  }
+
+  if (modifier === 'cursed') {
+    if (roll < 0.72) return 'combat';
+    if (roll < 0.82) return 'chest';
+    return 'trap';
+  }
+
+  if (modifier === 'elite') {
+    if (roll < 0.78) return 'combat';
+    if (roll < 0.9) return 'chest';
+    return 'trap';
+  }
+
+  if (roll < 0.68) return 'combat';
+  if (roll < 0.84) return 'chest';
+
+  return 'trap';
+}
+
+function rollCombatRoomType(floor: number, modifier: FloorModifier): 'monster' | 'elite' {
+  let eliteChance = getEliteChanceByFloor(floor);
+
+  if (modifier === 'elite') {
+    eliteChance += 0.2;
+  }
+
+  if (modifier === 'cursed') {
+    eliteChance += 0.12;
+  }
+
+  return Math.random() < Math.min(eliteChance, 0.75)
+    ? 'elite'
+    : 'monster';
+}
+
+function createRandomNormalRoom(
+  floor: number,
+  index: number,
+  modifier: FloorModifier
+): FloorRoom {
+  const kind = rollNormalRoomKind(modifier);
+
+  if (kind === 'chest') {
+    return {
+      id: `floor_${floor}_chest_${index}`,
+      type: 'chest',
+      title: 'Старый сундук',
+      description: 'Среди пыли и костей стоит тяжелый погребальный сундук.',
+      completed: false,
+    };
+  }
+
+  if (kind === 'trap') {
+    return {
+      id: `floor_${floor}_trap_${index}`,
+      type: 'trap',
+      title: 'Проклятая ловушка',
+      description: 'Плиты пола покрыты древними знаками. Один неверный шаг может стоить крови.',
+      completed: false,
+    };
+  }
+
+  const type = rollCombatRoomType(floor, modifier);
+
+  return {
+    id: `floor_${floor}_${type}_${index}`,
+    type,
+    title: type === 'elite' ? 'Опасная комната' : 'Обычная комната',
+    description: type === 'elite'
+      ? 'В этой комнате скрывается усиленный враг склепа.'
+      : 'Впереди слышится шорох костей и влажное дыхание мертвечины.',
+    enemyId: type === 'elite'
+      ? getRandomEliteEnemyId()
+      : getRandomCommonEnemyId(),
+    completed: false,
+  };
+}
+
+function createFinalRoom(floor: number): FloorRoom {
+  if (isTierBossFloor(floor)) {
+
+    return {
+      id: `floor_${floor}_tier_boss`,
+      type: 'tier_boss',
+      title: 'Морвеин, Владыка Запечатанного Склепа',
+      description: 'Последняя печать склепа дрожит. За ней ждёт Морвеин.',
+      enemyId: pickTierBoss(floor),
+      completed: false,
+    };
+  }
+
+  return {
+    id: `floor_${floor}_boss`,
+    type: 'boss',
+    title: 'Мини-босс этажа',
+    description: 'Последняя комната этажа охраняется сильным противником.',
+    enemyId: getRandomMiniBossEnemyId(),
+    completed: false,
+  };
 }
 
 export function getCurrentRoom(): FloorRoom | undefined {
@@ -315,43 +331,26 @@ export function getNextFloorAfterCurrent() {
   return gameState.floorRun.currentFloor + 1;
 }
 
-function pickNormalEnemy(floor: number) {
-  const index = Math.min(
-    normalEnemies.length - 1,
-    Math.floor(floor / 8)
-  );
-
-  return normalEnemies[Phaser.Math.Between(0, index)];
-}
-
-function pickEliteEnemy(floor: number) {
-  const index = Math.min(
-    eliteEnemies.length - 1,
-    Math.floor(floor / 10)
-  );
-
-  return eliteEnemies[Phaser.Math.Between(0, index)];
-}
-
-function pickFloorBoss(floor: number) {
-  const tier = getCurrentTierByFloor(floor);
-
-  const bosses = tier >= 2 ? floorBossesTier2 : floorBossesTier1;
-
-  const floorInsideTier = ((floor - 1) % 25) + 1;
-
-  const index = Math.min(
-    bosses.length - 1,
-    Math.floor(floorInsideTier / 5)
-  );
-
-  return bosses[index];
-}
-
 function pickTierBoss(floor: number) {
   const tier = getCurrentTierByFloor(floor);
 
-  return tierBossByTier[tier] ?? 'heart_of_catacombs';
+  return tierBossByTier[tier] ?? 'morvein_sealed_crypt_lord';
+}
+
+function getRandomFrom<T>(items: T[]) {
+  return items[Phaser.Math.Between(0, items.length - 1)];
+}
+
+function getRandomCommonEnemyId() {
+  return getRandomFrom(commonEnemyIds);
+}
+
+function getRandomEliteEnemyId() {
+  return getRandomFrom(eliteEnemyIds);
+}
+
+function getRandomMiniBossEnemyId() {
+  return getRandomFrom(miniBossEnemyIds);
 }
 
 export function getFloorPreview(floor: number) {

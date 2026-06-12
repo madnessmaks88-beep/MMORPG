@@ -5,6 +5,8 @@ import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 import { saveGameAsync } from '../systems/SaveSystem';
 
+import { materials, type MaterialId } from '../data/materials';
+
 import {
   equipItem,
   getBaseItemFromInventoryItem,
@@ -30,7 +32,7 @@ import {
   createSmallText,
 } from '../ui/theme';
 
-type InventoryCategory = 'all' | 'weapon' | 'armor' | 'potions';
+type InventoryCategory = 'all' | 'weapon' | 'armor' | 'potions' | 'materials';
 
 export class InventoryScene extends Phaser.Scene {
 	
@@ -390,9 +392,9 @@ export class InventoryScene extends Phaser.Scene {
 	    return player.inventory;
 	  }
 
-	  if (this.selectedCategory === 'potions') {
-	    return [];
-	  }
+	  if (this.selectedCategory === 'potions' || this.selectedCategory === 'materials') {
+		  return [];
+		}
 
 	  return player.inventory.filter(inventoryItem => {
 	    const item = getBaseItemFromInventoryItem(inventoryItem);
@@ -706,20 +708,24 @@ export class InventoryScene extends Phaser.Scene {
 	  const filteredItems = this.getFilteredInventoryItems();
 
 		const title =
-		  this.selectedCategory === 'potions'
-		    ? `Зелья здоровья`
-		    : this.selectedCategory === 'all'
-		      ? `Все предметы`
-		      : this.selectedCategory === 'weapon'
-		        ? `Оружие`
-		        : this.selectedCategory === 'armor'
-		          ? `Броня`
-		          : `Предметы`;
+		  this.selectedCategory === 'materials'
+		    ? 'Материалы'
+		    : this.selectedCategory === 'potions'
+		      ? 'Зелья здоровья'
+		      : this.selectedCategory === 'all'
+		        ? 'Все предметы'
+		        : this.selectedCategory === 'weapon'
+		          ? 'Оружие'
+		          : this.selectedCategory === 'armor'
+		            ? 'Броня'
+		            : 'Предметы';
 
 		const counter =
-		  this.selectedCategory === 'potions'
-		    ? `${player.potions} шт.`
-		    : `${filteredItems.length} шт.`;
+  		this.selectedCategory === 'materials'
+  		  ? `${this.getTotalMaterialsCount()} шт.`
+  		  : this.selectedCategory === 'potions'
+  		    ? `${player.potions} шт.`
+  		    : `${filteredItems.length} шт.`;
 
 		this.add.text(width / 2 - 275, titleY, title, {
 		  fontFamily: UI.font.title,
@@ -735,7 +741,11 @@ export class InventoryScene extends Phaser.Scene {
 		  color: UI.colors.textMuted,
 		}).setOrigin(1, 0.5).setDepth(10);
 
-	  if (player.inventory.length === 0) {
+	  if (
+		  player.inventory.length === 0 &&
+		  this.selectedCategory !== 'potions' &&
+		  this.selectedCategory !== 'materials'
+		) {
 	    createSmallText(
 	      this,
 	      width / 2,
@@ -809,6 +819,11 @@ export class InventoryScene extends Phaser.Scene {
 		  return;
 		}
 
+		if (this.selectedCategory === 'materials') {
+		  this.createMaterialsCategoryContent(panelY);
+		  return;
+		}
+
 		this.createRoundedMassSellButton({
 		  x: width / 2 - 28,
 		  y: massSellY,
@@ -820,6 +835,147 @@ export class InventoryScene extends Phaser.Scene {
 		  },
 		});
 	}
+
+	private getTotalMaterialsCount() {
+  return Object.values(player.materials ?? {}).reduce((sum, amount) => {
+    return sum + (amount ?? 0);
+  }, 0);
+}
+
+private createMaterialsCategoryContent(panelY: number) {
+  const { width } = this.scale;
+
+  const contentX = width / 2 - 28;
+
+  const visibleMaterials = materials.filter(material => {
+    return (player.materials?.[material.id] ?? 0) > 0;
+  });
+
+  if (visibleMaterials.length === 0) {
+    createSmallText(
+      this,
+      contentX,
+      panelY - 20,
+      'Материалов пока нет.\nИх можно получить с монстров, элиты, мини-боссов и Морвеина.',
+      {
+        fontSize: '20px',
+        color: UI.colors.textMuted,
+        width: 500,
+      }
+    );
+
+    return;
+  }
+
+  visibleMaterials.forEach((material, index) => {
+    this.createMaterialCard(material.id, panelY - 165 + index * 82);
+  });
+}
+
+private createMaterialCard(materialId: MaterialId, y: number) {
+  const { width } = this.scale;
+
+  const material = materials.find(item => item.id === materialId);
+
+  if (!material) {
+    return;
+  }
+
+  const amount = player.materials?.[materialId] ?? 0;
+
+  const contentX = width / 2 - 28;
+
+  const color =
+    material.tier === 'forge_core'
+      ? 0xff6b6b
+      : material.tier === 'medium'
+        ? 0x70a6ff
+        : 0xd8c7a3;
+
+  this.createRoundedPanel({
+    x: contentX,
+    y,
+    width: 500,
+    height: 70,
+    radius: 20,
+    color: 0x14100d,
+    alpha: 0.96,
+    strokeColor: color,
+    strokeAlpha: 0.55,
+    strokeWidth: 2,
+    depth: 20,
+  });
+
+  this.add.circle(contentX - 215, y, 24, color, 0.16)
+    .setStrokeStyle(1, color, 0.65)
+    .setDepth(24);
+
+  this.add.text(contentX - 215, y, this.getMaterialIcon(material.tier), {
+    fontFamily: UI.font.body,
+    fontSize: '19px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 2,
+  }).setOrigin(0.5).setDepth(25);
+
+  this.add.text(contentX - 175, y - 16, material.name, {
+    fontFamily: UI.font.title,
+    fontSize: '18px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 3,
+  }).setOrigin(0, 0.5).setDepth(25);
+
+  this.add.text(contentX - 175, y + 13, this.getMaterialTierText(material.tier), {
+    fontFamily: UI.font.body,
+    fontSize: '13px',
+    color: UI.colors.textMuted,
+  }).setOrigin(0, 0.5).setDepth(25);
+
+  this.add.text(contentX + 215, y, `x${amount}`, {
+    fontFamily: UI.font.title,
+    fontSize: '24px',
+    color: UI.colors.text,
+    stroke: '#000000',
+    strokeThickness: 3,
+  }).setOrigin(1, 0.5).setDepth(25);
+}
+
+private getMaterialIcon(tier: string) {
+  if (tier === 'forge_core') {
+    return '◆';
+  }
+
+  if (tier === 'medium') {
+    return '◇';
+  }
+
+  if (tier === 'crystal') {
+    return '✦';
+  }
+
+  return '•';
+}
+
+private getMaterialTierText(tier: string) {
+  if (tier === 'small') {
+    return 'Малый материал для улучшений до +3';
+  }
+
+  if (tier === 'medium') {
+    return 'Средний материал для улучшений до +5';
+  }
+
+  if (tier === 'forge_core') {
+    return 'Главный материал для прокачки наковальни';
+  }
+
+  if (tier === 'crystal') {
+    return 'Кристалл усиления';
+  }
+
+  return 'Материал';
+}
 
 	private createRoundedMassSellButton(config: {
 	  x: number;
@@ -942,37 +1098,42 @@ export class InventoryScene extends Phaser.Scene {
 	  const { width } = this.scale;
 
 	  const tabs: {
-	    id: InventoryCategory;
-	    label: string;
-	    icon: string;
-	  }[] = [
-	    {
-	      id: 'all',
-	      label: 'All',
-	      icon: '▦',
-	    },
-	    {
-	      id: 'weapon',
-	      label: 'Оружие',
-	      icon: '⚔',
-	    },
-	    {
-	      id: 'armor',
-	      label: 'Броня',
-	      icon: '🛡',
-	    },
-	    {
-	      id: 'potions',
-	      label: 'Зелья',
-	      icon: '✚',
-	    },
-	  ];
+		  id: InventoryCategory;
+		  label: string;
+		  icon: string;
+		}[] = [
+		  {
+		    id: 'all',
+		    label: 'Все',
+		    icon: '▦',
+		  },
+		  {
+		    id: 'weapon',
+		    label: 'Оружие',
+		    icon: '⚔',
+		  },
+		  {
+		    id: 'armor',
+		    label: 'Броня',
+		    icon: '🛡',
+		  },
+		  {
+		    id: 'potions',
+		    label: 'Зелья',
+		    icon: '✚',
+		  },
+		  {
+		    id: 'materials',
+		    label: 'Мат.',
+		    icon: '◇',
+		  },
+		];
 
 	  const tabX = width - 46;
-	  const startY = 480;
-	  const tabHeight = 72;
-	  const tabWidth = 84;
-	  const gap = 10;
+	  const startY = 450;
+		const tabHeight = 66;
+		const tabWidth = 84;
+		const gap = 9;
 
 	  tabs.forEach((tab, index) => {
 	    const y = startY + index * (tabHeight + gap);

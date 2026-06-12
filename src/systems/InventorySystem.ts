@@ -155,62 +155,27 @@ export function getUpgradeCost(inventoryItem: InventoryItem): number {
     baseCost = 55;
   }
 
-  if (item.rarity === 'cursed') {
-    baseCost = 75;
+  if (item.rarity === 'legendary') {
+    baseCost = 85;
+  }
+
+  if (item.rarity === 'mythic') {
+    baseCost = 120;
   }
 
   return baseCost + level * baseCost;
 }
 
 export function upgradeItem(
-  player: PlayerData,
-  instanceId: string
+  _player: PlayerData,
+  _instanceId: string
 ): {
   success: boolean;
   message: string;
 } {
-  const inventoryItem = getInventoryItemByInstanceId(player, instanceId);
-
-  if (!inventoryItem) {
-    return {
-      success: false,
-      message: 'Предмет не найден.',
-    };
-  }
-
-  const item = getBaseItemFromInventoryItem(inventoryItem);
-
-  if (!item) {
-    return {
-      success: false,
-      message: 'Базовый предмет не найден.',
-    };
-  }
-
-  const currentLevel = inventoryItem.upgradeLevel;
-
-  if (currentLevel >= 5) {
-    return {
-      success: false,
-      message: 'Предмет уже улучшен до максимума.',
-    };
-  }
-
-  const cost = getUpgradeCost(inventoryItem);
-
-  if (player.gold < cost) {
-    return {
-      success: false,
-      message: 'Недостаточно золота.',
-    };
-  }
-
-  player.gold -= cost;
-  inventoryItem.upgradeLevel += 1;
-
   return {
-    success: true,
-    message: `${item.name} улучшен до +${inventoryItem.upgradeLevel}.`,
+    success: false,
+    message: 'Улучшение предметов теперь выполняется в кузнице через материалы.',
   };
 }
 
@@ -360,10 +325,13 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
 }
 
 export function getRarityText(item: ItemData): string {
-  if (item.rarity === 'common') return 'Обычный';
-  if (item.rarity === 'rare') return 'Редкий';
-  if (item.rarity === 'epic') return 'Эпический';
-  return 'Проклятый';
+  if (item.rarity === 'common') return 'Обычная';
+  if (item.rarity === 'rare') return 'Редкая';
+  if (item.rarity === 'epic') return 'Эпическая';
+  if (item.rarity === 'legendary') return 'Легендарная';
+  if (item.rarity === 'mythic') return 'Мифическая';
+
+  return 'Обычная';
 }
 
 export function getSlotText(slot: EquipmentSlot): string {
@@ -408,8 +376,12 @@ export function getItemSellPrice(item: ItemData, upgradeLevel = 0): number {
     basePrice = 45;
   }
 
-  if (item.rarity === 'cursed') {
-    basePrice = 80;
+  if (item.rarity === 'legendary') {
+    basePrice = 90;
+  }
+
+  if (item.rarity === 'mythic') {
+    basePrice = 160;
   }
 
   return basePrice + upgradeLevel * Math.floor(basePrice * 0.7);
@@ -461,7 +433,8 @@ export function getRarityColor(item: ItemData): string {
   if (item.rarity === 'common') return '#b8aa91';
   if (item.rarity === 'rare') return '#70a6ff';
   if (item.rarity === 'epic') return '#c084fc';
-  
+  if (item.rarity === 'legendary') return '#f0d58a';
+  if (item.rarity === 'mythic') return '#ff6b6b';
 
   return '#b8aa91';
 }
@@ -470,7 +443,8 @@ export function getRarityColorHex(item: ItemData): number {
   if (item.rarity === 'common') return 0xb8aa91;
   if (item.rarity === 'rare') return 0x70a6ff;
   if (item.rarity === 'epic') return 0xc084fc;
-  
+  if (item.rarity === 'legendary') return 0xf0d58a;
+  if (item.rarity === 'mythic') return 0xff6b6b;
 
   return 0xb8aa91;
 }
@@ -479,6 +453,8 @@ export function getRarityStrokeColor(item: ItemData): number {
   if (item.rarity === 'common') return 0x6f6658;
   if (item.rarity === 'rare') return 0x3f6fa8;
   if (item.rarity === 'epic') return 0x7c3fb0;
+  if (item.rarity === 'legendary') return 0xb8943f;
+  if (item.rarity === 'mythic') return 0x9c1f1f;
 
   return 0x6f6658;
 }

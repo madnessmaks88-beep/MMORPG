@@ -24,6 +24,8 @@ export function createButton(
       ? 0x2a1010
       : 0x21150f;
 
+  const hoverColor = danger ? 0x3a1515 : 0x2c1d14;
+
   const strokeColor = disabled
     ? 0x333333
     : danger
@@ -36,9 +38,11 @@ export function createButton(
       ? '#ffb3b3'
       : UI.colors.text;
 
+  const hoverTextColor = danger ? '#ffd0d0' : '#f0d58a';
+
   const shadow = scene.add.rectangle(x, y + 5, width, height, 0x000000, 0.28);
 
-  const bg = scene.add.rectangle(x, y, width, height, baseColor, 0.96)
+  const bg = scene.add.rectangle(x, y, width, height, baseColor, disabled ? 0.62 : 0.96)
     .setStrokeStyle(2, strokeColor, disabled ? 0.45 : 0.8);
 
   const label = scene.add.text(x, y, text, {
@@ -48,27 +52,88 @@ export function createButton(
   }).setOrigin(0.5);
 
   if (!disabled) {
+    let isPressed = false;
+    let isLocked = false;
+
+    const resetButton = () => {
+      isPressed = false;
+
+      bg.setAlpha(1);
+      bg.setFillStyle(baseColor, 0.96);
+      bg.setStrokeStyle(2, strokeColor, 0.8);
+
+      label.setY(y);
+      label.setColor(textColor);
+    };
+
+    const setHover = () => {
+      if (isPressed) {
+        return;
+      }
+
+      bg.setAlpha(1);
+      bg.setFillStyle(hoverColor, 1);
+      bg.setStrokeStyle(2, strokeColor, 1);
+
+      label.setY(y);
+      label.setColor(hoverTextColor);
+    };
+
+    const setPressed = () => {
+      isPressed = true;
+
+      bg.setAlpha(0.92);
+      bg.setFillStyle(hoverColor, 1);
+      bg.setStrokeStyle(2, strokeColor, 0.95);
+
+      label.setY(y + 1);
+      label.setColor(hoverTextColor);
+    };
+
     bg.setInteractive({ useHandCursor: true });
 
     bg.on('pointerover', () => {
-      bg.setFillStyle(danger ? 0x3a1515 : 0x2c1d14, 1);
-      label.setColor(danger ? '#ffd0d0' : '#f0d58a');
+      setHover();
     });
 
     bg.on('pointerout', () => {
-      bg.setFillStyle(baseColor, 0.96);
-      label.setColor(textColor);
+      resetButton();
     });
 
     bg.on('pointerdown', () => {
-      bg.setScale(0.985);
-      label.setScale(0.985);
+      if (isLocked) {
+        return;
+      }
+
+      setPressed();
     });
 
     bg.on('pointerup', () => {
-      bg.setScale(1);
-      label.setScale(1);
-      onClick();
+      if (!isPressed || isLocked) {
+        return;
+      }
+
+      isLocked = true;
+      isPressed = false;
+
+      bg.setAlpha(1);
+      bg.setFillStyle(hoverColor, 1);
+      bg.setStrokeStyle(2, strokeColor, 1);
+
+      label.setY(y);
+      label.setColor(hoverTextColor);
+
+      scene.time.delayedCall(40, () => {
+        onClick();
+      });
+    });
+
+    bg.on('pointerupoutside', () => {
+      resetButton();
+    });
+
+    bg.on('pointercancel', () => {
+      resetButton();
     });
   }
 

@@ -10,6 +10,12 @@ import {
 } from '../data/gameState';
 
 import { createRelicBonusText, giveRelicForTier } from '../systems/RelicSystem';
+import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
+import { triggerTrapResult } from '../systems/TrapSystem';
+import {
+  createFloorMaterialsShortText,
+  createFloorMaterialsText,
+} from '../systems/FloorMaterialLogSystem';
 
 import {
   completeCurrentFloor,
@@ -30,18 +36,15 @@ import {
   createSceneBackground,
 } from '../ui/theme';
 
-import { giveFloorReward } from '../systems/FloorRewardSystem';
-
 import {
-  addItemToInventory,
   getPlayerStats,
-  rollItemDrop,
 } from '../systems/InventorySystem';
 
-import { getRandomLootItem } from '../data/items';
-import { addExperience, createLevelUpText } from '../systems/LevelSystem';
+import { giveFloorReward } from '../systems/FloorRewardSystem';
+
+import { claimChestReward } from '../systems/ChestRewardSystem';
 import { saveGameAsync } from '../systems/SaveSystem';
-import { trackChestOpened, trackGoldEarned } from '../systems/QuestSystem';
+
 
 export class DungeonScene extends Phaser.Scene {
 
@@ -73,6 +76,8 @@ export class DungeonScene extends Phaser.Scene {
     const tier = getCurrentTierByFloor(floor);
     const modifierName = getFloorModifierName(gameState.floorRun.modifier);
 
+    const theme = getCryptDepthTheme(floor);
+
     this.createRoundedPanel({
       x: width / 2,
       y: 82,
@@ -94,41 +99,39 @@ export class DungeonScene extends Phaser.Scene {
       strokeThickness: 5,
     }).setOrigin(0.5).setDepth(6);
 
-    this.add.text(width / 2, 100, modifierName, {
+    this.add.text(width / 2, 100, `${theme.name}  •  ${modifierName}`, {
       fontFamily: UI.font.body,
       fontSize: '16px',
-      color: UI.colors.textMuted,
+      color: theme.mutedText,
     }).setOrigin(0.5).setDepth(6);
   }
 
   private createDungeonBackdrop() {
     const { width, height } = this.scale;
 
-    // Тёмная глубина
-    this.add.rectangle(width / 2, height / 2, width, height, 0x050403, 0.35).setDepth(0);
+    const floor = gameState.floorRun.currentFloor || 1;
+    const theme = getCryptDepthTheme(floor);
 
-    // Свет факела сверху
-    this.add.circle(width / 2, 120, 250, 0x8b4a1f, 0.06).setDepth(0);
-    this.add.circle(width / 2, 120, 120, 0xf0a040, 0.035).setDepth(0);
+    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 0.55).setDepth(0);
 
-    // Туман
+    this.add.circle(width / 2, 120, 260, theme.glow, 0.075).setDepth(0);
+    this.add.circle(width / 2, 120, 130, theme.accent, 0.035).setDepth(0);
+
     for (let i = 0; i < 14; i += 1) {
       const x = 45 + i * 52;
       const y = 165 + (i % 6) * 92;
 
-      this.add.circle(x, y, 34 + (i % 4) * 8, 0xffffff, 0.013).setDepth(0);
+      this.add.circle(x, y, 34 + (i % 4) * 8, theme.fog, 0.018).setDepth(0);
     }
 
-    // Нижнее затемнение под UI
-    this.add.rectangle(width / 2, height - 180, width, 330, 0x020202, 0.34).setDepth(0);
+    this.add.rectangle(width / 2, height - 180, width, 330, 0x020202, 0.36).setDepth(0);
 
-    // Лёгкие частицы
     for (let i = 0; i < 34; i += 1) {
       const x = Phaser.Math.Between(35, width - 35);
       const y = Phaser.Math.Between(80, height - 170);
       const size = Phaser.Math.Between(1, 2);
 
-      this.add.circle(x, y, size, 0xd8b56d, 0.055).setDepth(1);
+      this.add.circle(x, y, size, theme.accent, 0.055).setDepth(1);
     }
   }
 
@@ -180,15 +183,17 @@ export class DungeonScene extends Phaser.Scene {
 
     const floor = gameState.floorRun.currentFloor;
 
+    const theme = getCryptDepthTheme(floor);
+
     this.createRoundedPanel({
       x: width / 2,
       y: 178,
       width: 620,
       height: 94,
       radius: 24,
-      color: 0x100c09,
+      color: theme.panel,
       alpha: 0.86,
-      strokeColor: UI.colors.goldDark,
+      strokeColor: theme.stroke,
       strokeAlpha: 0.3,
       depth: 2,
     });
@@ -196,7 +201,7 @@ export class DungeonScene extends Phaser.Scene {
     this.add.text(width / 2, 178, getFloorDescription(floor), {
       fontFamily: UI.font.body,
       fontSize: '14px',
-      color: UI.colors.textMuted,
+      color: theme.mutedText,
       align: 'center',
       wordWrap: {
         width: 545,
@@ -254,42 +259,87 @@ export class DungeonScene extends Phaser.Scene {
       return UI.colors.goldText;
     }
 
+    if (
+      lower.includes('материалы') ||
+      lower.includes('кость') ||
+      lower.includes('самоцвет') ||
+      lower.includes('кожа') ||
+      lower.includes('печать') ||
+      lower.includes('пламени') ||
+      lower.includes('саркофага')
+    ) {
+      return '#70a6ff';
+    }
     return UI.colors.text;
   }
 
   private createRoundedActionButton(config: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    text: string;
-    onClick: () => void;
-    variant?: 'green' | 'brown';
-    depth?: number;
-  }) {
-    const radius = 18;
-    const variant = config.variant ?? 'brown';
-    const depth = config.depth ?? 110;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  onClick: () => void;
+  variant?: 'green' | 'brown';
+  depth?: number;
+}) {
+  const radius = 18;
+  const variant = config.variant ?? 'brown';
+  const depth = config.depth ?? 110;
 
-    const bgColor = variant === 'green' ? 0x102016 : 0x21150f;
-    const bgHoverColor = variant === 'green' ? 0x183322 : 0x2c1d14;
+  const bgColor = variant === 'green' ? 0x102016 : 0x21150f;
+  const bgHoverColor = variant === 'green' ? 0x183322 : 0x2c1d14;
 
-    const strokeColor = variant === 'green' ? 0x75d184 : UI.colors.goldDark;
-    const textColor = variant === 'green' ? UI.colors.green : UI.colors.text;
+  const strokeColor = variant === 'green' ? 0x75d184 : UI.colors.goldDark;
+  const textColor = variant === 'green' ? UI.colors.green : UI.colors.text;
+  const hoverTextColor = variant === 'green' ? '#a8f0b4' : UI.colors.goldText;
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.3);
-    shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 5,
-      config.width,
-      config.height,
-      radius
-    );
-    shadow.setDepth(depth);
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.3);
+  shadow.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2 + 5,
+    config.width,
+    config.height,
+    radius
+  );
+  shadow.setDepth(depth);
 
-    const bg = this.add.graphics();
-    bg.fillStyle(bgColor, 0.96);
+  const bg = this.add.graphics();
+  bg.fillStyle(bgColor, 0.96);
+  bg.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.lineStyle(2, strokeColor, 0.9);
+  bg.strokeRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.setDepth(depth + 1);
+
+  const label = this.add.text(config.x, config.y, config.text, {
+    fontFamily: UI.font.body,
+    fontSize: '19px',
+    color: textColor,
+  }).setOrigin(0.5).setDepth(depth + 2);
+
+  const redrawButton = (
+    fillColor: number,
+    fillAlpha: number,
+    strokeAlpha: number,
+    labelColor: string,
+    labelOffsetY = 0
+  ) => {
+    bg.clear();
+
+    bg.fillStyle(fillColor, fillAlpha);
     bg.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -298,7 +348,7 @@ export class DungeonScene extends Phaser.Scene {
       radius
     );
 
-    bg.lineStyle(2, strokeColor, 0.9);
+    bg.lineStyle(2, strokeColor, strokeAlpha);
     bg.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -306,90 +356,81 @@ export class DungeonScene extends Phaser.Scene {
       config.height,
       radius
     );
-    bg.setDepth(depth + 1);
-    
 
-    bg.setInteractive(
-      new Phaser.Geom.Rectangle(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height
-      ),
-      Phaser.Geom.Rectangle.Contains
-    );
+    label.setY(config.y + labelOffsetY);
+    label.setColor(labelColor);
+  };
 
-    const label = this.add.text(config.x, config.y, config.text, {
-      fontFamily: UI.font.body,
-      fontSize: '19px',
-      color: textColor,
-    }).setOrigin(0.5); label.setDepth(depth + 2);
+  let isPressed = false;
+  let isLocked = false;
 
-    bg.on('pointerover', () => {
-      bg.clear();
+  bg.setInteractive(
+    new Phaser.Geom.Rectangle(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height
+    ),
+    Phaser.Geom.Rectangle.Contains
+  );
 
-      bg.fillStyle(bgHoverColor, 1);
-      bg.fillRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+  bg.on('pointerover', () => {
+    if (isPressed || isLocked) return;
 
-      bg.lineStyle(2, strokeColor, 1);
-      bg.strokeRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+    redrawButton(bgHoverColor, 1, 1, hoverTextColor);
+  });
 
-      label.setColor(variant === 'green' ? '#a8f0b4' : UI.colors.goldText);
-    });
+  bg.on('pointerout', () => {
+    isPressed = false;
 
-    bg.on('pointerout', () => {
-      bg.clear();
+    if (isLocked) return;
 
-      bg.fillStyle(bgColor, 0.96);
-      bg.fillRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+    redrawButton(bgColor, 0.96, 0.9, textColor);
+  });
 
-      bg.lineStyle(2, strokeColor, 0.9);
-      bg.strokeRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+  bg.on('pointerdown', () => {
+    if (isLocked) return;
 
-      label.setColor(textColor);
-    });
+    isPressed = true;
 
-    bg.on('pointerdown', () => {
-      bg.setScale(0.985);
-      label.setScale(0.985);
-    });
+    redrawButton(bgHoverColor, 0.92, 1, hoverTextColor, 1);
+  });
 
-    bg.on('pointerup', () => {
-      bg.setScale(1);
-      label.setScale(1);
+  bg.on('pointerup', () => {
+    if (!isPressed || isLocked) return;
+
+    isPressed = false;
+    isLocked = true;
+
+    redrawButton(bgHoverColor, 1, 1, hoverTextColor);
+
+    this.time.delayedCall(40, () => {
       config.onClick();
     });
+  });
 
-    return {
-      shadow,
-      bg,
-      label,
-    };
-  }
+  bg.on('pointerupoutside', () => {
+    isPressed = false;
+
+    if (isLocked) return;
+
+    redrawButton(bgColor, 0.96, 0.9, textColor);
+  });
+
+  bg.on('pointercancel', () => {
+    isPressed = false;
+
+    if (isLocked) return;
+
+    redrawButton(bgColor, 0.96, 0.9, textColor);
+  });
+
+  return {
+    shadow,
+    bg,
+    label,
+  };
+}
 
   private createRoomMap() {
    const { width } = this.scale;
@@ -468,6 +509,8 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const room = getCurrentRoom();
+    const floor = gameState.floorRun.currentFloor || 1;
+    const theme = getCryptDepthTheme(floor);
 
     if (!room) {
       this.showFloorCompleted();
@@ -485,7 +528,7 @@ export class DungeonScene extends Phaser.Scene {
       width: 620,
       height: panelHeight,
       radius: 36,
-      color: isBossRoom ? 0x160908 : 0x0d0a08,
+      color: isBossRoom ? 0x160908 : theme.panel,
       alpha: 0.94,
       strokeColor: this.getRoomStrokeColor(room.type),
       strokeAlpha: isBossRoom ? 0.82 : 0.52,
@@ -526,7 +569,7 @@ export class DungeonScene extends Phaser.Scene {
     this.add.text(width / 2, topY + 140, roomTitle, {
       fontFamily: UI.font.title,
       fontSize: isBossRoom ? '36px' : '34px',
-      color: isBossRoom ? UI.colors.red : UI.colors.goldText,
+      color: isBossRoom ? UI.colors.red : theme.text,
       stroke: '#000000',
       strokeThickness: 5,
     }).setOrigin(0.5).setDepth(7);
@@ -704,13 +747,13 @@ export class DungeonScene extends Phaser.Scene {
     if (type === 'chest') {
       buttonText = 'Открыть сундук';
       icon = '✦';
-      description = 'Золото, опыт и шанс предмета.';
+      description = 'Золото и материалы для кузницы.';
     }
 
     if (type === 'trap') {
       buttonText = 'Пройти осторожно';
       icon = '!';
-      description = 'Ловкость может спасти от урона.';
+      description = 'Можно избежать урона, если хватит ловкости.';
     }
 
     if (isBattleRoom) {
@@ -867,38 +910,97 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private createRoomActionButton(config: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    icon: string;
-    title: string;
-    subtitle: string;
-    accentColor: number;
-    danger?: boolean;
-    onClick: () => void;
-  }) {
-    const danger = config.danger ?? false;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  icon: string;
+  title: string;
+  subtitle: string;
+  accentColor: number;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  const danger = config.danger ?? false;
 
-    const bgColor = danger ? 0x241010 : 0x17100c;
-    const hoverColor = danger ? 0x321515 : 0x21150f;
-    const textColor = danger ? UI.colors.red : UI.colors.goldText;
+  const bgColor = danger ? 0x241010 : 0x17100c;
+  const hoverColor = danger ? 0x321515 : 0x21150f;
+  const textColor = danger ? UI.colors.red : UI.colors.goldText;
+  const hoverTextColor = danger ? '#ff9a9a' : UI.colors.text;
 
-    const radius = 22;
+  const radius = 22;
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.34);
-    shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 5,
-      config.width,
-      config.height,
-      radius
-    );
-    shadow.setDepth(20);
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.34);
+  shadow.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2 + 5,
+    config.width,
+    config.height,
+    radius
+  );
+  shadow.setDepth(20);
 
-    const bg = this.add.graphics();
-    bg.fillStyle(bgColor, 0.96);
+  const bg = this.add.graphics();
+  bg.fillStyle(bgColor, 0.96);
+  bg.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
+  bg.strokeRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.setDepth(21);
+
+  const iconX = config.x - config.width / 2 + 42;
+
+  const iconCircle = this.add.circle(iconX, config.y, 23, config.accentColor, 0.15)
+    .setStrokeStyle(1, config.accentColor, 0.58)
+    .setDepth(22);
+
+  const iconText = this.add.text(iconX, config.y, config.icon, {
+    fontFamily: UI.font.body,
+    fontSize: '20px',
+    color: textColor,
+    stroke: '#000000',
+    strokeThickness: 2,
+  }).setOrigin(0.5).setDepth(23);
+
+  const titleText = this.add.text(config.x - config.width / 2 + 78, config.y - 12, config.title, {
+    fontFamily: UI.font.title,
+    fontSize: '20px',
+    color: textColor,
+    stroke: '#000000',
+    strokeThickness: 3,
+  }).setOrigin(0, 0.5).setDepth(23);
+
+  const subtitleText = this.add.text(config.x - config.width / 2 + 78, config.y + 17, config.subtitle, {
+    fontFamily: UI.font.body,
+    fontSize: '13px',
+    color: UI.colors.textMuted,
+    wordWrap: {
+      width: config.width - 105,
+    },
+  }).setOrigin(0, 0.5).setDepth(23);
+
+  const redrawButton = (
+    fillColor: number,
+    fillAlpha: number,
+    strokeAlpha: number,
+    titleColor: string,
+    offsetY = 0
+  ) => {
+    bg.clear();
+
+    bg.fillStyle(fillColor, fillAlpha);
     bg.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -906,7 +1008,8 @@ export class DungeonScene extends Phaser.Scene {
       config.height,
       radius
     );
-    bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
+
+    bg.lineStyle(2, config.accentColor, strokeAlpha);
     bg.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -914,106 +1017,79 @@ export class DungeonScene extends Phaser.Scene {
       config.height,
       radius
     );
-    bg.setDepth(21);
 
-    const iconX = config.x - config.width / 2 + 42;
+    iconCircle.setY(config.y + offsetY);
+    iconText.setY(config.y + offsetY);
+    titleText.setY(config.y - 12 + offsetY);
+    subtitleText.setY(config.y + 17 + offsetY);
 
-    this.add.circle(iconX, config.y, 23, config.accentColor, 0.15)
-      .setStrokeStyle(1, config.accentColor, 0.58)
-      .setDepth(22);
+    titleText.setColor(titleColor);
+  };
 
-    this.add.text(iconX, config.y, config.icon, {
-      fontFamily: UI.font.body,
-      fontSize: '20px',
-      color: textColor,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(23);
+  let isPressed = false;
+  let isLocked = false;
 
-    const titleText = this.add.text(config.x - config.width / 2 + 78, config.y - 12, config.title, {
-      fontFamily: UI.font.title,
-      fontSize: '20px',
-      color: textColor,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0, 0.5).setDepth(23);
+  bg.setInteractive(
+    new Phaser.Geom.Rectangle(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height
+    ),
+    Phaser.Geom.Rectangle.Contains
+  );
 
-    this.add.text(config.x - config.width / 2 + 78, config.y + 17, config.subtitle, {
-      fontFamily: UI.font.body,
-      fontSize: '13px',
-      color: UI.colors.textMuted,
-      wordWrap: {
-        width: config.width - 105,
-      },
-    }).setOrigin(0, 0.5).setDepth(23);
+  bg.on('pointerover', () => {
+    if (isPressed || isLocked) return;
 
-    bg.setInteractive(
-      new Phaser.Geom.Rectangle(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height
-      ),
-      Phaser.Geom.Rectangle.Contains
-    );
+    redrawButton(hoverColor, 1, 0.95, hoverTextColor);
+  });
 
-    bg.on('pointerover', () => {
-      bg.clear();
+  bg.on('pointerout', () => {
+    isPressed = false;
 
-      bg.fillStyle(hoverColor, 1);
-      bg.fillRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
-      bg.lineStyle(2, config.accentColor, 0.95);
-      bg.strokeRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+    if (isLocked) return;
 
-      titleText.setColor(danger ? '#ff9a9a' : UI.colors.text);
-    });
+    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
+  });
 
-    bg.on('pointerout', () => {
-      bg.clear();
+  bg.on('pointerdown', () => {
+    if (isLocked) return;
 
-      bg.fillStyle(bgColor, 0.96);
-      bg.fillRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
-      bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
-      bg.strokeRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+    isPressed = true;
 
-      titleText.setColor(textColor);
-    });
+    redrawButton(hoverColor, 0.92, 0.95, hoverTextColor, 1);
+  });
 
-    bg.on('pointerdown', () => {
-      bg.setScale(0.985);
-      titleText.setScale(0.985);
-    });
+  bg.on('pointerup', () => {
+    if (!isPressed || isLocked) return;
 
-    bg.on('pointerup', () => {
-      bg.setScale(1);
-      titleText.setScale(1);
+    isPressed = false;
+    isLocked = true;
+
+    redrawButton(hoverColor, 1, 0.95, hoverTextColor);
+
+    this.time.delayedCall(40, () => {
       config.onClick();
     });
-  }
+  });
+
+  bg.on('pointerupoutside', () => {
+    isPressed = false;
+
+    if (isLocked) return;
+
+    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
+  });
+
+  bg.on('pointercancel', () => {
+    isPressed = false;
+
+    if (isLocked) return;
+
+    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
+  });
+}
 
   private createRoundedPanel(config: {
     x: number;
@@ -1075,67 +1151,27 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private openChest() {
-    let gold = Phaser.Math.Between(6, 16);
+  const room = getCurrentRoom();
 
-    if (gameState.floorRun.modifier === 'treasure') {
-      gold += Phaser.Math.Between(12, 28);
-    }
-
-    if (gameState.floorRun.modifier === 'cursed') {
-      gold += Phaser.Math.Between(8, 20);
-    }
-
-    player.gold += gold;
-
-    trackChestOpened();
-    trackGoldEarned(gold);
-
-    gameState.floorRun.chestsOpened += 1;
-    gameState.floorRun.goldEarned += gold;
-
-    const expResult = addExperience(player, 6);
-
-    gameState.floorRun.expEarned += 6;
-
-    let itemText = '';
-
-    let chestItemChance = 0.25;
-
-    if (gameState.floorRun.modifier === 'treasure') {
-      chestItemChance += 0.25;
-    }
-
-    if (gameState.floorRun.modifier === 'cursed') {
-      chestItemChance += 0.15;
-    }
-
-    if (rollItemDrop(player, chestItemChance)) {
-      const item = getRandomLootItem();
-
-      addItemToInventory(player, item.id);
-
-      itemText = `\nНайден предмет: ${item.name}`;
-    }
-
-    let levelText = '';
-
-    if (expResult.leveledUp) {
-      levelText = `\n\n${createLevelUpText(expResult)}`;
-    }
-
-    markCurrentRoomCompleted();
-    goToNextRoom();
-
-    void saveGameAsync();
-
-    this.showMessage(
-      'Сундук открыт',
-      `Ты открыл сундук.\n\nЗолото: +${gold}\nОпыт: +6${itemText}${levelText}`,
-      () => {
-        this.scene.restart();
-      }
-    );
+  if (!room || room.completed) {
+    return;
   }
+
+  const reward = claimChestReward();
+
+  markCurrentRoomCompleted();
+  goToNextRoom();
+
+  void saveGameAsync();
+
+  this.showMessage(
+    'Сундук открыт',
+    reward.text,
+    () => {
+      this.scene.restart();
+    }
+  );
+}
 
   private createFloorJournal(y: number, x = this.scale.width / 2) {
     const run = gameState.floorRun;
@@ -1154,6 +1190,7 @@ export class DungeonScene extends Phaser.Scene {
       `Ловушки: ${run.trapsTriggered}`,
       `Золото: +${run.goldEarned}`,
       `Опыт: +${run.expEarned}`,
+      createFloorMaterialsShortText(),
     ];
 
     lines.forEach((line, index) => {
@@ -1171,48 +1208,23 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private triggerTrap() {
-    const stats = getPlayerStats(player);
+    const room = getCurrentRoom();
 
-    gameState.floorRun.trapsTriggered += 1;
-
-    if (Math.random() < stats.trapDodgeChance) {
-      markCurrentRoomCompleted();
-      goToNextRoom();
-
-      void saveGameAsync();
-
-      this.showMessage(
-        'Проклятая ловушка',
-        `Ты встретил проклятую ловушку.\n\nЛовкость помогла увернуться.\nУрон: 0.`,
-        () => {
-          this.scene.restart();
-        }
-      );
-
+    if (!room || room.completed) {
       return;
     }
 
-    let damage = Phaser.Math.Between(14, 28);
-
-    if (gameState.floorRun.modifier === 'traps') {
-      damage = Math.floor(damage * 1.35);
-    }
-
-    if (gameState.floorRun.modifier === 'cursed') {
-      damage = Math.floor(damage * 1.5);
-    }
-
-    player.hp = Math.max(0, player.hp - damage);
+    const result = triggerTrapResult();
 
     if (player.hp <= 0) {
       this.showMessage(
         'Ты погиб',
-        'Ловушка оказалась смертельной.\nТы очнулся в лагере.',
+        `${result.text}\n\nЛовушка оказалась смертельной.\nТы очнулся в лагере.`,
         () => {
           const freshStats = getPlayerStats(player);
 
           player.hp = freshStats.maxHp;
-          player.energy = player.maxEnergy;
+          player.energy = freshStats.maxEnergy;
 
           resetFloorRun();
 
@@ -1231,8 +1243,8 @@ export class DungeonScene extends Phaser.Scene {
     void saveGameAsync();
 
     this.showMessage(
-      'Проклятая ловушка',
-      `Ты встретил проклятую ловушку.\n\nЛовкость не помогла увернуться.\nУрон: ${damage}.`,
+      result.avoided ? 'Ловушка обезврежена' : 'Проклятая ловушка',
+      result.text,
       () => {
         this.scene.restart();
       }
@@ -1307,7 +1319,13 @@ export class DungeonScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(103);
 
     // Главный reward-блок
-    this.createPremiumRewardBox(width / 2, 420, rewardText);
+    const materialsText = createFloorMaterialsText();
+
+    this.createPremiumRewardBox(
+      width / 2,
+      420,
+      `${rewardText}\n${materialsText}`
+    );
 
     // Две компактные инфо-колонки
     this.createCompactFloorJournal(645, width / 2 - 165);
@@ -1471,6 +1489,17 @@ export class DungeonScene extends Phaser.Scene {
    if (lower.includes('предмет') || lower.includes('найден')) {
      return '▣';
    }
+   if (
+      lower.includes('материалы') ||
+      lower.includes('кость') ||
+      lower.includes('самоцвет') ||
+      lower.includes('кожа') ||
+      lower.includes('печать') ||
+      lower.includes('пламени') ||
+      lower.includes('саркофага')
+    ) {
+      return '◇';
+    }
 
    if (lower.includes('награда')) {
      return '★';
@@ -1496,6 +1525,7 @@ export class DungeonScene extends Phaser.Scene {
       `Ловушки: ${run.trapsTriggered}`,
       `Золото: +${run.goldEarned}`,
       `Опыт: +${run.expEarned}`,
+      createFloorMaterialsShortText(),
     ];
 
     lines.forEach((line, index) => {
@@ -1503,7 +1533,9 @@ export class DungeonScene extends Phaser.Scene {
         ? UI.colors.goldText
         : line.includes('Опыт')
           ? UI.colors.green
-          : UI.colors.textMuted;
+          : line.includes('Материалы')
+            ? '#70a6ff'
+            : UI.colors.textMuted;
 
       this.add.text(x, y - 32 + index * 25, line, {
         fontFamily: UI.font.body,
@@ -1852,11 +1884,11 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     if (type === 'chest') {
-      return 'Можно получить золото, опыт и шанс на предмет.';
+      return 'Можно получить золото и материалы для улучшения оружия.';
     }
 
     if (type === 'trap') {
-      return 'Ловкость может помочь избежать урона.';
+      return 'Ловкость может помочь избежать урона. Некоторые ловушки также отнимают энергию.';
     }
 
     if (type === 'boss') {

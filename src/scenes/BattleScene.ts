@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 
+
 import { player } from '../data/player';
 import type { EnemyData } from '../data/enemies';
+import { getEnemyById } from '../data/enemies';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { trackEnemyKilled, trackGoldEarned } from '../systems/QuestSystem';
-import { getRandomLootItem } from '../data/items';
 import {
   restoreEnergy,
 } from '../systems/BattleSystem';
@@ -15,13 +16,13 @@ import {
 } from '../data/gameState';
 import { addExperience, createLevelUpText } from '../systems/LevelSystem';
 import {
-  addItemToInventory,
   getEquippedWeapon,
   getPlayerStats,
-  getRarityText,
-  rollItemDrop,
 } from '../systems/InventorySystem';
 import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
+import { rollEnemyLoot } from '../systems/LootSystem';
+import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
+import { createScaledEnemy } from '../systems/EnemyScalingSystem';
 
 
 
@@ -29,7 +30,6 @@ import {
   UI,
 } from '../ui/theme';
 
-import { getEnemyById } from '../data/enemies';
 
 
 
@@ -95,37 +95,44 @@ export class BattleScene extends Phaser.Scene {
   }
 
   init(data?: { enemyId?: string; returnToDungeon?: boolean }) {
-   this.returnToDungeon = data?.returnToDungeon ?? false;
-   this.isBattleEnded = false;
-   this.isBusy = false;
+  this.returnToDungeon = data?.returnToDungeon ?? false;
+  this.isBattleEnded = false;
+  this.isBusy = false;
 
-   this.humanPassiveActivated = false;
-   this.desperateStrikeCooldown = 0;
+  this.humanPassiveActivated = false;
+  this.desperateStrikeCooldown = 0;
 
-   this.enemyBleedTurns = 0;
-   this.enemyBleedDamage = 0;
-   this.shieldSwordGuardActive = false;
+  this.enemyBleedTurns = 0;
+  this.enemyBleedDamage = 0;
+  this.shieldSwordGuardActive = false;
 
-   const room = getCurrentRoom();
+  const room = getCurrentRoom();
 
-   const enemyId =
-     data?.enemyId ??
-     room?.enemyId ??
-     'rotting_skeleton';
+  const enemyId =
+    data?.enemyId ??
+    room?.enemyId ??
+    'bone_gnawer';
 
-   let enemyTemplate = getEnemyById(enemyId);
+  console.log('ROOM:', room);
+  console.log('ENEMY ID:', enemyId);
 
-   if (!enemyTemplate) {
-     console.warn('Enemy not found:', enemyId);
-     enemyTemplate = getEnemyById('rotting_skeleton');
-   }
+  let enemyTemplate = getEnemyById(enemyId);
 
-   if (!enemyTemplate) {
-     throw new Error('Fallback enemy rotting_skeleton not found');
-   }
+  console.log('ENEMY:', enemyTemplate);
 
-   this.enemy = this.createScaledEnemy(enemyTemplate);
+  if (!enemyTemplate) {
+    console.warn('Enemy not found:', enemyId);
+    enemyTemplate = getEnemyById('bone_gnawer');
   }
+
+  if (!enemyTemplate) {
+    throw new Error('Fallback enemy bone_gnawer not found');
+  }
+
+  const floor = gameState.floorRun.currentFloor || 1;
+
+  this.enemy = createScaledEnemy(enemyTemplate, floor, room?.type);
+}
 
   create() {
     const { width } = this.scale;
@@ -339,154 +346,206 @@ export class BattleScene extends Phaser.Scene {
     }
 
     private createBattleActionButton(config: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    icon: string;
-    title: string;
-    subtitle: string;
-    accentColor: number;
-    disabled?: boolean;
-    onClick: () => void;
-  }) {
-    const disabled = config.disabled ?? false;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  icon: string;
+  title: string;
+  subtitle: string;
+  accentColor: number;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const disabled = config.disabled ?? false;
 
-    const bgColor = disabled ? 0x101010 : 0x17100c;
-    const alpha = disabled ? 0.55 : 0.96;
-    const strokeAlpha = disabled ? 0.25 : 0.72;
+  const bgColor = disabled ? 0x101010 : 0x17100c;
+  const hoverColor = 0x20150f;
+  const alpha = disabled ? 0.55 : 0.96;
+  const strokeAlpha = disabled ? 0.25 : 0.72;
 
-    const objects: Phaser.GameObjects.GameObject[] = [];
+  const textColor = disabled ? '#555555' : UI.colors.text;
+  const titleHoverColor = UI.colors.goldText;
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.32);
-    shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 5,
-      config.width,
-      config.height,
-      22
-    );
-    shadow.setDepth(21);
+  const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const bg = this.add.graphics();
-    bg.fillStyle(bgColor, alpha);
+  const radius = 22;
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.32);
+  shadow.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2 + 5,
+    config.width,
+    config.height,
+    radius
+  );
+  shadow.setDepth(21);
+
+  const bg = this.add.graphics();
+  bg.fillStyle(bgColor, alpha);
+  bg.fillRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.lineStyle(2, config.accentColor, strokeAlpha);
+  bg.strokeRoundedRect(
+    config.x - config.width / 2,
+    config.y - config.height / 2,
+    config.width,
+    config.height,
+    radius
+  );
+  bg.setDepth(22);
+
+  const iconX = config.x - config.width / 2 + 42;
+
+  const iconBg = this.add.circle(iconX, config.y, 22, config.accentColor, disabled ? 0.08 : 0.16)
+    .setStrokeStyle(1, config.accentColor, disabled ? 0.25 : 0.58)
+    .setDepth(23);
+
+  const icon = this.add.text(iconX, config.y, config.icon, {
+    fontFamily: UI.font.body,
+    fontSize: '18px',
+    color: disabled ? '#555555' : UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 2,
+  }).setOrigin(0.5).setDepth(24);
+
+  const title = this.add.text(config.x - config.width / 2 + 78, config.y - 11, config.title, {
+    fontFamily: UI.font.title,
+    fontSize: config.width > 300 ? '20px' : '16px',
+    color: textColor,
+    stroke: '#000000',
+    strokeThickness: 3,
+  }).setOrigin(0, 0.5).setDepth(24);
+
+  const subtitle = this.add.text(config.x - config.width / 2 + 78, config.y + 16, config.subtitle, {
+    fontFamily: UI.font.body,
+    fontSize: '13px',
+    color: disabled ? '#444444' : UI.colors.textMuted,
+  }).setOrigin(0, 0.5).setDepth(24);
+
+  objects.push(shadow, bg, iconBg, icon, title, subtitle);
+
+  const redrawButton = (
+    fillColor: number,
+    fillAlpha: number,
+    borderAlpha: number,
+    titleColor: string,
+    offsetY = 0
+  ) => {
+    bg.clear();
+
+    bg.fillStyle(fillColor, fillAlpha);
     bg.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
       config.width,
       config.height,
-      22
+      radius
     );
-    bg.lineStyle(2, config.accentColor, strokeAlpha);
+
+    bg.lineStyle(2, config.accentColor, borderAlpha);
     bg.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
       config.width,
       config.height,
-      22
+      radius
     );
-    bg.setDepth(22);
 
-    const iconX = config.x - config.width / 2 + 42;
+    iconBg.setY(config.y + offsetY);
+    icon.setY(config.y + offsetY);
+    title.setY(config.y - 11 + offsetY);
+    subtitle.setY(config.y + 16 + offsetY);
 
-    const iconBg = this.add.circle(iconX, config.y, 22, config.accentColor, disabled ? 0.08 : 0.16)
-      .setStrokeStyle(1, config.accentColor, disabled ? 0.25 : 0.58)
-      .setDepth(23);
+    title.setColor(titleColor);
+  };
 
-    const icon = this.add.text(iconX, config.y, config.icon, {
-      fontFamily: UI.font.body,
-      fontSize: '18px',
-      color: disabled ? '#555555' : UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(24);
+  if (!disabled) {
+    let isPressed = false;
+    let isLocked = false;
 
-    const title = this.add.text(config.x - config.width / 2 + 78, config.y - 11, config.title, {
-      fontFamily: UI.font.title,
-      fontSize: config.width > 300 ? '20px' : '16px',
-      color: disabled ? '#555555' : UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0, 0.5).setDepth(24);
+    bg.setInteractive(
+      new Phaser.Geom.Rectangle(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height
+      ),
+      Phaser.Geom.Rectangle.Contains
+    );
 
-    const subtitle = this.add.text(config.x - config.width / 2 + 78, config.y + 16, config.subtitle, {
-      fontFamily: UI.font.body,
-      fontSize: '13px',
-      color: disabled ? '#444444' : UI.colors.textMuted,
-    }).setOrigin(0, 0.5).setDepth(24);
+    bg.on('pointerover', () => {
+      if (isPressed || isLocked) {
+        return;
+      }
 
-    objects.push(shadow, bg, iconBg, icon, title, subtitle);
+      redrawButton(hoverColor, 1, 0.95, titleHoverColor);
+    });
 
-    if (!disabled) {
-      bg.setInteractive(
-        new Phaser.Geom.Rectangle(
-          config.x - config.width / 2,
-          config.y - config.height / 2,
-          config.width,
-          config.height
-        ),
-        Phaser.Geom.Rectangle.Contains
-      );
+    bg.on('pointerout', () => {
+      isPressed = false;
 
-      bg.on('pointerover', () => {
-        title.setColor(UI.colors.goldText);
-        bg.clear();
-        bg.fillStyle(0x20150f, 1);
-        bg.fillRoundedRect(
-          config.x - config.width / 2,
-          config.y - config.height / 2,
-          config.width,
-          config.height,
-          22
-        );
-        bg.lineStyle(2, config.accentColor, 0.95);
-        bg.strokeRoundedRect(
-          config.x - config.width / 2,
-          config.y - config.height / 2,
-          config.width,
-          config.height,
-          22
-        );
-      });
+      if (isLocked) {
+        return;
+      }
 
-      bg.on('pointerout', () => {
-        title.setColor(UI.colors.text);
-        bg.clear();
-        bg.fillStyle(bgColor, alpha);
-        bg.fillRoundedRect(
-          config.x - config.width / 2,
-          config.y - config.height / 2,
-          config.width,
-          config.height,
-          22
-        );
-        bg.lineStyle(2, config.accentColor, strokeAlpha);
-        bg.strokeRoundedRect(
-          config.x - config.width / 2,
-          config.y - config.height / 2,
-          config.width,
-          config.height,
-          22
-        );
-      });
+      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+    });
 
-      bg.on('pointerdown', () => {
-        bg.setScale(0.99);
-        title.setScale(0.99);
-        subtitle.setScale(0.99);
-      });
+    bg.on('pointerdown', () => {
+      if (isLocked) {
+        return;
+      }
 
-      bg.on('pointerup', () => {
-        bg.setScale(1);
-        title.setScale(1);
-        subtitle.setScale(1);
+      isPressed = true;
+
+      redrawButton(hoverColor, 0.92, 0.95, titleHoverColor, 1);
+    });
+
+    bg.on('pointerup', () => {
+      if (!isPressed || isLocked) {
+        return;
+      }
+
+      isPressed = false;
+      isLocked = true;
+
+      redrawButton(hoverColor, 1, 0.95, titleHoverColor);
+
+      this.time.delayedCall(40, () => {
         config.onClick();
       });
-    }
+    });
 
-    return objects;
+    bg.on('pointerupoutside', () => {
+      isPressed = false;
+
+      if (isLocked) {
+        return;
+      }
+
+      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+    });
+
+    bg.on('pointercancel', () => {
+      isPressed = false;
+
+      if (isLocked) {
+        return;
+      }
+
+      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+    });
   }
+
+  return objects;
+}
 
   private getWeaponAttackButtonText() {
     const equippedWeapon = getEquippedWeapon(player);
@@ -554,75 +613,6 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(450, () => {
       this.enemyTurn(playerActionText, true);
     });
-  }
-
-  
-
-  private createScaledEnemy(enemy: EnemyData): EnemyData {
-    const floor = gameState.floorRun.currentFloor || 1;
-    const room = getCurrentRoom();
-    const modifier = gameState.floorRun.modifier;
-
-    let multiplier = 1 + (floor - 1) * 0.08;
-
-    if (room?.type === 'elite') {
-      multiplier *= 1.25;
-    }
-
-    if (room?.type === 'boss') {
-      multiplier *= 1.55;
-    }
-
-    if (room?.type === 'tier_boss') {
-      multiplier *= 2.2;
-    }
-
-    if (modifier === 'elite' && room?.type === 'elite') {
-      multiplier *= 1.15;
-    }
-
-    if (modifier === 'cursed') {
-      multiplier *= 1.25;
-    }
-
-    if (modifier === 'tier_boss') {
-      multiplier *= 1.2;
-    }
-
-    const scaledMaxHp = Math.floor(enemy.maxHp * multiplier);
-    const scaledAttack = Math.floor(enemy.attack * multiplier);
-    const scaledDefense = Math.floor(enemy.defense * multiplier);
-
-    let rewardMultiplier = 1 + floor * 0.07;
-
-    if (modifier === 'elite') {
-      rewardMultiplier += 0.15;
-    }
-
-    if (modifier === 'cursed') {
-      rewardMultiplier += 0.25;
-    }
-
-    if (room?.type === 'boss') {
-      rewardMultiplier += 0.2;
-    }
-
-    if (room?.type === 'tier_boss') {
-      rewardMultiplier += 0.45;
-    }
-
-    const scaledExp = Math.floor(enemy.expReward * rewardMultiplier);
-    const scaledGold = Math.floor(enemy.goldReward * rewardMultiplier);
-
-    return {
-      ...enemy,
-      maxHp: scaledMaxHp,
-      hp: scaledMaxHp,
-      attack: scaledAttack,
-      defense: scaledDefense,
-      expReward: scaledExp,
-      goldReward: scaledGold,
-    };
   }
 
   private getBattleStats(): BattleStats {
@@ -797,13 +787,15 @@ export class BattleScene extends Phaser.Scene {
   private createBattleBackground() {
     const { width, height } = this.scale;
 
-    // основной фон
-    this.add.rectangle(width / 2, height / 2, width, height, 0x050403, 1);
+    const floor = gameState.floorRun.currentFloor || 1;
+    const theme = getCryptDepthTheme(floor);
 
-    // дальняя красная дымка
-    this.add.circle(width / 2, 155, 260, 0x301008, 0.34);
-    this.add.circle(width / 2, 190, 180, 0x5c1a0d, 0.2);
-    this.add.circle(width / 2, 220, 90, 0xb9481a, 0.08);
+    // основной фон
+    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 1);
+
+    this.add.circle(width / 2, 155, 260, theme.glow, 0.28);
+    this.add.circle(width / 2, 190, 180, theme.fog, 0.13);
+    this.add.circle(width / 2, 220, 90, theme.accent, 0.07);
 
     // задняя стена арены
     this.add.rectangle(width / 2, 355, 650, 520, 0x0b0807, 0.92)
@@ -855,8 +847,8 @@ export class BattleScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x3c2515, 0.55);
 
     // красное свечение за врагом
-    this.add.circle(width / 2, 245, 165, 0x781d12, 0.12);
-    this.add.circle(width / 2, 245, 95, 0xff5a2a, 0.055);
+    this.add.circle(width / 2, 245, 165, theme.glow, 0.12);
+    this.add.circle(width / 2, 245, 95, theme.accent, 0.055);
 
     // пол арены
     this.add.rectangle(width / 2, 625, 650, 230, 0x0d0907, 0.96)
@@ -927,7 +919,7 @@ export class BattleScene extends Phaser.Scene {
       const y = Phaser.Math.Between(150, 520);
       const size = Phaser.Math.Between(1, 2);
 
-      this.add.circle(x, y, size, 0xff6b35, 0.12);
+      this.add.circle(x, y, size, theme.accent, 0.12);
     }
 
     // затемнение под интерфейсом кнопок
@@ -1647,15 +1639,11 @@ export class BattleScene extends Phaser.Scene {
 
     const expResult = addExperience(player, this.enemy.expReward);
 
-    let lootText = '';
+    const loot = rollEnemyLoot(this.enemy);
 
-    if (rollItemDrop(player, 0.15)) {
-      const item = getRandomLootItem();
-
-      addItemToInventory(player, item.id);
-
-      lootText = `\nПредмет: ${item.name} (${getRarityText(item)})`;
-    }
+    const lootText = loot.text.length > 0
+      ? `\n\nДобыча:\n${loot.text}`
+      : '';
 
     let levelText = '';
 

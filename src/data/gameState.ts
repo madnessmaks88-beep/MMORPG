@@ -47,6 +47,8 @@ export type FloorRun = {
   trapsTriggered: number;
   goldEarned: number;
   expEarned: number;
+
+  materialsEarned: Partial<Record<string, number>>;
 };
 
 export function createEmptyFloorRun(): FloorRun {
@@ -66,6 +68,8 @@ export function createEmptyFloorRun(): FloorRun {
     trapsTriggered: 0,
     goldEarned: 0,
     expEarned: 0,
+      
+    materialsEarned: {},
   };
 }
 

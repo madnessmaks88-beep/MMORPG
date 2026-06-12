@@ -1,0 +1,77 @@
+export type CryptDepthTheme = {
+  name: string;
+
+  background: number;
+  fog: number;
+  glow: number;
+
+  panel: number;
+  panelWarm: number;
+
+  stroke: number;
+  accent: number;
+  danger: number;
+
+  text: string;
+  mutedText: string;
+};
+
+export function getCryptDepthTheme(floor: number): CryptDepthTheme {
+  if (floor >= 21) {
+    return {
+      name: 'Черная усыпальница',
+
+      background: 0x030202,
+      fog: 0x5c1010,
+      glow: 0x8a1c1c,
+
+      panel: 0x120606,
+      panelWarm: 0x1a0808,
+
+      stroke: 0x8a2a2a,
+      accent: 0xff6b6b,
+      danger: 0xff4d4d,
+
+      text: '#f2dada',
+      mutedText: '#b88f8f',
+    };
+  }
+
+  if (floor >= 11) {
+    return {
+      name: 'Гниющие глубины',
+
+      background: 0x050605,
+      fog: 0x44523a,
+      glow: 0x4f6b3a,
+
+      panel: 0x0d100b,
+      panelWarm: 0x11170d,
+
+      stroke: 0x3f5a32,
+      accent: 0x9fbf7a,
+      danger: 0xff6b6b,
+
+      text: '#d8e0c5',
+      mutedText: '#9aaa82',
+    };
+  }
+
+  return {
+    name: 'Заброшенный склеп',
+
+    background: 0x080706,
+    fog: 0xb8aa91,
+    glow: 0x8b6f4a,
+
+    panel: 0x120d0a,
+    panelWarm: 0x17100c,
+
+    stroke: 0x5a422a,
+    accent: 0xd8c7a3,
+    danger: 0xff6b6b,
+
+    text: '#e8dcc7',
+    mutedText: '#b8aa91',
+  };
+}

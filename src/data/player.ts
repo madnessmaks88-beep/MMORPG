@@ -1,5 +1,6 @@
 import type { RaceId } from './races';
 import type { RelicId } from './relics';
+import type { MaterialId } from './materials';
 
 export type EquipmentSlot = 'weapon' | 'armor' | 'trinket';
 
@@ -47,6 +48,12 @@ export type PlayerData = {
 
   inventory: InventoryItem[];
   equipment: PlayerEquipment;
+
+  materials: Partial<Record<MaterialId, number>>;
+
+  anvilLevel: number;
+
+  crystalsUnlocked: boolean;
 };
 
 export const player: PlayerData = {
@@ -81,4 +88,10 @@ export const player: PlayerData = {
 
   inventory: [],
   equipment: {},
+
+  materials: {},
+
+  anvilLevel: 1,
+
+  crystalsUnlocked: false,
 };
