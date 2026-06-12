@@ -109,14 +109,14 @@ export class BattleScene extends Phaser.Scene {
   private playerDebuffs: ActivePlayerDebuff[] = [];
   private nextIncomingDamageBonus = 0;
 
-  private enemyInfoText?: Phaser.GameObjects.Text;
-
   private playerDebuffText?: Phaser.GameObjects.Text;
 
   private enemyEffectObjects: Phaser.GameObjects.GameObject[] = [];
   private playerEffectObjects: Phaser.GameObjects.GameObject[] = [];
 
   private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
+
+  private enemyHoverZone?: Phaser.GameObjects.Rectangle;
 
   
 
@@ -302,9 +302,9 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
   if (id === 'poison') return `Получает ${power} урона перед действием.`;
   if (id === 'curse') return `Атака и защита снижены на ${power}.`;
   if (id === 'armor_break') return `Защита снижена на ${power}.`;
-  if (id === 'rot') return `Лечение снижено на ${power}%.`;
+  if (id === 'rot') return `Зелья лечат на ${power}% меньше.`;
   if (id === 'death_mark') return `Следующий удар врага сильнее на ${power}%.`;
-  if (id === 'energy_block') return 'Восстановление энергии заблокировано.';
+  if (id === 'energy_block') return 'После удара врага энергия не восстановится.';
   if (id === 'weakness') return `Исходящий урон снижен на ${power}%.`;
   if (id === 'agility_down') return `Ловкость снижена на ${power}.`;
   if (id === 'crit_down') return `Шанс крита снижен на ${power}%.`;
@@ -1634,17 +1634,18 @@ private getSkillCostPenalty() {
 
       extraText.setText(`АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}`);
 
-      this.enemyInfoText = this.add.text(-190, isBoss ? 38 : 36, this.createEnemyInfoText(), {
-        fontFamily: UI.font.body,
-        fontSize: '13px',
-        color: UI.colors.textMuted,
-        wordWrap: {
-          width: 430,
-        },
-        lineSpacing: 3,
-      }).setOrigin(0, 0.5);
-    
-      container.add(this.enemyInfoText);
+      this.enemyHoverZone = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+
+      this.enemyHoverZone.on('pointerover', () => {
+        this.showEnemyTooltip();
+      });
+
+      this.enemyHoverZone.on('pointerout', () => {
+        this.hideTooltip();
+      });
+
+      container.add(this.enemyHoverZone);
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
@@ -1691,8 +1692,104 @@ private getSkillCostPenalty() {
   }
 
   private hideTooltip() {
-  this.tooltipObjects.forEach(object => object.destroy());
-  this.tooltipObjects = [];
+    this.tooltipObjects.forEach(object => object.destroy());
+    this.tooltipObjects = [];
+  }
+
+  private showEnemyTooltip() {
+  const weaknessText =
+    this.enemy.weaknesses && this.enemy.weaknesses.length > 0
+      ? this.enemy.weaknesses.map(tag => this.getEnemyTagText(tag)).join(', ')
+      : 'нет';
+
+  const resistanceText =
+    this.enemy.resistances && this.enemy.resistances.length > 0
+      ? this.enemy.resistances.map(tag => this.getEnemyTagText(tag)).join(', ')
+      : 'нет';
+
+  const debuff = this.enemy.debuffOnHit;
+
+  const debuffText = debuff
+    ? `${debuff.name}\n${this.getDebuffShortDescription(debuff.id, debuff.power)}\nШанс: ${Math.round(debuff.chance * 100)}% • ${debuff.duration} х.`
+    : 'нет';
+
+  const description =
+    `АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}\n\n` +
+    `Слабости: ${weaknessText}\n` +
+    `Сопротивления: ${resistanceText}\n\n` +
+    `Эффект при ударе:\n${debuffText}`;
+
+  this.showLargeTooltip(
+    this.enemyCard.x,
+    this.enemyCard.y + 80,
+    this.enemy.name,
+    description
+  );
+}
+
+private showLargeTooltip(x: number, y: number, title: string, description: string) {
+  this.hideTooltip();
+
+  const width = 390;
+  const height = 250;
+
+  const tooltipX = Phaser.Math.Clamp(x, 210, this.scale.width - 210);
+  const tooltipY = Phaser.Math.Clamp(y, 145, 420);
+
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.52);
+  shadow.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2 + 6,
+    width,
+    height,
+    22
+  );
+  shadow.setDepth(300);
+
+  const bg = this.add.graphics();
+  bg.fillStyle(0x100b08, 0.98);
+  bg.fillRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    22
+  );
+  bg.lineStyle(2, UI.colors.goldDark, 0.92);
+  bg.strokeRoundedRect(
+    tooltipX - width / 2,
+    tooltipY - height / 2,
+    width,
+    height,
+    22
+  );
+  bg.setDepth(301);
+
+  const titleText = this.add.text(tooltipX, tooltipY - 96, title, {
+    fontFamily: UI.font.title,
+    fontSize: '21px',
+    color: UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 4,
+  }).setOrigin(0.5).setDepth(302);
+
+  const descriptionText = this.add.text(
+    tooltipX - width / 2 + 22,
+    tooltipY - 62,
+    description,
+    {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.text,
+      wordWrap: {
+        width: width - 44,
+      },
+      lineSpacing: 4,
+    }
+  ).setOrigin(0, 0).setDepth(302);
+
+  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
 }
 
 private showTooltip(x: number, y: number, title: string, description: string) {
@@ -1813,8 +1910,8 @@ private createEffectChip(config: {
   }).setOrigin(0, 0.5).setDepth(47);
 
   const hitbox = this.add.rectangle(config.x, config.y, chipWidth, chipHeight, 0x000000, 0)
-    .setDepth(48)
-    .setInteractive({ useHandCursor: true });
+   .setDepth(90)
+   .setInteractive({ useHandCursor: true });
 
   hitbox.on('pointerover', () => {
     bg.clear();
@@ -1991,36 +2088,6 @@ private renderEnemyEffectChips() {
   if (tag === 'curse') return 'проклятие';
 
   return tag;
-}
-
-private createEnemyInfoText() {
-  const lines: string[] = [];
-
-  if (this.enemy.weaknesses && this.enemy.weaknesses.length > 0) {
-    const weaknesses = this.enemy.weaknesses
-      .map(tag => this.getEnemyTagText(tag))
-      .join(', ');
-
-    lines.push(`Слаб: ${weaknesses}`);
-  }
-
-  if (this.enemy.resistances && this.enemy.resistances.length > 0) {
-    const resistances = this.enemy.resistances
-      .map(tag => this.getEnemyTagText(tag))
-      .join(', ');
-
-    lines.push(`Сопр: ${resistances}`);
-  }
-
-  if (this.enemy.debuffOnHit) {
-    lines.push(`Эффект: ${this.enemy.debuffOnHit.name}`);
-  }
-
-  if (lines.length === 0) {
-    return 'Особенностей нет';
-  }
-
-  return lines.join('\n');
 }
 
   private updateStatusText() {
@@ -2874,10 +2941,6 @@ private createEnemyInfoText() {
      const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
      this.energyBar.displayWidth = 520 * energyRatio;
    }
-
-   if (this.enemyInfoText) {
-      this.enemyInfoText.setText(this.createEnemyInfoText());
-    }
 
     if (this.playerDebuffText) {
       this.playerDebuffText.setText(this.createPlayerDebuffText());

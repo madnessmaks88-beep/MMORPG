@@ -98,8 +98,8 @@ function rollItemRarity(enemy: EnemyData): ItemRarity {
   const roll = Math.random();
 
   if (isMorvein(enemy)) {
-    if (roll < 0.99) return 'mythic';      // 0.5% от выпавшего предмета
-    if (roll < 0.00) return 'legendary';    // 4.5%
+    if (roll < 0.005) return 'mythic';      // 0.5% от выпавшего предмета
+    if (roll < 0.05) return 'legendary';    // 4.5%
     return 'epic';                          // 95%
   }
 
