@@ -397,20 +397,15 @@ export class DungeonScene extends Phaser.Scene {
   });
 
   bg.on('pointerup', () => {
-    if (!isPressed || isLocked) return;
+    if (!isPressed) return;
 
     isPressed = false;
-    isLocked = true;
 
     redrawButton(bgHoverColor, 1, 1, hoverTextColor);
 
     this.time.delayedCall(40, () => {
+      redrawButton(bgColor, 0.96, 0.9, textColor);
       config.onClick();
-
-      this.time.delayedCall(160, () => {
-        isLocked = false;
-        redrawButton(bgColor, 0.96, 0.9, textColor);
-      });
     });
   });
 
@@ -1067,20 +1062,15 @@ export class DungeonScene extends Phaser.Scene {
   });
 
   bg.on('pointerup', () => {
-    if (!isPressed || isLocked) return;
-    
+    if (!isPressed) return;
+
     isPressed = false;
-    isLocked = true;
-    
+
     redrawButton(hoverColor, 1, 0.95, hoverTextColor);
-    
+
     this.time.delayedCall(40, () => {
+      redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
       config.onClick();
-    
-      this.time.delayedCall(160, () => {
-        isLocked = false;
-        redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
-      });
     });
   });
 
@@ -1448,6 +1438,8 @@ export class DungeonScene extends Phaser.Scene {
     modalObjects.forEach(object => {
       object.destroy();
     });
+  
+    modalObjects.length = 0;
   };
 
   const cancelButton = this.createRoundedActionButton({
