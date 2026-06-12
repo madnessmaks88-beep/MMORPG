@@ -37,7 +37,10 @@ export class ProfileScene extends Phaser.Scene {
   private createHeroPanel() {
     const { width } = this.scale;
 
-    const race = player.raceId ? getRaceById(player.raceId) : null;
+    const race = player.raceId ? getRaceById(player.raceId) : undefined;
+    const raceColor = race ? this.getRaceColor(race.id) : UI.colors.goldDark;
+    const raceIcon = race ? this.getRaceIcon(race.id) : '◆';
+    const raceRole = race ? this.getRaceRole(race.id) : 'Раса не выбрана';
 
     const panelY = 280;
     const panelHeight = race ? 412 : 190;
@@ -61,16 +64,22 @@ export class ProfileScene extends Phaser.Scene {
 
     // Аватар
     this.add.circle(width / 2 - 225, panelY - 120, 48, 0x2a1d13, 1)
-      .setStrokeStyle(3, UI.colors.goldDark, 0.85)
+      .setStrokeStyle(3, raceColor, 0.85)
       .setDepth(5);
 
-    this.add.text(width / 2 - 225, panelY - 120, '◆', {
+    this.add.text(width / 2 - 225, panelY - 120, raceIcon, {
       fontFamily: UI.font.body,
       fontSize: '38px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(6);
+
+    this.add.text(width / 2 - 160, panelY - 112, raceRole, {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: race ? this.getRaceColorText(race.id) : UI.colors.textMuted,
+    }).setOrigin(0, 0.5).setDepth(6);
 
     const heroTitle = player.name;
 
@@ -83,21 +92,23 @@ export class ProfileScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(6);
 
     // Расу показываем отдельной строкой только если имя героя не равно названию расы
-    if (race && player.name !== race.name) {
-      this.add.text(width / 2 - 160, panelY - 105, race.name, {
-        fontFamily: UI.font.body,
-        fontSize: '18px',
+    if (race) {
+      this.add.text(width / 2 - 160, panelY - 90, race.name, {
+        fontFamily: UI.font.title,
+        fontSize: '19px',
         color: UI.colors.text,
+        stroke: '#000000',
+        strokeThickness: 3,
       }).setOrigin(0, 0.5).setDepth(6);
-    } else if (!race) {
-      this.add.text(width / 2 - 160, panelY - 105, 'Раса не выбрана', {
+    } else {
+      this.add.text(width / 2 - 160, panelY - 90, 'Раса не выбрана', {
         fontFamily: UI.font.body,
         fontSize: '18px',
         color: UI.colors.textMuted,
       }).setOrigin(0, 0.5).setDepth(6);
     }
 
-    this.add.text(width / 2 - 160, panelY - 75, `Уровень ${player.level}`, {
+    this.add.text(width / 2 - 160, panelY - 58, `Уровень ${player.level}`, {
       fontFamily: UI.font.title,
       fontSize: '21px',
       color: UI.colors.green,
@@ -105,13 +116,13 @@ export class ProfileScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0, 0.5).setDepth(6);
 
-    this.add.text(width / 2 + 120, panelY - 75, `${player.gold} золота`, {
+    this.add.text(width / 2 + 120, panelY - 58, `${player.gold} золота`, {
       fontFamily: UI.font.body,
       fontSize: '18px',
       color: UI.colors.goldText,
     }).setOrigin(0, 0.5).setDepth(6);
 
-    this.createExpBar(width / 2, panelY - 25, 520);
+    this.createExpBar(width / 2, panelY - 8, 520);
 
     if (!race) {
       this.add.text(width / 2, panelY + 82, 'Выбери расу, чтобы открыть расовые навыки героя.', {
@@ -149,6 +160,50 @@ export class ProfileScene extends Phaser.Scene {
       icon: '✦',
     });
   }
+
+  private getRaceIcon(id: string) {
+  if (id === 'human') return '◆';
+  if (id === 'tainted_halfblood') return '☾';
+  if (id === 'stoneborn') return '▣';
+  if (id === 'night_elf') return '◐';
+  if (id === 'goblin') return '!';
+  if (id === 'demon') return '◆';
+
+  return '◆';
+}
+
+private getRaceRole(id: string) {
+  if (id === 'human') return 'Универсал';
+  if (id === 'tainted_halfblood') return 'Риск / крит / урон';
+  if (id === 'stoneborn') return 'Танк / выживание';
+  if (id === 'night_elf') return 'Уклонение / темп';
+  if (id === 'goblin') return 'Лут / золото / хитрость';
+  if (id === 'demon') return 'Урон / жертва HP';
+
+  return 'Боец';
+}
+
+private getRaceColor(id: string) {
+  if (id === 'human') return 0xf0d58a;
+  if (id === 'tainted_halfblood') return 0xc084fc;
+  if (id === 'stoneborn') return 0x9ca3af;
+  if (id === 'night_elf') return 0x70a6ff;
+  if (id === 'goblin') return 0x75d184;
+  if (id === 'demon') return 0xff6b6b;
+
+  return UI.colors.gold;
+}
+
+private getRaceColorText(id: string) {
+  if (id === 'human') return UI.colors.goldText;
+  if (id === 'tainted_halfblood') return '#c084fc';
+  if (id === 'stoneborn') return '#c7cbd1';
+  if (id === 'night_elf') return '#70a6ff';
+  if (id === 'goblin') return '#75d184';
+  if (id === 'demon') return '#ff6b6b';
+
+  return UI.colors.textMuted;
+}
 
   private createStatsPanel() {
     const { width } = this.scale;

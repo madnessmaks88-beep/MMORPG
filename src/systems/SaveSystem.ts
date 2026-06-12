@@ -8,6 +8,8 @@ import {
   type QuestProgress,
 } from '../data/gameState';
 
+import { races, type RaceId } from '../data/races';
+
 import {
   isVKBridgeReady,
   vkStorageGet,
@@ -103,10 +105,34 @@ function fixMissingPlayerFields() {
   if (player.strength === undefined) player.strength = player.attack ?? 11;
   if (player.intelligence === undefined) player.intelligence = 11;
 
+  if (!isValidRaceId(player.raceId)) {
+    player.raceId = 'human';
+  }
+
   if (!player.relicIds) player.relicIds = [];
 
   if (!player.inventory) player.inventory = [];
   if (!player.equipment) player.equipment = {};
+
+  player.maxHp ??= 110;
+  player.hp ??= player.maxHp;
+
+  player.attack ??= 11;
+  player.defense ??= 11;
+  player.agility ??= 11;
+  player.strength ??= 11;
+  player.luck ??= 5;
+  player.intelligence ??= 11;
+
+  player.maxEnergy ??= 5;
+  player.energy ??= player.maxEnergy;
+
+  player.critChance ??= 0.1;
+  player.potions ??= 2;
+  player.gold ??= 0;
+
+  player.hp = Math.min(player.hp, player.maxHp);
+  player.energy = Math.min(player.energy, player.maxEnergy);
   
   player.materials ??= {};
   player.anvilLevel ??= 1;
@@ -163,6 +189,10 @@ function fixMissingGameStateFields() {
   if (gameState.questProgress.dungeonsCompleted === undefined) gameState.questProgress.dungeonsCompleted = 0;
   if (gameState.questProgress.goldEarned === undefined) gameState.questProgress.goldEarned = 0;
   if (!gameState.questProgress.claimedQuestIds) gameState.questProgress.claimedQuestIds = [];
+}
+
+function isValidRaceId(raceId: unknown): raceId is RaceId {
+  return typeof raceId === 'string' && races.some(race => race.id === raceId);
 }
 
 export async function saveGameAsync() {

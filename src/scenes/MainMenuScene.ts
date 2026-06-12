@@ -41,7 +41,8 @@ export class MainMenuScene extends Phaser.Scene {
       warm: true,
     });
 
-    const raceName = player.raceId ? getRaceById(player.raceId).name : 'Раса не выбрана';
+    const race = player.raceId ? getRaceById(player.raceId) : undefined;
+    const raceName = race?.name ?? 'Раса не выбрана';
 
     this.add.text(width / 2, 220, player.name, {
       fontFamily: UI.font.title,

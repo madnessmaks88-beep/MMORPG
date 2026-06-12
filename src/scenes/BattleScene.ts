@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 
 import { player } from '../data/player';
-import type { EnemyData } from '../data/enemies';
+import type { EnemyData, EnemyDebuffId } from '../data/enemies';
 import { getEnemyById } from '../data/enemies';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { trackEnemyKilled, trackGoldEarned } from '../systems/QuestSystem';
@@ -52,6 +52,13 @@ type BattleStats = {
   lootChanceBonus: number;
 };
 
+type ActivePlayerDebuff = {
+  id: EnemyDebuffId;
+  name: string;
+  duration: number;
+  power: number;
+};
+
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyData;
 
@@ -75,11 +82,8 @@ export class BattleScene extends Phaser.Scene {
   private isBusy = false;
 
   private humanPassiveActivated = false;
-  private desperateStrikeCooldown = 0;
 
   private readonly powerAttackEnergyCost = 2;
-  private readonly desperateStrikeEnergyCost = 3;
-  private readonly desperateStrikeCooldownTurns = 2;
 
   private enemyBleedTurns = 0;
   private enemyBleedDamage = 0;
@@ -87,6 +91,23 @@ export class BattleScene extends Phaser.Scene {
   private shieldSwordGuardActive = false;
 
   private statusText?: Phaser.GameObjects.Text;
+
+  private raceSkillCooldown = 0;
+
+  private taintedHpCost = 0;
+  
+  private stoneGuardActive = false;
+  
+  private nightElfShadowStepActive = false;
+  private nightElfShadowDanceActive = false;
+  
+  private goblinDirtyTrickActive = false;
+  
+  private demonRageStacks = 0;
+  private demonHpSpentByHellfire = 0;
+
+  private playerDebuffs: ActivePlayerDebuff[] = [];
+  private nextIncomingDamageBonus = 0;
 
   
 
@@ -100,11 +121,26 @@ export class BattleScene extends Phaser.Scene {
   this.isBusy = false;
 
   this.humanPassiveActivated = false;
-  this.desperateStrikeCooldown = 0;
+  this.raceSkillCooldown = 0;
+
+  this.taintedHpCost = 0;
+
+  this.stoneGuardActive = false;
+
+  this.nightElfShadowStepActive = false;
+  this.nightElfShadowDanceActive = false;
+
+  this.goblinDirtyTrickActive = false;
+
+  this.demonRageStacks = 0;
+  this.demonHpSpentByHellfire = 0;
 
   this.enemyBleedTurns = 0;
   this.enemyBleedDamage = 0;
   this.shieldSwordGuardActive = false;
+
+  this.playerDebuffs = [];
+  this.nextIncomingDamageBonus = 0;
 
   const room = getCurrentRoom();
 
@@ -176,6 +212,42 @@ export class BattleScene extends Phaser.Scene {
     this.updateTexts();
     this.updateStatusText();
   }
+
+  private getCurrentWeaponType() {
+  const equippedWeapon = getEquippedWeapon(player);
+
+  return equippedWeapon?.item.weaponType ?? 'sword';
+}
+
+private getEnemyWeaknessDamageMultiplier() {
+  const weaponType = this.getCurrentWeaponType();
+
+  let multiplier = 1;
+
+  if (this.enemy.weaknesses?.includes(weaponType)) {
+    multiplier += 0.2;
+  }
+
+  if (this.enemy.resistances?.includes(weaponType)) {
+    multiplier -= 0.15;
+  }
+
+  return Phaser.Math.Clamp(multiplier, 0.65, 1.35);
+}
+
+private getEnemyWeaknessText() {
+  const weaponType = this.getCurrentWeaponType();
+
+  if (this.enemy.weaknesses?.includes(weaponType)) {
+    return '\nСлабость врага: удар оказался особенно эффективен.';
+  }
+
+  if (this.enemy.resistances?.includes(weaponType)) {
+    return '\nСопротивление врага: удар был менее эффективен.';
+  }
+
+  return '';
+}
 
   private createBattleHeader(title: string, subtitle: string, isBoss: boolean) {
     const { width } = this.scale;
@@ -289,30 +361,20 @@ export class BattleScene extends Phaser.Scene {
 
     this.actionButtons.push(...power);
 
-    const desperateText =
-      this.desperateStrikeCooldown > 0
-        ? `КД ${this.desperateStrikeCooldown}`
-        : '3 энергии';
-
-    const desperate = this.createBattleActionButton({
+    const raceSkill = this.createBattleActionButton({
       x: width / 2 + 140,
       y: 1055,
       width: 265,
       height: 72,
-      icon: '!',
-      title: 'Отчаянный',
-      subtitle: desperateText,
+      icon: this.getRaceSkillIcon(),
+      title: this.getRaceSkillTitle(),
+      subtitle: this.getRaceSkillSubtitle(),
       accentColor: UI.colors.gold,
-      disabled:
-      this.isBusy ||
-      this.isBattleEnded ||
-      player.raceId !== 'human' ||
-      player.energy < 3 ||
-      this.desperateStrikeCooldown > 0,
-      onClick: () => this.handleDesperateStrike(),
+      disabled: this.isRaceSkillDisabled(),
+      onClick: () => this.handleRaceSkill(),
     });
 
-    this.actionButtons.push(...desperate);
+    this.actionButtons.push(...raceSkill);
 
     const defend = this.createBattleActionButton({
       x: width / 2 - 140,
@@ -547,6 +609,287 @@ export class BattleScene extends Phaser.Scene {
   return objects;
 }
 
+private getRaceSkillIcon() {
+  if (player.raceId === 'human') return '!';
+  if (player.raceId === 'tainted_halfblood') return '☾';
+  if (player.raceId === 'stoneborn') return '▣';
+  if (player.raceId === 'night_elf') return '◐';
+  if (player.raceId === 'goblin') return '!';
+  if (player.raceId === 'demon') return '◆';
+
+  return '!';
+}
+
+private getRaceSkillTitle() {
+  if (player.raceId === 'human') return 'Отчаянный';
+  if (player.raceId === 'tainted_halfblood') return 'Рывок';
+  if (player.raceId === 'stoneborn') return 'Стойка';
+  if (player.raceId === 'night_elf') return 'Тень';
+  if (player.raceId === 'goblin') return 'Подлый';
+  if (player.raceId === 'demon') return 'Пламя';
+
+  return 'Навык';
+}
+
+private getRaceSkillEnergyCost() {
+  if (player.raceId === 'human') return 3;
+  if (player.raceId === 'tainted_halfblood') return 2;
+  if (player.raceId === 'stoneborn') return 2;
+  if (player.raceId === 'night_elf') return 3;
+  if (player.raceId === 'goblin') return 2;
+  if (player.raceId === 'demon') return 2;
+
+  return 2;
+}
+
+private getRaceSkillCooldownTurns() {
+  if (player.raceId === 'human') return 2;
+  if (player.raceId === 'tainted_halfblood') return 3;
+  if (player.raceId === 'stoneborn') return 3;
+  if (player.raceId === 'night_elf') return 4;
+  if (player.raceId === 'goblin') return 3;
+  if (player.raceId === 'demon') return 3;
+
+  return 3;
+}
+
+private getRaceSkillSubtitle() {
+  if (this.raceSkillCooldown > 0) {
+    return `КД ${this.raceSkillCooldown}`;
+  }
+
+  return `${this.getRaceSkillEnergyCost() + this.getSkillCostPenalty()} эн. / КД ${this.getRaceSkillCooldownTurns()}`;
+}
+
+private isRaceSkillDisabled() {
+  return (
+    this.isBusy ||
+    this.isBattleEnded ||
+    player.energy < this.getRaceSkillEnergyCost() + this.getSkillCostPenalty() ||
+    this.raceSkillCooldown > 0
+  );
+}
+
+private handleRaceSkill() {
+  if (this.isBattleEnded || this.isBusy) {
+    return;
+  }
+
+  if (this.applyDebuffDamageAndCheckDeath()) {
+    return;
+  }
+
+  if (this.isRaceSkillDisabled()) {
+    return;
+  }
+
+  if (player.raceId === 'human') {
+    this.handleHumanSkill();
+    return;
+  }
+
+  if (player.raceId === 'tainted_halfblood') {
+    this.handleTaintedSkill();
+    return;
+  }
+
+  if (player.raceId === 'stoneborn') {
+    this.handleStonebornSkill();
+    return;
+  }
+
+  if (player.raceId === 'night_elf') {
+    this.handleNightElfSkill();
+    return;
+  }
+
+  if (player.raceId === 'goblin') {
+    this.handleGoblinSkill();
+    return;
+  }
+
+  if (player.raceId === 'demon') {
+    this.handleDemonSkill();
+  }
+}
+
+private handleHumanSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+
+  const stats = this.getBattleStats();
+  const hpLostRatio = 1 - player.hp / stats.maxHp;
+
+  const multiplier = 1.35 + hpLostRatio * 1.25;
+
+  const damage = this.calculateDamage({
+    baseDamage: stats.attack,
+    multiplier,
+    varianceMin: 0,
+    varianceMax: 6,
+  });
+
+  const finalDamage = Math.floor(damage);
+
+  const weaknessText = this.getEnemyWeaknessText();
+
+  this.animatePlayerAttack();
+  this.damageEnemy(finalDamage);
+
+  const hpLostPercent = Math.round(hpLostRatio * 100);
+
+  const playerActionText =
+    `Отчаянный удар!\n` +
+    `Потеряно HP: ${hpLostPercent}%.\n` +
+    `Ты наносишь ${finalDamage} урона.${weaknessText}`;
+
+  this.afterPlayerAttack(playerActionText);
+}
+
+private handleTaintedSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+
+  const stats = this.getBattleStats();
+
+  const hpCost = Math.max(1, Math.floor(stats.maxHp * 0.05));
+  player.hp = Math.max(1, player.hp - hpCost);
+  this.taintedHpCost += hpCost;
+
+  const lowHp = player.hp / stats.maxHp <= 0.35;
+
+  const damage = this.calculateDamage({
+    baseDamage: stats.attack,
+    multiplier: lowHp ? 1.7 : 1.4,
+    varianceMin: 0,
+    varianceMax: 5,
+  });
+
+  const weaknessText = this.getEnemyWeaknessText();
+
+  this.animatePlayerAttack();
+  this.damageEnemy(damage);
+
+  const playerActionText =
+    lowHp
+      ? `Проклятый рывок!\nСкверна усиливает удар.\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}`
+      : `Проклятый рывок!\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}`;
+
+  this.afterPlayerAttack(playerActionText);
+}
+
+private handleStonebornSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.stoneGuardActive = true;
+
+  const playerActionText =
+    `Глухая стойка.\n` +
+    `Следующий удар врага нанесёт на 60% меньше урона.`;
+
+  this.logText.setText(playerActionText);
+  this.updateTexts();
+  this.createActionButtons();
+
+  this.time.delayedCall(450, () => {
+    this.enemyTurn(playerActionText, false);
+  });
+}
+
+private handleNightElfSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.nightElfShadowStepActive = true;
+
+  const playerActionText =
+    `Шаг в тень.\n` +
+    `Следующая атака врага будет гарантированно уклонена.`;
+
+  this.logText.setText(playerActionText);
+  this.updateTexts();
+  this.createActionButtons();
+
+  this.time.delayedCall(450, () => {
+    this.enemyTurn(playerActionText, false);
+  });
+}
+
+private handleGoblinSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+
+  const stats = this.getBattleStats();
+
+  const damage = this.calculateDamage({
+    baseDamage: stats.attack,
+    multiplier: 0.9,
+    varianceMin: 0,
+    varianceMax: 4,
+  });
+
+  const dirtyTrick = Math.random() < 0.5;
+
+  if (dirtyTrick) {
+    this.goblinDirtyTrickActive = true;
+  }
+
+  const weaknessText = this.getEnemyWeaknessText();
+
+  this.animatePlayerAttack();
+  this.damageEnemy(damage);
+
+  const playerActionText =
+    dirtyTrick
+      ? `Подлый удар!\nТы наносишь ${damage} урона.${weaknessText}\nГрязный приём ослабит следующий удар врага на 25%.`
+      : `Подлый удар!\nТы наносишь ${damage} урона.${weaknessText}`;
+
+  this.afterPlayerAttack(playerActionText);
+}
+
+private handleDemonSkill() {
+  this.isBusy = true;
+
+  player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+
+  const stats = this.getBattleStats();
+
+  const hpCost = Math.max(1, Math.floor(stats.maxHp * 0.08));
+  player.hp = Math.max(1, player.hp - hpCost);
+  this.demonHpSpentByHellfire += hpCost;
+
+  const lowHp = player.hp / stats.maxHp <= 0.4;
+
+  const damage = this.calculateDamage({
+    baseDamage: stats.attack,
+    multiplier: lowHp ? 2.1 : 1.7,
+    varianceMin: 0,
+    varianceMax: 5,
+  });
+
+  const weaknessText = this.getEnemyWeaknessText();
+
+  this.animatePlayerAttack();
+  this.damageEnemy(damage);
+
+  const playerActionText =
+    lowHp
+      ? `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}\nНизкое HP усилило пламя.`
+      : `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}`;
+
+  this.afterPlayerAttack(playerActionText);
+}
+
   private getWeaponAttackButtonText() {
     const equippedWeapon = getEquippedWeapon(player);
     const weaponType = equippedWeapon?.item.weaponType ?? 'sword';
@@ -565,14 +908,20 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    if (player.energy < this.powerAttackEnergyCost) {
+    if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
+    const cost = this.powerAttackEnergyCost + this.getSkillCostPenalty();
+
+    if (player.energy < cost) {
       this.logText.setText('Недостаточно энергии для сильного удара.');
       return;
     }
 
     this.isBusy = true;
 
-    player.energy -= this.powerAttackEnergyCost;
+    player.energy -= cost;
 
     const stats = this.getBattleStats();
 
@@ -601,6 +950,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
     this.isBusy = true;
 
     restoreEnergy(player, 1);
@@ -616,84 +969,82 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private getBattleStats(): BattleStats {
-   const stats = getPlayerStats(player);
+    const stats = getPlayerStats(player);
+    const bonus = this.getRaceBattleBonus(stats.maxHp);
 
-   const bonus = this.getHumanBattleBonus();
+    const armorBreak = this.getPlayerDebuff('armor_break');
+    const curse = this.getPlayerDebuff('curse');
+    const agilityDown = this.getPlayerDebuff('agility_down');
+    const critDown = this.getPlayerDebuff('crit_down');
 
-   const battleAgility = stats.agility + bonus.agility;
-   const battleStrength = player.strength + bonus.attack;
-   const battleIntelligence = player.intelligence + bonus.intelligence;
+    const debuffDefensePenalty = armorBreak?.power ?? 0;
+    const cursePower = curse?.power ?? 0;
+    const agilityPenalty = agilityDown?.power ?? 0;
+    const critPenalty = (critDown?.power ?? 0) / 100;
 
-   return {
-     ...stats,
+    const battleAgility = Math.max(0, stats.agility + bonus.agility - agilityPenalty);
+    const battleStrength = player.strength + bonus.attack;
+    const battleIntelligence = player.intelligence + bonus.intelligence;
 
-     attack: stats.attack + bonus.attack,
-     defense: stats.defense + bonus.defense,
+    const baseDodgeChance = Math.min(0.22, battleAgility * 0.01);
 
-     maxEnergy: stats.maxEnergy,
+    const dodgeChance =
+      player.raceId === 'stoneborn'
+        ? baseDodgeChance * 0.7
+        : baseDodgeChance;
 
-     strength: battleStrength,
-     agility: battleAgility,
-     intelligence: battleIntelligence,
+    return {
+      ...stats,
 
-     dodgeChance: Math.min(0.22, battleAgility * 0.01),
-     trapDodgeChance: stats.trapDodgeChance,
-     lootChanceBonus: stats.lootChanceBonus,
-   };
+      attack: Math.max(1, stats.attack + bonus.attack - cursePower),
+      defense: Math.max(0, stats.defense + bonus.defense - debuffDefensePenalty - cursePower),
+      critChance: Math.max(0, Math.min(0.5, stats.critChance + bonus.critChance - critPenalty)),
+
+      maxEnergy: stats.maxEnergy,
+
+      strength: battleStrength,
+      agility: battleAgility,
+      intelligence: battleIntelligence,
+
+      dodgeChance,
+      trapDodgeChance: stats.trapDodgeChance,
+      lootChanceBonus:
+        player.raceId === 'goblin'
+          ? stats.lootChanceBonus + 0.05
+          : stats.lootChanceBonus,
+    };
   }
 
-  private handleDesperateStrike() {
-    if (this.isBattleEnded || this.isBusy) {
-      return;
+  private getRaceBattleBonus(maxHp: number) {
+    const bonus = {
+      attack: 0,
+      defense: 0,
+      agility: 0,
+      intelligence: 0,
+      critChance: 0,
+    };
+
+    if (player.raceId === 'human' && this.humanPassiveActivated) {
+      bonus.attack += 2;
+      bonus.defense += 2;
+      bonus.agility += 2;
+      bonus.intelligence += 2;
     }
 
-    if (player.raceId !== 'human') {
-      this.logText.setText('Этот навык доступен только человеку.');
-      return;
+    if (player.raceId === 'tainted_halfblood') {
+      const lowHp = player.hp / maxHp <= 0.35;
+
+      if (lowHp) {
+        bonus.attack += 3;
+        bonus.critChance += 0.08;
+      }
     }
 
-    if (this.desperateStrikeCooldown > 0) {
-      this.logText.setText(`Отчаянный удар перезаряжается: ${this.desperateStrikeCooldown} хода.`);
-      return;
+    if (player.raceId === 'demon') {
+      bonus.attack += this.demonRageStacks;
     }
 
-    if (player.energy < this.desperateStrikeEnergyCost) {
-      this.logText.setText('Недостаточно энергии для отчаянного удара.');
-      return;
-    }
-
-    this.isBusy = true;
-
-    player.energy -= this.desperateStrikeEnergyCost;
-
-    const stats = this.getBattleStats();
-
-    const hpLostRatio = 1 - player.hp / stats.maxHp;
-
-    const multiplier = 1.35 + hpLostRatio * 1.25;
-
-    const damage = this.calculateDamage({
-      baseDamage: stats.attack,
-      multiplier,
-      varianceMin: 0,
-      varianceMax: 6,
-    });
-
-    const finalDamage = Math.floor(damage);
-
-    this.desperateStrikeCooldown = this.desperateStrikeCooldownTurns;
-
-    this.animatePlayerAttack();
-    this.damageEnemy(finalDamage);
-
-    const hpLostPercent = Math.round(hpLostRatio * 100);
-
-    const playerActionText =
-      `Отчаянный удар!\n` +
-      `Потеряно HP: ${hpLostPercent}%.\n` +
-      `Ты наносишь ${finalDamage} урона.`;
-
-    this.afterPlayerAttack(playerActionText);
+    return bonus;
   }
 
   private calculateDamage(config: {
@@ -702,14 +1053,157 @@ export class BattleScene extends Phaser.Scene {
     varianceMin: number;
     varianceMax: number;
   }) {
+    let multiplier = config.multiplier;
+
+    if (this.nightElfShadowDanceActive) {
+      multiplier *= 1.25;
+      this.nightElfShadowDanceActive = false;
+    }
+
+    multiplier *= this.getEnemyWeaknessDamageMultiplier();
+
+    if (this.hasPlayerDebuff('weakness')) {
+      const weakness = this.getPlayerDebuff('weakness');
+      multiplier *= 1 - ((weakness?.power ?? 20) / 100);
+    }
+
     const rawDamage =
-      config.baseDamage * config.multiplier +
+      config.baseDamage * multiplier +
       Phaser.Math.Between(config.varianceMin, config.varianceMax);
 
     const reducedDamage = rawDamage - this.enemy.defense * 0.45;
 
     return Math.max(1, Math.floor(reducedDamage));
   }
+
+  private getPlayerDebuff(id: EnemyDebuffId) {
+  return this.playerDebuffs.find(debuff => debuff.id === id);
+}
+
+private hasPlayerDebuff(id: EnemyDebuffId) {
+  return Boolean(this.getPlayerDebuff(id));
+}
+
+private addPlayerDebuff(debuff: ActivePlayerDebuff) {
+  const existing = this.getPlayerDebuff(debuff.id);
+
+  if (existing) {
+    existing.duration = Math.max(existing.duration, debuff.duration);
+    existing.power = Math.max(existing.power, debuff.power);
+    existing.name = debuff.name;
+    return;
+  }
+
+  this.playerDebuffs.push(debuff);
+}
+
+private tryApplyEnemyDebuffOnHit() {
+  const debuff = this.enemy.debuffOnHit;
+
+  if (!debuff) {
+    return '';
+  }
+
+  if (Math.random() > debuff.chance) {
+    return '';
+  }
+
+  this.addPlayerDebuff({
+    id: debuff.id,
+    name: debuff.name,
+    duration: debuff.duration,
+    power: debuff.power,
+  });
+
+  if (debuff.id === 'death_mark') {
+    this.nextIncomingDamageBonus = debuff.power;
+  }
+
+  return `\nНаложен эффект: ${debuff.name}.`;
+}
+
+private tickPlayerDebuffs() {
+  this.playerDebuffs = this.playerDebuffs
+    .map(debuff => ({
+      ...debuff,
+      duration: debuff.duration - 1,
+    }))
+    .filter(debuff => debuff.duration > 0);
+}
+
+private applyDebuffDamageBeforePlayerAction() {
+  let totalDamage = 0;
+  const lines: string[] = [];
+
+  this.playerDebuffs.forEach(debuff => {
+    if (debuff.id === 'bleeding' || debuff.id === 'poison') {
+      totalDamage += debuff.power;
+      lines.push(`${debuff.name}: -${debuff.power} HP`);
+    }
+  });
+
+  if (totalDamage <= 0) {
+    return '';
+  }
+
+  player.hp = Math.max(0, player.hp - totalDamage);
+
+  this.showFloatingText(
+    this.playerCard.x,
+    this.playerCard.y - 55,
+    `-${totalDamage}`,
+    '#9f7aea'
+  );
+
+  this.animateHit(this.playerCard);
+  this.updateTexts();
+
+  return lines.join('\n');
+}
+
+private applyDebuffDamageAndCheckDeath() {
+  const debuffText = this.applyDebuffDamageBeforePlayerAction();
+
+  if (!debuffText) {
+    return false;
+  }
+
+  if (player.hp <= 0) {
+    this.isBattleEnded = true;
+    this.isBusy = true;
+
+    this.logText.setText(
+      `${debuffText}\n\nТы пал от наложенных эффектов.`
+    );
+
+    this.updateTexts();
+
+    this.time.delayedCall(1800, () => {
+      const freshStats = getPlayerStats(player);
+
+      player.hp = freshStats.maxHp;
+      player.energy = freshStats.maxEnergy;
+
+      resetFloorRun();
+
+      void saveGameAsync();
+
+      this.scene.start('CampScene');
+    });
+
+    return true;
+  }
+
+  this.logText.setText(debuffText);
+
+  return false;
+}
+
+private getSkillCostPenalty() {
+  const skillCostUp = this.getPlayerDebuff('skill_cost_up');
+
+  return skillCostUp?.power ?? 0;
+}
 
   private damageEnemy(damage: number) {
     this.enemy.hp = Math.max(0, this.enemy.hp - damage);
@@ -748,7 +1242,7 @@ export class BattleScene extends Phaser.Scene {
       this.updateTexts();
 
       this.time.delayedCall(650, () => {
-        this.tickDesperateStrikeCooldown();
+        this.tickRaceSkillCooldown();
         this.isBusy = false;
         this.createActionButtons();
       });
@@ -952,33 +1446,6 @@ export class BattleScene extends Phaser.Scene {
     return '\n\nПассивный навык сработал: Воля к борьбе.\nДо конца боя характеристики увеличены.';
   }
 
-  private getHumanBattleBonus() {
-    if (player.raceId !== 'human') {
-      return {
-        attack: 0,
-        defense: 0,
-        agility: 0,
-        intelligence: 0,
-      };
-    }
-  
-    if (!this.humanPassiveActivated) {
-      return {
-        attack: 0,
-        defense: 0,
-        agility: 0,
-        intelligence: 0,
-      };
-    }
-  
-    return {
-      attack: 2,
-      defense: 2,
-      agility: 2,
-      intelligence: 2,
-    };
-  }
-
 
   private createFighterCard(
     x: number,
@@ -1171,9 +1638,33 @@ export class BattleScene extends Phaser.Scene {
       statuses.push('Защита щит-меча');
     }
 
-    if (this.desperateStrikeCooldown > 0) {
-      statuses.push(`Отчаянный удар: КД ${this.desperateStrikeCooldown}`);
+    if (this.raceSkillCooldown > 0) {
+      statuses.push(`Расовый навык: КД ${this.raceSkillCooldown}`);
     }
+
+    if (this.stoneGuardActive) {
+      statuses.push('Глухая стойка');
+    }
+
+    if (this.nightElfShadowStepActive) {
+      statuses.push('Шаг в тень');
+    }
+
+    if (this.nightElfShadowDanceActive) {
+      statuses.push('Танец теней');
+    }
+
+    if (this.goblinDirtyTrickActive) {
+      statuses.push('Грязный приём');
+    }
+
+    if (this.demonRageStacks > 0) {
+      statuses.push(`Адская ярость: +${this.demonRageStacks}`);
+    }
+
+    this.playerDebuffs.forEach(debuff => {
+      statuses.push(`${debuff.name}: ${debuff.duration} х.`);
+    });
 
     this.statusText.setText(
       statuses.length > 0
@@ -1366,6 +1857,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
     this.isBusy = true;
     this.createActionButtons();
 
@@ -1402,27 +1897,29 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleSwordAttack() {
-  const stats = this.getBattleStats();
+    const stats = this.getBattleStats();
 
-  const damage = this.calculateDamage({
-    baseDamage: stats.attack,
-    multiplier: 1,
-    varianceMin: -2,
-    varianceMax: 3,
-  });
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1,
+      varianceMin: -2,
+      varianceMax: 3,
+    });
 
-  const isCrit = Math.random() < stats.critChance;
-  const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
+    const isCrit = Math.random() < stats.critChance;
+    const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
 
-  this.animatePlayerAttack();
-  this.damageEnemy(finalDamage);
+    const weaknessText = this.getEnemyWeaknessText();
 
-  const playerActionText = isCrit
-    ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.`
-    : `Ты наносишь удар мечом: ${finalDamage} урона.`;
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
 
-  this.afterPlayerAttack(playerActionText);
-}
+    const playerActionText = isCrit
+      ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${weaknessText}`
+      : `Ты наносишь удар мечом: ${finalDamage} урона.${weaknessText}`;
+
+    this.afterPlayerAttack(playerActionText);
+  }
 
   private handleDaggerAttack() {
   const stats = this.getBattleStats();
@@ -1465,9 +1962,11 @@ export class BattleScene extends Phaser.Scene {
         ? `\nКритических ударов: ${critCount}.`
         : '';
 
+    const weaknessText = this.getEnemyWeaknessText();
+
     const playerActionText =
       `Кинжалы проводят серию из 3 быстрых ударов.\n` +
-      `Общий урон: ${totalDamage}.${critText}`;
+      `Общий урон: ${totalDamage}.${critText}${weaknessText}`;
 
     this.afterPlayerAttack(playerActionText);
   };
@@ -1502,32 +2001,34 @@ export class BattleScene extends Phaser.Scene {
 }
 
   private handleAxeAttack() {
-    const stats = this.getBattleStats();
+   const stats = this.getBattleStats();
 
-    const isArmoredEnemy = this.enemy.defense >= 4;
+   const isArmoredEnemy = this.enemy.defense >= 4;
 
-    const damage = this.calculateDamage({
-      baseDamage: stats.attack,
-      multiplier: isArmoredEnemy ? 1.42 : 1.18,
-      varianceMin: -2,
-      varianceMax: 6,
-    });
+   const damage = this.calculateDamage({
+     baseDamage: stats.attack,
+     multiplier: isArmoredEnemy ? 1.42 : 1.18,
+     varianceMin: -2,
+     varianceMax: 6,
+   });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+   const isCrit = Math.random() < stats.critChance;
+   const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
 
-    this.animatePlayerAttack();
-    this.damageEnemy(finalDamage);
+   const weaknessText = this.getEnemyWeaknessText();
 
-    let playerActionText = isCrit
-      ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.`
-      : `Топор наносит тяжёлый рубящий удар: ${finalDamage} урона.`;
+   this.animatePlayerAttack();
+   this.damageEnemy(finalDamage);
 
-    if (isArmoredEnemy) {
-      playerActionText += '\nБонус топора: враг в броне, удар пробивает защиту.';
-    }
+   let playerActionText = isCrit
+     ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.${weaknessText}`
+     : `Топор наносит тяжёлый рубящий удар: ${finalDamage} урона.${weaknessText}`;
 
-    this.afterPlayerAttack(playerActionText);
+   if (isArmoredEnemy) {
+     playerActionText += '\nБонус топора: враг в броне, удар пробивает защиту.';
+   }
+
+   this.afterPlayerAttack(playerActionText);
   }
 
   private handleKatanaAttack() {
@@ -1548,12 +2049,14 @@ export class BattleScene extends Phaser.Scene {
     this.enemyBleedTurns = 2;
     this.enemyBleedDamage = Math.max(this.enemyBleedDamage, bleedDamage);
 
+    const weaknessText = this.getEnemyWeaknessText();
+
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Катана наносит точный критический разрез: ${finalDamage} урона.\nВраг начинает кровоточить.`
-      : `Катана рассекает врага: ${finalDamage} урона.\nВраг начинает кровоточить.`;
+      ? `Катана наносит точный критический разрез: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.`
+      : `Катана рассекает врага: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.`;
 
     this.afterPlayerAttack(playerActionText);
   }
@@ -1576,13 +2079,15 @@ export class BattleScene extends Phaser.Scene {
     const stunChance = isBoss ? 0.15 : 0.35;
     const isStunned = Math.random() < stunChance;
 
+    const weaknessText = this.getEnemyWeaknessText();
+
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
     this.shakeBattle(0.008, 220);
 
     let playerActionText = isCrit
-      ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.`
-      : `Молот обрушивается на врага: ${finalDamage} урона.`;
+      ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.${weaknessText}`
+      : `Молот обрушивается на врага: ${finalDamage} урона.${weaknessText}`;
 
     if (isStunned) {
       playerActionText += '\nВраг оглушён.';
@@ -1595,97 +2100,131 @@ export class BattleScene extends Phaser.Scene {
 
   private handleShieldSwordAttack() {
     const stats = this.getBattleStats();
-
+    
     const damage = this.calculateDamage({
       baseDamage: stats.attack,
       multiplier: 0.82,
       varianceMin: -1,
       varianceMax: 3,
     });
-
+  
     const isCrit = Math.random() < stats.critChance;
     const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
-
+  
     this.shieldSwordGuardActive = true;
-
+  
+    const weaknessText = this.getEnemyWeaknessText();
+  
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
-
+  
     const playerActionText = isCrit
-      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.\nСледующий удар врага будет ослаблен.`
-      : `Ты атакуешь из-за щита: ${finalDamage} урона.\nСледующий удар врага будет ослаблен.`;
-
+      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`
+      : `Ты атакуешь из-за щита: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`;
+  
     this.afterPlayerAttack(playerActionText);
   }
 
   private handleVictory(playerActionText: string) {
-    if (this.isBattleEnded) {
+  if (this.isBattleEnded) {
+    return;
+  }
+
+  this.isBattleEnded = true;
+  this.isBusy = true;
+
+  const baseGold = this.enemy.goldReward;
+
+  const gold =
+    player.raceId === 'goblin'
+      ? Math.floor(baseGold * 1.2)
+      : baseGold;
+
+  player.gold += gold;
+
+  trackEnemyKilled();
+  trackGoldEarned(gold);
+
+  gameState.floorRun.monstersDefeated += 1;
+  gameState.floorRun.goldEarned += gold;
+  gameState.floorRun.expEarned += this.enemy.expReward;
+
+  const expResult = addExperience(player, this.enemy.expReward);
+
+  const loot = rollEnemyLoot(this.enemy);
+
+  const lootText = loot.text.length > 0
+    ? `\n\nДобыча:\n${loot.text}`
+    : '';
+
+  let levelText = '';
+
+  if (expResult.leveledUp) {
+    levelText = `\n\n${createLevelUpText(expResult)}`;
+  }
+
+  let demonHealText = '';
+
+  if (player.raceId === 'demon' && this.demonHpSpentByHellfire > 0) {
+    const stats = this.getBattleStats();
+    const heal = Math.floor(this.demonHpSpentByHellfire * 0.5);
+
+    if (heal > 0) {
+      player.hp = Math.min(stats.maxHp, player.hp + heal);
+
+      demonHealText =
+        `\nДемон поглощает остатки кровавого пламени и восстанавливает ${heal} HP.`;
+    }
+
+    this.demonHpSpentByHellfire = 0;
+  }
+
+  void saveGameAsync();
+
+  this.logText.setText(
+    `${playerActionText}\n\n` +
+    `${this.enemy.name} повержен.\n` +
+    `Получено золота: ${gold}\n` +
+    `Получено опыта: ${this.enemy.expReward}` +
+    `${demonHealText}` +
+    `${lootText}` +
+    `${levelText}`
+  );
+
+  this.updateTexts();
+
+  this.time.delayedCall(2200, () => {
+    if (this.returnToDungeon) {
+      markCurrentRoomCompleted();
+      goToNextRoom();
+
+      void saveGameAsync();
+
+      this.scene.start('DungeonScene');
       return;
     }
 
-    this.isBattleEnded = true;
-    this.isBusy = true;
-
-    const gold = this.enemy.goldReward;
-
-    player.gold += gold;
-
-    trackEnemyKilled();
-    trackGoldEarned(gold);
-
-    gameState.floorRun.monstersDefeated += 1;
-    gameState.floorRun.goldEarned += gold;
-    gameState.floorRun.expEarned += this.enemy.expReward;
-
-    const expResult = addExperience(player, this.enemy.expReward);
-
-    const loot = rollEnemyLoot(this.enemy);
-
-    const lootText = loot.text.length > 0
-      ? `\n\nДобыча:\n${loot.text}`
-      : '';
-
-    let levelText = '';
-
-    if (expResult.leveledUp) {
-      levelText = `\n\n${createLevelUpText(expResult)}`;
-    }
-
-    void saveGameAsync();
-
-    this.logText.setText(
-      `${playerActionText}\n\n` +
-      `${this.enemy.name} повержен.\n` +
-      `Получено золота: ${gold}\n` +
-      `Получено опыта: ${this.enemy.expReward}` +
-      `${lootText}` +
-      `${levelText}`
-    );
-
-    this.updateTexts();
-
-    this.time.delayedCall(2200, () => {
-      if (this.returnToDungeon) {
-        markCurrentRoomCompleted();
-        goToNextRoom();
-
-        void saveGameAsync();
-
-        this.scene.start('DungeonScene');
-        return;
-      }
-
-      this.scene.start('CampScene');
-    });
-  }
+    this.scene.start('CampScene');
+  });
+}
 
   private handlePotion() {
     if (this.isBattleEnded || this.isBusy) {
       return;
     }
 
+    if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
     if (player.potions <= 0) {
       this.logText.setText('Зелий больше нет.');
+      this.updateTexts();
+      return;
+    }
+
+    if (this.hasPlayerDebuff('heal_block')) {
+      this.logText.setText('Печать не даёт использовать зелье сейчас.');
       this.updateTexts();
       return;
     }
@@ -1702,7 +2241,14 @@ export class BattleScene extends Phaser.Scene {
 
     player.potions = Math.max(0, player.potions - 1);
 
-    const healAmount = Math.floor(stats.maxHp * 0.35);
+    const rot = this.getPlayerDebuff('rot');
+
+    const healMultiplier =
+      rot
+        ? 1 - rot.power / 100
+        : 1;
+
+    const healAmount = Math.max(1, Math.floor(stats.maxHp * 0.35 * healMultiplier));
     player.hp = Math.min(stats.maxHp, player.hp + healAmount);
 
     const playerActionText = `Ты выпил зелье и восстановил ${healAmount} HP.`;
@@ -1735,7 +2281,14 @@ export class BattleScene extends Phaser.Scene {
     
       const stats = this.getBattleStats();
 
-      if (Math.random() < stats.dodgeChance) {
+      const guaranteedDodge = this.nightElfShadowStepActive;
+
+      if (guaranteedDodge || Math.random() < stats.dodgeChance) {
+        this.nightElfShadowStepActive = false;
+      
+        if (player.raceId === 'night_elf') {
+          this.nightElfShadowDanceActive = true;
+        }
         this.showFloatingText(
           this.playerCard.x,
           this.playerCard.y - 55,
@@ -1752,7 +2305,8 @@ export class BattleScene extends Phaser.Scene {
         );
 
         this.updateTexts();
-        this.tickDesperateStrikeCooldown();
+        this.tickRaceSkillCooldown();
+        this.tickPlayerDebuffs();
         this.isBusy = false;
         this.createActionButtons();
 
@@ -1763,6 +2317,35 @@ export class BattleScene extends Phaser.Scene {
         1,
         this.enemy.attack + Phaser.Math.Between(-2, 3) - stats.defense
       );
+
+      if (this.hasPlayerDebuff('armor_break')) {
+        const armorBreak = this.getPlayerDebuff('armor_break');
+        damage += armorBreak?.power ?? 2;
+      }
+
+      if (this.hasPlayerDebuff('curse')) {
+        const curse = this.getPlayerDebuff('curse');
+        damage += curse?.power ?? 1;
+      }
+
+      if (this.nextIncomingDamageBonus > 0) {
+        damage = Math.floor(damage * (1 + this.nextIncomingDamageBonus / 100));
+        this.nextIncomingDamageBonus = 0;
+      }
+
+      if (player.raceId === 'stoneborn') {
+        damage = Math.max(1, damage - 2);
+      }
+
+      if (this.stoneGuardActive) {
+        damage = Math.max(1, Math.floor(damage * 0.4));
+        this.stoneGuardActive = false;
+      }
+
+      if (this.goblinDirtyTrickActive) {
+        damage = Math.max(1, Math.floor(damage * 0.75));
+        this.goblinDirtyTrickActive = false;
+      }
 
       let shieldSwordText = '';
 
@@ -1777,6 +2360,20 @@ export class BattleScene extends Phaser.Scene {
       }
 
       player.hp = Math.max(0, player.hp - damage);
+
+      const debuffText = this.tryApplyEnemyDebuffOnHit();
+
+      let demonRageText = '';
+
+      if (player.raceId === 'demon' && damage > 0) {
+        const previousStacks = this.demonRageStacks;
+      
+        this.demonRageStacks = Math.min(4, this.demonRageStacks + 1);
+      
+        if (this.demonRageStacks > previousStacks) {
+          demonRageText = `\nАдская ярость: атака +${this.demonRageStacks}.`;
+        }
+      }
 
       this.showFloatingText(
         this.playerCard.x,
@@ -1797,8 +2394,8 @@ export class BattleScene extends Phaser.Scene {
 
         this.logText.setText(
           isDefending
-            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\n\nТы пал в катакомбах...`
-            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\n\nТы пал в катакомбах...`
+            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}\n\nТы пал в катакомбах...`
+            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}\n\nТы пал в катакомбах...`
         );
 
         this.updateTexts();
@@ -1821,20 +2418,21 @@ export class BattleScene extends Phaser.Scene {
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\nЭнергия восстановлена на 1.${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}\nЭнергия восстановлена на 1.${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
       );
 
       this.updateTexts();
-      this.tickDesperateStrikeCooldown();
+      this.tickRaceSkillCooldown();
+      this.tickPlayerDebuffs();
       this.isBusy = false;
       this.createActionButtons();
     });
   }
 
-  private tickDesperateStrikeCooldown() {
-    if (this.desperateStrikeCooldown > 0) {
-      this.desperateStrikeCooldown -= 1;
+  private tickRaceSkillCooldown() {
+    if (this.raceSkillCooldown > 0) {
+      this.raceSkillCooldown -= 1;
     }
   }
 

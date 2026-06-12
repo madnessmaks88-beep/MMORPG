@@ -1,3 +1,49 @@
+export type EnemyWeakness =
+  | 'dagger'
+  | 'axe'
+  | 'katana'
+  | 'hammer'
+  | 'shield_sword'
+  | 'sword'
+  | 'bleed'
+  | 'stun'
+  | 'crit';
+
+export type EnemyResistance =
+  | 'dagger'
+  | 'axe'
+  | 'katana'
+  | 'hammer'
+  | 'shield_sword'
+  | 'sword'
+  | 'bleed'
+  | 'stun'
+  | 'crit'
+  | 'poison'
+  | 'curse';
+
+export type EnemyDebuffId =
+  | 'bleeding'
+  | 'poison'
+  | 'curse'
+  | 'armor_break'
+  | 'rot'
+  | 'death_mark'
+  | 'energy_block'
+  | 'weakness'
+  | 'agility_down'
+  | 'crit_down'
+  | 'heal_block'
+  | 'skill_cost_up';
+
+export type EnemyDebuffOnHit = {
+  id: EnemyDebuffId;
+  name: string;
+  chance: number;
+  duration: number;
+  power: number;
+};
+
 export type EnemyData = {
   id: string;
   name: string;
@@ -10,6 +56,10 @@ export type EnemyData = {
 
   expReward: number;
   goldReward: number;
+
+  weaknesses?: EnemyWeakness[];
+  resistances?: EnemyResistance[];
+  debuffOnHit?: EnemyDebuffOnHit;
 };
 
 export const enemies: EnemyData[] = [
@@ -26,6 +76,15 @@ export const enemies: EnemyData[] = [
     defense: 1,
     expReward: 12,
     goldReward: 6,
+    weaknesses: ['hammer', 'stun'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'bleeding',
+      name: 'Разгрызенная плоть',
+      chance: 0.15,
+      duration: 2,
+      power: 2,
+    },
   },
   {
     id: 'crypt_crawler',
@@ -36,6 +95,15 @@ export const enemies: EnemyData[] = [
     defense: 1,
     expReward: 13,
     goldReward: 7,
+    weaknesses: ['dagger', 'katana'],
+    resistances: ['hammer'],
+    debuffOnHit: {
+      id: 'agility_down',
+      name: 'Липкая слизь',
+      chance: 0.18,
+      duration: 2,
+      power: 2,
+    },
   },
   {
     id: 'grave_worm',
@@ -46,6 +114,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 14,
     goldReward: 7,
+    weaknesses: ['katana', 'axe'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'rot',
+      name: 'Могильная зараза',
+      chance: 0.16,
+      duration: 2,
+      power: 30,
+    },
   },
   {
     id: 'corpse_eater',
@@ -56,6 +133,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 15,
     goldReward: 8,
+    weaknesses: ['katana', 'axe', 'bleed'],
+    resistances: ['poison'],
+    debuffOnHit: {
+      id: 'poison',
+      name: 'Трупный яд',
+      chance: 0.18,
+      duration: 3,
+      power: 2,
+    },
   },
   {
     id: 'rotten_servant',
@@ -66,6 +152,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 14,
     goldReward: 8,
+    weaknesses: ['sword', 'katana'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'weakness',
+      name: 'Гнилой удар',
+      chance: 0.14,
+      duration: 2,
+      power: 20,
+    },
   },
   {
     id: 'bone_guard',
@@ -76,6 +171,15 @@ export const enemies: EnemyData[] = [
     defense: 3,
     expReward: 18,
     goldReward: 10,
+    weaknesses: ['hammer', 'stun'],
+    resistances: ['bleed', 'katana'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Трещина брони',
+      chance: 0.16,
+      duration: 2,
+      power: 3,
+    },
   },
   {
     id: 'mold_dead',
@@ -86,6 +190,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 16,
     goldReward: 9,
+    weaknesses: ['katana', 'axe'],
+    resistances: ['poison'],
+    debuffOnHit: {
+      id: 'crit_down',
+      name: 'Споры плесени',
+      chance: 0.18,
+      duration: 2,
+      power: 10,
+    },
   },
   {
     id: 'sarcophagus_rat',
@@ -96,6 +209,15 @@ export const enemies: EnemyData[] = [
     defense: 1,
     expReward: 13,
     goldReward: 7,
+    weaknesses: ['dagger', 'crit'],
+    resistances: ['hammer'],
+    debuffOnHit: {
+      id: 'bleeding',
+      name: 'Рваная рана',
+      chance: 0.2,
+      duration: 3,
+      power: 1,
+    },
   },
   {
     id: 'carrion_spider',
@@ -106,6 +228,15 @@ export const enemies: EnemyData[] = [
     defense: 1,
     expReward: 14,
     goldReward: 8,
+    weaknesses: ['dagger', 'katana'],
+    resistances: ['hammer'],
+    debuffOnHit: {
+      id: 'poison',
+      name: 'Падальный яд',
+      chance: 0.22,
+      duration: 2,
+      power: 2,
+    },
   },
   {
     id: 'crypt_minion',
@@ -116,6 +247,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 16,
     goldReward: 9,
+    weaknesses: ['sword', 'dagger'],
+    resistances: [],
+    debuffOnHit: {
+      id: 'weakness',
+      name: 'Подлый выпад',
+      chance: 0.15,
+      duration: 1,
+      power: 20,
+    },
   },
   {
     id: 'deadskin',
@@ -126,6 +266,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 18,
     goldReward: 10,
+    weaknesses: ['katana', 'bleed'],
+    resistances: ['poison'],
+    debuffOnHit: {
+      id: 'energy_block',
+      name: 'Мертвая хватка',
+      chance: 0.17,
+      duration: 1,
+      power: 1,
+    },
   },
   {
     id: 'funeral_beetle',
@@ -136,6 +285,15 @@ export const enemies: EnemyData[] = [
     defense: 3,
     expReward: 17,
     goldReward: 9,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['dagger'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Панцирная пыль',
+      chance: 0.15,
+      duration: 2,
+      power: 2,
+    },
   },
   {
     id: 'bone_breaker',
@@ -146,6 +304,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 20,
     goldReward: 11,
+    weaknesses: ['hammer', 'stun'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Сломанные ребра',
+      chance: 0.18,
+      duration: 2,
+      power: 3,
+    },
   },
   {
     id: 'coffin_scraper',
@@ -156,6 +323,15 @@ export const enemies: EnemyData[] = [
     defense: 3,
     expReward: 20,
     goldReward: 11,
+    weaknesses: ['axe', 'sword'],
+    resistances: ['crit'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Скрежет гроба',
+      chance: 0.16,
+      duration: 2,
+      power: 1,
+    },
   },
   {
     id: 'infected_acolyte',
@@ -166,6 +342,15 @@ export const enemies: EnemyData[] = [
     defense: 2,
     expReward: 21,
     goldReward: 12,
+    weaknesses: ['sword', 'crit'],
+    resistances: ['poison'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Зараженная молитва',
+      chance: 0.17,
+      duration: 3,
+      power: 1,
+    },
   },
 
   // =========================
@@ -181,6 +366,15 @@ export const enemies: EnemyData[] = [
     defense: 4,
     expReward: 36,
     goldReward: 20,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['bleed', 'stun'],
+    debuffOnHit: {
+      id: 'heal_block',
+      name: 'Печать саркофага',
+      chance: 0.2,
+      duration: 1,
+      power: 1,
+    },
   },
   {
     id: 'bone_executioner',
@@ -191,6 +385,15 @@ export const enemies: EnemyData[] = [
     defense: 4,
     expReward: 40,
     goldReward: 23,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Костяной раскол',
+      chance: 0.22,
+      duration: 2,
+      power: 4,
+    },
   },
   {
     id: 'crypt_butcher',
@@ -201,6 +404,15 @@ export const enemies: EnemyData[] = [
     defense: 4,
     expReward: 43,
     goldReward: 25,
+    weaknesses: ['katana', 'axe', 'bleed'],
+    resistances: ['stun'],
+    debuffOnHit: {
+      id: 'bleeding',
+      name: 'Рваное мясо',
+      chance: 0.24,
+      duration: 2,
+      power: 4,
+    },
   },
   {
     id: 'buried_knight',
@@ -211,6 +423,15 @@ export const enemies: EnemyData[] = [
     defense: 6,
     expReward: 47,
     goldReward: 28,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['dagger', 'katana'],
+    debuffOnHit: {
+      id: 'skill_cost_up',
+      name: 'Тяжелый надлом',
+      chance: 0.2,
+      duration: 2,
+      power: 1,
+    },
   },
   {
     id: 'bone_armored_guard',
@@ -221,6 +442,15 @@ export const enemies: EnemyData[] = [
     defense: 7,
     expReward: 50,
     goldReward: 30,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['dagger', 'bleed', 'katana'],
+    debuffOnHit: {
+      id: 'weakness',
+      name: 'Давление брони',
+      chance: 0.18,
+      duration: 2,
+      power: 15,
+    },
   },
   {
     id: 'dead_standard_bearer',
@@ -231,6 +461,15 @@ export const enemies: EnemyData[] = [
     defense: 5,
     expReward: 50,
     goldReward: 30,
+    weaknesses: ['sword', 'crit'],
+    resistances: ['curse'],
+    debuffOnHit: {
+      id: 'crit_down',
+      name: 'Знамя страха',
+      chance: 0.2,
+      duration: 2,
+      power: 15,
+    },
   },
   {
     id: 'rotten_chaplain',
@@ -241,6 +480,15 @@ export const enemies: EnemyData[] = [
     defense: 4,
     expReward: 52,
     goldReward: 32,
+    weaknesses: ['sword', 'katana'],
+    resistances: ['poison'],
+    debuffOnHit: {
+      id: 'rot',
+      name: 'Гнилая проповедь',
+      chance: 0.22,
+      duration: 2,
+      power: 40,
+    },
   },
   {
     id: 'leper_guard',
@@ -251,6 +499,15 @@ export const enemies: EnemyData[] = [
     defense: 6,
     expReward: 54,
     goldReward: 34,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['poison', 'bleed'],
+    debuffOnHit: {
+      id: 'rot',
+      name: 'Проказа',
+      chance: 0.2,
+      duration: 3,
+      power: 25,
+    },
   },
   {
     id: 'crypt_torturer',
@@ -261,6 +518,15 @@ export const enemies: EnemyData[] = [
     defense: 5,
     expReward: 58,
     goldReward: 36,
+    weaknesses: ['dagger', 'crit'],
+    resistances: ['stun'],
+    debuffOnHit: {
+      id: 'death_mark',
+      name: 'Боль истязателя',
+      chance: 0.22,
+      duration: 1,
+      power: 20,
+    },
   },
   {
     id: 'bloody_gravedigger',
@@ -271,6 +537,15 @@ export const enemies: EnemyData[] = [
     defense: 6,
     expReward: 62,
     goldReward: 40,
+    weaknesses: ['katana', 'axe'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'death_mark',
+      name: 'Кровавая метка',
+      chance: 0.2,
+      duration: 1,
+      power: 25,
+    },
   },
 
   // =========================
@@ -286,6 +561,15 @@ export const enemies: EnemyData[] = [
     defense: 7,
     expReward: 90,
     goldReward: 60,
+    weaknesses: ['hammer', 'sword'],
+    resistances: ['bleed', 'stun'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Костяное благословение',
+      chance: 0.25,
+      duration: 2,
+      power: 2,
+    },
   },
   {
     id: 'sarcophagus_lord',
@@ -296,6 +580,15 @@ export const enemies: EnemyData[] = [
     defense: 8,
     expReward: 105,
     goldReward: 70,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['bleed', 'stun'],
+    debuffOnHit: {
+      id: 'energy_block',
+      name: 'Запертая душа',
+      chance: 0.22,
+      duration: 1,
+      power: 1,
+    },
   },
   {
     id: 'lower_crypt_executioner',
@@ -306,6 +599,15 @@ export const enemies: EnemyData[] = [
     defense: 8,
     expReward: 115,
     goldReward: 78,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'death_mark',
+      name: 'Приговор палача',
+      chance: 0.24,
+      duration: 1,
+      power: 30,
+    },
   },
   {
     id: 'funeral_champion',
@@ -316,6 +618,15 @@ export const enemies: EnemyData[] = [
     defense: 10,
     expReward: 125,
     goldReward: 85,
+    weaknesses: ['hammer', 'crit'],
+    resistances: ['dagger', 'stun'],
+    debuffOnHit: {
+      id: 'skill_cost_up',
+      name: 'Давление чемпиона',
+      chance: 0.22,
+      duration: 1,
+      power: 1,
+    },
   },
   {
     id: 'bone_collector',
@@ -326,6 +637,15 @@ export const enemies: EnemyData[] = [
     defense: 7,
     expReward: 120,
     goldReward: 82,
+    weaknesses: ['hammer', 'stun'],
+    resistances: ['bleed'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Украденная кость',
+      chance: 0.2,
+      duration: 3,
+      power: 3,
+    },
   },
   {
     id: 'dead_knight_varn',
@@ -336,6 +656,15 @@ export const enemies: EnemyData[] = [
     defense: 11,
     expReward: 135,
     goldReward: 92,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['dagger', 'katana'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Рыцарский надлом',
+      chance: 0.22,
+      duration: 2,
+      power: 3,
+    },
   },
   {
     id: 'rotten_bishop',
@@ -346,6 +675,15 @@ export const enemies: EnemyData[] = [
     defense: 8,
     expReward: 140,
     goldReward: 96,
+    weaknesses: ['sword', 'crit'],
+    resistances: ['poison', 'bleed'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Черная литургия',
+      chance: 0.25,
+      duration: 3,
+      power: 2,
+    },
   },
   {
     id: 'black_tomb_guardian',
@@ -356,6 +694,15 @@ export const enemies: EnemyData[] = [
     defense: 12,
     expReward: 155,
     goldReward: 110,
+    weaknesses: ['hammer', 'axe'],
+    resistances: ['dagger', 'katana', 'bleed', 'stun'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Черная печать',
+      chance: 0.24,
+      duration: 2,
+      power: 2,
+    },
   },
 
   // =========================
@@ -371,6 +718,15 @@ export const enemies: EnemyData[] = [
     defense: 14,
     expReward: 320,
     goldReward: 240,
+    weaknesses: ['sword', 'hammer'],
+    resistances: ['bleed', 'stun', 'poison', 'dagger'],
+    debuffOnHit: {
+      id: 'curse',
+      name: 'Плач Костей',
+      chance: 0.28,
+      duration: 2,
+      power: 3,
+    },
   },
 ];
 
