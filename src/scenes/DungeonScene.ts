@@ -44,10 +44,30 @@ import { giveFloorReward } from '../systems/FloorRewardSystem';
 
 import { claimChestReward } from '../systems/ChestRewardSystem';
 import { saveGameAsync } from '../systems/SaveSystem';
+import { getMaterialName, type MaterialId } from '../data/materials';
 
+
+type FlintType = 'none' | 'dim' | 'black' | 'ruby';
+
+type CampfireState = {
+  tier: number;
+  selectedFlint: FlintType | null;
+  remainingCampfireUses: number;
+  campfireFloors: number[];
+  usedCampfireFloors: number[];
+  selectionDone: boolean;
+};
+
+type CampfirePlayer = typeof player & {
+  rubyFlintUnlocked?: boolean;
+  redRubyFlintUnlocked?: boolean;
+  donorFlintUnlocked?: boolean;
+  premiumFlintUnlocked?: boolean;
+};
 
 export class DungeonScene extends Phaser.Scene {
 
+  private readonly maxPotionCount = 6;
   private modalObjects: Phaser.GameObjects.GameObject[] = [];
   
   constructor() {
@@ -60,6 +80,9 @@ export class DungeonScene extends Phaser.Scene {
       void saveGameAsync();
     }
 
+    this.ensureCampfireState();
+    this.injectCampfireRoomIfNeeded();
+
     createSceneBackground(this);
     this.createDungeonBackdrop();
 
@@ -67,6 +90,14 @@ export class DungeonScene extends Phaser.Scene {
     this.createFloorProgress();
     this.createRoomMap();
     this.createCurrentRoom();
+
+    const campfireState = this.getCampfireState();
+
+    if (!campfireState.selectionDone) {
+      this.time.delayedCall(80, () => {
+        this.showFlintSelectionModal();
+      });
+    }
   }
 
   private createHeader() {
@@ -517,10 +548,12 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    const isBossRoom = room.type === 'boss' || room.type === 'tier_boss';
+    const roomType = String(room.type);
+    const isBossRoom = roomType === 'boss' || roomType === 'tier_boss';
+    const isCampfireRoom = roomType === 'campfire';
 
-    const panelY = isBossRoom ? 720 : 695;
-    const panelHeight = isBossRoom ? 620 : 500;
+    const panelY = isBossRoom ? 720 : isCampfireRoom ? 690 : 695;
+    const panelHeight = isBossRoom ? 620 : isCampfireRoom ? 530 : 500;
 
     this.createRoundedPanel({
       x: width / 2,
@@ -528,50 +561,61 @@ export class DungeonScene extends Phaser.Scene {
       width: 620,
       height: panelHeight,
       radius: 36,
-      color: isBossRoom ? 0x160908 : theme.panel,
+      color: isBossRoom
+        ? 0x160908
+        : isCampfireRoom
+          ? 0x1a0f08
+          : theme.panel,
       alpha: 0.94,
-      strokeColor: this.getRoomStrokeColor(room.type),
-      strokeAlpha: isBossRoom ? 0.82 : 0.52,
-      strokeWidth: isBossRoom ? 3 : 2,
+      strokeColor: this.getRoomStrokeColor(roomType),
+      strokeAlpha: isBossRoom || isCampfireRoom ? 0.82 : 0.52,
+      strokeWidth: isBossRoom || isCampfireRoom ? 3 : 2,
       depth: 2,
     });
 
-    const iconColor = this.getRoomTextColor(room.type);
-    const strokeColor = this.getRoomStrokeColor(room.type);
+    const iconColor = this.getRoomTextColor(roomType);
+    const strokeColor = this.getRoomStrokeColor(roomType);
 
     const topY = panelY - panelHeight / 2;
 
-    this.add.circle(width / 2, topY + 72, 52, strokeColor, 0.11).setDepth(5);
+    this.add.circle(width / 2, topY + 72, 58, strokeColor, isCampfireRoom ? 0.16 : 0.11).setDepth(5);
 
-    this.add.circle(width / 2, topY + 72, 40, 0x20150f, 1)
+    this.add.circle(width / 2, topY + 72, 42, 0x20150f, 1)
       .setStrokeStyle(2, strokeColor, 0.76)
       .setDepth(6);
 
-    this.add.text(width / 2, topY + 72, this.getRoomIcon(room.type), {
+    this.add.text(width / 2, topY + 72, this.getRoomIcon(roomType), {
       fontFamily: UI.font.body,
-      fontSize: '34px',
+      fontSize: isCampfireRoom ? '38px' : '34px',
       color: iconColor,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(7);
 
     const roomTitle =
-      room.type === 'monster'
+      roomType === 'monster'
         ? 'Обычная комната'
-        : room.type === 'elite'
+        : roomType === 'elite'
           ? 'Опасная комната'
-          : room.type === 'boss'
+          : roomType === 'boss'
             ? 'Комната босса'
-            : room.type === 'tier_boss'
+            : roomType === 'tier_boss'
               ? 'Финальный босс'
-              : room.title;
+              : roomType === 'campfire'
+                ? 'Забытый костёр'
+                : room.title;
 
     this.add.text(width / 2, topY + 140, roomTitle, {
       fontFamily: UI.font.title,
-      fontSize: isBossRoom ? '36px' : '34px',
-      color: isBossRoom ? UI.colors.red : theme.text,
+      fontSize: isBossRoom ? '36px' : isCampfireRoom ? '33px' : '34px',
+      color: isBossRoom ? UI.colors.red : isCampfireRoom ? UI.colors.goldText : theme.text,
       stroke: '#000000',
       strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: 540,
+      },
+      maxLines: 2,
     }).setOrigin(0.5).setDepth(7);
 
     this.add.text(width / 2, topY + 200, room.description, {
@@ -583,12 +627,13 @@ export class DungeonScene extends Phaser.Scene {
         width: 540,
       },
       lineSpacing: 4,
+      maxLines: 4,
     }).setOrigin(0.5).setDepth(7);
 
     this.createRoomInfoBox(
       width / 2,
       topY + 295,
-      this.getRoomInfo(room.type),
+      this.getRoomInfo(roomType),
       this.getModifierWarning()
     );
 
@@ -596,7 +641,11 @@ export class DungeonScene extends Phaser.Scene {
       this.createBossRequirementInfo(topY + 415);
     }
 
-    this.createRoomButton(room.type, room.enemyId);
+    if (isCampfireRoom) {
+      this.createCampfireStatusBox(topY + 410);
+    }
+
+    this.createRoomButton(roomType, room.enemyId);
   }
 
   private createRoomInfoBox(
@@ -695,6 +744,8 @@ export class DungeonScene extends Phaser.Scene {
         return UI.colors.goldText;
       case 'trap':
         return UI.colors.red;
+      case 'campfire':
+        return UI.colors.goldText;
       case 'elite':
         return '#c9a4ff';
       case 'boss':
@@ -756,6 +807,11 @@ export class DungeonScene extends Phaser.Scene {
       description = 'Можно избежать урона, если хватит ловкости.';
     }
 
+    if (type === 'campfire') {
+      this.createCampfireButtons();
+      return;
+    }
+
     if (isBattleRoom) {
       if (!enemyId) return;
 
@@ -800,6 +856,166 @@ export class DungeonScene extends Phaser.Scene {
         }
       },
     });
+  }
+
+  private createCampfireStatusBox(y: number) {
+    const { width } = this.scale;
+    const campfireState = this.getCampfireState();
+    const flintName = this.getFlintDisplayName(campfireState.selectedFlint ?? 'none');
+    const potionText = `Зелья: ${player.potions}/${this.maxPotionCount}`;
+    const chargeText = `Зарядов огнива: ${campfireState.remainingCampfireUses}`;
+
+    this.createRoundedPanel({
+      x: width / 2,
+      y,
+      width: 540,
+      height: 90,
+      radius: 22,
+      color: 0x17100c,
+      alpha: 0.9,
+      strokeColor: 0xf0a040,
+      strokeAlpha: 0.42,
+      strokeWidth: 1,
+      depth: 5,
+    });
+
+    this.add.text(width / 2, y - 24, flintName, {
+      fontFamily: UI.font.title,
+      fontSize: '18px',
+      color: campfireState.remainingCampfireUses > 0 ? UI.colors.goldText : UI.colors.textMuted,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: 500,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(8);
+
+    this.add.text(width / 2, y + 18, `${potionText}  •  ${chargeText}`, {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: 500,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(8);
+  }
+
+  private createCampfireButtons() {
+    const { width } = this.scale;
+    const campfireState = this.getCampfireState();
+    const canUseCampfire = campfireState.remainingCampfireUses > 0 && player.potions < this.maxPotionCount;
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: 850,
+      width: 470,
+      height: 62,
+      icon: '♨',
+      title: canUseCampfire ? 'Разжечь костёр' : 'Костёр не нужен',
+      subtitle: canUseCampfire
+        ? `Восстановить зелья до ${this.maxPotionCount}`
+        : player.potions >= this.maxPotionCount
+          ? `Зелья уже полные: ${player.potions}/${this.maxPotionCount}`
+          : 'Нет зарядов выбранного огнива',
+      accentColor: canUseCampfire ? 0xf0a040 : UI.colors.goldDark,
+      danger: false,
+      onClick: () => {
+        this.handleCampfireUse();
+      },
+    });
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: 925,
+      width: 470,
+      height: 58,
+      icon: '➤',
+      title: 'Пройти мимо',
+      subtitle: 'Не тратить заряд огнива',
+      accentColor: UI.colors.goldDark,
+      danger: false,
+      onClick: () => {
+        this.skipCampfire();
+      },
+    });
+  }
+
+  private handleCampfireUse() {
+    const room = getCurrentRoom();
+
+    if (!room || room.completed) {
+      return;
+    }
+
+    const campfireState = this.getCampfireState();
+
+    if (player.potions >= this.maxPotionCount) {
+      this.showMessage(
+        'Костёр не нужен',
+        `У тебя уже максимальный запас зелий: ${player.potions}/${this.maxPotionCount}.\nЗаряд огнива не потрачен.`,
+        () => {
+          this.scene.restart();
+        }
+      );
+      return;
+    }
+
+    if (campfireState.remainingCampfireUses <= 0) {
+      this.showMessage(
+        'Нет огня',
+        'У выбранного огнива больше нет зарядов. Можно только пройти мимо костра.',
+        () => {
+          this.scene.restart();
+        }
+      );
+      return;
+    }
+
+    campfireState.remainingCampfireUses = Math.max(0, campfireState.remainingCampfireUses - 1);
+    campfireState.usedCampfireFloors = Array.from(new Set([
+      ...campfireState.usedCampfireFloors,
+      gameState.floorRun.currentFloor,
+    ]));
+
+    player.potions = this.maxPotionCount;
+
+    markCurrentRoomCompleted();
+    goToNextRoom();
+
+    void saveGameAsync();
+
+    this.showMessage(
+      'Костёр разожжён',
+      `Пламя наполнило фляги.\nЗелья восстановлены до ${this.maxPotionCount}.\nОсталось зарядов: ${campfireState.remainingCampfireUses}.`,
+      () => {
+        this.scene.restart();
+      }
+    );
+  }
+
+  private skipCampfire() {
+    const room = getCurrentRoom();
+
+    if (!room || room.completed) {
+      return;
+    }
+
+    markCurrentRoomCompleted();
+    goToNextRoom();
+
+    void saveGameAsync();
+
+    this.showMessage(
+      'Костёр остался позади',
+      'Ты не стал тратить огниво и пошёл дальше.',
+      () => {
+        this.scene.restart();
+      }
+    );
   }
 
   private createNormalBattleButtons(config: {
@@ -1227,6 +1443,7 @@ export class DungeonScene extends Phaser.Scene {
           player.energy = freshStats.maxEnergy;
 
           resetFloorRun();
+          this.resetCampfireState();
 
           void saveGameAsync();
 
@@ -1465,6 +1682,7 @@ export class DungeonScene extends Phaser.Scene {
       closeModal();
 
       resetFloorRun();
+      this.resetCampfireState();
 
       void saveGameAsync();
 
@@ -1782,6 +2000,7 @@ export class DungeonScene extends Phaser.Scene {
       variant: 'brown',
       onClick: () => {
         resetFloorRun();
+        this.resetCampfireState();
       
         void saveGameAsync();
       
@@ -1877,6 +2096,7 @@ export class DungeonScene extends Phaser.Scene {
       variant: 'brown',
       onClick: () => {
         resetFloorRun();
+        this.resetCampfireState();
       
         void saveGameAsync();
       
@@ -1981,6 +2201,530 @@ export class DungeonScene extends Phaser.Scene {
     );
   }
 
+  private getCampfireState(): CampfireState {
+    const stateOwner = gameState as typeof gameState & {
+      dungeonCampfireState?: CampfireState;
+    };
+
+    if (!stateOwner.dungeonCampfireState) {
+      this.ensureCampfireState();
+    }
+
+    return stateOwner.dungeonCampfireState as CampfireState;
+  }
+
+  private ensureCampfireState() {
+    const floor = gameState.floorRun.currentFloor || 1;
+    const tier = getCurrentTierByFloor(floor);
+    const stateOwner = gameState as typeof gameState & {
+      dungeonCampfireState?: CampfireState;
+    };
+
+    if (stateOwner.dungeonCampfireState?.tier === tier) {
+      return;
+    }
+
+    stateOwner.dungeonCampfireState = {
+      tier,
+      selectedFlint: null,
+      remainingCampfireUses: 0,
+      campfireFloors: this.createCampfireFloorsForTier(tier),
+      usedCampfireFloors: [],
+      selectionDone: false,
+    };
+  }
+
+  private resetCampfireState() {
+    const stateOwner = gameState as typeof gameState & {
+      dungeonCampfireState?: CampfireState;
+    };
+
+    stateOwner.dungeonCampfireState = undefined;
+  }
+
+  private createCampfireFloorsForTier(tier: number) {
+    const tierStart = (tier - 1) * 25;
+
+    return [
+      tierStart + Phaser.Math.Between(3, 11),
+      tierStart + Phaser.Math.Between(12, 18),
+      tierStart + Phaser.Math.Between(19, 24),
+    ];
+  }
+
+  private injectCampfireRoomIfNeeded() {
+    const campfireState = this.getCampfireState();
+    const floor = gameState.floorRun.currentFloor || 1;
+
+    if (!campfireState.campfireFloors.includes(floor)) {
+      return;
+    }
+
+    if (campfireState.usedCampfireFloors.includes(floor)) {
+      return;
+    }
+
+    const rooms = gameState.floorRun.rooms as Array<{
+      id: string;
+      type: string;
+      title: string;
+      description: string;
+      enemyId?: string;
+      completed: boolean;
+    }>;
+
+    if (rooms.some(room => room.type === 'campfire')) {
+      return;
+    }
+
+    const maxInsertIndex = Math.max(1, rooms.length - 1);
+    const insertIndex = Phaser.Math.Clamp(
+      Phaser.Math.Between(1, maxInsertIndex),
+      1,
+      maxInsertIndex
+    );
+
+    rooms.splice(insertIndex, 0, {
+      id: `floor_${floor}_campfire`,
+      type: 'campfire',
+      title: 'Забытый костёр',
+      description: 'В нише мерцают старые угли. Если у тебя есть заряд огнива, можно восстановить запас зелий.',
+      completed: false,
+    });
+  }
+
+  private showFlintSelectionModal() {
+    const campfireState = this.getCampfireState();
+
+    if (campfireState.selectionDone) {
+      return;
+    }
+
+    const { width, height } = this.scale;
+
+    this.modalObjects.forEach(object => object.destroy());
+    this.modalObjects = [];
+
+    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.76)
+      .setDepth(200)
+      .setInteractive();
+
+    const panel = this.createRoundedPanel({
+      x: width / 2,
+      y: height / 2,
+      width: Math.min(width - 42, 640),
+      height: 710,
+      radius: 34,
+      color: 0x14100d,
+      alpha: 0.985,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.92,
+      strokeWidth: 3,
+      depth: 201,
+    });
+
+    const title = this.add.text(width / 2, height / 2 - 305, 'Выбор огнива', {
+      fontFamily: UI.font.title,
+      fontSize: '34px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: Math.min(width - 90, 560),
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(204);
+
+    const subtitle = this.add.text(
+      width / 2,
+      height / 2 - 252,
+      'Огниво выбирается в начале яруса. Один заряд активирует один найденный костёр. Костёр восстанавливает запас зелий до 6.',
+      {
+        fontFamily: UI.font.body,
+        fontSize: '16px',
+        color: UI.colors.text,
+        align: 'center',
+        lineSpacing: 5,
+        wordWrap: {
+          width: Math.min(width - 90, 550),
+        },
+        maxLines: 4,
+      }
+    ).setOrigin(0.5).setDepth(204);
+
+    const dimCard = this.createFlintCard({
+      x: width / 2,
+      y: height / 2 - 145,
+      type: 'dim',
+      title: 'Тусклое огниво',
+      description: 'Обычный вариант. Позволяет активировать 1 костёр в ярусе.',
+      accentColor: 0xd8c7a3,
+    });
+
+    const blackCard = this.createFlintCard({
+      x: width / 2,
+      y: height / 2 + 15,
+      type: 'black',
+      title: 'Чёрное огниво',
+      description: 'Улучшенное огниво. Позволяет активировать 2 костра в ярусе.',
+      accentColor: 0x70a6ff,
+    });
+
+    const rubyCard = this.createFlintCard({
+      x: width / 2,
+      y: height / 2 + 175,
+      type: 'ruby',
+      title: 'Огниво с красным рубином',
+      description: 'Донатное огниво. Позволяет активировать все 3 костра в ярусе.',
+      accentColor: 0xff6b6b,
+    });
+
+    const noFlintButton = this.createSimpleModalButton({
+      x: width / 2,
+      y: height / 2 + 312,
+      width: 430,
+      height: 50,
+      text: 'Идти без огнива',
+      accentColor: UI.colors.goldDark,
+      onClick: () => {
+        this.selectFlint('none');
+      },
+      depth: 204,
+    });
+
+    this.modalObjects.push(
+      overlay,
+      panel.shadow,
+      panel.panel,
+      title,
+      subtitle,
+      ...dimCard,
+      ...blackCard,
+      ...rubyCard,
+      ...noFlintButton
+    );
+  }
+
+  private createFlintCard(config: {
+    x: number;
+    y: number;
+    type: FlintType;
+    title: string;
+    description: string;
+    accentColor: number;
+  }) {
+    const { width } = this.scale;
+    const cardWidth = Math.min(width - 86, 560);
+    const cardHeight = 136;
+    const left = config.x - cardWidth / 2;
+    const canSelect = this.canSelectFlint(config.type);
+    const uses = this.getFlintMaxUses(config.type);
+    const costText = this.getFlintCostText(config.type);
+
+    const panel = this.createRoundedPanel({
+      x: config.x,
+      y: config.y,
+      width: cardWidth,
+      height: cardHeight,
+      radius: 24,
+      color: canSelect ? 0x17100c : 0x0d0d0d,
+      alpha: canSelect ? 0.97 : 0.72,
+      strokeColor: config.accentColor,
+      strokeAlpha: canSelect ? 0.72 : 0.28,
+      strokeWidth: 2,
+      depth: 204,
+    });
+
+    const icon = this.add.circle(left + 42, config.y - 28, 28, config.accentColor, 0.16)
+      .setStrokeStyle(2, config.accentColor, canSelect ? 0.72 : 0.3)
+      .setDepth(207);
+
+    const iconText = this.add.text(left + 42, config.y - 28, this.getFlintIcon(config.type), {
+      fontFamily: UI.font.body,
+      fontSize: '22px',
+      color: canSelect ? UI.colors.goldText : UI.colors.textMuted,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(208);
+
+    const title = this.add.text(left + 84, config.y - 50, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '19px',
+      color: canSelect ? UI.colors.goldText : UI.colors.textMuted,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: cardWidth - 220,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(208);
+
+    const desc = this.add.text(left + 84, config.y - 12, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: UI.colors.text,
+      wordWrap: {
+        width: cardWidth - 220,
+      },
+      maxLines: 2,
+      lineSpacing: 3,
+    }).setOrigin(0, 0.5).setDepth(208);
+
+    const cost = this.add.text(left + 84, config.y + 38, costText, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: canSelect ? UI.colors.textMuted : UI.colors.red,
+      wordWrap: {
+        width: cardWidth - 220,
+      },
+      maxLines: 2,
+      lineSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(208);
+
+    const button = this.createSimpleModalButton({
+      x: config.x + cardWidth / 2 - 72,
+      y: config.y + 22,
+      width: 116,
+      height: 44,
+      text: canSelect ? `Взять x${uses}` : 'Нет',
+      accentColor: config.accentColor,
+      disabled: !canSelect,
+      onClick: () => {
+        this.selectFlint(config.type);
+      },
+      depth: 208,
+      small: true,
+    });
+
+    return [
+      panel.shadow,
+      panel.panel,
+      icon,
+      iconText,
+      title,
+      desc,
+      cost,
+      ...button,
+    ];
+  }
+
+  private createSimpleModalButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    accentColor: number;
+    onClick: () => void;
+    disabled?: boolean;
+    depth?: number;
+    small?: boolean;
+  }) {
+    const disabled = config.disabled ?? false;
+    const depth = config.depth ?? 205;
+    const radius = Math.min(18, config.height / 2);
+    const fillColor = disabled ? 0x111111 : 0x21150f;
+    const hoverColor = disabled ? fillColor : 0x2c1d14;
+    const textColor = disabled ? '#555555' : UI.colors.goldText;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillRoundedRect(config.x - config.width / 2, config.y - config.height / 2 + 4, config.width, config.height, radius);
+    shadow.setDepth(depth);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(fillColor, disabled ? 0.55 : 0.96);
+    bg.fillRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
+    bg.lineStyle(2, config.accentColor, disabled ? 0.32 : 0.86);
+    bg.strokeRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
+    bg.setDepth(depth + 1);
+
+    const label = this.add.text(config.x, config.y, config.text, {
+      fontFamily: UI.font.body,
+      fontSize: config.small ? '12px' : '16px',
+      color: textColor,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 14,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(depth + 2);
+
+    if (!disabled) {
+      let isPressed = false;
+
+      bg.setInteractive(
+        new Phaser.Geom.Rectangle(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height),
+        Phaser.Geom.Rectangle.Contains
+      );
+
+      const redraw = (color: number, alpha: number, offsetY = 0) => {
+        bg.clear();
+        bg.fillStyle(color, alpha);
+        bg.fillRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
+        bg.lineStyle(2, config.accentColor, 0.95);
+        bg.strokeRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
+        label.setY(config.y + offsetY);
+      };
+
+      bg.on('pointerover', () => {
+        if (!isPressed) redraw(hoverColor, 1);
+      });
+
+      bg.on('pointerout', () => {
+        isPressed = false;
+        redraw(fillColor, 0.96);
+      });
+
+      bg.on('pointerdown', () => {
+        isPressed = true;
+        redraw(hoverColor, 0.9, 1);
+      });
+
+      bg.on('pointerup', () => {
+        if (!isPressed) return;
+        isPressed = false;
+        redraw(hoverColor, 1);
+        this.time.delayedCall(40, config.onClick);
+      });
+    }
+
+    return [shadow, bg, label];
+  }
+
+  private canSelectFlint(type: FlintType) {
+    if (type === 'none') {
+      return true;
+    }
+
+    if (type === 'ruby') {
+      return this.hasRubyFlintUnlocked();
+    }
+
+    return this.hasMaterials(this.getFlintCost(type));
+  }
+
+  private selectFlint(type: FlintType) {
+    if (!this.canSelectFlint(type)) {
+      return;
+    }
+
+    const campfireState = this.getCampfireState();
+
+    if (type !== 'none' && type !== 'ruby') {
+      this.spendMaterials(this.getFlintCost(type));
+    }
+
+    campfireState.selectedFlint = type;
+    campfireState.remainingCampfireUses = this.getFlintMaxUses(type);
+    campfireState.selectionDone = true;
+
+    this.modalObjects.forEach(object => object.destroy());
+    this.modalObjects = [];
+
+    void saveGameAsync();
+
+    this.showMessage(
+      'Огниво выбрано',
+      type === 'none'
+        ? 'Ты идёшь без огнива. Найденные костры нельзя будет активировать.'
+        : `${this.getFlintDisplayName(type)} взято в ярус.\nДоступно активаций костра: ${campfireState.remainingCampfireUses}.`,
+      () => {
+        this.scene.restart();
+      }
+    );
+  }
+
+  private getFlintMaxUses(type: FlintType) {
+    if (type === 'dim') return 1;
+    if (type === 'black') return 2;
+    if (type === 'ruby') return 3;
+
+    return 0;
+  }
+
+  private getFlintDisplayName(type: FlintType) {
+    if (type === 'dim') return 'Тусклое огниво';
+    if (type === 'black') return 'Чёрное огниво';
+    if (type === 'ruby') return 'Огниво с красным рубином';
+
+    return 'Без огнива';
+  }
+
+  private getFlintIcon(type: FlintType) {
+    if (type === 'dim') return '◇';
+    if (type === 'black') return '◆';
+    if (type === 'ruby') return '✦';
+
+    return '×';
+  }
+
+  private getFlintCost(type: FlintType): Array<{ id: MaterialId; amount: number }> {
+    if (type === 'dim') {
+      return [
+        { id: 'darkened_bone', amount: 2 },
+        { id: 'dim_gem', amount: 1 },
+        { id: 'old_leather', amount: 1 },
+      ];
+    }
+
+    if (type === 'black') {
+      return [
+        { id: 'darkened_bone', amount: 3 },
+        { id: 'dim_gem', amount: 2 },
+        { id: 'black_gem', amount: 1 },
+        { id: 'cursed_seal', amount: 1 },
+      ];
+    }
+
+    return [];
+  }
+
+  private getFlintCostText(type: FlintType) {
+    if (type === 'ruby') {
+      return this.hasRubyFlintUnlocked()
+        ? 'Донатное огниво разблокировано'
+        : 'Доступно после доната';
+    }
+
+    const cost = this.getFlintCost(type);
+
+    if (cost.length === 0) {
+      return 'Без стоимости';
+    }
+
+    return cost
+      .map(material => `${getMaterialName(material.id)} x${material.amount}`)
+      .join(' • ');
+  }
+
+  private hasRubyFlintUnlocked() {
+    const campfirePlayer = player as CampfirePlayer;
+
+    return Boolean(
+      campfirePlayer.rubyFlintUnlocked ||
+      campfirePlayer.redRubyFlintUnlocked ||
+      campfirePlayer.donorFlintUnlocked ||
+      campfirePlayer.premiumFlintUnlocked
+    );
+  }
+
+  private hasMaterials(cost: Array<{ id: MaterialId; amount: number }>) {
+    return cost.every(material => {
+      return (player.materials[material.id] ?? 0) >= material.amount;
+    });
+  }
+
+  private spendMaterials(cost: Array<{ id: MaterialId; amount: number }>) {
+    cost.forEach(material => {
+      player.materials[material.id] = Math.max(
+        0,
+        (player.materials[material.id] ?? 0) - material.amount
+      );
+    });
+  }
+
   private getRoomIcon(type: string) {
     switch (type) {
       case 'monster':
@@ -1991,6 +2735,8 @@ export class DungeonScene extends Phaser.Scene {
         return '✦';
       case 'trap':
         return '!';
+      case 'campfire':
+        return '♨';
       case 'boss':
         return '♛';
       case 'tier_boss':
@@ -2016,6 +2762,10 @@ export class DungeonScene extends Phaser.Scene {
 
     if (type === 'trap') {
       return 'Ловкость может помочь избежать урона. Некоторые ловушки также отнимают энергию.';
+    }
+
+    if (type === 'campfire') {
+      return `Костёр может восстановить запас зелий до ${this.maxPotionCount}. Для активации нужен заряд выбранного огнива.`;
     }
 
     if (type === 'boss') {
@@ -2061,6 +2811,8 @@ export class DungeonScene extends Phaser.Scene {
         return UI.colors.gold;
       case 'trap':
         return 0xff6b6b;
+      case 'campfire':
+        return 0xf0a040;
       case 'elite':
         return 0xb07cff;
       case 'boss':

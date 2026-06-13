@@ -60,6 +60,28 @@ type ActivePlayerDebuff = {
   power: number;
 };
 
+type BattleLayout = {
+  width: number;
+  height: number;
+  centerX: number;
+  safeX: number;
+  safeTop: number;
+  safeBottom: number;
+  contentWidth: number;
+  enemyY: number;
+  playerY: number;
+  logY: number;
+  logHeight: number;
+  actionPanelY: number;
+  actionPanelHeight: number;
+  attackButtonY: number;
+  firstRowY: number;
+  secondRowY: number;
+  mainButtonWidth: number;
+  sideButtonWidth: number;
+  compact: boolean;
+};
+
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyData;
 
@@ -94,6 +116,7 @@ export class BattleScene extends Phaser.Scene {
   private statusText?: Phaser.GameObjects.Text;
 
   private raceSkillCooldown = 0;
+  private potionCooldown = 0;
 
   private taintedHpCost = 0;
   
@@ -117,12 +140,16 @@ export class BattleScene extends Phaser.Scene {
 
   private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
 
-  private enemyHoverZone?: Phaser.GameObjects.Rectangle;
+  private enemyHoverZone?: Phaser.GameObjects.GameObject;
 
-  private playerHoverZone?: Phaser.GameObjects.Rectangle;
+  private playerHoverZone?: Phaser.GameObjects.GameObject;
 
+  private playerHpBarMaxWidth = 520;
+  private enemyHpBarMaxWidth = 520;
+  private energyBarMaxWidth = 520;
+
+  private isBossBattle = false;
   
-
   constructor() {
     super('BattleScene');
   }
@@ -134,6 +161,7 @@ export class BattleScene extends Phaser.Scene {
 
   this.humanPassiveActivated = false;
   this.raceSkillCooldown = 0;
+  this.potionCooldown = 0;
 
   this.taintedHpCost = 0;
 
@@ -183,14 +211,15 @@ export class BattleScene extends Phaser.Scene {
 }
 
   create() {
-    const { width } = this.scale;
-
     const floor = gameState.floorRun.currentFloor || 1;
     const room = getCurrentRoom();
-
-    this.createBattleBackground();
-
     const isBoss = room?.type === 'boss' || room?.type === 'tier_boss';
+
+    this.isBossBattle = isBoss;
+
+    const layout = this.getBattleLayout();
+
+    this.createBattleBackground(isBoss);
 
     this.createBattleHeader(
       `Этаж ${floor}`,
@@ -199,8 +228,8 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.enemyCard = this.createFighterCard(
-      width / 2,
-      isBoss ? 255 : 245,
+      layout.centerX,
+      layout.enemyY,
       this.enemy.name,
       isBoss ? '♛' : '☠',
       isBoss ? 0x3a120c : 0x241515,
@@ -209,8 +238,8 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.playerCard = this.createFighterCard(
-      width / 2,
-      525,
+      layout.centerX,
+      layout.playerY,
       player.name,
       '🗡',
       0x151b24,
@@ -224,6 +253,54 @@ export class BattleScene extends Phaser.Scene {
     this.updateTexts();
     this.updateStatusText();
   }
+
+  private getBattleLayout(): BattleLayout {
+    const { width, height } = this.scale;
+
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 18, 34);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 28, 46);
+    const contentWidth = Math.min(width - safeX * 2, 660);
+    const compact = height < 1120;
+
+    const actionPanelHeight = compact ? 286 : 306;
+    const actionPanelY = height - safeBottom - actionPanelHeight / 2;
+    const attackButtonY = actionPanelY - actionPanelHeight / 2 + 52;
+    const firstRowY = attackButtonY + (compact ? 78 : 86);
+    const secondRowY = firstRowY + (compact ? 78 : 88);
+
+    const logHeight = compact ? 188 : 220;
+    const logY = actionPanelY - actionPanelHeight / 2 - logHeight / 2 - 18;
+
+    const playerY = logY - logHeight / 2 - (compact ? 116 : 128);
+    const enemyY = safeTop + (this.isBossBattle ? (compact ? 218 : 236) : (compact ? 182 : 198));
+
+    const mainButtonWidth = Math.min(contentWidth - 70, 560);
+    const sideButtonWidth = Math.min((mainButtonWidth - 18) / 2, 272);
+
+    return {
+      width,
+      height,
+      centerX: width / 2,
+      safeX,
+      safeTop,
+      safeBottom,
+      contentWidth,
+      enemyY,
+      playerY,
+      logY,
+      logHeight,
+      actionPanelY,
+      actionPanelHeight,
+      attackButtonY,
+      firstRowY,
+      secondRowY,
+      mainButtonWidth,
+      sideButtonWidth,
+      compact,
+    };
+  }
+
 
   private getCurrentWeaponType() {
   const equippedWeapon = getEquippedWeapon(player);
@@ -262,26 +339,68 @@ private getEnemyWeaknessDamageMultiplier() {
   }
 
   private createBattleHeader(title: string, subtitle: string, isBoss: boolean) {
-    const { width } = this.scale;
+    const layout = this.getBattleLayout();
+    const panelWidth = Math.min(layout.contentWidth, 640);
+    const panelHeight = isBoss ? 112 : 86;
+    const panelY = layout.safeTop + panelHeight / 2 + 6;
 
-    this.add.text(width / 2, 38, title, {
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: panelWidth,
+      height: panelHeight,
+      radius: 26,
+      color: isBoss ? 0x1a0807 : 0x0d0a08,
+      alpha: 0.95,
+      strokeColor: isBoss ? 0xff6b35 : UI.colors.goldDark,
+      strokeAlpha: isBoss ? 0.86 : 0.45,
+      strokeWidth: isBoss ? 3 : 2,
+      depth: 8,
+    });
+
+    if (isBoss) {
+      this.add.circle(layout.centerX, panelY, panelWidth * 0.36, 0xff2f2f, 0.055).setDepth(9);
+
+      this.add.text(layout.centerX, panelY - 36, '⚠ БОСС ПОДЗЕМЕЛЬЯ ⚠', {
+        fontFamily: UI.font.title,
+        fontSize: layout.compact ? '18px' : '20px',
+        color: '#ff9a6b',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center',
+        wordWrap: {
+          width: panelWidth - 42,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(11);
+    }
+
+    this.add.text(layout.centerX, isBoss ? panelY - 6 : panelY - 14, title, {
       fontFamily: UI.font.title,
-      fontSize: '26px',
+      fontSize: isBoss ? (layout.compact ? '24px' : '27px') : (layout.compact ? '23px' : '26px'),
       color: isBoss ? '#ffb36b' : UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(10);
-
-    this.add.text(width / 2, 73, subtitle, {
-      fontFamily: UI.font.body,
-      fontSize: '15px',
-      color: UI.colors.textMuted,
       align: 'center',
       wordWrap: {
-        width: 580,
+        width: panelWidth - 44,
       },
-    }).setOrigin(0.5).setDepth(10);
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(12);
+
+    this.add.text(layout.centerX, isBoss ? panelY + 29 : panelY + 20, subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '13px' : '15px',
+      color: isBoss ? '#f0c0a0' : UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 58,
+      },
+      maxLines: 2,
+      lineSpacing: 3,
+    }).setOrigin(0.5).setDepth(12);
   }
+
 
   private getDebuffIcon(id: EnemyDebuffId) {
   if (id === 'bleeding') return '🩸';
@@ -318,43 +437,51 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
 }
 
   private createBattleLogPanel() {
-    const { width } = this.scale;
+    const layout = this.getBattleLayout();
 
     this.createRoundedPanel({
-      x: width / 2,
-      y: 770,
-      width: 620,
-      height: 240,
+      x: layout.centerX,
+      y: layout.logY,
+      width: layout.contentWidth,
+      height: layout.logHeight,
       radius: 28,
       color: 0x0d0a08,
-      alpha: 0.9,
+      alpha: 0.92,
       strokeColor: UI.colors.goldDark,
       strokeAlpha: 0.5,
       depth: 8,
     });
 
-    this.add.text(width / 2, 665, 'Ход боя', {
+    this.add.text(layout.centerX, layout.logY - layout.logHeight / 2 + 25, 'Ход боя', {
       fontFamily: UI.font.title,
-      fontSize: '21px',
+      fontSize: layout.compact ? '18px' : '21px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 44,
+      },
+      maxLines: 1,
     }).setOrigin(0.5).setDepth(11);
 
-    this.logText = this.add.text(width / 2, 770, 'Выбери действие.', {
+    this.logText = this.add.text(layout.centerX, layout.logY + 14, 'Выбери действие.', {
       fontFamily: UI.font.body,
-      fontSize: '18px',
+      fontSize: layout.compact ? '15px' : '17px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 720,
+        width: layout.contentWidth - 66,
+        useAdvancedWrap: true,
       },
-      lineSpacing: 1,
+      maxLines: layout.compact ? 7 : 8,
+      lineSpacing: 3,
     }).setOrigin(0.5).setDepth(11);
   }
 
+
   private createActionButtons() {
-    const { width } = this.scale;
+    const layout = this.getBattleLayout();
 
     this.actionButtons.forEach(object => {
       object.destroy();
@@ -363,28 +490,39 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
     this.actionButtons = [];
 
     const panelObjects = this.createRoundedPanel({
-      x: width / 2,
-      y: 1060,
-      width: 620,
-      height: 310,
+      x: layout.centerX,
+      y: layout.actionPanelY,
+      width: layout.contentWidth,
+      height: layout.actionPanelHeight,
       radius: 32,
       color: 0x0b0908,
-      alpha: 0.94,
+      alpha: 0.96,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.55,
+      strokeAlpha: 0.58,
       depth: 20,
     });
 
     this.actionButtons.push(panelObjects.shadow, panelObjects.panel);
 
+    const panelDivider = this.add.rectangle(
+      layout.centerX,
+      layout.actionPanelY - layout.actionPanelHeight / 2 + 16,
+      layout.contentWidth - 70,
+      2,
+      UI.colors.gold,
+      0.18
+    ).setDepth(22);
+
+    this.actionButtons.push(panelDivider);
+
     const attack = this.createBattleActionButton({
-      x: width / 2,
-      y: 960,
-      width: 550,
-      height: 62,
+      x: layout.centerX,
+      y: layout.attackButtonY,
+      width: layout.mainButtonWidth,
+      height: layout.compact ? 56 : 62,
       icon: '⚔',
       title: this.getWeaponAttackButtonText(),
-      subtitle: '0 энергии',
+      subtitle: 'Базовая атака • 0 энергии',
       accentColor: UI.colors.gold,
       disabled: this.isBusy || this.isBattleEnded,
       onClick: () => this.handleAttack(),
@@ -392,26 +530,29 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
 
     this.actionButtons.push(...attack);
 
+    const leftX = layout.centerX - layout.sideButtonWidth / 2 - 9;
+    const rightX = layout.centerX + layout.sideButtonWidth / 2 + 9;
+
     const power = this.createBattleActionButton({
-      x: width / 2 - 140,
-      y: 1055,
-      width: 265,
-      height: 72,
+      x: leftX,
+      y: layout.firstRowY,
+      width: layout.sideButtonWidth,
+      height: layout.compact ? 64 : 70,
       icon: '◆',
       title: 'Сильный удар',
-      subtitle: '2 энергии',
+      subtitle: `${this.powerAttackEnergyCost + this.getSkillCostPenalty()} эн.`,
       accentColor: UI.colors.redHex,
-      disabled: this.isBusy || this.isBattleEnded || player.energy < 2,
+      disabled: this.isBusy || this.isBattleEnded || player.energy < this.powerAttackEnergyCost + this.getSkillCostPenalty(),
       onClick: () => this.handlePowerAttack(),
     });
 
     this.actionButtons.push(...power);
 
     const raceSkill = this.createBattleActionButton({
-      x: width / 2 + 140,
-      y: 1055,
-      width: 265,
-      height: 72,
+      x: rightX,
+      y: layout.firstRowY,
+      width: layout.sideButtonWidth,
+      height: layout.compact ? 64 : 70,
       icon: this.getRaceSkillIcon(),
       title: this.getRaceSkillTitle(),
       subtitle: this.getRaceSkillSubtitle(),
@@ -423,13 +564,13 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
     this.actionButtons.push(...raceSkill);
 
     const defend = this.createBattleActionButton({
-      x: width / 2 - 140,
-      y: 1150,
-      width: 265,
-      height: 72,
+      x: leftX,
+      y: layout.secondRowY,
+      width: layout.sideButtonWidth,
+      height: layout.compact ? 64 : 70,
       icon: '🛡',
       title: 'Защита',
-      subtitle: '+1 энергия',
+      subtitle: 'Снизить урон • +1 эн.',
       accentColor: UI.colors.blueHex,
       disabled: this.isBusy || this.isBattleEnded,
       onClick: () => this.handleDefend(),
@@ -438,20 +579,49 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
     this.actionButtons.push(...defend);
 
     const potion = this.createBattleActionButton({
-      x: width / 2 + 140,
-      y: 1150,
-      width: 265,
-      height: 72,
+      x: rightX,
+      y: layout.secondRowY,
+      width: layout.sideButtonWidth,
+      height: layout.compact ? 64 : 70,
       icon: '✚',
       title: 'Зелье',
-      subtitle: `${player.potions} шт.`,
+      subtitle: this.getPotionButtonSubtitle(),
       accentColor: UI.colors.greenHex,
-      disabled: this.isBusy || this.isBattleEnded || player.potions <= 0,
+      disabled: this.isPotionDisabled(),
       onClick: () => this.handlePotion(),
     });
 
     this.actionButtons.push(...potion);
+  }
+
+  private getPotionButtonSubtitle() {
+    if (this.potionCooldown > 0) {
+      return `КД ${this.potionCooldown} х.`;
     }
+
+    if (this.hasPlayerDebuff('heal_block')) {
+      return 'Лечение заблок.';
+    }
+
+    return `${player.potions} шт. • без хода`;
+  }
+
+  private isPotionDisabled() {
+    return (
+      this.isBusy ||
+      this.isBattleEnded ||
+      player.potions <= 0 ||
+      this.potionCooldown > 0 ||
+      this.hasPlayerDebuff('heal_block')
+    );
+  }
+
+  private tickPotionCooldown() {
+    if (this.potionCooldown > 0) {
+      this.potionCooldown -= 1;
+    }
+  }
+
 
     private createBattleActionButton(config: {
   x: number;
@@ -467,77 +637,84 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
 }) {
   const disabled = config.disabled ?? false;
 
-  const bgColor = disabled ? 0x101010 : 0x17100c;
-  const hoverColor = 0x20150f;
-  const alpha = disabled ? 0.55 : 0.96;
-  const strokeAlpha = disabled ? 0.25 : 0.72;
+  const bgColor = disabled ? 0x0c0c0c : 0x17100c;
+  const hoverColor = 0x2a1b12;
+  const pressedColor = 0x342015;
+  const alpha = disabled ? 0.54 : 0.98;
+  const strokeAlpha = disabled ? 0.24 : 0.82;
 
-  const textColor = disabled ? '#555555' : UI.colors.text;
-  const titleHoverColor = UI.colors.goldText;
+  const textColor = disabled ? '#5b5b5b' : UI.colors.text;
+  const titleHoverColor = disabled ? '#5b5b5b' : UI.colors.goldText;
 
   const objects: Phaser.GameObjects.GameObject[] = [];
-
-  const radius = 22;
+  const radius = Math.min(24, config.height / 2);
+  const left = config.x - config.width / 2;
+  const top = config.y - config.height / 2;
 
   const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.32);
-  shadow.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2 + 5,
-    config.width,
-    config.height,
-    radius
-  );
+  shadow.fillStyle(0x000000, 0.34);
+  shadow.fillRoundedRect(left, top + 6, config.width, config.height, radius);
   shadow.setDepth(21);
 
+  const glow = this.add.graphics();
+  glow.fillStyle(config.accentColor, disabled ? 0.025 : 0.075);
+  glow.fillRoundedRect(left + 5, top + 5, config.width - 10, config.height - 10, radius);
+  glow.setDepth(22);
+
   const bg = this.add.graphics();
-  bg.fillStyle(bgColor, alpha);
-  bg.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-  bg.lineStyle(2, config.accentColor, strokeAlpha);
-  bg.strokeRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-  bg.setDepth(22);
+  const drawBg = (fill: number, fillAlpha: number, borderAlpha: number) => {
+    bg.clear();
+    bg.fillStyle(fill, fillAlpha);
+    bg.fillRoundedRect(left, top, config.width, config.height, radius);
+    bg.lineStyle(2, config.accentColor, borderAlpha);
+    bg.strokeRoundedRect(left, top, config.width, config.height, radius);
+    bg.fillStyle(config.accentColor, disabled ? 0.06 : 0.14);
+    bg.fillRoundedRect(left + 6, top + 6, 46, config.height - 12, Math.min(18, radius));
+  };
 
-  const iconX = config.x - config.width / 2 + 42;
+  drawBg(bgColor, alpha, strokeAlpha);
+  bg.setDepth(23);
 
-  const iconBg = this.add.circle(iconX, config.y, 22, config.accentColor, disabled ? 0.08 : 0.16)
-    .setStrokeStyle(1, config.accentColor, disabled ? 0.25 : 0.58)
-    .setDepth(23);
+  const iconX = left + 31;
+
+  const iconBg = this.add.circle(iconX, config.y, 20, config.accentColor, disabled ? 0.08 : 0.18)
+    .setStrokeStyle(1, config.accentColor, disabled ? 0.25 : 0.64)
+    .setDepth(24);
 
   const icon = this.add.text(iconX, config.y, config.icon, {
     fontFamily: UI.font.body,
-    fontSize: '18px',
+    fontSize: config.width > 300 ? '18px' : '16px',
     color: disabled ? '#555555' : UI.colors.goldText,
     stroke: '#000000',
     strokeThickness: 2,
-  }).setOrigin(0.5).setDepth(24);
+  }).setOrigin(0.5).setDepth(25);
 
-  const title = this.add.text(config.x - config.width / 2 + 78, config.y - 11, config.title, {
+  const textX = left + 62;
+  const title = this.add.text(textX, config.y - 12, config.title, {
     fontFamily: UI.font.title,
-    fontSize: config.width > 300 ? '20px' : '16px',
+    fontSize: config.width > 300 ? '19px' : '15px',
     color: textColor,
     stroke: '#000000',
     strokeThickness: 3,
-  }).setOrigin(0, 0.5).setDepth(24);
+    wordWrap: {
+      width: config.width - 72,
+    },
+    maxLines: 1,
+  }).setOrigin(0, 0.5).setDepth(25);
 
-  const subtitle = this.add.text(config.x - config.width / 2 + 78, config.y + 16, config.subtitle, {
+  const subtitle = this.add.text(textX, config.y + 16, config.subtitle, {
     fontFamily: UI.font.body,
-    fontSize: '13px',
+    fontSize: config.width > 300 ? '12px' : '11px',
     color: disabled ? '#444444' : UI.colors.textMuted,
-  }).setOrigin(0, 0.5).setDepth(24);
+    wordWrap: {
+      width: config.width - 72,
+    },
+    maxLines: 1,
+  }).setOrigin(0, 0.5).setDepth(25);
 
-  objects.push(shadow, bg, iconBg, icon, title, subtitle);
+  const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
+
+  objects.push(shadow, glow, bg, iconBg, icon, title, subtitle, zone);
 
   const redrawButton = (
     fillColor: number,
@@ -546,29 +723,11 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
     titleColor: string,
     offsetY = 0
   ) => {
-    bg.clear();
-
-    bg.fillStyle(fillColor, fillAlpha);
-    bg.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
-      radius
-    );
-
-    bg.lineStyle(2, config.accentColor, borderAlpha);
-    bg.strokeRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
-      radius
-    );
+    drawBg(fillColor, fillAlpha, borderAlpha);
 
     iconBg.setY(config.y + offsetY);
     icon.setY(config.y + offsetY);
-    title.setY(config.y - 11 + offsetY);
+    title.setY(config.y - 12 + offsetY);
     subtitle.setY(config.y + 16 + offsetY);
 
     title.setColor(titleColor);
@@ -578,17 +737,11 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
     let isPressed = false;
     let isLocked = false;
 
-    bg.setInteractive(
-      new Phaser.Geom.Rectangle(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height
-      ),
-      Phaser.Geom.Rectangle.Contains
-    );
+    zone.setInteractive({
+      useHandCursor: true,
+    });
 
-    bg.on('pointerover', () => {
+    zone.on('pointerover', () => {
       if (isPressed || isLocked) {
         return;
       }
@@ -596,7 +749,7 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
       redrawButton(hoverColor, 1, 0.95, titleHoverColor);
     });
 
-    bg.on('pointerout', () => {
+    zone.on('pointerout', () => {
       isPressed = false;
 
       if (isLocked) {
@@ -606,17 +759,16 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
       redrawButton(bgColor, alpha, strokeAlpha, textColor);
     });
 
-    bg.on('pointerdown', () => {
+    zone.on('pointerdown', () => {
       if (isLocked) {
         return;
       }
 
       isPressed = true;
-
-      redrawButton(hoverColor, 0.92, 0.95, titleHoverColor, 1);
+      redrawButton(pressedColor, 0.96, 1, titleHoverColor, 1);
     });
 
-    bg.on('pointerup', () => {
+    zone.on('pointerup', () => {
       if (!isPressed || isLocked) {
         return;
       }
@@ -624,14 +776,14 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
       isPressed = false;
       isLocked = true;
 
-      redrawButton(hoverColor, 1, 0.95, titleHoverColor);
+      redrawButton(hoverColor, 1, 1, titleHoverColor);
 
       this.time.delayedCall(40, () => {
         config.onClick();
       });
     });
 
-    bg.on('pointerupoutside', () => {
+    zone.on('pointerupoutside', () => {
       isPressed = false;
 
       if (isLocked) {
@@ -641,7 +793,7 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
       redrawButton(bgColor, alpha, strokeAlpha, textColor);
     });
 
-    bg.on('pointercancel', () => {
+    zone.on('pointercancel', () => {
       isPressed = false;
 
       if (isLocked) {
@@ -654,6 +806,7 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
 
   return objects;
 }
+
 
 private getRaceSkillIcon() {
   if (player.raceId === 'human') return '!';
@@ -1289,6 +1442,7 @@ private getSkillCostPenalty() {
 
       this.time.delayedCall(650, () => {
         this.tickRaceSkillCooldown();
+        this.tickPotionCooldown();
         this.isBusy = false;
         this.createActionButtons();
       });
@@ -1324,151 +1478,115 @@ private getSkillCostPenalty() {
     return bleedText;
   }
 
-  private createBattleBackground() {
+  private createBattleBackground(isBoss = false) {
     const { width, height } = this.scale;
+    const layout = this.getBattleLayout();
 
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
 
-    // основной фон
-    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 1);
+    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 1).setDepth(0);
 
-    this.add.circle(width / 2, 155, 260, theme.glow, 0.28);
-    this.add.circle(width / 2, 190, 180, theme.fog, 0.13);
-    this.add.circle(width / 2, 220, 90, theme.accent, 0.07);
+    const arenaWidth = Math.min(width - layout.safeX * 2, 680);
+    const arenaHeight = Math.max(420, layout.playerY - layout.safeTop + 130);
+    const arenaY = layout.safeTop + arenaHeight / 2 + 56;
 
-    // задняя стена арены
-    this.add.rectangle(width / 2, 355, 650, 520, 0x0b0807, 0.92)
-      .setStrokeStyle(2, 0x332013, 0.7);
+    this.add.circle(width / 2, layout.enemyY - 40, arenaWidth * 0.42, isBoss ? 0xff2f2f : theme.glow, isBoss ? 0.22 : 0.16).setDepth(0);
+    this.add.circle(width / 2, layout.enemyY - 20, arenaWidth * 0.26, theme.fog, 0.11).setDepth(0);
+    this.add.circle(width / 2, layout.enemyY, arenaWidth * 0.13, isBoss ? 0xff6b35 : theme.accent, isBoss ? 0.12 : 0.07).setDepth(0);
 
-    // верхняя тёмная арка
-    this.add.ellipse(width / 2, 250, 500, 300, 0x120b08, 0.78)
-      .setStrokeStyle(2, 0x2e1a10, 0.45);
+    this.add.rectangle(width / 2, arenaY, arenaWidth, arenaHeight, 0x0b0807, 0.92)
+      .setStrokeStyle(2, isBoss ? 0x6b1d12 : 0x332013, isBoss ? 0.9 : 0.7)
+      .setDepth(1);
 
-    this.add.ellipse(width / 2, 275, 330, 210, 0x080605, 0.88)
-      .setStrokeStyle(2, 0x28170f, 0.35);
+    this.add.ellipse(width / 2, layout.enemyY - 18, arenaWidth * 0.72, 270, isBoss ? 0x220907 : 0x120b08, 0.78)
+      .setStrokeStyle(2, isBoss ? 0x6b1d12 : 0x2e1a10, isBoss ? 0.65 : 0.45)
+      .setDepth(1);
 
-    // камни на задней стене
+    this.add.ellipse(width / 2, layout.enemyY + 4, arenaWidth * 0.48, 190, 0x080605, 0.88)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x28170f, 0.38)
+      .setDepth(1);
+
     const brickRows = [
-      { y: 165, count: 5, offset: 0 },
-      { y: 215, count: 6, offset: -45 },
-      { y: 265, count: 5, offset: 0 },
-      { y: 315, count: 6, offset: -45 },
-      { y: 365, count: 5, offset: 0 },
+      { y: layout.enemyY - 92, count: 5, offset: 0 },
+      { y: layout.enemyY - 48, count: 6, offset: -38 },
+      { y: layout.enemyY - 4, count: 5, offset: 0 },
+      { y: layout.enemyY + 40, count: 6, offset: -38 },
     ];
 
     brickRows.forEach(row => {
-      for (let i = 0; i < row.count; i++) {
-        const brickWidth = 92;
-        const brickHeight = 34;
+      const brickWidth = Math.min(88, arenaWidth / 6.5);
+      const brickHeight = 30;
 
-        const x =
-          width / 2 -
-          ((row.count - 1) * brickWidth) / 2 +
-          i * brickWidth +
-          row.offset;
+      for (let i = 0; i < row.count; i += 1) {
+        const x = width / 2 - ((row.count - 1) * brickWidth) / 2 + i * brickWidth + row.offset;
 
-        this.add.rectangle(x, row.y, brickWidth - 6, brickHeight, 0x120d0a, 0.42)
-          .setStrokeStyle(1, 0x2a1b12, 0.26);
+        this.add.rectangle(x, row.y, brickWidth - 6, brickHeight, isBoss ? 0x1d0b08 : 0x120d0a, 0.42)
+          .setStrokeStyle(1, isBoss ? 0x4a160f : 0x2a1b12, 0.28)
+          .setDepth(2);
       }
     });
 
-    // боковые колонны
-    this.add.rectangle(96, 405, 58, 500, 0x0e0a08, 0.9)
-      .setStrokeStyle(2, 0x2a1a10, 0.55);
+    const columnX = Math.min(86, layout.safeX + 54);
+    this.add.rectangle(columnX, arenaY, 52, arenaHeight, 0x0e0a08, 0.88)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.55)
+      .setDepth(2);
 
-    this.add.rectangle(width - 96, 405, 58, 500, 0x0e0a08, 0.9)
-      .setStrokeStyle(2, 0x2a1a10, 0.55);
+    this.add.rectangle(width - columnX, arenaY, 52, arenaHeight, 0x0e0a08, 0.88)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.55)
+      .setDepth(2);
 
-    this.add.rectangle(96, 155, 76, 36, 0x17100c, 0.92)
-      .setStrokeStyle(2, 0x3c2515, 0.55);
+    const floorTopY = layout.playerY + 52;
+    const floorBottomY = Math.min(height - 250, layout.logY - layout.logHeight / 2 - 8);
 
-    this.add.rectangle(width - 96, 155, 76, 36, 0x17100c, 0.92)
-      .setStrokeStyle(2, 0x3c2515, 0.55);
+    this.add.rectangle(width / 2, (floorTopY + floorBottomY) / 2, arenaWidth, Math.max(90, floorBottomY - floorTopY), 0x0d0907, 0.96)
+      .setStrokeStyle(2, isBoss ? 0x5c1d12 : 0x372114, 0.7)
+      .setDepth(2);
 
-    // красное свечение за врагом
-    this.add.circle(width / 2, 245, 165, theme.glow, 0.12);
-    this.add.circle(width / 2, 245, 95, theme.accent, 0.055);
+    for (let i = 0; i < 9; i += 1) {
+      const xTop = layout.safeX + 80 + i * ((width - layout.safeX * 2 - 160) / 8);
+      const xBottom = layout.safeX + 35 + i * ((width - layout.safeX * 2 - 70) / 8);
 
-    // пол арены
-    this.add.rectangle(width / 2, 625, 650, 230, 0x0d0907, 0.96)
-      .setStrokeStyle(2, 0x372114, 0.7);
-
-    // перспектива пола
-    const floorTopY = 520;
-    const floorBottomY = 735;
-
-    for (let i = 0; i < 9; i++) {
-      const xTop = 150 + i * 52;
-      const xBottom = 70 + i * 72;
-
-      const line = this.add.line(
-        0,
-        0,
-        xTop,
-        floorTopY,
-        xBottom,
-        floorBottomY,
-        0x2a1a10,
-        0.38
-      );
-
-      line.setOrigin(0, 0);
+      this.add.line(0, 0, xTop, floorTopY, xBottom, floorBottomY, isBoss ? 0x4a160f : 0x2a1a10, isBoss ? 0.45 : 0.34)
+        .setOrigin(0, 0)
+        .setDepth(3);
     }
 
-    for (let i = 0; i < 5; i++) {
-      const y = floorTopY + i * 43;
+    for (let i = 0; i < 5; i += 1) {
+      const y = floorTopY + i * ((floorBottomY - floorTopY) / 4);
 
-      this.add.line(
-        0,
-        0,
-        95,
-        y,
-        width - 95,
-        y,
-        0x2a1a10,
-        0.32
-      ).setOrigin(0, 0);
+      this.add.line(0, 0, layout.safeX + 54, y, width - layout.safeX - 54, y, isBoss ? 0x4a160f : 0x2a1a10, 0.3)
+        .setOrigin(0, 0)
+        .setDepth(3);
     }
 
-    // передняя тень пола
-    this.add.rectangle(width / 2, 735, 650, 80, 0x050403, 0.48);
+    for (let i = 0; i < 16; i += 1) {
+      const x = layout.safeX + 28 + (i % 8) * ((width - layout.safeX * 2 - 56) / 7);
+      const y = layout.safeTop + 120 + Math.floor(i / 8) * 118 + (i % 3) * 18;
+      const radius = 36 + (i % 4) * 14;
 
-    // мягкий туман
-    for (let i = 0; i < 9; i++) {
-      const x = Phaser.Math.Between(90, width - 90);
-      const y = Phaser.Math.Between(430, 720);
-      const radius = Phaser.Math.Between(42, 95);
-
-      this.add.circle(x, y, radius, 0x8a6a48, 0.025);
+      this.add.circle(x, y, radius, isBoss ? 0xff6b35 : 0x8a6a48, isBoss ? 0.028 : 0.02).setDepth(1);
     }
 
-    // пепел / искры
-    for (let i = 0; i < 55; i++) {
-      const x = Phaser.Math.Between(28, width - 28);
-      const y = Phaser.Math.Between(70, height - 210);
-      const size = Phaser.Math.Between(1, 3);
-      const alpha = Phaser.Math.FloatBetween(0.035, 0.09);
+    for (let i = 0; i < 48; i += 1) {
+      const x = layout.safeX + 14 + (i * 37) % Math.max(1, width - layout.safeX * 2 - 28);
+      const y = layout.safeTop + 58 + (i * 61) % Math.max(1, height - layout.safeTop - layout.safeBottom - 260);
+      const size = 1 + (i % 3);
+      const alpha = 0.035 + (i % 5) * 0.011;
 
-      this.add.circle(x, y, size, 0xd8b56d, alpha);
+      this.add.circle(x, y, size, isBoss && i % 2 === 0 ? 0xff6b35 : 0xd8b56d, alpha).setDepth(4);
     }
 
-    // несколько красных искр ближе к центру
-    for (let i = 0; i < 16; i++) {
-      const x = Phaser.Math.Between(width / 2 - 190, width / 2 + 190);
-      const y = Phaser.Math.Between(150, 520);
-      const size = Phaser.Math.Between(1, 2);
-
-      this.add.circle(x, y, size, theme.accent, 0.12);
+    if (isBoss) {
+      this.add.rectangle(width / 2, height / 2, width, height, 0x3a0505, 0.14).setDepth(5);
+      this.add.rectangle(width / 2, layout.enemyY + 18, arenaWidth - 46, 3, 0xff6b35, 0.34).setDepth(5);
     }
 
-    // затемнение под интерфейсом кнопок
-    this.add.rectangle(width / 2, height - 160, width, 330, 0x040302, 0.58);
-
-    // лёгкая виньетка по бокам
-    this.add.rectangle(28, height / 2, 56, height, 0x000000, 0.32);
-    this.add.rectangle(width - 28, height / 2, 56, height, 0x000000, 0.32);
+    this.add.rectangle(width / 2, height - 150, width, 330, 0x040302, 0.6).setDepth(6);
+    this.add.rectangle(24, height / 2, 48, height, 0x000000, 0.32).setDepth(6);
+    this.add.rectangle(width - 24, height / 2, 48, height, 0x000000, 0.32).setDepth(6);
   }
+
 
 
   private checkHumanPassive() {
@@ -1502,10 +1620,12 @@ private getSkillCostPenalty() {
     isEnemy: boolean,
     isBoss = false
   ) {
-    const cardWidth = isBoss ? 660 : 610;
-    const cardHeight = isBoss ? 235 : 185;
+    const layout = this.getBattleLayout();
+    const cardWidth = Math.min(layout.contentWidth, isBoss ? 660 : 620);
+    const cardHeight = isEnemy ? (isBoss ? 248 : 202) : 214;
+    const barWidth = Math.max(260, cardWidth - 100);
 
-    const container = this.add.container(x, y);
+    const container = this.add.container(x, y).setDepth(isEnemy ? 18 : 19);
 
     const strokeColor = isEnemy
       ? isBoss
@@ -1513,83 +1633,112 @@ private getSkillCostPenalty() {
         : 0x8a2f2f
       : UI.colors.goldDark;
 
-    const titleColor = isEnemy ? UI.colors.red : UI.colors.goldText;
+    const titleColor = isEnemy ? (isBoss ? '#ffb36b' : UI.colors.red) : UI.colors.goldText;
 
-    const shadow = this.add.rectangle(0, 8, cardWidth, cardHeight, 0x000000, 0.34);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.36);
+    shadow.fillRoundedRect(-cardWidth / 2, -cardHeight / 2 + 8, cardWidth, cardHeight, 30);
 
-    const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, color, isBoss ? 0.98 : 0.94)
-      .setStrokeStyle(isBoss ? 4 : 2, strokeColor, isBoss ? 0.95 : 0.6);
+    const bg = this.add.graphics();
+    bg.fillStyle(color, isBoss ? 0.98 : 0.95);
+    bg.fillRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 30);
+    bg.lineStyle(isBoss ? 4 : 2, strokeColor, isBoss ? 0.95 : 0.62);
+    bg.strokeRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 30);
+
+    const topGlow = this.add.circle(0, -cardHeight / 2 + 40, cardWidth * 0.3, isBoss ? 0xff6b35 : strokeColor, isBoss ? 0.11 : 0.045);
 
     const sideAccent = this.add.rectangle(
-      -cardWidth / 2 + 5,
+      -cardWidth / 2 + 7,
       0,
-      8,
-      cardHeight - 22,
+      9,
+      cardHeight - 24,
       strokeColor,
-      isBoss ? 0.85 : 0.55
+      isBoss ? 0.9 : 0.56
     );
 
-    const iconBg = this.add.circle(-245, -38, 40, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
-      .setStrokeStyle(2, strokeColor, 0.75);
+    const iconX = -cardWidth / 2 + 70;
+    const titleX = -cardWidth / 2 + 124;
 
-    const iconText = this.add.text(-245, -38, icon, {
+    const currentRoom = getCurrentRoom();
+
+    const isDangerTooltip =
+      currentRoom?.type === 'boss' ||
+      currentRoom?.type === 'tier_boss' ||
+      Boolean(this.enemy.debuffOnHit);
+
+    const iconBg = this.add.circle(iconX, -cardHeight / 2 + 58, isBoss ? 43 : 36, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
+      .setStrokeStyle(2, strokeColor, 0.78);
+
+    const iconText = this.add.text(iconX, -cardHeight / 2 + 58, icon, {
       fontFamily: UI.font.body,
-      fontSize: '31px',
-      color: isEnemy ? UI.colors.red : UI.colors.goldText,
+      fontSize: isBoss ? '34px' : '29px',
+      color: isEnemy ? (isBoss ? '#ffb36b' : UI.colors.red) : UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    const nameText = this.add.text(-190, -62, name, {
+    const nameText = this.add.text(titleX, -cardHeight / 2 + 38, name, {
       fontFamily: UI.font.title,
-      fontSize: isBoss ? '27px' : '24px',
+      fontSize: isBoss ? (layout.compact ? '23px' : '27px') : (layout.compact ? '21px' : '24px'),
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
+      wordWrap: {
+        width: cardWidth - 190,
+      },
+      maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const hpText = this.add.text(-190, -24, '', {
+    const hpText = this.add.text(titleX, -cardHeight / 2 + 75, '', {
       fontFamily: UI.font.body,
-      fontSize: '17px',
-      color: UI.colors.text,
+      fontSize: layout.compact ? '15px' : '17px',
+      color: isDangerTooltip ? '#ffd0c2' : UI.colors.text,
+      wordWrap: {
+        width: cardWidth - 190,
+      },
+      maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const extraText = this.add.text(-190, 10, '', {
+    const extraText = this.add.text(titleX, -cardHeight / 2 + 106, '', {
       fontFamily: UI.font.body,
-      fontSize: '15px',
+      fontSize: layout.compact ? '13px' : '15px',
       color: UI.colors.textMuted,
+      wordWrap: {
+        width: cardWidth - 190,
+      },
+      maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const hpBarY = isBoss ? 82 : 68;
-    const energyBarY = isBoss ? 103 : 88;
+    const hpBarY = isEnemy ? cardHeight / 2 - 54 : cardHeight / 2 - 66;
+    const energyBarY = hpBarY + 22;
 
-    const barBack = this.add.rectangle(0, hpBarY, 520, 12, 0x050505, 0.92);
+    const barBack = this.add.rectangle(0, hpBarY, barWidth, 12, 0x050505, 0.92);
 
     const hpBar = this.add.rectangle(
-      -260,
+      -barWidth / 2,
       hpBarY,
-      520,
+      barWidth,
       12,
       isEnemy ? 0xff6b6b : 0x75d184,
       0.98
     ).setOrigin(0, 0.5);
 
-    const hpBarFrame = this.add.rectangle(0, hpBarY, 520, 12)
+    const hpBarFrame = this.add.rectangle(0, hpBarY, barWidth, 12)
       .setStrokeStyle(1, 0x000000, 0.85);
 
     const energyBack = this.add.rectangle(
       0,
       energyBarY,
-      520,
+      barWidth,
       8,
       0x050505,
       isEnemy ? 0 : 0.92
     );
 
     const energyBar = this.add.rectangle(
-      -260,
+      -barWidth / 2,
       energyBarY,
-      520,
+      barWidth,
       8,
       0x70a6ff,
       isEnemy ? 0 : 0.95
@@ -1598,6 +1747,7 @@ private getSkillCostPenalty() {
     container.add([
       shadow,
       bg,
+      topGlow,
       sideAccent,
       iconBg,
       iconText,
@@ -1612,20 +1762,47 @@ private getSkillCostPenalty() {
     ]);
 
     if (isBoss) {
-      const bossLabel = this.add.text(0, -94, 'БОСС', {
+      const bossBanner = this.add.graphics();
+      bossBanner.fillStyle(0x3a0907, 0.96);
+      bossBanner.fillRoundedRect(-118, -cardHeight / 2 - 20, 236, 36, 16);
+      bossBanner.lineStyle(2, 0xff6b35, 0.92);
+      bossBanner.strokeRoundedRect(-118, -cardHeight / 2 - 20, 236, 36, 16);
+
+      const bossLabel = this.add.text(0, -cardHeight / 2 - 2, 'БОСС  •  СМЕРТЕЛЬНАЯ УГРОЗА', {
         fontFamily: UI.font.title,
-        fontSize: '22px',
+        fontSize: '14px',
         color: '#ffb36b',
         stroke: '#000000',
-        strokeThickness: 5,
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: {
+          width: 220,
+        },
+        maxLines: 1,
       }).setOrigin(0.5);
 
-      container.add(bossLabel);
+      const leftRune = this.add.text(-cardWidth / 2 + 36, 0, '♜', {
+        fontFamily: UI.font.body,
+        fontSize: '34px',
+        color: '#ff6b35',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setAlpha(0.42);
+
+      const rightRune = this.add.text(cardWidth / 2 - 36, 0, '♜', {
+        fontFamily: UI.font.body,
+        fontSize: '34px',
+        color: '#ff6b35',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setAlpha(0.42);
+
+      container.add([bossBanner, bossLabel, leftRune, rightRune]);
 
       this.tweens.add({
-        targets: bossLabel,
-        alpha: 0.55,
-        duration: 750,
+        targets: [bossLabel, leftRune, rightRune],
+        alpha: 0.58,
+        duration: 680,
         yoyo: true,
         repeat: -1,
       });
@@ -1634,110 +1811,248 @@ private getSkillCostPenalty() {
     if (isEnemy) {
       this.enemyHpText = hpText;
       this.enemyHpBar = hpBar;
+      this.enemyHpBarMaxWidth = barWidth;
 
       extraText.setText(`АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}`);
 
-      this.enemyHoverZone = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x000000, 0)
+      const hintText = this.add.text(cardWidth / 2 - 24, -cardHeight / 2 + 25, 'нажми: опасность', {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: isBoss ? '#ff9a66' : '#ff6b6b',
+        align: 'right',
+        wordWrap: {
+          width: 126,
+        },
+        maxLines: 1,
+      }).setOrigin(1, 0.5).setAlpha(0.74);
+
+      this.enemyHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
         .setInteractive({ useHandCursor: true });
 
-      this.enemyHoverZone.on('pointerover', () => {
+      this.enemyHoverZone.on('pointerup', () => {
         this.showEnemyTooltip();
       });
 
-      this.enemyHoverZone.on('pointerout', () => {
-        this.hideTooltip();
-      });
-
-      container.add(this.enemyHoverZone);
+      container.add([hintText, this.enemyHoverZone]);
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
+      this.playerHpBarMaxWidth = barWidth;
       this.energyBar = energyBar;
+      this.energyBarMaxWidth = barWidth;
       this.energyText = extraText;
 
-      this.playerDebuffText = this.add.text(-190, 38, '', {
+      this.playerDebuffText = this.add.text(titleX, cardHeight / 2 - 29, '', {
         fontFamily: UI.font.body,
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#c084fc',
         wordWrap: {
-          width: 430,
+          width: cardWidth - 178,
         },
-        lineSpacing: 3,
+        maxLines: 1,
+        lineSpacing: 2,
       }).setOrigin(0, 0.5);
-
-      container.add(this.playerDebuffText);
 
       const stats = this.getBattleStats();
 
-      this.potionText = this.add.text(245, 12, `Зелья: ${player.potions}`, {
+      this.potionText = this.add.text(cardWidth / 2 - 24, -4, `Зелья: ${player.potions}`, {
         fontFamily: UI.font.body,
-        fontSize: '15px',
+        fontSize: layout.compact ? '13px' : '15px',
         color: UI.colors.textMuted,
         align: 'right',
+        wordWrap: {
+          width: 120,
+        },
+        maxLines: 1,
       }).setOrigin(1, 0.5);
 
-      const statsText = this.add.text(245, -35, [
+      const statsText = this.add.text(cardWidth / 2 - 24, -48, [
         `АТК ${stats.attack}`,
         `ЗАЩ ${stats.defense}`,
         `КРИТ ${Math.round(stats.critChance * 100)}%`,
       ].join('\n'), {
         fontFamily: UI.font.body,
-        fontSize: '15px',
+        fontSize: layout.compact ? '13px' : '15px',
         color: UI.colors.textMuted,
         align: 'right',
         lineSpacing: 4,
+        wordWrap: {
+          width: 120,
+        },
+        maxLines: 3,
       }).setOrigin(1, 0.5);
 
-      this.playerHoverZone = this.add.rectangle(0, 0, cardWidth, cardHeight, 0x000000, 0)
+      const tapHint = this.add.text(cardWidth / 2 - 24, cardHeight / 2 - 28, 'нажми: сведения', {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: UI.colors.textMuted,
+        align: 'right',
+        wordWrap: {
+          width: 120,
+        },
+        maxLines: 1,
+      }).setOrigin(1, 0.5).setAlpha(0.74);
+
+      this.playerHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
         .setInteractive({ useHandCursor: true });
 
-      this.playerHoverZone.on('pointerover', () => {
+      this.playerHoverZone.on('pointerup', () => {
         this.showPlayerTooltip();
       });
 
-      this.playerHoverZone.on('pointerout', () => {
-        this.hideTooltip();
-      });
-
-      container.add([this.potionText, statsText, this.playerHoverZone]);
+      container.add([this.playerDebuffText, this.potionText, statsText, tapHint, this.playerHoverZone]);
     }
 
     return container;
   }
+
 
   private hideTooltip() {
     this.tooltipObjects.forEach(object => object.destroy());
     this.tooltipObjects = [];
   }
 
+  private showInfoModal(title: string, description: string, accentColor = UI.colors.gold) {
+    this.hideTooltip();
+
+    const { width, height } = this.scale;
+    const modalWidth = Math.min(width - 44, 580);
+    const modalHeight = Math.min(height - 220, 330);
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const overlay = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.68)
+      .setDepth(500)
+      .setInteractive();
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.56);
+    shadow.fillRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2 + 8,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    shadow.setDepth(501);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x120d0a, 0.985);
+    bg.fillRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    bg.lineStyle(3, accentColor, 0.9);
+    bg.strokeRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    bg.setDepth(502);
+
+    const glow = this.add.circle(centerX, centerY - modalHeight / 2 + 42, modalWidth * 0.28, accentColor, 0.075)
+      .setDepth(503);
+
+    const titleText = this.add.text(centerX, centerY - modalHeight / 2 + 46, title, {
+      fontFamily: UI.font.title,
+      fontSize: '24px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: modalWidth - 48,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(504);
+
+    const descriptionText = this.add.text(centerX, centerY - 12, description, {
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.text,
+      align: 'center',
+      lineSpacing: 6,
+      wordWrap: {
+        width: modalWidth - 58,
+        useAdvancedWrap: true,
+      },
+      maxLines: 7,
+    }).setOrigin(0.5).setDepth(504);
+
+    const closeText = this.add.text(centerX, centerY + modalHeight / 2 - 38, 'Нажми, чтобы закрыть', {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: modalWidth - 48,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(504);
+
+    const close = () => {
+      this.tooltipObjects.forEach(object => object.destroy());
+      this.tooltipObjects = [];
+    };
+
+    overlay.on('pointerup', close);
+
+    const closeZone = this.add.zone(
+      centerX,
+      centerY + modalHeight / 2 - 38,
+      modalWidth - 90,
+      38
+    )
+      .setDepth(505)
+      .setInteractive({ useHandCursor: true });
+
+    closeZone.on('pointerup', close);
+
+    this.tooltipObjects.push(overlay, shadow, bg, glow, titleText, descriptionText, closeText, closeZone);
+  }
+
   private showEnemyTooltip() {
   const weaknessText =
     this.enemy.weaknesses && this.enemy.weaknesses.length > 0
       ? this.enemy.weaknesses.map(tag => this.getEnemyTagText(tag)).join(', ')
-      : 'нет';
+      : 'нет явных слабостей';
 
   const resistanceText =
     this.enemy.resistances && this.enemy.resistances.length > 0
       ? this.enemy.resistances.map(tag => this.getEnemyTagText(tag)).join(', ')
-      : 'нет';
+      : 'нет сопротивлений';
 
   const debuff = this.enemy.debuffOnHit;
 
   const debuffText = debuff
-    ? `${debuff.name}\n${this.getDebuffShortDescription(debuff.id, debuff.power)}\nШанс: ${Math.round(debuff.chance * 100)}% • ${debuff.duration} х.`
-    : 'нет';
+    ? `${this.getDebuffIcon(debuff.id)} ${debuff.name}\n${this.getDebuffShortDescription(debuff.id, debuff.power)}\nШанс наложения: ${Math.round(debuff.chance * 100)}% • Длительность: ${debuff.duration} х.`
+    : 'Враг не накладывает эффект при обычном ударе.';
+
+  const dangerText = this.isBossBattle
+    ? 'УРОВЕНЬ УГРОЗЫ: БОСС. Ошибка может стоить забега.'
+    : 'УРОВЕНЬ УГРОЗЫ: обычный противник.';
 
   const description =
-    `АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}\n\n` +
-    `Слабости: ${weaknessText}\n` +
-    `Сопротивления: ${resistanceText}\n\n` +
+    `${dangerText}\n\n` +
+    `Боевые параметры:\n` +
+    `АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}  •  HP ${this.enemy.hp}/${this.enemy.maxHp}\n\n` +
+    `Слабости:\n${weaknessText}\n\n` +
+    `Сопротивления:\n${resistanceText}\n\n` +
     `Эффект при ударе:\n${debuffText}`;
 
   this.showLargeTooltip(
     this.enemyCard.x,
-    this.enemyCard.y + 80,
-    this.enemy.name,
-    description
+    this.enemyCard.y + 82,
+    this.isBossBattle ? `⚠ ${this.enemy.name}` : this.enemy.name,
+    description,
+    0xff6b6b,
+    true
   );
 }
 
@@ -1756,9 +2071,12 @@ private showPlayerTooltip() {
     ? `${race.activeName}\n${race.activeDescription}`
     : 'Нет активного навыка.';
 
+  const debuffSection = this.createPlayerTooltipDebuffSection();
+
   const description =
     `Раса: ${raceName}\n` +
     `${raceDescription}\n\n` +
+    `${debuffSection}\n` +
     `Пассивка:\n${passiveText}\n\n` +
     `Активный навык:\n${activeText}\n\n` +
     `Характеристики:\n` +
@@ -1768,202 +2086,256 @@ private showPlayerTooltip() {
 
   this.showPlayerLargeTooltip(
     this.playerCard.x,
-    this.playerCard.y - 185,
+    this.playerCard.y,
     player.name,
     description
   );
 }
 
-private showPlayerLargeTooltip(x: number, y: number, title: string, description: string) {
+private createPlayerTooltipDebuffSection() {
+  if (this.playerDebuffs.length === 0) {
+    return 'Негативные эффекты:\nНет активных дебаффов.\n';
+  }
+
+  const debuffLines = this.playerDebuffs.map(debuff => {
+    return `${this.getDebuffIcon(debuff.id)} ${debuff.name}: ${this.getDebuffShortDescription(debuff.id, debuff.power)} Осталось: ${debuff.duration} х.`;
+  });
+
+  return `Негативные эффекты:\n${debuffLines.join('\n')}\n`;
+}
+
+
+private showPlayerLargeTooltip(_x: number, _y: number, title: string, description: string) {
   this.hideTooltip();
 
-  const width = 470;
-  const height = 430;
+  const safeX = Phaser.Math.Clamp(Math.round(this.scale.width * 0.045), 18, 32);
+  const modalWidth = Math.min(this.scale.width - safeX * 2, 620);
+  const modalHeight = Math.min(520, this.scale.height - 210);
 
-  const tooltipX = Phaser.Math.Clamp(x, 245, this.scale.width - 245);
-  const tooltipY = Phaser.Math.Clamp(y, 230, this.scale.height - 230);
+  const modalX = this.scale.width / 2;
+  const modalY = this.scale.height / 2;
+
+  const overlay = this.add.rectangle(
+    this.scale.width / 2,
+    this.scale.height / 2,
+    this.scale.width,
+    this.scale.height,
+    0x000000,
+    0.64
+  )
+    .setDepth(299)
+    .setInteractive();
 
   const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.52);
+  shadow.fillStyle(0x000000, 0.58);
   shadow.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2 + 6,
-    width,
-    height,
-    24
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2 + 7,
+    modalWidth,
+    modalHeight,
+    26
   );
   shadow.setDepth(300);
 
   const bg = this.add.graphics();
-  bg.fillStyle(0x10141c, 0.98);
+  bg.fillStyle(0x10141c, 0.985);
   bg.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    24
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
   );
   bg.lineStyle(2, UI.colors.goldDark, 0.9);
   bg.strokeRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    24
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
   );
   bg.setDepth(301);
 
-  const titleText = this.add.text(tooltipX, tooltipY - 158, title, {
+  const titleText = this.add.text(modalX, modalY - modalHeight / 2 + 30, title, {
     fontFamily: UI.font.title,
     fontSize: '23px',
     color: UI.colors.goldText,
     stroke: '#000000',
     strokeThickness: 4,
+    align: 'center',
+    wordWrap: {
+      width: modalWidth - 52,
+    },
+    maxLines: 1,
   }).setOrigin(0.5).setDepth(302);
 
   const descriptionText = this.add.text(
-    tooltipX - width / 2 + 24,
-    tooltipY - 120,
+    modalX - modalWidth / 2 + 24,
+    modalY - modalHeight / 2 + 68,
     description,
     {
       fontFamily: UI.font.body,
-      fontSize: '14px',
+      fontSize: '13px',
       color: UI.colors.text,
       wordWrap: {
-        width: width - 48,
+        width: modalWidth - 48,
+        useAdvancedWrap: true,
       },
-      lineSpacing: 5,
-    }
-  ).setOrigin(0, 0).setDepth(302);
-
-  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
-}
-
-private showLargeTooltip(x: number, y: number, title: string, description: string) {
-  this.hideTooltip();
-
-  const width = 390;
-  const height = 250;
-
-  const tooltipX = Phaser.Math.Clamp(x, 210, this.scale.width - 210);
-  const tooltipY = Phaser.Math.Clamp(y, 145, 420);
-
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.52);
-  shadow.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2 + 6,
-    width,
-    height,
-    22
-  );
-  shadow.setDepth(300);
-
-  const bg = this.add.graphics();
-  bg.fillStyle(0x100b08, 0.98);
-  bg.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    22
-  );
-  bg.lineStyle(2, UI.colors.goldDark, 0.92);
-  bg.strokeRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    22
-  );
-  bg.setDepth(301);
-
-  const titleText = this.add.text(tooltipX, tooltipY - 96, title, {
-    fontFamily: UI.font.title,
-    fontSize: '21px',
-    color: UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 4,
-  }).setOrigin(0.5).setDepth(302);
-
-  const descriptionText = this.add.text(
-    tooltipX - width / 2 + 22,
-    tooltipY - 62,
-    description,
-    {
-      fontFamily: UI.font.body,
-      fontSize: '14px',
-      color: UI.colors.text,
-      wordWrap: {
-        width: width - 44,
-      },
+      maxLines: 23,
       lineSpacing: 4,
     }
   ).setOrigin(0, 0).setDepth(302);
 
-  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
+  const closeHint = this.add.text(modalX, modalY + modalHeight / 2 - 24, 'Нажми затемнение, чтобы закрыть', {
+    fontFamily: UI.font.body,
+    fontSize: '11px',
+    color: UI.colors.textMuted,
+    align: 'center',
+    wordWrap: {
+      width: modalWidth - 52,
+    },
+    maxLines: 1,
+  }).setOrigin(0.5).setDepth(302);
+
+  const close = () => {
+    this.hideTooltip();
+  };
+
+  overlay.on('pointerup', close);
+
+  const closeZone = this.add.zone(
+    modalX,
+    modalY + modalHeight / 2 - 24,
+    modalWidth - 90,
+    38
+  )
+    .setDepth(303)
+    .setInteractive({ useHandCursor: true });
+
+  closeZone.on('pointerup', close);
+
+  this.tooltipObjects.push(overlay, shadow, bg, titleText, descriptionText, closeHint, closeZone);
 }
 
-private showTooltip(x: number, y: number, title: string, description: string) {
+private showLargeTooltip(
+  _x: number,
+  _y: number,
+  title: string,
+  description: string,
+  accentColor = UI.colors.goldDark,
+  danger = false
+) {
   this.hideTooltip();
 
-  const width = 360;
-  const height = 118;
+  const safeX = Phaser.Math.Clamp(Math.round(this.scale.width * 0.045), 18, 32);
+  const modalWidth = Math.min(this.scale.width - safeX * 2, danger ? 620 : 520);
+  const modalHeight = Math.min(danger ? 520 : 360, this.scale.height - 210);
 
-  const tooltipX = Phaser.Math.Clamp(x, 190, this.scale.width - 190);
-  const tooltipY = Phaser.Math.Clamp(y, 90, this.scale.height - 90);
+  const modalX = this.scale.width / 2;
+  const modalY = this.scale.height / 2;
+
+  const overlay = this.add.rectangle(
+    this.scale.width / 2,
+    this.scale.height / 2,
+    this.scale.width,
+    this.scale.height,
+    0x000000,
+    danger ? 0.68 : 0.58
+  )
+    .setDepth(299)
+    .setInteractive();
 
   const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.45);
+  shadow.fillStyle(0x000000, 0.58);
   shadow.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2 + 5,
-    width,
-    height,
-    18
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2 + 7,
+    modalWidth,
+    modalHeight,
+    26
   );
   shadow.setDepth(300);
 
   const bg = this.add.graphics();
-  bg.fillStyle(0x120d0a, 0.98);
+  bg.fillStyle(danger ? 0x1b0706 : 0x100b08, 0.985);
   bg.fillRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    18
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
   );
-  bg.lineStyle(2, UI.colors.goldDark, 0.85);
+  bg.lineStyle(danger ? 3 : 2, accentColor, danger ? 0.98 : 0.9);
   bg.strokeRoundedRect(
-    tooltipX - width / 2,
-    tooltipY - height / 2,
-    width,
-    height,
-    18
+    modalX - modalWidth / 2,
+    modalY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
   );
   bg.setDepth(301);
 
-  const titleText = this.add.text(tooltipX, tooltipY - 32, title, {
+  const titleText = this.add.text(modalX, modalY - modalHeight / 2 + 32, title, {
     fontFamily: UI.font.title,
-    fontSize: '18px',
-    color: UI.colors.goldText,
+    fontSize: danger ? '23px' : '21px',
+    color: danger ? '#ff9a66' : UI.colors.goldText,
     stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0.5).setDepth(302);
-
-  const descriptionText = this.add.text(tooltipX, tooltipY + 16, description, {
-    fontFamily: UI.font.body,
-    fontSize: '14px',
-    color: UI.colors.text,
+    strokeThickness: 4,
     align: 'center',
     wordWrap: {
-      width: width - 34,
+      width: modalWidth - 52,
     },
-    lineSpacing: 4,
+    maxLines: 2,
   }).setOrigin(0.5).setDepth(302);
 
-  this.tooltipObjects.push(shadow, bg, titleText, descriptionText);
+  const descriptionText = this.add.text(
+    modalX - modalWidth / 2 + 24,
+    modalY - modalHeight / 2 + 82,
+    description,
+    {
+      fontFamily: UI.font.body,
+      fontSize: danger ? '13px' : '14px',
+      color: danger ? '#ffd0c2' : UI.colors.text,
+      wordWrap: {
+        width: modalWidth - 48,
+        useAdvancedWrap: true,
+      },
+      maxLines: danger ? 24 : 13,
+      lineSpacing: 4,
+    }
+  ).setOrigin(0, 0).setDepth(302);
+
+  const closeHint = this.add.text(modalX, modalY + modalHeight / 2 - 24, 'Нажми затемнение, чтобы закрыть', {
+    fontFamily: UI.font.body,
+    fontSize: '11px',
+    color: UI.colors.textMuted,
+    align: 'center',
+    wordWrap: {
+      width: modalWidth - 52,
+    },
+    maxLines: 1,
+  }).setOrigin(0.5).setDepth(302);
+
+  const close = () => {
+    this.hideTooltip();
+  };
+
+  overlay.on('pointerup', close);
+
+  const closeZone = this.add.zone(
+    modalX,
+    modalY + modalHeight / 2 - 24,
+    modalWidth - 90,
+    38
+  )
+    .setDepth(303)
+    .setInteractive({ useHandCursor: true });
+
+  closeZone.on('pointerup', close);
+
+  this.tooltipObjects.push(overlay, shadow, bg, titleText, descriptionText, closeHint, closeZone);
 }
+
 
 private createEffectChip(config: {
   x: number;
@@ -1974,9 +2346,11 @@ private createEffectChip(config: {
   tooltipTitle: string;
   tooltipDescription: string;
   targetArray: Phaser.GameObjects.GameObject[];
+  width?: number;
+  parent?: Phaser.GameObjects.Container;
 }) {
-  const chipWidth = 178;
-  const chipHeight = 34;
+  const chipWidth = Math.min(config.width ?? 164, this.scale.width - 54);
+  const chipHeight = 32;
   const radius = 13;
 
   const shadow = this.add.graphics();
@@ -1991,91 +2365,76 @@ private createEffectChip(config: {
   shadow.setDepth(45);
 
   const bg = this.add.graphics();
-  bg.fillStyle(0x120d0a, 0.96);
-  bg.fillRoundedRect(
-    config.x - chipWidth / 2,
-    config.y - chipHeight / 2,
-    chipWidth,
-    chipHeight,
-    radius
-  );
-  bg.lineStyle(1, config.color, 0.75);
-  bg.strokeRoundedRect(
-    config.x - chipWidth / 2,
-    config.y - chipHeight / 2,
-    chipWidth,
-    chipHeight,
-    radius
-  );
+  const redrawChip = (fillColor: number, alpha: number, lineWidth: number, lineAlpha: number) => {
+    bg.clear();
+    bg.fillStyle(fillColor, alpha);
+    bg.fillRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+    bg.lineStyle(lineWidth, config.color, lineAlpha);
+    bg.strokeRoundedRect(
+      config.x - chipWidth / 2,
+      config.y - chipHeight / 2,
+      chipWidth,
+      chipHeight,
+      radius
+    );
+  };
+
+  redrawChip(0x120d0a, 0.96, 1, 0.78);
   bg.setDepth(46);
 
-  const iconText = this.add.text(config.x - chipWidth / 2 + 20, config.y, config.icon, {
+  const iconText = this.add.text(config.x - chipWidth / 2 + 18, config.y, config.icon, {
     fontFamily: UI.font.body,
-    fontSize: '14px',
+    fontSize: '13px',
     color: UI.colors.text,
+    stroke: '#000000',
+    strokeThickness: 2,
   }).setOrigin(0.5).setDepth(47);
 
-  const labelText = this.add.text(config.x - chipWidth / 2 + 39, config.y, config.text, {
+  const labelText = this.add.text(config.x - chipWidth / 2 + 34, config.y, config.text, {
     fontFamily: UI.font.body,
-    fontSize: '12px',
+    fontSize: '11px',
     color: UI.colors.text,
+    wordWrap: {
+      width: chipWidth - 42,
+    },
+    maxLines: 1,
   }).setOrigin(0, 0.5).setDepth(47);
 
-  const hitbox = this.add.rectangle(config.x, config.y, chipWidth, chipHeight, 0x000000, 0)
+  const hitbox = this.add.zone(config.x, config.y, chipWidth, chipHeight)
    .setDepth(90)
    .setInteractive({ useHandCursor: true });
 
   hitbox.on('pointerover', () => {
-    bg.clear();
-    bg.fillStyle(0x20150f, 1);
-    bg.fillRoundedRect(
-      config.x - chipWidth / 2,
-      config.y - chipHeight / 2,
-      chipWidth,
-      chipHeight,
-      radius
-    );
-    bg.lineStyle(2, config.color, 1);
-    bg.strokeRoundedRect(
-      config.x - chipWidth / 2,
-      config.y - chipHeight / 2,
-      chipWidth,
-      chipHeight,
-      radius
-    );
-
-    this.showTooltip(
-      config.x,
-      config.y - 82,
-      config.tooltipTitle,
-      config.tooltipDescription
-    );
+    redrawChip(0x20150f, 1, 2, 1);
   });
 
   hitbox.on('pointerout', () => {
-    bg.clear();
-    bg.fillStyle(0x120d0a, 0.96);
-    bg.fillRoundedRect(
-      config.x - chipWidth / 2,
-      config.y - chipHeight / 2,
-      chipWidth,
-      chipHeight,
-      radius
-    );
-    bg.lineStyle(1, config.color, 0.75);
-    bg.strokeRoundedRect(
-      config.x - chipWidth / 2,
-      config.y - chipHeight / 2,
-      chipWidth,
-      chipHeight,
-      radius
-    );
-
-    this.hideTooltip();
+    redrawChip(0x120d0a, 0.96, 1, 0.78);
   });
 
-  config.targetArray.push(shadow, bg, iconText, labelText, hitbox);
+  hitbox.on('pointerup', () => {
+    this.showInfoModal(
+      config.tooltipTitle,
+      config.tooltipDescription,
+      config.color
+    );
+  });
+
+  const chipObjects = [shadow, bg, iconText, labelText, hitbox];
+
+  if (config.parent) {
+    config.parent.add(chipObjects);
+  }
+
+  config.targetArray.push(...chipObjects);
 }
+
 
 private getDebuffColor(id: EnemyDebuffId) {
   if (id === 'bleeding') return 0xff6b6b;
@@ -2102,30 +2461,33 @@ private renderPlayerEffectChips() {
     return;
   }
 
-  const startX = this.playerCard.x - 170;
-  const startY = this.playerCard.y + 38;
+  const chipWidth = 148;
+  const totalVisible = Math.min(this.playerDebuffs.length, 3);
+  const totalWidth = totalVisible * chipWidth + Math.max(0, totalVisible - 1) * 8;
+  const startX = -totalWidth / 2 + chipWidth / 2;
+  const y = 86;
 
-  this.playerDebuffs.slice(0, 4).forEach((debuff, index) => {
-    const row = Math.floor(index / 2);
-    const col = index % 2;
-
-    const x = startX + col * 190;
-    const y = startY + row * 40;
+  this.playerDebuffs.slice(0, 3).forEach((debuff, index) => {
+    const x = startX + index * (chipWidth + 8);
 
     this.createEffectChip({
+      parent: this.playerCard,
       x,
       y,
-      text: `${debuff.name}: ${debuff.duration} х.`,
+      width: chipWidth,
+      text: `${debuff.name}: ${debuff.duration}х`,
       icon: this.getDebuffIcon(debuff.id),
       color: this.getDebuffColor(debuff.id),
       tooltipTitle: debuff.name,
       tooltipDescription:
-        `${this.getDebuffShortDescription(debuff.id, debuff.power)}\n` +
+        `${this.getDebuffShortDescription(debuff.id, debuff.power)}
+` +
         `Осталось ходов: ${debuff.duration}.`,
       targetArray: this.playerEffectObjects,
     });
   });
 }
+
 
 private renderEnemyEffectChips() {
   this.enemyEffectObjects.forEach(object => object.destroy());
@@ -2151,20 +2513,21 @@ private renderEnemyEffectChips() {
     return;
   }
 
-  const startX = this.enemyCard.x - 170;
-  const startY = this.enemyCard.y + 78;
+  const layout = this.getBattleLayout();
+  const chipWidth = Math.min(160, (layout.contentWidth - 120) / 3);
+  const totalVisible = Math.min(effects.length, 3);
+  const totalWidth = totalVisible * chipWidth + Math.max(0, totalVisible - 1) * 8;
+  const startX = this.enemyCard.x - totalWidth / 2 + chipWidth / 2;
+  const y = this.enemyCard.y + (this.isBossBattle ? 104 : 88);
 
-  effects.slice(0, 4).forEach((effect, index) => {
-    const row = Math.floor(index / 2);
-    const col = index % 2;
-
-    const x = startX + col * 190;
-    const y = startY + row * 40;
+  effects.slice(0, 3).forEach((effect, index) => {
+    const x = startX + index * (chipWidth + 8);
 
     this.createEffectChip({
       x,
       y,
-      text: `${effect.name}: ${effect.duration} х.`,
+      width: chipWidth,
+      text: `${effect.name}: ${effect.duration}х`,
       icon: this.getDebuffIcon(effect.id),
       color: this.getDebuffColor(effect.id),
       tooltipTitle: effect.name,
@@ -2176,15 +2539,6 @@ private renderEnemyEffectChips() {
   });
 }
 
-  private createPlayerDebuffText() {
-    if (this.playerDebuffs.length === 0) {
-      return '';
-    }
-
-    return this.playerDebuffs
-      .map(debuff => `${this.getDebuffIcon(debuff.id)} ${debuff.name}: ${debuff.duration} х.`)
-      .join('\n');
-  }
 
   private getEnemyTagText(tag: string) {
   if (tag === 'dagger') return 'кинжал';
@@ -2273,13 +2627,16 @@ private renderEnemyEffectChips() {
     const strokeWidth = config.strokeWidth ?? 2;
     const depth = config.depth ?? 1;
 
+    const safeWidth = Math.min(config.width, this.scale.width - 24);
+    const safeHeight = Math.min(config.height, this.scale.height - 24);
+
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.3);
     shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 6,
-      config.width,
-      config.height,
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2 + 6,
+      safeWidth,
+      safeHeight,
       radius
     );
     shadow.setDepth(depth);
@@ -2287,19 +2644,19 @@ private renderEnemyEffectChips() {
     const panel = this.add.graphics();
     panel.fillStyle(color, alpha);
     panel.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2,
+      safeWidth,
+      safeHeight,
       radius
     );
 
     panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
     panel.strokeRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2,
+      safeWidth,
+      safeHeight,
       radius
     );
 
@@ -2310,6 +2667,7 @@ private renderEnemyEffectChips() {
       panel,
     };
   }
+
 
   private showFloatingText(
     x: number,
@@ -2793,12 +3151,14 @@ private renderEnemyEffectChips() {
       return;
     }
 
-    if (this.applyDebuffDamageAndCheckDeath()) {
+    if (player.potions <= 0) {
+      this.logText.setText('Зелий больше нет.');
+      this.updateTexts();
       return;
     }
 
-    if (player.potions <= 0) {
-      this.logText.setText('Зелий больше нет.');
+    if (this.potionCooldown > 0) {
+      this.logText.setText(`Зелье будет доступно через ${this.potionCooldown} ход.`);
       this.updateTexts();
       return;
     }
@@ -2820,28 +3180,42 @@ private renderEnemyEffectChips() {
     this.isBusy = true;
 
     player.potions = Math.max(0, player.potions - 1);
+    this.potionCooldown = 2;
 
     const rot = this.getPlayerDebuff('rot');
 
-    const healMultiplier =
-      rot
-        ? 1 - rot.power / 100
-        : 1;
-
+    const healMultiplier = rot ? 1 - rot.power / 100 : 1;
     const healAmount = Math.max(1, Math.floor(stats.maxHp * 0.35 * healMultiplier));
+
     player.hp = Math.min(stats.maxHp, player.hp + healAmount);
 
-    const playerActionText = `Ты выпил зелье и восстановил ${healAmount} HP.`;
+    const rotText = rot
+      ? `
+Могильная зараза ослабила лечение на ${rot.power}%.`
+      : '';
 
-    this.logText.setText(playerActionText);
+    this.logText.setText(
+      `Ты выпил зелье и восстановил ${healAmount} HP.${rotText}
+
+Зелье не тратит ход. Враг не атакует.`
+    );
+
+    this.showFloatingText(
+      this.playerCard.x,
+      this.playerCard.y - 55,
+      `+${healAmount}`,
+      '#75d184'
+    );
 
     this.updateTexts();
     this.createActionButtons();
 
     void saveGameAsync();
 
-    this.time.delayedCall(450, () => {
-      this.enemyTurn(playerActionText);
+    this.time.delayedCall(260, () => {
+      this.isBusy = false;
+      this.updateTexts();
+      this.createActionButtons();
     });
   }
 
@@ -2886,6 +3260,7 @@ private renderEnemyEffectChips() {
 
         this.updateTexts();
         this.tickRaceSkillCooldown();
+        this.tickPotionCooldown();
         this.tickPlayerDebuffs();
         this.isBusy = false;
         this.createActionButtons();
@@ -3004,6 +3379,7 @@ private renderEnemyEffectChips() {
 
       this.updateTexts();
       this.tickRaceSkillCooldown();
+      this.tickPotionCooldown();
       this.tickPlayerDebuffs();
       this.isBusy = false;
       this.createActionButtons();
@@ -3041,21 +3417,22 @@ private renderEnemyEffectChips() {
 
    if (this.playerHpBar) {
      const playerHpRatio = Phaser.Math.Clamp(player.hp / stats.maxHp, 0, 1);
-     this.playerHpBar.displayWidth = 520 * playerHpRatio;
+     this.playerHpBar.displayWidth = this.playerHpBarMaxWidth * playerHpRatio;
    }
 
    if (this.enemyHpBar) {
      const enemyHpRatio = Phaser.Math.Clamp(this.enemy.hp / this.enemy.maxHp, 0, 1);
-     this.enemyHpBar.displayWidth = 520 * enemyHpRatio;
+     this.enemyHpBar.displayWidth = this.enemyHpBarMaxWidth * enemyHpRatio;
    }
 
    if (this.energyBar) {
      const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
-     this.energyBar.displayWidth = 520 * energyRatio;
+     this.energyBar.displayWidth = this.energyBarMaxWidth * energyRatio;
    }
 
     if (this.playerDebuffText) {
-      this.playerDebuffText.setText(this.createPlayerDebuffText());
+      this.playerDebuffText.setText('');
+      this.playerDebuffText.setVisible(false);
     }
 
     this.renderPlayerEffectChips();

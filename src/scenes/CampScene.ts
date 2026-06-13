@@ -19,16 +19,33 @@ import {
 
 import {
   UI,
-  createPanel,
   createSceneBackground,
-  createTitle,
 } from '../ui/theme';
 
+type CampLayout = {
+  width: number;
+  height: number;
+  centerX: number;
+
+  safeX: number;
+  safeTop: number;
+  safeBottom: number;
+
+  contentWidth: number;
+  bottomNavTop: number;
+
+  compact: boolean;
+};
+
 export class CampScene extends Phaser.Scene {
-  private readonly campfireCooldownMs = 5 * 60 * 1000;
 
   private restButtonLabel?: Phaser.GameObjects.Text;
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
+
+  private readonly CAMPFIRE_COOLDOWN_MS = 30 * 60 * 1000;
+  private readonly CAMPFIRE_LAST_USE_KEY = 'campfire_last_rest_at';
+
+  private campfireTimerText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('CampScene');
@@ -36,84 +53,137 @@ export class CampScene extends Phaser.Scene {
 
   create() {
     createSceneBackground(this);
-    this.createCampBackdrop();
 
-    createTitle(this, 'Лагерь у входа', 'Последний огонь перед катакомбами');
+    const layout = this.getLayout();
 
-    this.createPlayerLine();
-    this.createTopStatusStrip();
-    this.createMainActions();
+    this.createCampBackdrop(layout);
+    this.createHeader(layout);
+    this.createPlayerLine(layout);
+    this.createHeroStatusCard(layout);
+    this.createMainActions(layout);
 
     createBottomNav(this, {
       activeScene: 'CampScene',
     });
   }
 
-  private createCampBackdrop() {
+  private getLayout(): CampLayout {
     const { width, height } = this.scale;
 
-    // Тёплое свечение костра
-    this.add.circle(width / 2, 410, 250, 0x8a3f1c, 0.08).setDepth(0);
-    this.add.circle(width / 2, 410, 145, 0xf0a040, 0.07).setDepth(0);
-    this.add.circle(width / 2, 410, 70, 0xffc46b, 0.055).setDepth(0);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
+    const safeBottom = 116;
 
-    // Туман
-    for (let i = 0; i < 14; i += 1) {
-      const x = 40 + i * 55;
-      const y = 155 + (i % 5) * 70;
+    return {
+      width,
+      height,
+      centerX: width / 2,
 
-      this.add.circle(x, y, 28 + (i % 3) * 9, 0xffffff, 0.016).setDepth(0);
+      safeX,
+      safeTop,
+      safeBottom,
+
+      contentWidth: Math.min(width - safeX * 2, 620),
+      bottomNavTop: height - safeBottom,
+
+      compact: height < 1120,
+    };
+  }
+
+  private createCampBackdrop(layout: CampLayout) {
+    const { width, height, centerX } = layout;
+
+    const fireY = Phaser.Math.Clamp(height * 0.32, 330, 430);
+
+    this.add.circle(centerX, fireY, width * 0.42, 0x8a3f1c, 0.08).setDepth(0);
+    this.add.circle(centerX, fireY, width * 0.24, 0xf0a040, 0.07).setDepth(0);
+    this.add.circle(centerX, fireY, width * 0.12, 0xffc46b, 0.055).setDepth(0);
+
+    for (let i = 0; i < 12; i += 1) {
+      const x = layout.safeX + 24 + i * ((width - layout.safeX * 2 - 48) / 11);
+      const y = layout.safeTop + 110 + (i % 4) * 58;
+
+      this.add.circle(x, y, 26 + (i % 3) * 8, 0xffffff, 0.015).setDepth(0);
     }
 
-    // Тёмная земля снизу
-    this.add.rectangle(width / 2, height - 195, width, 310, 0x050403, 0.34).setDepth(0);
+    this.add.rectangle(centerX, height - 190, width, 320, 0x050403, 0.34).setDepth(0);
 
-    // Центральный костёр
-    this.add.circle(width / 2, 405, 52, 0x000000, 0.22).setDepth(1);
-    this.add.circle(width / 2, 395, 40, 0xf08a24, 0.13).setDepth(1);
+    this.add.circle(centerX, fireY + 3, 52, 0x000000, 0.22).setDepth(1);
+    this.add.circle(centerX, fireY - 7, 42, 0xf08a24, 0.13).setDepth(1);
 
-    this.add.text(width / 2, 395, '♨', {
+    this.add.text(centerX, fireY - 8, '♨', {
       fontFamily: UI.font.body,
-      fontSize: '46px',
+      fontSize: layout.compact ? '42px' : '48px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
     }).setOrigin(0.5).setDepth(2);
   }
 
-  private createPlayerLine() {
-    const { width } = this.scale;
+  private createHeader(layout: CampLayout) {
+    const titleY = layout.safeTop + 26;
 
-    const vkUser = getCachedVKUser();
-    const vkName = vkUser ? vkUser.first_name : 'локальный режим';
+    this.add.text(layout.centerX, titleY, 'Лагерь у входа', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '30px' : '34px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth,
+      },
+    }).setOrigin(0.5).setDepth(10);
 
-    this.add.text(width / 2, 120, `Игрок: ${vkName}`, {
+    this.add.text(layout.centerX, titleY + 36, 'Последний огонь перед катакомбами', {
       fontFamily: UI.font.body,
       fontSize: '15px',
       color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 40,
+      },
     }).setOrigin(0.5).setDepth(10);
   }
 
-  private createTopStatusStrip() {
-    const { width } = this.scale;
+  private createPlayerLine(layout: CampLayout) {
+    const vkUser = getCachedVKUser();
+    const vkName = vkUser ? vkUser.first_name : 'локальный режим';
 
-    const race = player.raceId ? getRaceById(player.raceId) : null;
+    this.add.text(layout.centerX, layout.safeTop + 82, `Игрок: ${vkName}`, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 40,
+      },
+    }).setOrigin(0.5).setDepth(10);
+  }
+
+  private createHeroStatusCard(layout: CampLayout) {
+    const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
 
-    const y = 205;
+    const cardTop = layout.safeTop + 110;
+    const cardHeight = layout.compact ? 132 : 148;
+    const cardY = cardTop + cardHeight / 2;
 
     this.createRoundedPanel({
-      x: width / 2,
-      y,
-      width: 620,
-      height: 120,
+      x: layout.centerX,
+      y: cardY,
+      width: layout.contentWidth,
+      height: cardHeight,
       radius: 30,
       color: 0x0d0a08,
-      alpha: 0.9,
+      alpha: 0.93,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.42,
+      strokeAlpha: 0.5,
       depth: 2,
     });
+
+    const innerLeft = layout.centerX - layout.contentWidth / 2 + 28;
+    const innerRight = layout.centerX + layout.contentWidth / 2 - 28;
 
     const heroName =
       race && player.name === race.name
@@ -122,26 +192,32 @@ export class CampScene extends Phaser.Scene {
           ? `${player.name} • ${race.name}`
           : player.name;
 
-    this.add.text(width / 2 - 270, y - 37, heroName, {
+    this.add.text(innerLeft, cardY - cardHeight / 2 + 28, heroName, {
       fontFamily: UI.font.title,
-      fontSize: '23px',
+      fontSize: layout.compact ? '20px' : '23px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
+      wordWrap: {
+        width: layout.contentWidth - 140,
+      },
     }).setOrigin(0, 0.5).setDepth(6);
 
-    this.add.text(width / 2 + 185, y - 37, `Ур. ${player.level}`, {
+    this.add.text(innerRight, cardY - cardHeight / 2 + 28, `Ур. ${player.level}`, {
       fontFamily: UI.font.title,
-      fontSize: '20px',
+      fontSize: '19px',
       color: UI.colors.green,
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0, 0.5).setDepth(6);
+    }).setOrigin(1, 0.5).setDepth(6);
+
+    const barWidth = Math.min((layout.contentWidth - 78) / 2, 258);
+    const barY = cardY - 6;
 
     this.createSmallBar({
-      x: width / 2 - 135,
-      y: y + 3,
-      width: 250,
+      x: layout.centerX - barWidth / 2 - 12,
+      y: barY,
+      width: barWidth,
       label: 'HP',
       value: `${player.hp}/${stats.maxHp}`,
       progress: stats.maxHp > 0 ? player.hp / stats.maxHp : 1,
@@ -149,18 +225,191 @@ export class CampScene extends Phaser.Scene {
     });
 
     this.createSmallBar({
-      x: width / 2 + 155,
-      y: y + 3,
-      width: 250,
+      x: layout.centerX + barWidth / 2 + 12,
+      y: barY,
+      width: barWidth,
       label: 'Энергия',
       value: `${player.energy}/${stats.maxEnergy}`,
       progress: stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1,
       color: UI.colors.blueHex,
     });
 
-    this.createTinyResource(width / 2 - 185, y + 47, '◆', `${player.gold}`);
-    this.createTinyResource(width / 2, y + 47, '✚', `${player.potions}`);
-    this.createTinyResource(width / 2 + 185, y + 47, '★', `${player.relicIds.length}`);
+    const resourceY = cardY + cardHeight / 2 - 27;
+    const resourceWidth = Math.min((layout.contentWidth - 40) / 3, 150);
+
+    this.createTinyResource(layout.centerX - resourceWidth - 10, resourceY, '◆', `${player.gold}`, resourceWidth);
+    this.createTinyResource(layout.centerX, resourceY, '✚', `${player.potions}`, resourceWidth);
+    this.createTinyResource(layout.centerX + resourceWidth + 10, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
+  }
+
+  private createMainActions(layout: CampLayout) {
+    const hasActiveRun =
+      gameState.floorRun.active &&
+      gameState.floorRun.rooms.length > 0;
+
+    const hasQuestReward = this.hasClaimableQuests();
+
+    const panelTop = layout.compact
+      ? layout.safeTop + 260
+      : layout.safeTop + 286;
+
+    const panelBottom = layout.bottomNavTop - 18;
+    const availableHeight = Math.max(500, panelBottom - panelTop);
+    const panelHeight = Math.min(availableHeight, hasActiveRun ? 700 : 640);
+    const panelY = panelTop + panelHeight / 2;
+
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: layout.contentWidth,
+      height: panelHeight,
+      radius: 36,
+      color: 0x0b0908,
+      alpha: 0.92,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.5,
+      depth: 2,
+    });
+
+    const innerTop = panelTop + 28;
+    const gap = layout.compact ? 12 : 14;
+
+    const mainButtonHeight = layout.compact ? 88 : 98;
+    const wideButtonHeight = layout.compact ? 70 : 78;
+    const tileHeight = layout.compact ? 86 : 96;
+
+    const dungeonTitle = hasActiveRun
+      ? 'Продолжить спуск'
+      : 'Войти в катакомбы';
+
+    const dungeonDesc = hasActiveRun
+      ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
+      : 'Начать новый спуск в глубины.';
+
+    let currentY = innerTop + mainButtonHeight / 2;
+
+    this.createMainDungeonButton({
+      layout,
+      x: layout.centerX,
+      y: currentY,
+      width: layout.contentWidth - 60,
+      height: mainButtonHeight,
+      title: dungeonTitle,
+      description: dungeonDesc,
+      hasActiveRun,
+      onClick: () => {
+        this.tryEnterCatacombs(hasActiveRun);
+      },
+    });
+
+    currentY += mainButtonHeight / 2 + gap;
+
+    if (hasActiveRun) {
+      currentY += wideButtonHeight / 2;
+
+      this.createWideActionButton({
+        x: layout.centerX,
+        y: currentY,
+        width: layout.contentWidth - 60,
+        height: wideButtonHeight,
+        icon: '!',
+        title: 'Покинуть спуск',
+        description: 'Текущий ярус придётся проходить заново.',
+        accentColor: UI.colors.redHex,
+        danger: true,
+        onClick: () => {
+          this.showLeaveRunMessage();
+        },
+      });
+
+      currentY += wideButtonHeight / 2 + gap;
+    }
+
+    const tileWidth = Math.min((layout.contentWidth - 78) / 2, 270);
+    const leftX = layout.centerX - tileWidth / 2 - 10;
+    const rightX = layout.centerX + tileWidth / 2 + 10;
+
+    currentY += tileHeight / 2;
+
+    this.createCampTile({
+      x: leftX,
+      y: currentY,
+      width: tileWidth,
+      height: tileHeight,
+      icon: '▣',
+      title: 'Лавка',
+      description: 'Зелья и припасы',
+      accentColor: UI.colors.gold,
+      onClick: () => {
+        this.scene.start('ShopScene');
+      },
+    });
+
+    this.createCampTile({
+      x: rightX,
+      y: currentY,
+      width: tileWidth,
+      height: tileHeight,
+      icon: '▲',
+      title: 'Тренировка',
+      description: 'Прокачка героя',
+      accentColor: UI.colors.greenHex,
+      onClick: () => {
+        this.scene.start('TrainingScene');
+      },
+    });
+
+    currentY += tileHeight + gap;
+
+    this.createCampTile({
+      x: leftX,
+      y: currentY,
+      width: tileWidth,
+      height: tileHeight,
+      icon: hasQuestReward ? '!' : '◆',
+      title: hasQuestReward ? 'Задания!' : 'Задания',
+      description: hasQuestReward ? 'Есть награда' : 'Цели и награды',
+      accentColor: hasQuestReward ? UI.colors.greenHex : UI.colors.goldDark,
+      highlighted: hasQuestReward,
+      onClick: () => {
+        this.scene.start('QuestScene');
+      },
+    });
+
+    this.createCampTile({
+      x: rightX,
+      y: currentY,
+      width: tileWidth,
+      height: tileHeight,
+      icon: '⚒',
+      title: 'Кузница',
+      description: 'Улучшения',
+      accentColor: UI.colors.goldDark,
+      onClick: () => {
+        this.scene.start('ForgeScene');
+      },
+    });
+
+    currentY += tileHeight / 2 + gap + wideButtonHeight / 2;
+
+    const maxRestY = panelTop + panelHeight - 48;
+
+    const restCard = this.createWideActionButton({
+      x: layout.centerX,
+      y: Math.min(currentY, maxRestY),
+      width: layout.contentWidth - 60,
+      height: wideButtonHeight,
+      icon: '♨',
+      title: this.getRestButtonText(),
+      description: 'Восстановить HP, энергию и зелья.',
+      accentColor: UI.colors.gold,
+      onClick: () => {
+        this.restAtCampfire();
+      },
+    });
+
+    this.restButtonLabel = restCard.titleText;
+    this.startCampfireTimer();
   }
 
   private hasClaimableQuests() {
@@ -201,584 +450,562 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createMainActions() {
-    const { width } = this.scale;
-
-    const hasActiveRun =
-      gameState.floorRun.active &&
-      gameState.floorRun.rooms.length > 0;
-
-    const hasQuestReward = this.hasClaimableQuests();
-
-    const panelY = 720;
-    const panelHeight = hasActiveRun ? 705 : 640;
+  private createMainDungeonButton(config: {
+    layout: CampLayout;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    title: string;
+    description: string;
+    hasActiveRun: boolean;
+    onClick: () => void;
+  }) {
+    const accent = config.hasActiveRun ? UI.colors.greenHex : UI.colors.redHex;
 
     this.createRoundedPanel({
-      x: width / 2,
-      y: panelY,
-      width: 620,
-      height: panelHeight,
-      radius: 36,
-      color: 0x0b0908,
-      alpha: 0.9,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.48,
-      depth: 2,
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      radius: 28,
+      color: config.hasActiveRun ? 0x102016 : 0x1a100d,
+      alpha: 0.98,
+      strokeColor: accent,
+      strokeAlpha: 0.82,
+      strokeWidth: 2,
+      depth: 4,
     });
 
-    const dungeonTitle = hasActiveRun
-      ? 'Продолжить спуск'
-      : 'Войти в катакомбы';
+    const left = config.x - config.width / 2;
+    const iconX = left + 48;
+    const textX = left + 92;
 
-    const dungeonDesc = hasActiveRun
-      ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
-      : 'Начать новый спуск в глубины.';
+    this.add.circle(iconX, config.y, 31, accent, 0.15)
+      .setStrokeStyle(2, accent, 0.72)
+      .setDepth(6);
 
-    this.createMainDungeonButton({
-      x: width / 2,
-      y: panelY - panelHeight / 2 + 105,
-      title: dungeonTitle,
-      description: dungeonDesc,
-      hasActiveRun,
-      onClick: () => {
-        this.tryEnterCatacombs(hasActiveRun);
+    this.add.text(iconX, config.y, config.hasActiveRun ? '▼' : '☠', {
+      fontFamily: UI.font.body,
+      fontSize: '27px',
+      color: config.hasActiveRun ? UI.colors.green : UI.colors.red,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(7);
+
+    const titleColor = config.hasActiveRun ? UI.colors.green : UI.colors.goldText;
+
+    const titleText = this.add.text(textX, config.y - 18, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.compact ? '21px' : '24px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 4,
+      wordWrap: {
+        width: config.width - 120,
       },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.add.text(textX, config.y + 19, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: config.width - 120,
+      },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.createClickZone(config.x, config.y, config.width, config.height, () => {
+      config.onClick();
+    }, titleText, titleColor);
+  }
+
+  private createCampTile(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    description: string;
+    accentColor: number;
+    highlighted?: boolean;
+    onClick: () => void;
+  }) {
+    const highlighted = config.highlighted ?? false;
+
+    this.createRoundedPanel({
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      radius: 24,
+      color: highlighted ? 0x102016 : 0x17100c,
+      alpha: highlighted ? 0.98 : 0.94,
+      strokeColor: config.accentColor,
+      strokeAlpha: highlighted ? 0.88 : 0.42,
+      strokeWidth: highlighted ? 2 : 1,
+      depth: 4,
     });
 
-    let gridY = panelY - panelHeight / 2 + 230;
+    const left = config.x - config.width / 2;
+    const iconX = left + 42;
+    const textX = left + 78;
+    const titleColor = highlighted ? UI.colors.green : UI.colors.goldText;
 
-    if (hasActiveRun) {
-      this.createWideActionButton({
-        x: width / 2,
-        y: gridY,
-        icon: '!',
-        title: 'Покинуть спуск',
-        description: 'Текущий ярус придётся проходить заново.',
-        accentColor: UI.colors.redHex,
-        danger: true,
-        onClick: () => {
-          this.showLeaveRunMessage();
-        },
+    this.add.circle(iconX, config.y, 24, config.accentColor, 0.14)
+      .setStrokeStyle(1, config.accentColor, 0.62)
+      .setDepth(6);
+
+    this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '20px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(7);
+
+    const titleText = this.add.text(textX, config.y - 16, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: config.width - 92,
+      },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.add.text(textX, config.y + 16, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: config.width - 92,
+      },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.createClickZone(config.x, config.y, config.width, config.height, () => {
+      config.onClick();
+    }, titleText, titleColor);
+
+    if (highlighted) {
+      this.tweens.add({
+        targets: titleText,
+        alpha: 0.55,
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+  }
+
+  private createWideActionButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    description: string;
+    accentColor: number;
+    danger?: boolean;
+    onClick: () => void;
+  }) {
+    const danger = config.danger ?? false;
+    const titleColor = danger ? UI.colors.red : UI.colors.goldText;
+
+    this.createRoundedPanel({
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      radius: 24,
+      color: danger ? 0x241010 : 0x17100c,
+      alpha: 0.96,
+      strokeColor: config.accentColor,
+      strokeAlpha: danger ? 0.72 : 0.44,
+      strokeWidth: danger ? 2 : 1,
+      depth: 4,
+    });
+
+    const left = config.x - config.width / 2;
+    const iconX = left + 44;
+    const textX = left + 82;
+
+    this.add.circle(iconX, config.y, 24, config.accentColor, 0.14)
+      .setStrokeStyle(1, config.accentColor, 0.62)
+      .setDepth(6);
+
+    this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '20px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(7);
+
+    const titleText = this.add.text(textX, config.y - 13, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '19px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: config.width - 110,
+      },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.add.text(textX, config.y + 17, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: config.width - 110,
+      },
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    this.createClickZone(config.x, config.y, config.width, config.height, () => {
+      config.onClick();
+    }, titleText, titleColor);
+
+    return {
+      titleText,
+    };
+  }
+
+  private createClickZone(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    onClick: () => void,
+    titleText?: Phaser.GameObjects.Text,
+    normalColor = UI.colors.goldText
+  ) {
+    const zone = this.add.zone(x, y, width, height)
+      .setDepth(30)
+      .setInteractive({
+        useHandCursor: true,
       });
 
-      gridY += 120;
-    }
-
-    const leftX = width / 2 - 142;
-    const rightX = width / 2 + 142;
-
-    this.createCampTile({
-      x: leftX,
-      y: gridY,
-      icon: '▣',
-      title: 'Лавка',
-      description: 'Зелья и припасы',
-      accentColor: UI.colors.gold,
-      onClick: () => {
-        this.scene.start('ShopScene');
-      },
+    zone.on('pointerover', () => {
+      titleText?.setColor(UI.colors.text);
     });
 
-    this.createCampTile({
-      x: rightX,
-      y: gridY,
-      icon: '▲',
-      title: 'Тренировка',
-      description: 'Прокачка героя',
-      accentColor: UI.colors.greenHex,
-      onClick: () => {
-        this.scene.start('TrainingScene');
-      },
+    zone.on('pointerout', () => {
+      titleText?.setColor(normalColor);
     });
 
-    this.createCampTile({
-      x: leftX,
-      y: gridY + 120,
-      icon: hasQuestReward ? '!' : '◆',
-      title: hasQuestReward ? 'Задания!' : 'Задания',
-      description: hasQuestReward ? 'Есть награда' : 'Цели и награды',
-      accentColor: hasQuestReward ? UI.colors.greenHex : UI.colors.goldDark,
-      highlighted: hasQuestReward,
-      onClick: () => {
-        this.scene.start('QuestScene');
-      },
+    zone.on('pointerdown', () => {
+      onClick();
     });
 
-    this.createCampTile({
-      x: rightX,
-      y: gridY + 120,
-      icon: '⚒',
-      title: 'Кузница',
-      description: 'Улучшения',
-      accentColor: UI.colors.goldDark,
-      onClick: () => {
-        this.scene.start('ForgeScene');
-      },
-    });
-
-    const restCard = this.createWideActionButton({
-      x: width / 2,
-      y: gridY + 250,
-      icon: '♨',
-      title: this.getRestButtonText(),
-      description: 'Восстановить HP, энергию и зелья.',
-      accentColor: UI.colors.gold,
-      onClick: () => {
-        this.restAtCampfire();
-      },
-    });
-
-    this.restButtonLabel = restCard.titleText;
-    this.startCampfireTimer();
+    return zone;
   }
 
-  private createMainDungeonButton(config: {
-  x: number;
-  y: number;
-  title: string;
-  description: string;
-  hasActiveRun: boolean;
-  onClick: () => void;
-}) {
-  const accent = config.hasActiveRun ? UI.colors.greenHex : UI.colors.redHex;
+  private createSmallBar(config: {
+    x: number;
+    y: number;
+    width: number;
+    label: string;
+    value: string;
+    progress: number;
+    color: number;
+  }) {
+    const progress = Phaser.Math.Clamp(config.progress, 0, 1);
 
-  this.createRoundedPanel({
-    x: config.x,
-    y: config.y,
-    width: 560,
-    height: 100,
-    radius: 28,
-    color: config.hasActiveRun ? 0x102016 : 0x1a100d,
-    alpha: 0.98,
-    strokeColor: accent,
-    strokeAlpha: 0.82,
-    strokeWidth: 2,
-    depth: 4,
-  });
+    this.add.text(config.x - config.width / 2, config.y - 12, config.label, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: UI.colors.textMuted,
+    }).setOrigin(0, 0.5).setDepth(6);
 
-  this.add.circle(config.x - 230, config.y, 32, accent, 0.15)
-    .setStrokeStyle(2, accent, 0.72)
-    .setDepth(6);
+    this.add.text(config.x + config.width / 2, config.y - 12, config.value, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: UI.colors.text,
+    }).setOrigin(1, 0.5).setDepth(6);
 
-  this.add.text(config.x - 230, config.y, config.hasActiveRun ? '▼' : '☠', {
-    fontFamily: UI.font.body,
-    fontSize: '27px',
-    color: config.hasActiveRun ? UI.colors.green : UI.colors.red,
-    stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0.5).setDepth(7);
+    this.add.rectangle(config.x, config.y + 8, config.width, 10, 0x050505, 0.88)
+      .setDepth(5);
 
-  const titleText = this.add.text(config.x - 180, config.y - 18, config.title, {
-    fontFamily: UI.font.title,
-    fontSize: '25px',
-    color: config.hasActiveRun ? UI.colors.green : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 4,
-  }).setOrigin(0, 0.5).setDepth(7);
+    this.add.rectangle(
+      config.x - config.width / 2 + (config.width * progress) / 2,
+      config.y + 8,
+      config.width * progress,
+      10,
+      config.color,
+      0.95
+    ).setDepth(6);
 
-  this.add.text(config.x - 180, config.y + 19, config.description, {
-    fontFamily: UI.font.body,
-    fontSize: '15px',
-    color: UI.colors.textMuted,
-    wordWrap: {
-      width: 400,
-    },
-  }).setOrigin(0, 0.5).setDepth(7);
-
-  this.createClickZone(config.x, config.y, 560, 100, () => {
-    config.onClick();
-  }, titleText);
-}
-
-private createCampTile(config: {
-  x: number;
-  y: number;
-  icon: string;
-  title: string;
-  description: string;
-  accentColor: number;
-  highlighted?: boolean;
-  onClick: () => void;
-}) {
-  const highlighted = config.highlighted ?? false;
-
-  this.createRoundedPanel({
-    x: config.x,
-    y: config.y,
-    width: 270,
-    height: 100,
-    radius: 24,
-    color: highlighted ? 0x102016 : 0x17100c,
-    alpha: highlighted ? 0.98 : 0.94,
-    strokeColor: config.accentColor,
-    strokeAlpha: highlighted ? 0.88 : 0.42,
-    strokeWidth: highlighted ? 2 : 1,
-    depth: 4,
-  });
-
-  this.add.circle(config.x - 92, config.y, 25, config.accentColor, 0.14)
-    .setStrokeStyle(1, config.accentColor, 0.62)
-    .setDepth(6);
-
-  this.add.text(config.x - 92, config.y, config.icon, {
-    fontFamily: UI.font.body,
-    fontSize: '21px',
-    color: highlighted ? UI.colors.green : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 2,
-  }).setOrigin(0.5).setDepth(7);
-
-  const titleText = this.add.text(config.x - 55, config.y - 17, config.title, {
-    fontFamily: UI.font.title,
-    fontSize: '18px',
-    color: highlighted ? UI.colors.green : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0, 0.5).setDepth(7);
-
-  this.add.text(config.x - 55, config.y + 16, config.description, {
-    fontFamily: UI.font.body,
-    fontSize: '13px',
-    color: UI.colors.textMuted,
-    wordWrap: {
-      width: 170,
-    },
-  }).setOrigin(0, 0.5).setDepth(7);
-
-  this.createClickZone(config.x, config.y, 270, 100, () => {
-    config.onClick();
-  }, titleText);
-
-  if (highlighted) {
-    this.tweens.add({
-      targets: titleText,
-      alpha: 0.55,
-      duration: 700,
-      yoyo: true,
-      repeat: -1,
-    });
+    this.add.rectangle(config.x, config.y + 8, config.width, 10)
+      .setStrokeStyle(1, UI.colors.goldDark, 0.45)
+      .setDepth(7);
   }
-}
 
-private createWideActionButton(config: {
-  x: number;
-  y: number;
-  icon: string;
-  title: string;
-  description: string;
-  accentColor: number;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  const danger = config.danger ?? false;
-
-  this.createRoundedPanel({
-    x: config.x,
-    y: config.y,
-    width: 560,
-    height: 78,
-    radius: 24,
-    color: danger ? 0x241010 : 0x17100c,
-    alpha: 0.96,
-    strokeColor: config.accentColor,
-    strokeAlpha: danger ? 0.72 : 0.44,
-    strokeWidth: danger ? 2 : 1,
-    depth: 4,
-  });
-
-  this.add.circle(config.x - 230, config.y, 24, config.accentColor, 0.14)
-    .setStrokeStyle(1, config.accentColor, 0.62)
-    .setDepth(6);
-
-  this.add.text(config.x - 230, config.y, config.icon, {
-    fontFamily: UI.font.body,
-    fontSize: '20px',
-    color: danger ? UI.colors.red : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 2,
-  }).setOrigin(0.5).setDepth(7);
-
-  const titleText = this.add.text(config.x - 190, config.y - 13, config.title, {
-    fontFamily: UI.font.title,
-    fontSize: '20px',
-    color: danger ? UI.colors.red : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0, 0.5).setDepth(7);
-
-  this.add.text(config.x - 190, config.y + 17, config.description, {
-    fontFamily: UI.font.body,
-    fontSize: '14px',
-    color: UI.colors.textMuted,
-    wordWrap: {
-      width: 390,
-    },
-  }).setOrigin(0, 0.5).setDepth(7);
-
-  this.createClickZone(config.x, config.y, 560, 78, () => {
-    config.onClick();
-  }, titleText);
-
-  return {
-    titleText,
-  };
-}
-
-private createClickZone(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  onClick: () => void,
-  titleText?: Phaser.GameObjects.Text
-) {
-  const zone = this.add.zone(x, y, width, height)
-    .setDepth(30)
-    .setInteractive({
-      useHandCursor: true,
+  private createTinyResource(
+    x: number,
+    y: number,
+    icon: string,
+    value: string,
+    width: number
+  ) {
+    this.createRoundedPanel({
+      x,
+      y,
+      width,
+      height: 34,
+      radius: 15,
+      color: 0x17100c,
+      alpha: 0.95,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.35,
+      strokeWidth: 1,
+      depth: 4,
     });
 
-  zone.on('pointerover', () => {
-    titleText?.setColor(UI.colors.text);
-  });
+    this.add.text(x - width / 2 + 36, y, icon, {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5).setDepth(6);
 
-  zone.on('pointerout', () => {
-    titleText?.setColor(UI.colors.goldText);
-  });
+    this.add.text(x - width / 2 + 58, y, value, {
+      fontFamily: UI.font.title,
+      fontSize: '16px',
+      color: UI.colors.text,
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: width - 70,
+      },
+    }).setOrigin(0, 0.5).setDepth(6);
+  }
 
-  zone.on('pointerdown', () => {
-    onClick();
-  });
+  private createRoundedPanel(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius?: number;
+    color?: number;
+    alpha?: number;
+    strokeColor?: number;
+    strokeAlpha?: number;
+    strokeWidth?: number;
+    depth?: number;
+  }) {
+    const radius = config.radius ?? 24;
+    const color = config.color ?? 0x14100d;
+    const alpha = config.alpha ?? 0.92;
+    const strokeColor = config.strokeColor ?? UI.colors.goldDark;
+    const strokeAlpha = config.strokeAlpha ?? 0.45;
+    const strokeWidth = config.strokeWidth ?? 2;
+    const depth = config.depth ?? 1;
 
-  return zone;
-}
+    const safeWidth = Math.min(config.width, this.scale.width - 24);
+    const safeHeight = Math.min(config.height, this.scale.height - 24);
 
-private createSmallBar(config: {
-  x: number;
-  y: number;
-  width: number;
-  label: string;
-  value: string;
-  progress: number;
-  color: number;
-}) {
-  const progress = Phaser.Math.Clamp(config.progress, 0, 1);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.28);
+    shadow.fillRoundedRect(
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2 + 6,
+      safeWidth,
+      safeHeight,
+      radius
+    );
+    shadow.setDepth(depth);
 
-  this.add.text(config.x - config.width / 2, config.y - 12, config.label, {
-    fontFamily: UI.font.body,
-    fontSize: '12px',
-    color: UI.colors.textMuted,
-  }).setOrigin(0, 0.5).setDepth(6);
+    const panel = this.add.graphics();
+    panel.fillStyle(color, alpha);
+    panel.fillRoundedRect(
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2,
+      safeWidth,
+      safeHeight,
+      radius
+    );
 
-  this.add.text(config.x + config.width / 2, config.y - 12, config.value, {
-    fontFamily: UI.font.body,
-    fontSize: '12px',
-    color: UI.colors.text,
-  }).setOrigin(1, 0.5).setDepth(6);
+    panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+    panel.strokeRoundedRect(
+      config.x - safeWidth / 2,
+      config.y - safeHeight / 2,
+      safeWidth,
+      safeHeight,
+      radius
+    );
 
-  this.add.rectangle(config.x, config.y + 8, config.width, 10, 0x050505, 0.88)
-    .setDepth(5);
+    panel.setDepth(depth + 1);
 
-  this.add.rectangle(
-    config.x - config.width / 2 + (config.width * progress) / 2,
-    config.y + 8,
-    config.width * progress,
-    10,
-    config.color,
-    0.95
-  ).setDepth(6);
-
-  this.add.rectangle(config.x, config.y + 8, config.width, 10)
-    .setStrokeStyle(1, UI.colors.goldDark, 0.45)
-    .setDepth(7);
-}
-
-private createTinyResource(
-  x: number,
-  y: number,
-  icon: string,
-  value: string
-) {
-  this.createRoundedPanel({
-    x,
-    y,
-    width: 150,
-    height: 34,
-    radius: 15,
-    color: 0x17100c,
-    alpha: 0.95,
-    strokeColor: UI.colors.goldDark,
-    strokeAlpha: 0.35,
-    strokeWidth: 1,
-    depth: 4,
-  });
-
-  this.add.text(x - 44, y, icon, {
-    fontFamily: UI.font.body,
-    fontSize: '15px',
-    color: UI.colors.goldText,
-  }).setOrigin(0.5).setDepth(6);
-
-  this.add.text(x - 20, y, value, {
-    fontFamily: UI.font.title,
-    fontSize: '16px',
-    color: UI.colors.text,
-    stroke: '#000000',
-    strokeThickness: 2,
-  }).setOrigin(0, 0.5).setDepth(6);
-}
-
-private createRoundedPanel(config: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  radius?: number;
-  color?: number;
-  alpha?: number;
-  strokeColor?: number;
-  strokeAlpha?: number;
-  strokeWidth?: number;
-  depth?: number;
-}) {
-  const radius = config.radius ?? 24;
-  const color = config.color ?? 0x14100d;
-  const alpha = config.alpha ?? 0.92;
-  const strokeColor = config.strokeColor ?? UI.colors.goldDark;
-  const strokeAlpha = config.strokeAlpha ?? 0.45;
-  const strokeWidth = config.strokeWidth ?? 2;
-  const depth = config.depth ?? 1;
-
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.28);
-  shadow.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2 + 6,
-    config.width,
-    config.height,
-    radius
-  );
-  shadow.setDepth(depth);
-
-  const panel = this.add.graphics();
-  panel.fillStyle(color, alpha);
-  panel.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-
-  panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
-  panel.strokeRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-
-  panel.setDepth(depth + 1);
-
-  return {
-    shadow,
-    panel,
-  };
-}
+    return {
+      shadow,
+      panel,
+    };
+  }
 
   private restAtCampfire() {
-    const currentCooldownLeft = this.getCampfireCooldownLeft();
+    const stats = getPlayerStats(player);
 
-    if (currentCooldownLeft > 0) {
-      this.showRestCooldownMessage(currentCooldownLeft);
+    const maxPotions = 6;
+    const hpIsFull = player.hp >= stats.maxHp;
+    const potionsAreFull = player.potions >= maxPotions;
+
+    const cooldownLeft = this.getCampfireCooldownLeft();
+
+    if (cooldownLeft > 0) {
+      this.showMessage(
+        'Костёр остывает',
+        `Костёр можно использовать снова через ${this.formatCooldown(cooldownLeft)}.`
+      );
+      return;
+    }
+
+    if (hpIsFull && potionsAreFull) {
+      this.showMessage(
+        'Костёр не нужен',
+        `HP уже полное, а зелий максимум: ${player.potions}/${maxPotions}.`
+      );
+      return;
+    }
+
+    player.hp = stats.maxHp;
+    player.energy = stats.maxEnergy;
+    player.potions = maxPotions;
+
+    localStorage.setItem(
+      this.CAMPFIRE_LAST_USE_KEY,
+      String(Date.now())
+    );
+
+    void saveGameAsync();
+
+    this.showMessage(
+      'Отдых у костра',
+      `HP полностью восстановлено.\nЗелья восстановлены до ${maxPotions}.\n\nКостёр снова будет доступен через 30 минут.`
+    );
+  }
+
+  private getCampfireCooldownLeft() {
+    const lastUse = Number(localStorage.getItem(this.CAMPFIRE_LAST_USE_KEY) ?? 0);
+
+    if (!lastUse) {
+      return 0;
+    }
+
+    const passed = Date.now() - lastUse;
+    const left = this.CAMPFIRE_COOLDOWN_MS - passed;
+
+    return Math.max(0, left);
+  }
+
+  private createCampfireTimerText(campfireY: number) {
+    const { width } = this.scale;
+
+    this.campfireTimerText = this.add.text(width / 2, campfireY + 96, '', {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: Math.min(width - 80, 500),
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(20);
+
+    this.updateCampfireTimerText();
+
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        this.updateCampfireTimerText();
+      },
+    });
+  }
+
+  private updateCampfireTimerText() {
+    if (!this.campfireTimerText) {
       return;
     }
 
     const stats = getPlayerStats(player);
 
-    player.hp = stats.maxHp;
-    player.energy = stats.maxEnergy;
-    player.potions = Math.max(player.potions, 2);
+    const maxPotions = 6;
+    const hpIsFull = player.hp >= stats.maxHp;
+    const potionsAreFull = player.potions >= maxPotions;
+    const cooldownLeft = this.getCampfireCooldownLeft();
 
-    gameState.lastCampRestAt = Date.now();
-
-    void saveGameAsync();
-
-    this.updateCampfireButtonText();
-    this.showRestMessage();
-  }
-
-  private getCampfireCooldownLeft() {
-    const lastRestAt = gameState.lastCampRestAt ?? 0;
-
-    if (lastRestAt <= 0) {
-      return 0;
+    if (cooldownLeft > 0) {
+      this.campfireTimerText.setText(
+        `Костёр будет доступен через ${this.formatCooldown(cooldownLeft)}`
+      );
+      this.campfireTimerText.setColor(UI.colors.red);
+      return;
     }
 
-    const passed = Date.now() - lastRestAt;
-    const left = this.campfireCooldownMs - passed;
+    if (hpIsFull && potionsAreFull) {
+      this.campfireTimerText.setText(
+        `Костёр не нужен: HP полное, зелья ${player.potions}/${maxPotions}`
+      );
+      this.campfireTimerText.setColor(UI.colors.textMuted);
+      return;
+    }
 
-    return Math.max(0, left);
+    this.campfireTimerText.setText(
+      'Костёр готов: восстановит HP и зелья до 6'
+    );
+    this.campfireTimerText.setColor(UI.colors.green);
   }
 
   private tryEnterCatacombs(hasActiveRun: boolean) {
-   const stats = getPlayerStats(player);
+    const stats = getPlayerStats(player);
 
-   const hpPercent = stats.maxHp > 0
-     ? player.hp / stats.maxHp
-     : 1;
+    const hpPercent = stats.maxHp > 0
+      ? player.hp / stats.maxHp
+      : 1;
 
-   if (hpPercent < 0.7) {
-     this.showLowHpWarning(hasActiveRun);
-     return;
-   }
+    if (hpPercent < 0.7) {
+      this.showLowHpWarning(hasActiveRun);
+      return;
+    }
 
-   if (hasActiveRun) {
-     this.scene.start('DungeonScene');
-     return;
-   }
+    if (hasActiveRun) {
+      this.scene.start('DungeonScene');
+      return;
+    }
 
-   this.scene.start('DungeonSelectScene');
+    this.scene.start('DungeonSelectScene');
   }
 
   private showLowHpWarning(hasActiveRun: boolean) {
-    const { width, height } = this.scale;
-
+    const layout = this.getLayout();
     const stats = getPlayerStats(player);
+
+    const campfireY = 620;
 
     const hpPercent = Math.round((player.hp / stats.maxHp) * 100);
     const cooldownLeft = this.getCampfireCooldownLeft();
     const canRest = cooldownLeft <= 0;
 
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x000000,
-      0.72
-    )
-      .setDepth(1000)
-      .setInteractive();
+    const modal = this.createModalShell(layout, 430);
 
-    const panel = createPanel(this, width / 2, height / 2, 620, 430, {
-      alpha: 0.98,
-      stroke: true,
-      warm: true,
-    }).setDepth(1001);
-
-    const title = this.add.text(width / 2, height / 2 - 180, 'Ты ранен', {
+    const title = this.add.text(layout.centerX, layout.height / 2 - 178, 'Ты ранен', {
       fontFamily: UI.font.title,
-      fontSize: '34px',
+      fontSize: '32px',
       color: UI.colors.red,
       stroke: '#000000',
       strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 60,
+      },
     }).setOrigin(0.5).setDepth(1002);
 
     const message = this.add.text(
-      width / 2,
-      height / 2 - 85,
+      layout.centerX,
+      layout.height / 2 - 82,
       [
         `Здоровье: ${player.hp}/${stats.maxHp} HP`,
         `Осталось примерно ${hpPercent}% здоровья.`,
@@ -790,19 +1017,21 @@ private createRoundedPanel(config: {
       ].join('\n'),
       {
         fontFamily: UI.font.body,
-        fontSize: '20px',
+        fontSize: '19px',
         color: UI.colors.text,
         align: 'center',
         lineSpacing: 6,
         wordWrap: {
-          width: 540,
+          width: layout.contentWidth - 80,
         },
       }
     ).setOrigin(0.5).setDepth(1002);
 
+    const buttonWidth = Math.min(layout.contentWidth - 140, 430);
+
     const closePopup = () => {
-      overlay.destroy();
-      panel.destroy();
+      modal.destroy();
+
       title.destroy();
       message.destroy();
 
@@ -821,8 +1050,8 @@ private createRoundedPanel(config: {
 
     const restButton = createButton(
       this,
-      width / 2,
-      height / 2 + 45,
+      layout.centerX,
+      layout.height / 2 + 42,
       canRest ? 'Отдохнуть у костра' : 'Костёр недоступен',
       () => {
         if (!canRest) {
@@ -832,21 +1061,21 @@ private createRoundedPanel(config: {
         closePopup();
         this.restAtCampfire();
       },
-      430,
+      buttonWidth,
       52,
       {
         disabled: !canRest,
       }
     );
 
-    restButton.shadow.setDepth(1001);
-    restButton.bg.setDepth(1002);
-    restButton.label.setDepth(1003);
+    this.createCampfireTimerText(campfireY);
+
+    this.setButtonDepth(restButton, 1001);
 
     const continueButton = createButton(
       this,
-      width / 2,
-      height / 2 + 110,
+      layout.centerX,
+      layout.height / 2 + 106,
       'Всё равно идти',
       () => {
         if (hasActiveRun) {
@@ -856,55 +1085,38 @@ private createRoundedPanel(config: {
 
         this.scene.start('DungeonSelectScene');
       },
-      430,
+      buttonWidth,
       52,
       {
         danger: true,
       }
     );
 
-    continueButton.shadow.setDepth(1001);
-    continueButton.bg.setDepth(1002);
-    continueButton.label.setDepth(1003);
+    this.setButtonDepth(continueButton, 1001);
 
     const cancelButton = createButton(
       this,
-      width / 2,
-      height / 2 + 175,
+      layout.centerX,
+      layout.height / 2 + 170,
       'Остаться в городе',
       () => {
         closePopup();
       },
-      430,
+      buttonWidth,
       52
     );
 
-    cancelButton.shadow.setDepth(1001);
-    cancelButton.bg.setDepth(1002);
-    cancelButton.label.setDepth(1003);
+    this.setButtonDepth(cancelButton, 1001);
   }
 
   private formatCooldown(ms: number) {
     const totalSeconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-
+  
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  private showRestMessage() {
-    this.showMessage(
-      'Отдых у костра',
-      'Ты восстановил здоровье, энергию и пополнил запас зелий.'
-    );
-  }
-
-  private showRestCooldownMessage(cooldownLeft: number) {
-    this.showMessage(
-      'Костёр ещё тлеет',
-      `Перед следующим отдыхом нужно подождать: ${this.formatCooldown(cooldownLeft)}.`
-    );
-  }
 
   private showLeaveRunMessage() {
     this.showConfirmMessage(
@@ -920,58 +1132,85 @@ private createRoundedPanel(config: {
     );
   }
 
-  private showMessage(title: string, message: string) {
-    const { width, height } = this.scale;
+  
 
+  private createModalShell(layout: CampLayout, height: number) {
     const modal = this.add.container(0, 0).setDepth(1000);
 
     const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
+      layout.centerX,
+      layout.height / 2,
+      layout.width,
+      layout.height,
       0x000000,
       0.72
     ).setInteractive();
 
-    const panel = this.add.rectangle(width / 2, height / 2, 620, 300, 0x17100c, 0.98)
-      .setStrokeStyle(3, UI.colors.goldDark, 0.9);
+    const panelWidth = Math.min(layout.contentWidth, 620);
+    const panelHeight = Math.min(height, layout.height - 120);
 
-    const titleText = this.add.text(width / 2, height / 2 - 95, title, {
+    const panel = this.add.rectangle(
+      layout.centerX,
+      layout.height / 2,
+      panelWidth,
+      panelHeight,
+      0x17100c,
+      0.98
+    ).setStrokeStyle(3, UI.colors.goldDark, 0.9);
+
+    modal.add([overlay, panel]);
+
+    return {
+      container: modal,
+      destroy: () => {
+        modal.destroy(true);
+      },
+    };
+  }
+
+  private showMessage(title: string, message: string) {
+    const layout = this.getLayout();
+    const modal = this.createModalShell(layout, 300);
+
+    const titleText = this.add.text(layout.centerX, layout.height / 2 - 95, title, {
       fontFamily: UI.font.title,
-      fontSize: '30px',
+      fontSize: '29px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5);
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 80,
+      },
+    }).setOrigin(0.5).setDepth(1002);
 
-    const messageText = this.add.text(width / 2, height / 2 - 10, message, {
+    const messageText = this.add.text(layout.centerX, layout.height / 2 - 10, message, {
       fontFamily: UI.font.body,
-      fontSize: '20px',
+      fontSize: '19px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 540,
+        width: layout.contentWidth - 80,
       },
       lineSpacing: 7,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(1002);
 
     const ok = createButton(
       this,
-      width / 2,
-      height / 2 + 95,
+      layout.centerX,
+      layout.height / 2 + 95,
       'Понятно',
       () => {
-        modal.destroy(true);
+        modal.destroy();
         this.scene.restart();
       },
       260,
       54
     );
 
-    modal.add([
-      overlay,
-      panel,
+    this.setButtonDepth(ok, 1001);
+
+    modal.container.add([
       titleText,
       messageText,
       ok.shadow,
@@ -980,73 +1219,74 @@ private createRoundedPanel(config: {
     ]);
   }
 
-  private showConfirmMessage(title: string, message: string, onConfirm: () => void) {
-    const { width, height } = this.scale;
+  private showConfirmMessage(
+    title: string,
+    message: string,
+    onConfirm: () => void
+  ) {
+    const layout = this.getLayout();
+    const modal = this.createModalShell(layout, 340);
 
-    const modal = this.add.container(0, 0).setDepth(1000);
-
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x000000,
-      0.72
-    ).setInteractive();
-
-    const panel = this.add.rectangle(width / 2, height / 2, 620, 340, 0x17100c, 0.98)
-      .setStrokeStyle(3, UI.colors.goldDark, 0.9);
-
-    const titleText = this.add.text(width / 2, height / 2 - 115, title, {
+    const titleText = this.add.text(layout.centerX, layout.height / 2 - 115, title, {
       fontFamily: UI.font.title,
-      fontSize: '30px',
+      fontSize: '29px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5);
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 80,
+      },
+    }).setOrigin(0.5).setDepth(1002);
 
-    const messageText = this.add.text(width / 2, height / 2 - 35, message, {
+    const messageText = this.add.text(layout.centerX, layout.height / 2 - 35, message, {
       fontFamily: UI.font.body,
-      fontSize: '20px',
+      fontSize: '19px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 540,
+        width: layout.contentWidth - 80,
       },
       lineSpacing: 7,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(1002);
+
+    const buttonWidth = Math.min((layout.contentWidth - 90) / 2, 230);
+    const leftX = layout.centerX - buttonWidth / 2 - 10;
+    const rightX = layout.centerX + buttonWidth / 2 + 10;
 
     const cancel = createButton(
       this,
-      width / 2 - 130,
-      height / 2 + 100,
+      leftX,
+      layout.height / 2 + 100,
       'Отмена',
       () => {
-        modal.destroy(true);
+        modal.destroy();
       },
-      230,
+      buttonWidth,
       54
     );
 
+    this.setButtonDepth(cancel, 1001);
+
     const confirm = createButton(
       this,
-      width / 2 + 130,
-      height / 2 + 100,
+      rightX,
+      layout.height / 2 + 100,
       'Выйти',
       () => {
-        modal.destroy(true);
+        modal.destroy();
         onConfirm();
       },
-      230,
+      buttonWidth,
       54,
       {
         danger: true,
       }
     );
 
-    modal.add([
-      overlay,
-      panel,
+    this.setButtonDepth(confirm, 1001);
+
+    modal.container.add([
       titleText,
       messageText,
       cancel.shadow,
@@ -1056,5 +1296,18 @@ private createRoundedPanel(config: {
       confirm.bg,
       confirm.label,
     ]);
+  }
+
+  private setButtonDepth(
+    button: {
+      shadow: Phaser.GameObjects.GameObject & { setDepth: (depth: number) => unknown };
+      bg: Phaser.GameObjects.GameObject & { setDepth: (depth: number) => unknown };
+      label: Phaser.GameObjects.GameObject & { setDepth: (depth: number) => unknown };
+    },
+    baseDepth: number
+  ) {
+    button.shadow.setDepth(baseDepth);
+    button.bg.setDepth(baseDepth + 1);
+    button.label.setDepth(baseDepth + 2);
   }
 }
