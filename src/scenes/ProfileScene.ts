@@ -199,15 +199,6 @@ export class ProfileScene extends Phaser.Scene {
       photo_max_orig?: string;
     };
 
-    const fallback = () => {
-      if (resolved) {
-        return;
-      }
-
-      resolved = true;
-      fallback();
-    };
-
     const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
 
     const photoUrl =
@@ -216,6 +207,10 @@ export class ProfileScene extends Phaser.Scene {
       vkUser?.photo_400_orig ||
       vkUser?.photo_max_orig ||
       vkUser?.photo_50;
+
+    const fallback = () => {
+      this.createAvatarFallback(container, x, y, size, depth);
+    };
 
     if (!photoUrl) {
       fallback();
@@ -231,22 +226,38 @@ export class ProfileScene extends Phaser.Scene {
 
     let resolved = false;
 
-    
+    const drawAvatarOnce = () => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+    };
+
+    const fallbackOnce = () => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      fallback();
+    };
 
     this.load.setCORS('anonymous');
     this.load.image(avatarKey, photoUrl);
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       if (this.textures.exists(avatarKey)) {
-        this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+        drawAvatarOnce();
         return;
       }
-    
-      fallback();
+
+      fallbackOnce();
     });
 
     this.load.once('loaderror', () => {
-      fallback();
+      fallbackOnce();
     });
 
     this.load.start();
@@ -295,6 +306,50 @@ export class ProfileScene extends Phaser.Scene {
       avatar,
       maskShape,
       shine,
+    };
+  }
+
+  private createAvatarFallback(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    size: number,
+    depth: number
+  ) {
+    const vkUser = getCachedVKUser() as {
+      first_name?: string;
+      last_name?: string;
+    } | null;
+
+    const firstLetter =
+      vkUser?.first_name?.[0] ||
+      player.name?.[0] ||
+      '?';
+
+    const shadow = this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
+      .setDepth(depth);
+
+    const border = this.add.circle(x, y, size / 2 + 6, UI.colors.goldDark, 0.95)
+      .setDepth(depth + 1);
+
+    const inner = this.add.circle(x, y, size / 2 + 2, 0x17100c, 1)
+      .setDepth(depth + 2);
+
+    const letter = this.add.text(x, y, firstLetter.toUpperCase(), {
+      fontFamily: UI.font.title,
+      fontSize: `${Math.floor(size * 0.42)}px`,
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(depth + 3);
+
+    container.add([shadow, border, inner, letter]);
+
+    return {
+      shadow,
+      border,
+      inner,
+      letter,
     };
   }
 
@@ -412,11 +467,6 @@ export class ProfileScene extends Phaser.Scene {
 
     const avatarX = innerLeft + 54;
     const avatarY = topY + 84;
-
-    this.addTo(
-      container,
-      this.add.circle(avatarX, avatarY, 68, raceColor, 0.08).setDepth(4)
-    );
 
     this.createVkAvatar(container, avatarX, avatarY, 92, 5);
 
