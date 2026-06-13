@@ -240,18 +240,15 @@ export class ProfileScene extends Phaser.Scene {
   size: number,
   depth: number
 ) {
-  const avatar = this.add.image(x, y, textureKey)
+  const roundTextureKey = `${textureKey}_round_${size}`;
+
+  if (!this.textures.exists(roundTextureKey)) {
+    this.createRoundAvatarTexture(textureKey, roundTextureKey, size);
+  }
+
+  const avatar = this.add.image(x, y, roundTextureKey)
     .setDisplaySize(size, size)
     .setDepth(depth + 3);
-
-  const maskShape = this.add.graphics();
-  maskShape.fillStyle(0xffffff, 1);
-  maskShape.fillCircle(x, y, size / 2);
-  maskShape.setVisible(false);
-  maskShape.setDepth(depth + 10);
-
-  const mask = maskShape.createGeometryMask();
-  avatar.setMask(mask);
 
   const border = this.add.circle(x, y, size / 2 + 5, 0x000000, 0)
     .setStrokeStyle(3, UI.colors.goldDark, 0.95)
@@ -267,17 +264,75 @@ export class ProfileScene extends Phaser.Scene {
 
   container.add([
     avatar,
-    maskShape,
     border,
     shine,
   ]);
 
   return {
     avatar,
-    maskShape,
     border,
     shine,
   };
+}
+
+private createRoundAvatarTexture(
+  sourceTextureKey: string,
+  targetTextureKey: string,
+  size: number
+) {
+  const sourceImage = this.textures.get(sourceTextureKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+
+  const canvasTexture = this.textures.createCanvas(targetTextureKey, size, size);
+
+  if (!canvasTexture) {
+    return;
+  }
+
+  const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return;
+  }
+
+  const sourceWidth =
+    sourceImage instanceof HTMLImageElement
+      ? sourceImage.naturalWidth || sourceImage.width
+      : sourceImage.width;
+
+  const sourceHeight =
+    sourceImage instanceof HTMLImageElement
+      ? sourceImage.naturalHeight || sourceImage.height
+      : sourceImage.height;
+
+  const cropSize = Math.min(sourceWidth, sourceHeight);
+  const cropX = Math.floor((sourceWidth - cropSize) / 2);
+  const cropY = Math.floor((sourceHeight - cropSize) / 2);
+
+  context.clearRect(0, 0, size, size);
+
+  context.save();
+
+  context.beginPath();
+  context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  context.closePath();
+  context.clip();
+
+  context.drawImage(
+    sourceImage,
+    cropX,
+    cropY,
+    cropSize,
+    cropSize,
+    0,
+    0,
+    size,
+    size
+  );
+
+  context.restore();
+
+  canvasTexture.refresh();
 }
 
   private createAvatarFallback(
