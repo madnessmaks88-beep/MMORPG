@@ -12,6 +12,13 @@ import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 
 import {
+  getActiveCampfireBattleCheckpoint,
+  restoreCampfireBattleCheckpoint,
+  formatCheckpointTimeLeft,
+  clearCampfireBattleCheckpoint,
+} from '../systems/CampfireCheckpointSystem';
+
+import {
   getQuests,
   isQuestCompleted,
   isQuestClaimed,
@@ -247,6 +254,9 @@ export class CampScene extends Phaser.Scene {
       gameState.floorRun.active &&
       gameState.floorRun.rooms.length > 0;
 
+    const activeCheckpoint = getActiveCampfireBattleCheckpoint();
+    const hasActiveCheckpoint = Boolean(activeCheckpoint);
+
     const hasQuestReward = this.hasClaimableQuests();
 
     const panelTop = layout.compact
@@ -255,7 +265,10 @@ export class CampScene extends Phaser.Scene {
 
     const panelBottom = layout.bottomNavTop - 18;
     const availableHeight = Math.max(500, panelBottom - panelTop);
-    const panelHeight = Math.min(availableHeight, hasActiveRun ? 700 : 640);
+    const panelHeight = Math.min(
+      availableHeight,
+      hasActiveRun || hasActiveCheckpoint ? 700 : 640
+    );
     const panelY = panelTop + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -278,13 +291,17 @@ export class CampScene extends Phaser.Scene {
     const wideButtonHeight = layout.compact ? 70 : 78;
     const tileHeight = layout.compact ? 86 : 96;
 
-    const dungeonTitle = hasActiveRun
-      ? 'Продолжить спуск'
-      : 'Войти в катакомбы';
+    const dungeonTitle = activeCheckpoint
+      ? 'Вернуться к костру'
+      : hasActiveRun
+        ? 'Продолжить спуск'
+        : 'Войти в катакомбы';
 
-    const dungeonDesc = hasActiveRun
-      ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
-      : 'Начать новый спуск в глубины.';
+    const dungeonDesc = activeCheckpoint
+      ? `Чекпоинт на этаже ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
+      : hasActiveRun
+        ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
+        : 'Начать новый спуск в глубины.';
 
     let currentY = innerTop + mainButtonHeight / 2;
 
@@ -296,8 +313,13 @@ export class CampScene extends Phaser.Scene {
       height: mainButtonHeight,
       title: dungeonTitle,
       description: dungeonDesc,
-      hasActiveRun,
+      hasActiveRun: hasActiveRun || hasActiveCheckpoint,
       onClick: () => {
+        if (activeCheckpoint) {
+          this.returnToCampfireCheckpoint();
+          return;
+        }
+
         this.tryEnterCatacombs(hasActiveRun);
       },
     });
@@ -1118,12 +1140,35 @@ export class CampScene extends Phaser.Scene {
   }
 
 
+  private returnToCampfireCheckpoint() {
+    const result = restoreCampfireBattleCheckpoint();
+
+    if (!result.success) {
+      this.showMessage(
+        'Костёр погас',
+        `${result.message}
+
+Вернуться в бой уже нельзя.`
+      );
+      return;
+    }
+
+    void saveGameAsync();
+
+    this.scene.start('DungeonScene');
+  }
+
   private showLeaveRunMessage() {
+    const activeCheckpoint = getActiveCampfireBattleCheckpoint();
+
     this.showConfirmMessage(
       'Покинуть спуск?',
-      'Если выйти сейчас, текущий ярус придётся проходить заново.',
+      activeCheckpoint
+        ? 'Если выйти сейчас, текущий ярус придётся проходить заново. Чекпоинт костра тоже будет потерян.'
+        : 'Если выйти сейчас, текущий ярус придётся проходить заново.',
       () => {
         resetFloorRun();
+        clearCampfireBattleCheckpoint();
 
         void saveGameAsync();
 

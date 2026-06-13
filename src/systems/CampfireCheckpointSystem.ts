@@ -86,7 +86,7 @@ export function createCampfireBattleCheckpoint(config: {
     expiresAt: now + durationMs,
     playerHp: stats.maxHp,
     playerEnergy: stats.maxEnergy,
-    playerPotions: 6,
+    playerPotions: Math.max(6, player.potions ?? 0),
     floorRunSnapshot: cloneData(stateOwner.floorRun),
   };
 
@@ -108,13 +108,11 @@ export function restoreCampfireBattleCheckpoint() {
 
   const stats = getPlayerStats(player);
 
-  stateOwner.floorRun = cloneData<typeof stateOwner.floorRun>(
-  checkpoint.floorRunSnapshot
-);
+  stateOwner.floorRun = cloneData<typeof gameState.floorRun>(checkpoint.floorRunSnapshot);
 
   player.hp = Math.min(stats.maxHp, Math.max(1, checkpoint.playerHp));
   player.energy = Math.min(stats.maxEnergy, Math.max(0, checkpoint.playerEnergy));
-  player.potions = Math.max(player.potions ?? 0, checkpoint.playerPotions);
+  player.potions = Math.max(6, player.potions ?? 0, checkpoint.playerPotions);
 
   return {
     success: true,

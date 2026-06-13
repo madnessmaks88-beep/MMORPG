@@ -31,6 +31,8 @@ import {
 
 import { createButton } from '../ui/createButton';
 
+
+
 import {
   UI,
   createSceneBackground,
@@ -48,6 +50,7 @@ import { getMaterialName, type MaterialId } from '../data/materials';
 import {
   clearCampfireBattleCheckpoint,
   createCampfireBattleCheckpoint,
+  getActiveCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
   type CheckpointFlintType,
 } from '../systems/CampfireCheckpointSystem';
@@ -308,6 +311,16 @@ export class DungeonScene extends Phaser.Scene {
       return '#70a6ff';
     }
     return UI.colors.text;
+  }
+
+  private getTownExitSubtitle() {
+    const checkpoint = getActiveCampfireBattleCheckpoint();
+
+    if (!checkpoint) {
+      return 'Без костра вернуться в этот бой нельзя';
+    }
+
+    return `Костёр активен ещё ${formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now())}`;
   }
 
   private createRoundedActionButton(config: {
@@ -913,7 +926,14 @@ export class DungeonScene extends Phaser.Scene {
   private createCampfireButtons() {
     const { width } = this.scale;
     const campfireState = this.getCampfireState();
-    const canUseCampfire = campfireState.remainingCampfireUses > 0 && player.potions < this.maxPotionCount;
+    const stats = getPlayerStats(player);
+
+    const hpIsFull = player.hp >= stats.maxHp;
+    const energyIsFull = player.energy >= stats.maxEnergy;
+    const potionsAreFull = player.potions >= this.maxPotionCount;
+
+    const needsCampfire = !hpIsFull || !energyIsFull || !potionsAreFull;
+    const canUseCampfire = campfireState.remainingCampfireUses > 0 && needsCampfire;
 
     this.createRoomActionButton({
       x: width / 2,
@@ -923,10 +943,10 @@ export class DungeonScene extends Phaser.Scene {
       icon: '♨',
       title: canUseCampfire ? 'Разжечь костёр' : 'Костёр не нужен',
       subtitle: canUseCampfire
-        ? `Восстановить зелья до ${this.maxPotionCount}`
-        : player.potions >= this.maxPotionCount
-          ? `Зелья уже полные: ${player.potions}/${this.maxPotionCount}`
-          : 'Нет зарядов выбранного огнива',
+        ? `Полное HP/энергия • зелья до ${this.maxPotionCount}`
+        : campfireState.remainingCampfireUses <= 0
+          ? 'Нет зарядов выбранного огнива'
+          : `HP и зелья уже полные: ${player.potions}/${this.maxPotionCount}`,
       accentColor: canUseCampfire ? 0xf0a040 : UI.colors.goldDark,
       danger: false,
       onClick: () => {
@@ -958,11 +978,20 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const campfireState = this.getCampfireState();
+    const stats = getPlayerStats(player);
 
-    if (player.potions >= this.maxPotionCount) {
+    const hpBefore = player.hp;
+    const energyBefore = player.energy;
+    const potionsBefore = player.potions ?? 0;
+
+    const hpIsFull = player.hp >= stats.maxHp;
+    const energyIsFull = player.energy >= stats.maxEnergy;
+    const potionsAreFull = player.potions >= this.maxPotionCount;
+
+    if (campfireState.remainingCampfireUses <= 0) {
       this.showMessage(
-        'Костёр не нужен',
-        `У тебя уже максимальный запас зелий: ${player.potions}/${this.maxPotionCount}.\nЗаряд огнива не потрачен.`,
+        'Нет огня',
+        'У выбранного огнива больше нет зарядов. Можно только пройти мимо костра.',
         () => {
           this.scene.restart();
         }
@@ -970,10 +999,11 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    if (campfireState.remainingCampfireUses <= 0) {
+    if (hpIsFull && energyIsFull && potionsAreFull) {
       this.showMessage(
-        'Нет огня',
-        'У выбранного огнива больше нет зарядов. Можно только пройти мимо костра.',
+        'Костёр не нужен',
+        `HP, энергия и зелья уже полные: ${player.potions}/${this.maxPotionCount}.
+Заряд огнива не потрачен.`,
         () => {
           this.scene.restart();
         }
@@ -987,6 +1017,8 @@ export class DungeonScene extends Phaser.Scene {
       gameState.floorRun.currentFloor,
     ]));
 
+    player.hp = stats.maxHp;
+    player.energy = stats.maxEnergy;
     player.potions = this.maxPotionCount;
 
     markCurrentRoomCompleted();
@@ -998,16 +1030,22 @@ export class DungeonScene extends Phaser.Scene {
       selectedFlint: (campfireState.selectedFlint ?? 'none') as CheckpointFlintType,
     });
 
+    player.hp = stats.maxHp;
+    player.energy = stats.maxEnergy;
+    player.potions = this.maxPotionCount;
+
     const checkpointTime = formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now());
 
     void saveGameAsync();
 
     this.showMessage(
       'Костёр разожжён',
-      `Пламя наполнило фляги.
-Зелья восстановлены до ${this.maxPotionCount}.
-Осталось зарядов: ${campfireState.remainingCampfireUses}.
+      `Пламя восстановило силы.
+HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
+Энергия: ${energyBefore}/${stats.maxEnergy} → ${player.energy}/${stats.maxEnergy}
+Зелья: ${potionsBefore}/${this.maxPotionCount} → ${player.potions}/${this.maxPotionCount}
 
+Осталось зарядов: ${campfireState.remainingCampfireUses}.
 Костёр стал чекпоинтом. При смерти можно вернуться сюда ещё ${checkpointTime}.`,
       () => {
         this.scene.restart();
@@ -1045,19 +1083,17 @@ export class DungeonScene extends Phaser.Scene {
   }) {
     const { width } = this.scale;
 
-    const prepareY = 830;
-    const battleY = 900;
-
-    const prepareHeight = 56;
-    const battleHeight = 62;
-
     const buttonWidth = 460;
+
+    const prepareY = 795;
+    const battleY = 865;
+    const townY = 935;
 
     this.createRoomActionButton({
       x: width / 2,
       y: prepareY,
       width: buttonWidth,
-      height: prepareHeight,
+      height: 56,
       icon: '▣',
       title: 'Подготовиться',
       subtitle: 'Открыть сумку перед боем',
@@ -1075,7 +1111,7 @@ export class DungeonScene extends Phaser.Scene {
       x: width / 2,
       y: battleY,
       width: buttonWidth,
-      height: battleHeight,
+      height: 62,
       icon: config.icon,
       title: config.buttonText,
       subtitle: config.description,
@@ -1088,7 +1124,23 @@ export class DungeonScene extends Phaser.Scene {
         });
       },
     });
+
+    this.createRoomActionButton({
+      x: width / 2,
+      y: townY,
+      width: buttonWidth,
+      height: 58,
+      icon: '⌂',
+      title: 'Вернуться в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
+      },
+    });
   }
+  
 
   private createBossBattleButtons(config: {
     enemyId: string;
@@ -1097,20 +1149,18 @@ export class DungeonScene extends Phaser.Scene {
     description: string;
   }) {
     const { width } = this.scale;
-
-    const prepareY = 910;
-    const battleY = 985;
-
-    const prepareHeight = 60;
-    const battleHeight = 68;
-
+  
     const buttonWidth = 480;
-
+  
+    const prepareY = 850;
+    const battleY = 925;
+    const townY = 1000;
+  
     this.createRoomActionButton({
       x: width / 2,
       y: prepareY,
       width: buttonWidth,
-      height: prepareHeight,
+      height: 60,
       icon: '▣',
       title: 'Подготовиться',
       subtitle: 'Проверить снаряжение перед боссом',
@@ -1123,12 +1173,12 @@ export class DungeonScene extends Phaser.Scene {
         });
       },
     });
-
+  
     this.createRoomActionButton({
       x: width / 2,
       y: battleY,
       width: buttonWidth,
-      height: battleHeight,
+      height: 68,
       icon: config.icon,
       title: config.buttonText,
       subtitle: config.description,
@@ -1139,6 +1189,21 @@ export class DungeonScene extends Phaser.Scene {
           enemyId: config.enemyId,
           returnToDungeon: true,
         });
+      },
+    });
+  
+    this.createRoomActionButton({
+      x: width / 2,
+      y: townY,
+      width: buttonWidth,
+      height: 58,
+      icon: '⌂',
+      title: 'Вернуться в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
       },
     });
   }
