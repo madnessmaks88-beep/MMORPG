@@ -466,7 +466,6 @@ private createRoundAvatarTexture(
 
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const raceColor = race ? this.getRaceColor(race.id) : UI.colors.goldDark;
-    const raceIcon = race ? this.getRaceIcon(race.id) : '◆';
     const raceRole = race ? this.getRaceRole(race.id) : 'Раса не выбрана';
 
     const panelHeight = race
@@ -498,27 +497,6 @@ private createRoundAvatarTexture(
     const avatarY = topY + 84;
 
     this.createVkAvatar(container, avatarX, avatarY, 92, 5);
-
-    const raceBadgeX = avatarX + 37;
-    const raceBadgeY = avatarY + 37;
-
-    this.addTo(
-      container,
-      this.add.circle(raceBadgeX, raceBadgeY, 20, 0x17100c, 1)
-        .setStrokeStyle(2, raceColor, 0.92)
-        .setDepth(10)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(raceBadgeX, raceBadgeY, raceIcon, {
-        fontFamily: UI.font.body,
-        fontSize: '16px',
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(11)
-    );
 
     const textX = innerLeft + 122;
     const titleMaxWidth = Math.max(150, innerRight - textX - 78);
@@ -1358,17 +1336,6 @@ private createRoundAvatarTexture(
     }
 
     return 'локальный режим';
-  }
-
-  private getRaceIcon(id: string) {
-    if (id === 'human') return '◆';
-    if (id === 'tainted_halfblood') return '☾';
-    if (id === 'stoneborn') return '▣';
-    if (id === 'night_elf') return '◐';
-    if (id === 'goblin') return '!';
-    if (id === 'demon') return '◆';
-
-    return '◆';
   }
 
   private getRaceRole(id: string) {
