@@ -10,6 +10,8 @@ import { getCachedVKUser } from '../systems/VKBridgeSystem';
 
 import { createBottomNav } from '../ui/createBottomNav';
 
+
+
 import {
   UI,
   createSceneBackground,
@@ -179,6 +181,123 @@ export class ProfileScene extends Phaser.Scene {
     }
   }
 
+  private createVkAvatar(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    size: number,
+    depth = 20
+  ) {
+    type VKUserWithPhoto = {
+      id?: number | string;
+      first_name?: string;
+      last_name?: string;
+      photo_50?: string;
+      photo_100?: string;
+      photo_200?: string;
+      photo_400_orig?: string;
+      photo_max_orig?: string;
+    };
+
+    const fallback = () => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      fallback();
+    };
+
+    const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
+
+    const photoUrl =
+      vkUser?.photo_200 ||
+      vkUser?.photo_100 ||
+      vkUser?.photo_400_orig ||
+      vkUser?.photo_max_orig ||
+      vkUser?.photo_50;
+
+    if (!photoUrl) {
+      fallback();
+      return;
+    }
+
+    const avatarKey = `vk_avatar_${vkUser?.id ?? 'local'}`;
+
+    if (this.textures.exists(avatarKey)) {
+      this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+      return;
+    }
+
+    let resolved = false;
+
+    
+
+    this.load.setCORS('anonymous');
+    this.load.image(avatarKey, photoUrl);
+
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      if (this.textures.exists(avatarKey)) {
+        this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+        return;
+      }
+    
+      fallback();
+    });
+
+    this.load.once('loaderror', () => {
+      fallback();
+    });
+
+    this.load.start();
+  }
+
+  private drawRoundAvatar(
+    container: Phaser.GameObjects.Container,
+    textureKey: string,
+    x: number,
+    y: number,
+    size: number,
+    depth: number
+  ) {
+    const shadow = this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
+      .setDepth(depth);
+
+    const border = this.add.circle(x, y, size / 2 + 6, UI.colors.goldDark, 0.95)
+      .setDepth(depth + 1);
+
+    const innerBorder = this.add.circle(x, y, size / 2 + 2, 0x17100c, 1)
+      .setDepth(depth + 2);
+
+    const avatar = this.add.image(x, y, textureKey)
+      .setDisplaySize(size, size)
+      .setDepth(depth + 3);
+
+    const maskShape = this.add.graphics()
+      .setVisible(false)
+      .setDepth(depth + 10);
+
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillCircle(x, y, size / 2);
+
+    const mask = maskShape.createGeometryMask();
+    avatar.setMask(mask);
+
+    const shine = this.add.circle(x - size * 0.18, y - size * 0.2, size * 0.18, 0xffffff, 0.08)
+      .setDepth(depth + 4);
+
+    container.add([shadow, border, innerBorder, avatar, maskShape, shine]);
+
+    return {
+      shadow,
+      border,
+      innerBorder,
+      avatar,
+      maskShape,
+      shine,
+    };
+  }
+
   private createScrollInput(layout: ProfileLayout) {
     this.scrollZone?.destroy();
 
@@ -294,24 +413,32 @@ export class ProfileScene extends Phaser.Scene {
     const avatarX = innerLeft + 54;
     const avatarY = topY + 84;
 
-    this.addTo(container, this.add.circle(avatarX, avatarY, 68, raceColor, 0.08).setDepth(4));
+    this.addTo(
+      container,
+      this.add.circle(avatarX, avatarY, 68, raceColor, 0.08).setDepth(4)
+    );
+
+    this.createVkAvatar(container, avatarX, avatarY, 92, 5);
+
+    const raceBadgeX = avatarX + 37;
+    const raceBadgeY = avatarY + 37;
 
     this.addTo(
       container,
-      this.add.circle(avatarX, avatarY, 49, 0x2a1d13, 1)
-        .setStrokeStyle(3, raceColor, 0.85)
-        .setDepth(5)
+      this.add.circle(raceBadgeX, raceBadgeY, 20, 0x17100c, 1)
+        .setStrokeStyle(2, raceColor, 0.92)
+        .setDepth(10)
     );
 
     this.addTo(
       container,
-      this.add.text(avatarX, avatarY, raceIcon, {
+      this.add.text(raceBadgeX, raceBadgeY, raceIcon, {
         fontFamily: UI.font.body,
-        fontSize: '38px',
+        fontSize: '16px',
         color: UI.colors.goldText,
         stroke: '#000000',
-        strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(6)
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(11)
     );
 
     const textX = innerLeft + 122;
