@@ -199,6 +199,7 @@ export class ProfileScene extends Phaser.Scene {
 
   const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
 
+  // Сразу рисуем заглушку, чтобы профиль не ждал загрузку VK-фото
   this.createAvatarFallback(container, x, y, size, depth);
 
   const photoUrl =
@@ -213,11 +214,7 @@ export class ProfileScene extends Phaser.Scene {
   const avatarKey = `vk_avatar_${vkUser?.id ?? 'local'}`;
 
   if (this.textures.exists(avatarKey)) {
-    this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
-    return;
-  }
-
-  if (this.load.isLoading()) {
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth + 4);
     return;
   }
 
@@ -229,101 +226,106 @@ export class ProfileScene extends Phaser.Scene {
       return;
     }
 
-    this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth + 4);
   });
 
   this.load.start();
 }
 
   private drawRoundAvatar(
-    container: Phaser.GameObjects.Container,
-    textureKey: string,
-    x: number,
-    y: number,
-    size: number,
-    depth: number
-  ) {
-    const shadow = this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
-      .setDepth(depth);
+  container: Phaser.GameObjects.Container,
+  textureKey: string,
+  x: number,
+  y: number,
+  size: number,
+  depth: number
+) {
+  const avatar = this.add.image(x, y, textureKey)
+    .setDisplaySize(size, size)
+    .setDepth(depth + 3);
 
-    const border = this.add.circle(x, y, size / 2 + 6, UI.colors.goldDark, 0.95)
-      .setDepth(depth + 1);
+  const maskShape = this.add.graphics();
+  maskShape.fillStyle(0xffffff, 1);
+  maskShape.fillCircle(x, y, size / 2);
+  maskShape.setVisible(false);
+  maskShape.setDepth(depth + 10);
 
-    const innerBorder = this.add.circle(x, y, size / 2 + 2, 0x17100c, 1)
-      .setDepth(depth + 2);
+  const mask = maskShape.createGeometryMask();
+  avatar.setMask(mask);
 
-    const avatar = this.add.image(x, y, textureKey)
-      .setDisplaySize(size, size)
-      .setDepth(depth + 3);
+  const border = this.add.circle(x, y, size / 2 + 5, 0x000000, 0)
+    .setStrokeStyle(3, UI.colors.goldDark, 0.95)
+    .setDepth(depth + 4);
 
-    const maskShape = this.add.graphics()
-      .setVisible(false)
-      .setDepth(depth + 10);
+  const shine = this.add.circle(
+    x - size * 0.18,
+    y - size * 0.2,
+    size * 0.17,
+    0xffffff,
+    0.08
+  ).setDepth(depth + 5);
 
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillCircle(x, y, size / 2);
+  container.add([
+    avatar,
+    maskShape,
+    border,
+    shine,
+  ]);
 
-    const mask = maskShape.createGeometryMask();
-    avatar.setMask(mask);
-
-    const shine = this.add.circle(x - size * 0.18, y - size * 0.2, size * 0.18, 0xffffff, 0.08)
-      .setDepth(depth + 4);
-
-    container.add([shadow, border, innerBorder, avatar, maskShape, shine]);
-
-    return {
-      shadow,
-      border,
-      innerBorder,
-      avatar,
-      maskShape,
-      shine,
-    };
-  }
+  return {
+    avatar,
+    maskShape,
+    border,
+    shine,
+  };
+}
 
   private createAvatarFallback(
-    container: Phaser.GameObjects.Container,
-    x: number,
-    y: number,
-    size: number,
-    depth: number
-  ) {
-    const vkUser = getCachedVKUser() as {
-      first_name?: string;
-      last_name?: string;
-    } | null;
+  container: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  size: number,
+  depth: number
+) {
+  const vkUser = getCachedVKUser() as {
+    first_name?: string;
+    last_name?: string;
+  } | null;
 
-    const firstLetter =
-      vkUser?.first_name?.[0] ||
-      player.name?.[0] ||
-      '?';
+  const firstLetter =
+    vkUser?.first_name?.[0] ||
+    player.name?.[0] ||
+    '?';
 
-    const shadow = this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
-      .setDepth(depth);
+  this.addTo(
+    container,
+    this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
+      .setDepth(depth)
+  );
 
-    const border = this.add.circle(x, y, size / 2 + 6, UI.colors.goldDark, 0.95)
-      .setDepth(depth + 1);
+  this.addTo(
+    container,
+    this.add.circle(x, y, size / 2 + 5, UI.colors.goldDark, 0.95)
+      .setDepth(depth + 1)
+  );
 
-    const inner = this.add.circle(x, y, size / 2 + 2, 0x17100c, 1)
-      .setDepth(depth + 2);
+  this.addTo(
+    container,
+    this.add.circle(x, y, size / 2 + 1, 0x17100c, 1)
+      .setDepth(depth + 2)
+  );
 
-    const letter = this.add.text(x, y, firstLetter.toUpperCase(), {
+  this.addTo(
+    container,
+    this.add.text(x, y, firstLetter.toUpperCase(), {
       fontFamily: UI.font.title,
       fontSize: `${Math.floor(size * 0.42)}px`,
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(depth + 3);
-
-    container.add([shadow, border, inner, letter]);
-
-    return {
-      shadow,
-      border,
-      inner,
-      letter,
-    };
-  }
+    }).setOrigin(0.5).setDepth(depth + 3)
+  );
+}
 
   private createScrollInput(layout: ProfileLayout) {
     this.scrollZone?.destroy();
