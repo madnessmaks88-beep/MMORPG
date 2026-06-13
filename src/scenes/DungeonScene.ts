@@ -31,7 +31,12 @@ import {
 
 import { createButton } from '../ui/createButton';
 
-
+import {
+  applyRoomRegeneration,
+  blockRoomRegenerationUntilFloorEnd,
+  clearRoomRegenerationBlock,
+  isRoomRegenerationBlocked,
+} from '../systems/RoomRegenerationSystem';
 
 import {
   UI,
@@ -313,6 +318,54 @@ export class DungeonScene extends Phaser.Scene {
     return UI.colors.text;
   }
 
+  private completeRoomAndApplyRegeneration() {
+    markCurrentRoomCompleted();
+    goToNextRoom();
+
+    const regeneration = applyRoomRegeneration();
+
+    return regeneration.text
+      ? `\n\n${regeneration.text}`
+      : '';
+  }
+
+  private isCurrentTrapCursed() {
+    const room = getCurrentRoom();
+
+    const roomId = String(room?.id ?? '').toLowerCase();
+    const roomTitle = String(room?.title ?? '').toLowerCase();
+
+    return (
+      gameState.floorRun.modifier === 'cursed' ||
+      roomId.includes('trap_cursed') ||
+      roomTitle.includes('проклят')
+    );
+  }
+
+  private tryBreakRegenerationByCursedTrap(trapWasAvoided: boolean) {
+    if (trapWasAvoided) {
+      return '';
+    }
+
+    if (!this.isCurrentTrapCursed()) {
+      return '';
+    }
+
+    if (isRoomRegenerationBlocked()) {
+      return '';
+    }
+
+    const breakChance = 0.5;
+
+    if (Math.random() > breakChance) {
+      return '';
+    }
+
+    blockRoomRegenerationUntilFloorEnd();
+
+    return '\n\nПроклятие ловушки подавило регенерацию до конца этажа.';
+  }
+
   private getTownExitSubtitle() {
     const checkpoint = getActiveCampfireBattleCheckpoint();
 
@@ -571,8 +624,8 @@ export class DungeonScene extends Phaser.Scene {
     const isBossRoom = roomType === 'boss' || roomType === 'tier_boss';
     const isCampfireRoom = roomType === 'campfire';
 
-    const panelY = isBossRoom ? 720 : isCampfireRoom ? 690 : 695;
-    const panelHeight = isBossRoom ? 620 : isCampfireRoom ? 530 : 500;
+    const panelY = isBossRoom ? 735 : isCampfireRoom ? 735 : 715;
+    const panelHeight = isBossRoom ? 680 : isCampfireRoom ? 650 : 570;
 
     this.createRoundedPanel({
       x: width / 2,
@@ -657,11 +710,11 @@ export class DungeonScene extends Phaser.Scene {
     );
 
     if (isBossRoom) {
-      this.createBossRequirementInfo(topY + 415);
+      this.createBossRequirementInfo(topY + 385);
     }
 
     if (isCampfireRoom) {
-      this.createCampfireStatusBox(topY + 410);
+      this.createCampfireStatusBox(topY + 390);
     }
 
     this.createRoomButton(roomType, room.enemyId);
@@ -679,7 +732,7 @@ export class DungeonScene extends Phaser.Scene {
       x,
       y,
       width: 540,
-      height: 92,
+      height: 82,
       radius: 22,
       color: 0x17100c,
       alpha: 0.88,
@@ -691,7 +744,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.add.text(x, y, text, {
       fontFamily: UI.font.body,
-      fontSize: '14px',
+      fontSize: '13px',
       color: UI.colors.textMuted,
       align: 'center',
       wordWrap: {
@@ -937,7 +990,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.createRoomActionButton({
       x: width / 2,
-      y: 850,
+      y: 905,
       width: 470,
       height: 62,
       icon: '♨',
@@ -956,7 +1009,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.createRoomActionButton({
       x: width / 2,
-      y: 925,
+      y: 982,
       width: 470,
       height: 58,
       icon: '➤',
@@ -1060,14 +1113,13 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       return;
     }
 
-    markCurrentRoomCompleted();
-    goToNextRoom();
+    const regenerationText = this.completeRoomAndApplyRegeneration();
 
     void saveGameAsync();
 
     this.showMessage(
       'Костёр остался позади',
-      'Ты не стал тратить огниво и пошёл дальше.',
+      `Ты не стал тратить огниво и пошёл дальше.${regenerationText}`,
       () => {
         this.scene.restart();
       }
@@ -1085,15 +1137,15 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
 
     const buttonWidth = 460;
 
-    const prepareY = 795;
-    const battleY = 865;
-    const townY = 935;
+    const prepareY = 820;
+    const battleY = 890;
+    const townY = 960;
 
     this.createRoomActionButton({
       x: width / 2,
       y: prepareY,
       width: buttonWidth,
-      height: 56,
+      height: 54,
       icon: '▣',
       title: 'Подготовиться',
       subtitle: 'Открыть сумку перед боем',
@@ -1152,15 +1204,15 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
   
     const buttonWidth = 480;
   
-    const prepareY = 850;
-    const battleY = 925;
-    const townY = 1000;
+    const prepareY = 875;
+    const battleY = 950;
+    const townY = 1025;
   
     this.createRoomActionButton({
       x: width / 2,
       y: prepareY,
       width: buttonWidth,
-      height: 60,
+      height: 56,
       icon: '▣',
       title: 'Подготовиться',
       subtitle: 'Проверить снаряжение перед боссом',
@@ -1178,7 +1230,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       x: width / 2,
       y: battleY,
       width: buttonWidth,
-      height: 68,
+      height: 62,
       icon: config.icon,
       title: config.buttonText,
       subtitle: config.description,
@@ -1196,7 +1248,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       x: width / 2,
       y: townY,
       width: buttonWidth,
-      height: 58,
+      height: 54,
       icon: '⌂',
       title: 'Вернуться в город',
       subtitle: this.getTownExitSubtitle(),
@@ -1458,14 +1510,13 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
 
   const reward = claimChestReward();
 
-  markCurrentRoomCompleted();
-  goToNextRoom();
+  const regenerationText = this.completeRoomAndApplyRegeneration();
 
   void saveGameAsync();
 
   this.showMessage(
     'Сундук открыт',
-    reward.text,
+    `${reward.text}${regenerationText}`,
     () => {
       this.scene.restart();
     }
@@ -1526,6 +1577,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
           player.energy = freshStats.maxEnergy;
 
           resetFloorRun();
+          clearRoomRegenerationBlock();
           this.resetCampfireState();
 
           void saveGameAsync();
@@ -1537,14 +1589,15 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       return;
     }
 
-    markCurrentRoomCompleted();
-    goToNextRoom();
+    const curseText = this.tryBreakRegenerationByCursedTrap(result.avoided);
+
+    const regenerationText = this.completeRoomAndApplyRegeneration();
 
     void saveGameAsync();
 
     this.showMessage(
       result.avoided ? 'Ловушка обезврежена' : 'Проклятая ловушка',
-      result.text,
+      `${result.text}${curseText}${regenerationText}`,
       () => {
         this.scene.restart();
       }
@@ -1556,6 +1609,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     const nextFloor = getNextFloorAfterCurrent();
 
     completeCurrentFloor();
+    clearRoomRegenerationBlock();
 
     if (gameState.floorRun.runType === 'tier_gate') {
       void saveGameAsync();
@@ -1642,6 +1696,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       depth: 120,
       onClick: () => {
         startFloorRun(nextFloor);
+        clearRoomRegenerationBlock();
         void saveGameAsync();
         this.scene.restart();
       },
@@ -2163,6 +2218,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       variant: 'green',
       onClick: () => {
         startFloorRun(nextFloor);
+        clearRoomRegenerationBlock();
       
         void saveGameAsync();
       
@@ -2189,100 +2245,140 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
   }
 
   private showMessage(title: string, message: string, onContinue?: () => void) {
-    const { width, height } = this.scale;
+  const { width, height } = this.scale;
 
-    // Удаляем старое модальное окно, если оно уже было
-    this.modalObjects.forEach(object => {
-      object.destroy();
-    });
+  this.modalObjects.forEach(object => {
+    object.destroy();
+  });
 
-    this.modalObjects = [];
+  this.modalObjects = [];
 
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x000000,
-      0.72
-    ).setDepth(100);
+  const modalWidth = Math.min(width - 48, 620);
+  const modalHeight = Math.min(height - 140, 460);
+  const centerX = width / 2;
+  const centerY = height / 2;
 
-    const panelShadow = this.add.rectangle(
-      width / 2,
-      height / 2 + 6,
-      590,
-      330,
-      0x000000,
-      0.35
-    ).setDepth(101);
+  const overlay = this.add.rectangle(
+    centerX,
+    centerY,
+    width,
+    height,
+    0x000000,
+    0.72
+  ).setDepth(100).setInteractive();
 
-    const panel = this.add.rectangle(
-      width / 2,
-      height / 2,
-      590,
-      330,
-      0x17100c,
-      0.98
-    )
-      .setStrokeStyle(3, UI.colors.goldDark, 0.9)
-      .setDepth(102);
+  const shadow = this.add.graphics();
+  shadow.fillStyle(0x000000, 0.38);
+  shadow.fillRoundedRect(
+    centerX - modalWidth / 2,
+    centerY - modalHeight / 2 + 8,
+    modalWidth,
+    modalHeight,
+    26
+  );
+  shadow.setDepth(101);
 
-    const titleText = this.add.text(width / 2, height / 2 - 115, title, {
+  const panel = this.add.graphics();
+  panel.fillStyle(0x17100c, 0.98);
+  panel.fillRoundedRect(
+    centerX - modalWidth / 2,
+    centerY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
+  );
+  panel.lineStyle(3, UI.colors.goldDark, 0.9);
+  panel.strokeRoundedRect(
+    centerX - modalWidth / 2,
+    centerY - modalHeight / 2,
+    modalWidth,
+    modalHeight,
+    26
+  );
+  panel.setDepth(102);
+
+  const titleText = this.add.text(
+    centerX,
+    centerY - modalHeight / 2 + 42,
+    title,
+    {
       fontFamily: UI.font.title,
-      fontSize: '30px',
+      fontSize: '29px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
-    }).setOrigin(0.5).setDepth(103);
-
-    const messageText = this.add.text(width / 2, height / 2 - 25, message, {
-      fontFamily: UI.font.body,
-      fontSize: '20px',
-      color: UI.colors.text,
-      align: 'center',
-      lineSpacing: 10,
       wordWrap: {
-        width: 500,
+        width: modalWidth - 70,
         useAdvancedWrap: true,
       },
-    }).setOrigin(0.5).setDepth(103);
+      maxLines: 2,
+    }
+  ).setOrigin(0.5).setDepth(103);
 
-    const button = createButton(
-      this,
-      width / 2,
-      height / 2 + 115,
-      'Продолжить',
-      () => {
-        this.modalObjects.forEach(object => {
-          object.destroy();
-        });
+  const divider = this.add.rectangle(
+    centerX,
+    centerY - modalHeight / 2 + 78,
+    modalWidth - 90,
+    2,
+    UI.colors.gold,
+    0.25
+  ).setDepth(103);
 
-        this.modalObjects = [];
-
-        if (onContinue) {
-          onContinue();
-        }
+  const messageText = this.add.text(
+    centerX,
+    centerY - modalHeight / 2 + 100,
+    message,
+    {
+      fontFamily: UI.font.body,
+      fontSize: '18px',
+      color: UI.colors.text,
+      align: 'center',
+      lineSpacing: 7,
+      wordWrap: {
+        width: modalWidth - 82,
+        useAdvancedWrap: true,
       },
-      300,
-      56
-    );
+      maxLines: 9,
+    }
+  ).setOrigin(0.5, 0).setDepth(103);
 
-    button.shadow.setDepth(102);
-    button.bg.setDepth(103);
-    button.label.setDepth(104);
+  const button = createButton(
+    this,
+    centerX,
+    centerY + modalHeight / 2 - 48,
+    'Продолжить',
+    () => {
+      this.modalObjects.forEach(object => {
+        object.destroy();
+      });
 
-    this.modalObjects.push(
-      overlay,
-      panelShadow,
-      panel,
-      titleText,
-      messageText,
-      button.shadow,
-      button.bg,
-      button.label
-    );
-  }
+      this.modalObjects = [];
+
+      if (onContinue) {
+        onContinue();
+      }
+    },
+    Math.min(300, modalWidth - 120),
+    56
+  );
+
+  button.shadow.setDepth(102);
+  button.bg.setDepth(103);
+  button.label.setDepth(104);
+
+  this.modalObjects.push(
+    overlay,
+    shadow,
+    panel,
+    titleText,
+    divider,
+    messageText,
+    button.shadow,
+    button.bg,
+    button.label
+  );
+}
 
   private getCampfireState(): CampfireState {
     const stateOwner = gameState as typeof gameState & {

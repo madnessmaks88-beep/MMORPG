@@ -32,7 +32,7 @@ import {
   type CampfireBattleCheckpoint,
 } from '../systems/CampfireCheckpointSystem';
 
-
+import { applyRoomRegeneration } from '../systems/RoomRegenerationSystem';
 
 import {
   UI,
@@ -156,6 +156,8 @@ export class BattleScene extends Phaser.Scene {
   private energyBarMaxWidth = 520;
 
   private isBossBattle = false;
+
+  
 
 
   constructor() {
@@ -3085,6 +3087,16 @@ private renderEnemyEffectChips() {
       ? `\n\nДобыча:\n${loot.text}`
       : '';
 
+    let regenerationText = '';
+
+    if (this.returnToDungeon) {
+      const regeneration = applyRoomRegeneration();
+    
+      if (regeneration.text) {
+        regenerationText = `\n${regeneration.text}`;
+      }
+    }
+
     let levelText = '';
 
     if (expResult.leveledUp) {
@@ -3116,7 +3128,8 @@ private renderEnemyEffectChips() {
       `Получено опыта: ${this.enemy.expReward}` +
       `${demonHealText}` +
       `${lootText}` +
-      `${levelText}`
+      `${levelText}` +
+      `${regenerationText}`
     );
 
     this.updateTexts();

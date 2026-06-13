@@ -298,7 +298,7 @@ export class CampScene extends Phaser.Scene {
         : 'Войти в катакомбы';
 
     const dungeonDesc = activeCheckpoint
-      ? `Чекпоинт на этаже ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
+      ? `Чекпоинт: этаж ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
       : hasActiveRun
         ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
         : 'Начать новый спуск в глубины.';
@@ -439,6 +439,8 @@ export class CampScene extends Phaser.Scene {
       return isQuestCompleted(quest) && !isQuestClaimed(quest.id);
     });
   }
+
+  
 
   private getRestButtonText() {
     const cooldownLeft = this.getCampfireCooldownLeft();
@@ -1142,19 +1144,18 @@ export class CampScene extends Phaser.Scene {
 
   private returnToCampfireCheckpoint() {
     const result = restoreCampfireBattleCheckpoint();
-
+    
     if (!result.success) {
       this.showMessage(
         'Костёр погас',
-        `${result.message}
-
-Вернуться в бой уже нельзя.`
+        `${result.message}\n\nВернуться к чекпоинту уже нельзя.`
       );
+    
       return;
     }
-
+  
     void saveGameAsync();
-
+  
     this.scene.start('DungeonScene');
   }
 
