@@ -45,6 +45,12 @@ import { giveFloorReward } from '../systems/FloorRewardSystem';
 import { claimChestReward } from '../systems/ChestRewardSystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
+import {
+  clearCampfireBattleCheckpoint,
+  createCampfireBattleCheckpoint,
+  formatCheckpointTimeLeft,
+  type CheckpointFlintType,
+} from '../systems/CampfireCheckpointSystem';
 
 
 type FlintType = 'none' | 'dim' | 'black' | 'ruby';
@@ -986,11 +992,23 @@ export class DungeonScene extends Phaser.Scene {
     markCurrentRoomCompleted();
     goToNextRoom();
 
+    const checkpoint = createCampfireBattleCheckpoint({
+      tier: campfireState.tier,
+      floor: gameState.floorRun.currentFloor,
+      selectedFlint: (campfireState.selectedFlint ?? 'none') as CheckpointFlintType,
+    });
+
+    const checkpointTime = formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now());
+
     void saveGameAsync();
 
     this.showMessage(
       'Костёр разожжён',
-      `Пламя наполнило фляги.\nЗелья восстановлены до ${this.maxPotionCount}.\nОсталось зарядов: ${campfireState.remainingCampfireUses}.`,
+      `Пламя наполнило фляги.
+Зелья восстановлены до ${this.maxPotionCount}.
+Осталось зарядов: ${campfireState.remainingCampfireUses}.
+
+Костёр стал чекпоинтом. При смерти можно вернуться сюда ещё ${checkpointTime}.`,
       () => {
         this.scene.restart();
       }
@@ -2240,6 +2258,7 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     stateOwner.dungeonCampfireState = undefined;
+    clearCampfireBattleCheckpoint();
   }
 
   private createCampfireFloorsForTier(tier: number) {

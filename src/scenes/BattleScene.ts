@@ -24,6 +24,13 @@ import { rollEnemyLoot } from '../systems/LootSystem';
 import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
 import { createScaledEnemy } from '../systems/EnemyScalingSystem';
 import { getRaceById } from '../data/races';
+import {
+  clearCampfireBattleCheckpoint,
+  formatCheckpointTimeLeft,
+  getActiveCampfireBattleCheckpoint,
+  restoreCampfireBattleCheckpoint,
+  type CampfireBattleCheckpoint,
+} from '../systems/CampfireCheckpointSystem';
 
 
 
@@ -149,7 +156,8 @@ export class BattleScene extends Phaser.Scene {
   private energyBarMaxWidth = 520;
 
   private isBossBattle = false;
-  
+
+
   constructor() {
     super('BattleScene');
   }
@@ -1368,27 +1376,9 @@ private applyDebuffDamageAndCheckDeath() {
   }
 
   if (player.hp <= 0) {
-    this.isBattleEnded = true;
-    this.isBusy = true;
+    this.handlePlayerDeath(`${debuffText}
 
-    this.logText.setText(
-      `${debuffText}\n\nТы пал от наложенных эффектов.`
-    );
-
-    this.updateTexts();
-
-    this.time.delayedCall(1800, () => {
-      const freshStats = getPlayerStats(player);
-
-      player.hp = freshStats.maxHp;
-      player.energy = freshStats.maxEnergy;
-
-      resetFloorRun();
-
-      void saveGameAsync();
-
-      this.scene.start('CampScene');
-    });
+Ты пал от наложенных эффектов.`);
 
     return true;
   }
@@ -3146,6 +3136,259 @@ private renderEnemyEffectChips() {
     });
   }
 
+
+  private handlePlayerDeath(deathText: string) {
+    this.isBattleEnded = true;
+    this.isBusy = true;
+
+    this.logText.setText(deathText);
+    this.updateTexts();
+    this.createActionButtons();
+
+    const checkpoint = getActiveCampfireBattleCheckpoint();
+
+    if (!checkpoint) {
+      this.time.delayedCall(1800, () => {
+        const freshStats = getPlayerStats(player);
+
+        player.hp = freshStats.maxHp;
+        player.energy = freshStats.maxEnergy;
+
+        resetFloorRun();
+
+        void saveGameAsync();
+
+        this.scene.start('CampScene');
+      });
+
+      return;
+    }
+
+    this.time.delayedCall(650, () => {
+      this.showCampfireDeathChoice(checkpoint);
+    });
+  }
+
+  private showCampfireDeathChoice(checkpoint: CampfireBattleCheckpoint) {
+    const { width, height } = this.scale;
+    const modalObjects: Phaser.GameObjects.GameObject[] = [];
+
+    const panelWidth = Math.min(width - 42, 620);
+    const panelHeight = 430;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const left = centerX - panelWidth / 2;
+    const top = centerY - panelHeight / 2;
+    const timeLeftText = formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now());
+
+    const overlay = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.76)
+      .setDepth(700)
+      .setInteractive();
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.52);
+    shadow.fillRoundedRect(left, top + 8, panelWidth, panelHeight, 32);
+    shadow.setDepth(701);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x17100c, 0.985);
+    bg.fillRoundedRect(left, top, panelWidth, panelHeight, 32);
+    bg.lineStyle(3, 0xf0a040, 0.92);
+    bg.strokeRoundedRect(left, top, panelWidth, panelHeight, 32);
+    bg.setDepth(702);
+
+    const glow = this.add.circle(centerX, top + 74, panelWidth * 0.25, 0xf0a040, 0.08)
+      .setDepth(703);
+
+    const title = this.add.text(centerX, top + 54, 'Костёр ещё горит', {
+      fontFamily: UI.font.title,
+      fontSize: '30px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 60,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(704);
+
+    const message = this.add.text(
+      centerX,
+      top + 160,
+      [
+        `Ты можешь вернуться к зажжённому костру на этаже ${checkpoint.floor}.`,
+        `Чекпоинт действует ещё: ${timeLeftText}.`,
+        '',
+        'При возвращении герой восстановит HP, энергию и запас зелий, а забег продолжится с места после костра.',
+      ].join('\n'),
+      {
+        fontFamily: UI.font.body,
+        fontSize: '17px',
+        color: UI.colors.text,
+        align: 'center',
+        lineSpacing: 5,
+        wordWrap: {
+          width: panelWidth - 70,
+          useAdvancedWrap: true,
+        },
+        maxLines: 7,
+      }
+    ).setOrigin(0.5).setDepth(704);
+
+    const returnButton = this.createCheckpointModalButton({
+      x: centerX,
+      y: top + 302,
+      width: Math.min(panelWidth - 90, 460),
+      height: 56,
+      text: 'Вернуться к костру',
+      accentColor: 0xf0a040,
+      onClick: () => {
+        const result = restoreCampfireBattleCheckpoint();
+
+        if (!result.success) {
+          modalObjects.forEach(object => object.destroy());
+          this.handlePlayerDeath('Костёр погас. Ты очнулся в лагере.');
+          return;
+        }
+
+        void saveGameAsync();
+
+        this.scene.start('DungeonScene');
+      },
+      depth: 704,
+    });
+
+    const townButton = this.createCheckpointModalButton({
+      x: centerX,
+      y: top + 366,
+      width: Math.min(panelWidth - 90, 460),
+      height: 52,
+      text: 'Очнуться в лагере',
+      accentColor: UI.colors.goldDark,
+      onClick: () => {
+        const freshStats = getPlayerStats(player);
+
+        player.hp = freshStats.maxHp;
+        player.energy = freshStats.maxEnergy;
+
+        clearCampfireBattleCheckpoint();
+        resetFloorRun();
+
+        void saveGameAsync();
+
+        this.scene.start('CampScene');
+      },
+      depth: 704,
+    });
+
+    modalObjects.push(
+      overlay,
+      shadow,
+      bg,
+      glow,
+      title,
+      message,
+      ...returnButton,
+      ...townButton
+    );
+  }
+
+  private createCheckpointModalButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    accentColor: number;
+    onClick: () => void;
+    depth: number;
+  }) {
+    const radius = Math.min(20, config.height / 2);
+    const objects: Phaser.GameObjects.GameObject[] = [];
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.34);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 5,
+      config.width,
+      config.height,
+      radius
+    );
+    shadow.setDepth(config.depth);
+
+    const bg = this.add.graphics();
+    const draw = (fill: number, alpha: number, offsetY = 0) => {
+      bg.clear();
+      bg.fillStyle(fill, alpha);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      bg.lineStyle(2, config.accentColor, 0.9);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      label.setY(config.y + offsetY);
+    };
+
+    bg.setDepth(config.depth + 1);
+
+    const label = this.add.text(config.x, config.y, config.text, {
+      fontFamily: UI.font.body,
+      fontSize: '16px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 22,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(config.depth + 2);
+
+    draw(0x21150f, 0.98);
+
+    const zone = this.add.zone(config.x, config.y, config.width, config.height)
+      .setDepth(config.depth + 3)
+      .setInteractive({ useHandCursor: true });
+
+    let pressed = false;
+
+    zone.on('pointerover', () => {
+      if (!pressed) draw(0x2c1d14, 1);
+    });
+
+    zone.on('pointerout', () => {
+      pressed = false;
+      draw(0x21150f, 0.98);
+    });
+
+    zone.on('pointerdown', () => {
+      pressed = true;
+      draw(0x2c1d14, 0.92, 1);
+    });
+
+    zone.on('pointerup', () => {
+      if (!pressed) return;
+      pressed = false;
+      draw(0x2c1d14, 1);
+      this.time.delayedCall(40, config.onClick);
+    });
+
+    objects.push(shadow, bg, label, zone);
+    return objects;
+  }
+
   private handlePotion() {
     if (this.isBattleEnded || this.isBusy) {
       return;
@@ -3345,28 +3588,20 @@ private renderEnemyEffectChips() {
       const passiveText = this.checkHumanPassive();
 
       if (player.hp <= 0) {
-        this.isBattleEnded = true;
+        const deathText = isDefending
+          ? `${playerActionText}
 
-        this.logText.setText(
-          isDefending
-            ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}\n\nТы пал в катакомбах...`
-            : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}\n\nТы пал в катакомбах...`
-        );
+Ты заблокировал часть удара.
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}
 
-        this.updateTexts();
+Ты пал в катакомбах...`
+          : `${playerActionText}
 
-        this.time.delayedCall(2000, () => {
-          const freshStats = getPlayerStats(player);
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}
 
-          player.hp = freshStats.maxHp;
-          player.energy = freshStats.maxEnergy;
+Ты пал в катакомбах...`;
 
-          resetFloorRun();
-
-          void saveGameAsync();
-
-          this.scene.start('CampScene');
-        });
+        this.handlePlayerDeath(deathText);
 
         return;
       }
