@@ -182,86 +182,58 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   private createVkAvatar(
-    container: Phaser.GameObjects.Container,
-    x: number,
-    y: number,
-    size: number,
-    depth = 20
-  ) {
-    type VKUserWithPhoto = {
-      id?: number | string;
-      first_name?: string;
-      last_name?: string;
-      photo_50?: string;
-      photo_100?: string;
-      photo_200?: string;
-      photo_400_orig?: string;
-      photo_max_orig?: string;
-    };
+  container: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  size: number,
+  depth = 20
+) {
+  type VKUserWithPhoto = {
+    id?: number | string;
+    first_name?: string;
+    last_name?: string;
+    photo_50?: string;
+    photo_100?: string;
+    photo_200?: string;
+  };
 
-    const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
+  const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
 
-    const photoUrl =
-      vkUser?.photo_200 ||
-      vkUser?.photo_100 ||
-      vkUser?.photo_400_orig ||
-      vkUser?.photo_max_orig ||
-      vkUser?.photo_50;
+  this.createAvatarFallback(container, x, y, size, depth);
 
-    const fallback = () => {
-      this.createAvatarFallback(container, x, y, size, depth);
-    };
+  const photoUrl =
+    vkUser?.photo_100 ||
+    vkUser?.photo_50 ||
+    vkUser?.photo_200;
 
-    if (!photoUrl) {
-      fallback();
-      return;
-    }
-
-    const avatarKey = `vk_avatar_${vkUser?.id ?? 'local'}`;
-
-    if (this.textures.exists(avatarKey)) {
-      this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
-      return;
-    }
-
-    let resolved = false;
-
-    const drawAvatarOnce = () => {
-      if (resolved) {
-        return;
-      }
-
-      resolved = true;
-      this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
-    };
-
-    const fallbackOnce = () => {
-      if (resolved) {
-        return;
-      }
-
-      resolved = true;
-      fallback();
-    };
-
-    this.load.setCORS('anonymous');
-    this.load.image(avatarKey, photoUrl);
-
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      if (this.textures.exists(avatarKey)) {
-        drawAvatarOnce();
-        return;
-      }
-
-      fallbackOnce();
-    });
-
-    this.load.once('loaderror', () => {
-      fallbackOnce();
-    });
-
-    this.load.start();
+  if (!photoUrl) {
+    return;
   }
+
+  const avatarKey = `vk_avatar_${vkUser?.id ?? 'local'}`;
+
+  if (this.textures.exists(avatarKey)) {
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+    return;
+  }
+
+  if (this.load.isLoading()) {
+    return;
+  }
+
+  this.load.setCORS('anonymous');
+  this.load.image(avatarKey, photoUrl);
+
+  this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+    if (!this.textures.exists(avatarKey)) {
+      return;
+    }
+
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth);
+  });
+
+  this.load.start();
+}
 
   private drawRoundAvatar(
     container: Phaser.GameObjects.Container,
