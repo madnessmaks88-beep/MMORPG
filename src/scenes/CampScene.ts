@@ -5,8 +5,8 @@ import { gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
 import { getPlayerStats } from '../systems/InventorySystem';
-import { saveGameAsync } from '../systems/SaveSystem';
-import { getCachedVKUser } from '../systems/VKBridgeSystem';
+import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
+import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
@@ -45,6 +45,8 @@ type CampLayout = {
 };
 
 export class CampScene extends Phaser.Scene {
+  private static startupPrepared = false;
+  private static startupPromise?: Promise<void>;
 
   private restButtonLabel?: Phaser.GameObjects.Text;
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
@@ -52,18 +54,20 @@ export class CampScene extends Phaser.Scene {
   private readonly CAMPFIRE_COOLDOWN_MS = 30 * 60 * 1000;
   private readonly CAMPFIRE_LAST_USE_KEY = 'campfire_last_rest_at';
 
-  private campfireTimerText?: Phaser.GameObjects.Text;
-
   constructor() {
     super('CampScene');
   }
 
-  create() {
-    createSceneBackground(this);
-
+  async create() {
     const layout = this.getLayout();
 
+    createSceneBackground(this);
     this.createCampBackdrop(layout);
+
+    await this.prepareStartupOnce();
+
+    this.grantStartGoldOnce();
+
     this.createHeader(layout);
     this.createPlayerLine(layout);
     this.createHeroStatusCard(layout);
@@ -72,6 +76,29 @@ export class CampScene extends Phaser.Scene {
     createBottomNav(this, {
       activeScene: 'CampScene',
     });
+  }
+
+  private async prepareStartupOnce() {
+    if (CampScene.startupPrepared) {
+      return;
+    }
+
+    if (!CampScene.startupPromise) {
+      CampScene.startupPromise = this.prepareStartup();
+    }
+
+    await CampScene.startupPromise;
+    CampScene.startupPrepared = true;
+  }
+
+  private async prepareStartup() {
+    try {
+      await initVKBridge();
+      await getVKUser();
+      await loadGameAsync();
+    } catch (error) {
+      console.warn('CampScene startup failed:', error);
+    }
   }
 
   private getLayout(): CampLayout {
@@ -249,6 +276,20 @@ export class CampScene extends Phaser.Scene {
     this.createTinyResource(layout.centerX + resourceWidth + 10, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
   }
 
+  private grantStartGoldOnce() {
+  const key = 'start_gold_500_v1';
+
+  if (localStorage.getItem(key)) {
+    return;
+  }
+
+  player.gold = Math.max(player.gold, 500);
+
+  localStorage.setItem(key, '1');
+
+  void saveGameAsync();
+}
+
   private createMainActions(layout: CampLayout) {
     const hasActiveRun =
       gameState.floorRun.active &&
@@ -267,7 +308,7 @@ export class CampScene extends Phaser.Scene {
     const availableHeight = Math.max(500, panelBottom - panelTop);
     const panelHeight = Math.min(
       availableHeight,
-      hasActiveRun || hasActiveCheckpoint ? 700 : 640
+      hasActiveRun || hasActiveCheckpoint ? 760 : 720
     );
     const panelY = panelTop + panelHeight / 2;
 
@@ -287,9 +328,10 @@ export class CampScene extends Phaser.Scene {
     const innerTop = panelTop + 28;
     const gap = layout.compact ? 12 : 14;
 
-    const mainButtonHeight = layout.compact ? 88 : 98;
-    const wideButtonHeight = layout.compact ? 70 : 78;
-    const tileHeight = layout.compact ? 86 : 96;
+    const mainButtonHeight = layout.compact ? 78 : 92;
+    const wideButtonHeight = layout.compact ? 62 : 72;
+    const tileHeight = layout.compact ? 78 : 90;
+    const newGameButtonHeight = layout.compact ? 58 : 64;
 
     const dungeonTitle = activeCheckpoint
       ? 'Вернуться к костру'
@@ -414,11 +456,14 @@ export class CampScene extends Phaser.Scene {
 
     currentY += tileHeight / 2 + gap + wideButtonHeight / 2;
 
-    const maxRestY = panelTop + panelHeight - 48;
+    const bottomPadding = 22;
+    const newGameY = panelTop + panelHeight - bottomPadding - newGameButtonHeight / 2;
+    const restYLimit = newGameY - newGameButtonHeight / 2 - gap - wideButtonHeight / 2;
+    const restY = Math.min(currentY, restYLimit);
 
     const restCard = this.createWideActionButton({
       x: layout.centerX,
-      y: Math.min(currentY, maxRestY),
+      y: restY,
       width: layout.contentWidth - 60,
       height: wideButtonHeight,
       icon: '♨',
@@ -432,6 +477,21 @@ export class CampScene extends Phaser.Scene {
 
     this.restButtonLabel = restCard.titleText;
     this.startCampfireTimer();
+
+    this.createWideActionButton({
+      x: layout.centerX,
+      y: newGameY,
+      width: layout.contentWidth - 60,
+      height: newGameButtonHeight,
+      icon: '↻',
+      title: 'Новая игра',
+      description: 'Стереть прогресс и выбрать героя заново.',
+      accentColor: UI.colors.redHex,
+      danger: true,
+      onClick: () => {
+        this.showNewGameConfirm();
+      },
+    });
   }
 
   private hasClaimableQuests() {
@@ -677,7 +737,9 @@ export class CampScene extends Phaser.Scene {
       strokeThickness: 3,
       wordWrap: {
         width: config.width - 110,
+        useAdvancedWrap: true,
       },
+      maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
     this.add.text(textX, config.y + 17, config.description, {
@@ -686,7 +748,10 @@ export class CampScene extends Phaser.Scene {
       color: UI.colors.textMuted,
       wordWrap: {
         width: config.width - 110,
+        useAdvancedWrap: true,
       },
+      maxLines: 2,
+      lineSpacing: 2,
     }).setOrigin(0, 0.5).setDepth(7);
 
     this.createClickZone(config.x, config.y, config.width, config.height, () => {
@@ -924,66 +989,15 @@ export class CampScene extends Phaser.Scene {
     return Math.max(0, left);
   }
 
-  private createCampfireTimerText(campfireY: number) {
-    const { width } = this.scale;
-
-    this.campfireTimerText = this.add.text(width / 2, campfireY + 96, '', {
-      fontFamily: UI.font.body,
-      fontSize: '15px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: Math.min(width - 80, 500),
-      },
-      maxLines: 2,
-    }).setOrigin(0.5).setDepth(20);
-
-    this.updateCampfireTimerText();
-
-    this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => {
-        this.updateCampfireTimerText();
-      },
-    });
-  }
-
-  private updateCampfireTimerText() {
-    if (!this.campfireTimerText) {
-      return;
-    }
-
-    const stats = getPlayerStats(player);
-
-    const maxPotions = 6;
-    const hpIsFull = player.hp >= stats.maxHp;
-    const potionsAreFull = player.potions >= maxPotions;
-    const cooldownLeft = this.getCampfireCooldownLeft();
-
-    if (cooldownLeft > 0) {
-      this.campfireTimerText.setText(
-        `Костёр будет доступен через ${this.formatCooldown(cooldownLeft)}`
-      );
-      this.campfireTimerText.setColor(UI.colors.red);
-      return;
-    }
-
-    if (hpIsFull && potionsAreFull) {
-      this.campfireTimerText.setText(
-        `Костёр не нужен: HP полное, зелья ${player.potions}/${maxPotions}`
-      );
-      this.campfireTimerText.setColor(UI.colors.textMuted);
-      return;
-    }
-
-    this.campfireTimerText.setText(
-      'Костёр готов: восстановит HP и зелья до 6'
-    );
-    this.campfireTimerText.setColor(UI.colors.green);
-  }
-
   private tryEnterCatacombs(hasActiveRun: boolean) {
+    if (!player.raceId) {
+      this.showMessage(
+        'Герой не создан',
+        'Нажми «Новая игра» внизу лагеря и выбери расу перед первым спуском.'
+      );
+      return;
+    }
+
     const stats = getPlayerStats(player);
 
     const hpPercent = stats.maxHp > 0
@@ -1006,8 +1020,6 @@ export class CampScene extends Phaser.Scene {
   private showLowHpWarning(hasActiveRun: boolean) {
     const layout = this.getLayout();
     const stats = getPlayerStats(player);
-
-    const campfireY = 620;
 
     const hpPercent = Math.round((player.hp / stats.maxHp) * 100);
     const cooldownLeft = this.getCampfireCooldownLeft();
@@ -1091,8 +1103,6 @@ export class CampScene extends Phaser.Scene {
         disabled: !canRest,
       }
     );
-
-    this.createCampfireTimerText(campfireY);
 
     this.setButtonDepth(restButton, 1001);
 
@@ -1180,6 +1190,74 @@ export class CampScene extends Phaser.Scene {
 
   
 
+  private showNewGameConfirm() {
+    this.showConfirmMessage(
+      'Начать новую игру?',
+      'Текущий прогресс будет удалён: герой, спуск, чекпоинт костра, магазин и временные награды. После подтверждения сразу откроется выбор расы, без перезагрузки.',
+      () => {
+        this.startNewGame();
+      },
+      'Новая игра'
+    );
+  }
+
+  private startNewGame() {
+    resetFloorRun();
+    clearCampfireBattleCheckpoint();
+    this.clearLocalProgress();
+    this.resetPlayerInMemory();
+
+    CampScene.startupPrepared = true;
+    CampScene.startupPromise = undefined;
+
+    this.scene.start('RaceSelectScene');
+  }
+
+  private clearLocalProgress() {
+    const saveKeys = [
+      'below_ashes_save_v3',
+      'below_ashes_save_v2',
+      'below_ashes_save_v1',
+      'catacombs_save_v3',
+      'catacombs_save_v2',
+      'catacombs_save_v1',
+      'catacombs_shop_assortment_v2',
+      this.CAMPFIRE_LAST_USE_KEY,
+      'start_gold_500_v1',
+    ];
+
+    saveKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+  }
+
+  private resetPlayerInMemory() {
+    Object.assign(player, {
+      name: 'Безымянный',
+      raceId: undefined,
+      level: 1,
+      exp: 0,
+      gold: 0,
+      hp: 100,
+      maxHp: 100,
+      energy: 3,
+      maxEnergy: 3,
+      potions: 3,
+      attack: 1,
+      defense: 0,
+      agility: 1,
+      strength: 1,
+      luck: 0,
+      intelligence: 1,
+      critChance: 0.1,
+      inventory: [],
+      equipment: {},
+      relicIds: [],
+      materials: {},
+      anvilLevel: 1,
+    });
+  }
+
   private createModalShell(layout: CampLayout, height: number) {
     const modal = this.add.container(0, 0).setDepth(1000);
 
@@ -1237,7 +1315,9 @@ export class CampScene extends Phaser.Scene {
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 80,
+        useAdvancedWrap: true,
       },
+      maxLines: 6,
       lineSpacing: 7,
     }).setOrigin(0.5).setDepth(1002);
 
@@ -1268,7 +1348,8 @@ export class CampScene extends Phaser.Scene {
   private showConfirmMessage(
     title: string,
     message: string,
-    onConfirm: () => void
+    onConfirm: () => void,
+    confirmText = 'Выйти'
   ) {
     const layout = this.getLayout();
     const modal = this.createModalShell(layout, 340);
@@ -1292,7 +1373,9 @@ export class CampScene extends Phaser.Scene {
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 80,
+        useAdvancedWrap: true,
       },
+      maxLines: 6,
       lineSpacing: 7,
     }).setOrigin(0.5).setDepth(1002);
 
@@ -1318,7 +1401,7 @@ export class CampScene extends Phaser.Scene {
       this,
       rightX,
       layout.height / 2 + 100,
-      'Выйти',
+      confirmText,
       () => {
         modal.destroy();
         onConfirm();

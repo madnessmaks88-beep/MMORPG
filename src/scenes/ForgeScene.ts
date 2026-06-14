@@ -260,6 +260,8 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private createScrollableContent(layout: ForgeLayout) {
+    this.contentContainer?.destroy(true);
+
     this.contentContainer = this.add.container(0, 0).setDepth(5);
 
     const maskGraphics = this.add.graphics();
@@ -482,7 +484,8 @@ export class ForgeScene extends Phaser.Scene {
 
     const description = isUpgraded
       ? 'Наковальня усилена. Можно доводить эпические, легендарные и мифические вещи до предела.'
-      : `Усиление откроет высокие уровни закалки. Нужно: ${getMaterialName(anvilCost.materialId)} x${anvilCost.amount} и ${anvilCost.gold} золота.`;
+      : `Усиление откроет высокие уровни закалки.
+Нужно: ${this.createAnvilCostNeedText(anvilCost)}.`;
 
     this.addTo(
       container,
@@ -493,8 +496,9 @@ export class ForgeScene extends Phaser.Scene {
         lineSpacing: 4,
         wordWrap: {
           width: layout.contentWidth - 280,
+          useAdvancedWrap: true,
         },
-        maxLines: 3,
+        maxLines: 4,
       }).setOrigin(0, 0.5).setDepth(8)
     );
 
@@ -651,10 +655,12 @@ export class ForgeScene extends Phaser.Scene {
     const title = this.getCategoryTitle(this.selectedCategory);
     const icon = this.getCategoryIcon(this.selectedCategory);
 
-    const cardHeight = 126;
-    const cardGap = 14;
-    const headerHeight = 84;
-    const bottomPadding = 22;
+    // Карточка выше обычной: внутри помещаются название, статус, прогресс,
+    // характеристики, отдельный блок стоимости и большая кнопка улучшения.
+    const cardHeight = layout.compact ? 214 : 226;
+    const cardGap = 16;
+    const headerHeight = 88;
+    const bottomPadding = 30;
 
     const emptyHeight = 270;
     const listHeight = itemsForForge.length === 0
@@ -678,16 +684,20 @@ export class ForgeScene extends Phaser.Scene {
       depth: 2,
     });
 
+    const left = layout.centerX - layout.contentWidth / 2;
+    const right = layout.centerX + layout.contentWidth / 2;
+
     this.addTo(
       container,
-      this.add.text(layout.centerX - layout.contentWidth / 2 + 30, topY + 36, `${icon} ${title}`, {
+      this.add.text(left + 30, topY + 36, `${icon} ${title}`, {
         fontFamily: UI.font.title,
-        fontSize: '25px',
+        fontSize: layout.compact ? '22px' : '25px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 4,
         wordWrap: {
-          width: layout.contentWidth - 170,
+          width: layout.contentWidth - 178,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(8)
@@ -695,7 +705,7 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(layout.centerX + layout.contentWidth / 2 - 30, topY + 36, `${itemsForForge.length} шт.`, {
+      this.add.text(right - 30, topY + 36, `${itemsForForge.length} шт.`, {
         fontFamily: UI.font.body,
         fontSize: '14px',
         color: UI.colors.textMuted,
@@ -705,6 +715,20 @@ export class ForgeScene extends Phaser.Scene {
         },
         maxLines: 1,
       }).setOrigin(1, 0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(left + 30, topY + 66, 'Надетые предметы всегда идут первыми. Стоимость показана в формате: есть / нужно.', {
+        fontFamily: UI.font.body,
+        fontSize: '12px',
+        color: UI.colors.textMuted,
+        wordWrap: {
+          width: layout.contentWidth - 60,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(8)
     );
 
     if (itemsForForge.length === 0) {
@@ -784,6 +808,7 @@ export class ForgeScene extends Phaser.Scene {
     const canUpgrade = this.canUpgradeItem(inventoryItem);
     const isRarityMaxLevel = upgradeLevel >= rarityMaxUpgrade;
     const isAnvilLocked = upgradeLevel >= availableMaxUpgrade && upgradeLevel < rarityMaxUpgrade;
+    const isMaxLevel = isRarityMaxLevel || isAnvilLocked;
 
     const rarityColor = getRarityColorHex(item);
     const rarityStrokeColor = getRarityStrokeColor(item);
@@ -792,6 +817,8 @@ export class ForgeScene extends Phaser.Scene {
     const cardWidth = layout.contentWidth - 44;
     const left = cardX - cardWidth / 2;
     const right = cardX + cardWidth / 2;
+    const top = y - cardHeight / 2;
+    const bottom = y + cardHeight / 2;
 
     this.createRoundedPanel({
       parent: container,
@@ -811,27 +838,28 @@ export class ForgeScene extends Phaser.Scene {
 
     const rarityBar = this.add.graphics();
     rarityBar.fillStyle(rarityColor, 0.95);
-    rarityBar.fillRoundedRect(left + 6, y - cardHeight / 2 + 10, 8, cardHeight - 20, 6);
+    rarityBar.fillRoundedRect(left + 6, top + 10, 8, cardHeight - 20, 6);
     rarityBar.setDepth(8);
     container.add(rarityBar);
 
-    const iconX = left + 47;
-    const textX = left + 86;
-    const buttonWidth = Phaser.Math.Clamp(Math.round(cardWidth * 0.22), 106, 134);
+    const iconX = left + 48;
+    const textX = left + 88;
+    const buttonWidth = Phaser.Math.Clamp(Math.round(cardWidth * 0.24), 120, 146);
     const buttonX = right - buttonWidth / 2 - 18;
-    const costX = buttonX - buttonWidth / 2 - 12;
-    const textWidth = Math.max(170, costX - textX - 18);
+    const infoRight = buttonX - buttonWidth / 2 - 16;
+    const textWidth = Math.max(170, infoRight - textX);
+    const costWidth = Math.max(220, infoRight - textX);
 
     this.addTo(
       container,
-      this.add.circle(iconX, y - 30, 27, rarityColor, 0.95)
+      this.add.circle(iconX, top + 46, 29, rarityColor, 0.95)
         .setStrokeStyle(2, rarityStrokeColor, 0.9)
         .setDepth(9)
     );
 
     this.addTo(
       container,
-      this.add.text(iconX, y - 30, getSlotIcon(item.slot), {
+      this.add.text(iconX, top + 46, getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
         fontSize: '18px',
         color: '#ffffff',
@@ -840,33 +868,39 @@ export class ForgeScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(10)
     );
 
+    const titleWidth = equipped ? Math.max(140, textWidth - 82) : textWidth;
+
     this.addTo(
       container,
-      this.add.text(textX, y - 44, `${item.name} +${upgradeLevel}`, {
+      this.add.text(textX, top + 24, `${item.name} +${upgradeLevel}`, {
         fontFamily: UI.font.title,
-        fontSize: '15px',
+        fontSize: layout.compact ? '14px' : '16px',
         color: equipped ? UI.colors.goldText : UI.colors.text,
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
         wordWrap: {
-          width: textWidth,
+          width: titleWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 2,
+        lineSpacing: -2,
       }).setOrigin(0, 0).setDepth(10)
     );
 
     if (equipped) {
-      this.createEquippedBadge(container, textX, y - 50);
+      // Бейдж расположен в правой части информационного блока, а не поверх названия.
+      this.createEquippedBadge(container, infoRight - 34, top + 34, 10);
     }
 
     this.addTo(
       container,
-      this.add.text(textX, y - 11, `${getRarityText(item)} • ${this.getItemTypeText(item)} • предел +${rarityMaxUpgrade}`, {
+      this.add.text(textX, top + 68, `${getRarityText(item)} • ${this.getItemTypeText(item)} • предел +${rarityMaxUpgrade}`, {
         fontFamily: UI.font.body,
         fontSize: '12px',
         color: this.getRarityTextColor(item),
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(10)
@@ -875,8 +909,8 @@ export class ForgeScene extends Phaser.Scene {
     this.createUpgradeProgressBar(
       container,
       textX,
-      y + 12,
-      Math.min(textWidth, 260),
+      top + 91,
+      Math.min(textWidth - 46, 270),
       upgradeLevel,
       rarityMaxUpgrade,
       rarityColor
@@ -884,58 +918,58 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(textX, y + 43, createItemStatsText(inventoryItem) || 'Без бонусов', {
+      this.add.text(textX, top + 119, createItemStatsText(inventoryItem) || 'Без бонусов', {
         fontFamily: UI.font.body,
         fontSize: '12px',
         color: UI.colors.textMuted,
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(10)
-    );
-
-    const costText =
-      isRarityMaxLevel
-        ? `Достигнут предел редкости: +${rarityMaxUpgrade}`
-        : isAnvilLocked
-          ? `Нужна наковальня II\nдля улучшения выше +${anvilMaxUpgrade}`
-          : this.createUpgradeCostText(cost);
-
-    this.addTo(
-      container,
-      this.add.text(costX, y - 14, costText, {
-        fontFamily: UI.font.body,
-        fontSize: '11px',
-        color: isRarityMaxLevel
-          ? UI.colors.green
-          : isAnvilLocked
-            ? UI.colors.red
-            : canUpgrade
-              ? UI.colors.textMuted
-              : UI.colors.red,
         lineSpacing: 2,
-        wordWrap: {
-          width: Math.max(92, buttonX - costX - buttonWidth / 2 - 8),
-        },
-        maxLines: 5,
       }).setOrigin(0, 0.5).setDepth(10)
     );
+
+    if (isRarityMaxLevel || isAnvilLocked) {
+      const lockedText = isRarityMaxLevel
+        ? `Достигнут предел редкости: +${rarityMaxUpgrade}`
+        : `Нужна наковальня II для улучшения выше +${anvilMaxUpgrade}`;
+
+      this.createLockedCostPanel(
+        container,
+        textX,
+        bottom - 45,
+        costWidth,
+        lockedText,
+        isRarityMaxLevel,
+        10
+      );
+    } else {
+      this.createUpgradeCostPanel(
+        container,
+        textX,
+        bottom - 45,
+        costWidth,
+        cost,
+        canUpgrade,
+        10
+      );
+    }
 
     this.createForgeButton({
       parent: container,
       x: buttonX,
-      y: y + 34,
+      y: bottom - 46,
       width: buttonWidth,
-      height: 42,
+      height: 52,
       text: isRarityMaxLevel
         ? 'Макс.'
         : isAnvilLocked
-          ? 'Наков.'
+          ? 'Наков. II'
           : 'Улучшить',
-          
       disabled: isRarityMaxLevel || isAnvilLocked || !canUpgrade,
-      variant: isRarityMaxLevel ? 'green' : 'gold',
+      variant: isMaxLevel ? 'green' : canUpgrade ? 'gold' : 'dark',
       onClick: () => {
         this.showUpgradeConfirm(inventoryItem);
       },
@@ -947,43 +981,54 @@ export class ForgeScene extends Phaser.Scene {
   private createEquippedBadge(
     container: Phaser.GameObjects.Container,
     x: number,
-    y: number
+    y: number,
+    depth: number
   ) {
-    const width = 70;
-    const height = 22;
-    const radius = 10;
+    const width = 72;
+    const height = 24;
+    const radius = 12;
 
     const bg = this.add.graphics();
 
     bg.fillStyle(0x2a1d13, 0.96);
     bg.fillRoundedRect(
-      x,
-      y,
+      x - width / 2,
+      y - height / 2,
       width,
       height,
       radius
     );
 
-    bg.lineStyle(1, UI.colors.gold, 0.8);
+    bg.lineStyle(1, UI.colors.gold, 0.86);
     bg.strokeRoundedRect(
-      x,
-      y,
+      x - width / 2,
+      y - height / 2,
       width,
       height,
       radius
     );
 
-    bg.setDepth(11);
+    bg.setDepth(depth);
 
-    const label = this.add.text(x + width / 2, y + height / 2, 'НАДЕТО', {
+    const label = this.add.text(x, y, 'НАДЕТО', {
       fontFamily: UI.font.body,
       fontSize: '10px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(12);
+      align: 'center',
+      wordWrap: {
+        width: width - 10,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(depth + 1);
 
     container.add([bg, label]);
+
+    return {
+      bg,
+      label,
+    };
   }
 
   private getRarityMaxUpgradeLevel(item: NonNullable<ReturnType<typeof getBaseItemFromInventoryItem>>) {
@@ -1364,13 +1409,28 @@ export class ForgeScene extends Phaser.Scene {
           return 0;
         }
 
+        const equippedA = isItemEquipped(player, a.instanceId);
+        const equippedB = isItemEquipped(player, b.instanceId);
+
+        // Сначала показываем то, что сейчас надето: игрок чаще всего хочет
+        // улучшать активную экипировку, а не искать её в середине списка.
+        if (equippedA !== equippedB) {
+          return equippedA ? -1 : 1;
+        }
+
         const rarityDiff = this.getRarityWeight(itemB) - this.getRarityWeight(itemA);
 
         if (rarityDiff !== 0) {
           return rarityDiff;
         }
 
-        return (b.upgradeLevel ?? 0) - (a.upgradeLevel ?? 0);
+        const upgradeDiff = (b.upgradeLevel ?? 0) - (a.upgradeLevel ?? 0);
+
+        if (upgradeDiff !== 0) {
+          return upgradeDiff;
+        }
+
+        return itemA.name.localeCompare(itemB.name, 'ru');
       });
   }
 
@@ -1540,12 +1600,195 @@ export class ForgeScene extends Phaser.Scene {
     }));
   }
 
-  private createUpgradeCostText(cost: UpgradeCost) {
-    const materialText = cost.materials
-      .map(material => `${getMaterialName(material.id)} x${material.amount}`)
-      .join('\n');
+  private createUpgradeCostPanel(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    width: number,
+    cost: UpgradeCost,
+    canUpgrade: boolean,
+    depth: number
+  ) {
+    const lineCount = 1 + cost.materials.length;
+    const panelHeight = Phaser.Math.Clamp(28 + lineCount * 17, 66, 90);
+    const panelX = x + width / 2;
 
-    return [`Золото x${cost.gold}`, materialText].filter(Boolean).join('\n');
+    this.createRoundedPanel({
+      parent: container,
+      x: panelX,
+      y,
+      width,
+      height: panelHeight,
+      radius: 16,
+      color: canUpgrade ? 0x0f1510 : 0x17100c,
+      alpha: 0.82,
+      strokeColor: canUpgrade ? 0x75d184 : 0xff6b6b,
+      strokeAlpha: canUpgrade ? 0.34 : 0.5,
+      strokeWidth: 1,
+      glowColor: canUpgrade ? 0x75d184 : 0xff6b6b,
+      depth,
+    });
+
+    const left = x + 12;
+    const lineWidth = width - 24;
+
+    this.addTo(
+      container,
+      this.add.text(left, y - panelHeight / 2 + 13, 'Нужно для улучшения', {
+        fontFamily: UI.font.body,
+        fontSize: '10px',
+        color: UI.colors.textMuted,
+        wordWrap: {
+          width: lineWidth,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(depth + 3)
+    );
+
+    let lineY = y - panelHeight / 2 + 30;
+
+    this.createUpgradeCostLine(
+      container,
+      left,
+      lineY,
+      `Золото: ${player.gold} / ${cost.gold}`,
+      player.gold >= cost.gold,
+      lineWidth,
+      depth + 3
+    );
+
+    cost.materials.forEach(material => {
+      const owned = player.materials[material.id] ?? 0;
+      const enough = owned >= material.amount;
+
+      lineY += 17;
+
+      this.createUpgradeCostLine(
+        container,
+        left,
+        lineY,
+        `${this.getShortMaterialName(material.id)}: ${owned} / ${material.amount}`,
+        enough,
+        lineWidth,
+        depth + 3
+      );
+    });
+  }
+
+  private createUpgradeCostLine(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    text: string,
+    enough: boolean,
+    width: number,
+    depth: number
+  ) {
+    const mark = enough ? '✓' : '!';
+
+    this.addTo(
+      container,
+      this.add.text(x, y, `${mark} ${text}`, {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: enough ? UI.colors.text : UI.colors.red,
+        stroke: '#000000',
+        strokeThickness: 1,
+        wordWrap: {
+          width,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(depth)
+    );
+  }
+
+  private createLockedCostPanel(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    width: number,
+    text: string,
+    success: boolean,
+    depth: number
+  ) {
+    const panelX = x + width / 2;
+    const panelHeight = 58;
+
+    this.createRoundedPanel({
+      parent: container,
+      x: panelX,
+      y,
+      width,
+      height: panelHeight,
+      radius: 16,
+      color: success ? 0x0f1510 : 0x17100c,
+      alpha: 0.82,
+      strokeColor: success ? 0x75d184 : UI.colors.goldDark,
+      strokeAlpha: 0.44,
+      strokeWidth: 1,
+      glowColor: success ? 0x75d184 : 0xf0a040,
+      depth,
+    });
+
+    this.addTo(
+      container,
+      this.add.text(x + 12, y, text, {
+        fontFamily: UI.font.body,
+        fontSize: '12px',
+        color: success ? UI.colors.green : UI.colors.goldText,
+        lineSpacing: 3,
+        wordWrap: {
+          width: width - 24,
+          useAdvancedWrap: true,
+        },
+        maxLines: 2,
+      }).setOrigin(0, 0.5).setDepth(depth + 3)
+    );
+  }
+
+  private createUpgradeCostText(cost: UpgradeCost) {
+    const goldEnough = player.gold >= cost.gold;
+    const goldLine = `${goldEnough ? '✓' : '!'} Золото: ${player.gold}/${cost.gold}`;
+
+    const materialText = cost.materials
+      .map(material => {
+        const owned = player.materials[material.id] ?? 0;
+        const enough = owned >= material.amount;
+
+        return `${enough ? '✓' : '!'} ${this.getShortMaterialName(material.id)}: ${owned}/${material.amount}`;
+      })
+      .join('\\n');
+
+    return [goldLine, materialText].filter(Boolean).join('\\n');
+  }
+
+  private createAnvilCostNeedText(cost: {
+    materialId: MaterialId;
+    amount: number;
+    gold: number;
+  }) {
+    const ownedMaterial = player.materials[cost.materialId] ?? 0;
+    const materialEnough = ownedMaterial >= cost.amount;
+    const goldEnough = player.gold >= cost.gold;
+
+    return [
+      `${materialEnough ? '✓' : '!'} ${this.getShortMaterialName(cost.materialId)}: ${ownedMaterial}/${cost.amount}`,
+      `${goldEnough ? '✓' : '!'} золото: ${player.gold}/${cost.gold}`,
+    ].join(', ');
+  }
+
+  private getShortMaterialName(id: MaterialId) {
+    if (id === 'darkened_bone') return 'Кость';
+    if (id === 'dim_gem') return 'Самоцвет';
+    if (id === 'old_leather') return 'Кожа';
+    if (id === 'dark_flame_heart') return 'Сердце';
+    if (id === 'black_gem') return 'Чёрн. самоцвет';
+    if (id === 'cursed_seal') return 'Печать';
+    if (id === 'black_sarcophagus_shard') return 'Осколок';
+
+    return getMaterialName(id);
   }
 
   private getTotalMaterialsCount() {

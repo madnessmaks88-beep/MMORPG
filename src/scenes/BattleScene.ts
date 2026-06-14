@@ -700,16 +700,18 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
   }).setOrigin(0.5).setDepth(25);
 
   const textX = left + 62;
-  const title = this.add.text(textX, config.y - 12, config.title, {
+  const title = this.add.text(textX, config.y - 13, config.title, {
     fontFamily: UI.font.title,
-    fontSize: config.width > 300 ? '19px' : '15px',
+    fontSize: config.width > 300 ? '19px' : '14px',
     color: textColor,
     stroke: '#000000',
     strokeThickness: 3,
     wordWrap: {
       width: config.width - 72,
+      useAdvancedWrap: true,
     },
-    maxLines: 1,
+    maxLines: 2,
+    lineSpacing: -3,
   }).setOrigin(0, 0.5).setDepth(25);
 
   const subtitle = this.add.text(textX, config.y + 16, config.subtitle, {
@@ -737,7 +739,7 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
 
     iconBg.setY(config.y + offsetY);
     icon.setY(config.y + offsetY);
-    title.setY(config.y - 12 + offsetY);
+    title.setY(config.y - 13 + offsetY);
     subtitle.setY(config.y + 16 + offsetY);
 
     title.setColor(titleColor);
@@ -830,12 +832,11 @@ private getRaceSkillIcon() {
 }
 
 private getRaceSkillTitle() {
-  if (player.raceId === 'human') return 'Отчаянный';
-  if (player.raceId === 'tainted_halfblood') return 'Рывок';
-  if (player.raceId === 'stoneborn') return 'Стойка';
-  if (player.raceId === 'night_elf') return 'Тень';
-  if (player.raceId === 'goblin') return 'Подлый';
-  if (player.raceId === 'demon') return 'Пламя';
+  const race = player.raceId ? getRaceById(player.raceId) : undefined;
+
+  if (race?.activeName) {
+    return race.activeName;
+  }
 
   return 'Навык';
 }
@@ -1669,19 +1670,29 @@ private getSkillCostPenalty() {
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    const nameText = this.add.text(titleX, -cardHeight / 2 + 38, name, {
+    const nameTextY = isEnemy ? -cardHeight / 2 + 22 : -cardHeight / 2 + 38;
+    const nameTextMaxLines = isEnemy ? 2 : 1;
+    const nameTextWidth = isEnemy ? cardWidth - 245 : cardWidth - 190;
+
+    const nameText = this.add.text(titleX, nameTextY, name, {
       fontFamily: UI.font.title,
-      fontSize: isBoss ? (layout.compact ? '23px' : '27px') : (layout.compact ? '21px' : '24px'),
+      fontSize: isEnemy
+        ? isBoss
+          ? layout.compact ? '21px' : '24px'
+          : layout.compact ? '19px' : '22px'
+        : layout.compact ? '21px' : '24px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       wordWrap: {
-        width: cardWidth - 190,
+        width: nameTextWidth,
+        useAdvancedWrap: true,
       },
-      maxLines: 1,
-    }).setOrigin(0, 0.5);
+      maxLines: nameTextMaxLines,
+      lineSpacing: -3,
+    }).setOrigin(0, isEnemy ? 0 : 0.5);
 
-    const hpText = this.add.text(titleX, -cardHeight / 2 + 75, '', {
+    const hpText = this.add.text(titleX, isEnemy ? -cardHeight / 2 + 86 : -cardHeight / 2 + 75, '', {
       fontFamily: UI.font.body,
       fontSize: layout.compact ? '15px' : '17px',
       color: isDangerTooltip ? '#ffd0c2' : UI.colors.text,
@@ -1691,7 +1702,7 @@ private getSkillCostPenalty() {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const extraText = this.add.text(titleX, -cardHeight / 2 + 106, '', {
+    const extraText = this.add.text(titleX, isEnemy ? -cardHeight / 2 + 116 : -cardHeight / 2 + 106, '', {
       fontFamily: UI.font.body,
       fontSize: layout.compact ? '13px' : '15px',
       color: UI.colors.textMuted,
@@ -2339,10 +2350,11 @@ private createEffectChip(config: {
   tooltipDescription: string;
   targetArray: Phaser.GameObjects.GameObject[];
   width?: number;
+  height?: number;
   parent?: Phaser.GameObjects.Container;
 }) {
   const chipWidth = Math.min(config.width ?? 164, this.scale.width - 54);
-  const chipHeight = 32;
+  const chipHeight = config.height ?? 42;
   const radius = 13;
 
   const shadow = this.add.graphics();
@@ -2390,12 +2402,14 @@ private createEffectChip(config: {
 
   const labelText = this.add.text(config.x - chipWidth / 2 + 34, config.y, config.text, {
     fontFamily: UI.font.body,
-    fontSize: '11px',
+    fontSize: '10px',
     color: UI.colors.text,
     wordWrap: {
       width: chipWidth - 42,
+      useAdvancedWrap: true,
     },
-    maxLines: 1,
+    maxLines: 2,
+    lineSpacing: 0,
   }).setOrigin(0, 0.5).setDepth(47);
 
   const hitbox = this.add.zone(config.x, config.y, chipWidth, chipHeight)
@@ -2453,11 +2467,11 @@ private renderPlayerEffectChips() {
     return;
   }
 
-  const chipWidth = 148;
+  const chipWidth = 168;
   const totalVisible = Math.min(this.playerDebuffs.length, 3);
   const totalWidth = totalVisible * chipWidth + Math.max(0, totalVisible - 1) * 8;
   const startX = -totalWidth / 2 + chipWidth / 2;
-  const y = 86;
+  const y = 84;
 
   this.playerDebuffs.slice(0, 3).forEach((debuff, index) => {
     const x = startX + index * (chipWidth + 8);
@@ -2467,7 +2481,9 @@ private renderPlayerEffectChips() {
       x,
       y,
       width: chipWidth,
-      text: `${debuff.name}: ${debuff.duration}х`,
+      height: 42,
+      text: `${debuff.name}
+${debuff.duration} х.`,
       icon: this.getDebuffIcon(debuff.id),
       color: this.getDebuffColor(debuff.id),
       tooltipTitle: debuff.name,
@@ -2519,7 +2535,9 @@ private renderEnemyEffectChips() {
       x,
       y,
       width: chipWidth,
-      text: `${effect.name}: ${effect.duration}х`,
+      height: 42,
+      text: `${effect.name}
+${effect.duration} х.`,
       icon: this.getDebuffIcon(effect.id),
       color: this.getDebuffColor(effect.id),
       tooltipTitle: effect.name,

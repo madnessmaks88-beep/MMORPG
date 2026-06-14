@@ -1442,6 +1442,20 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
   });
 }
 
+private exitToTownKeepingCampfireCheckpoint() {
+  const checkpoint = getActiveCampfireBattleCheckpoint();
+
+  resetFloorRun();
+
+  if (!checkpoint) {
+    this.resetCampfireState();
+  }
+
+  void saveGameAsync();
+
+  this.scene.start('CampScene');
+}
+
   private createRoundedPanel(config: {
     x: number;
     y: number;
@@ -1819,12 +1833,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     onClick: () => {
       closeModal();
 
-      resetFloorRun();
-      this.resetCampfireState();
-
-      void saveGameAsync();
-
-      this.scene.start('CampScene');
+      this.exitToTownKeepingCampfireCheckpoint();
     },
     variant: 'green',
     depth: 204,
@@ -2137,12 +2146,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       text: 'Вернуться в город',
       variant: 'brown',
       onClick: () => {
-        resetFloorRun();
-        this.resetCampfireState();
-      
-        void saveGameAsync();
-      
-        this.scene.start('CampScene');
+        this.exitToTownKeepingCampfireCheckpoint();
       },
     });
   }
@@ -2234,12 +2238,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       text: 'Вернуться в город',
       variant: 'brown',
       onClick: () => {
-        resetFloorRun();
-        this.resetCampfireState();
-      
-        void saveGameAsync();
-      
-        this.scene.start('CampScene');
+        this.exitToTownKeepingCampfireCheckpoint();
       },
     });
   }

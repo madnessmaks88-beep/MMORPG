@@ -34,6 +34,7 @@ type RaceButton = {
 
 export class RaceSelectScene extends Phaser.Scene {
   private selectedRace?: RaceData;
+  private bottomActionObjects: Phaser.GameObjects.GameObject[] = [];
 
   private layout!: RaceLayout;
   private contentContainer?: Phaser.GameObjects.Container;
@@ -630,6 +631,7 @@ export class RaceSelectScene extends Phaser.Scene {
     this.targetScrollY = 0;
     this.currentScrollY = 0;
     this.createScrollableContent(this.layout);
+    this.createBottomAction(this.layout);
   }
 
   private createSelectedRacePanel(layout: RaceLayout, topY: number, race: RaceData) {
@@ -998,7 +1000,13 @@ export class RaceSelectScene extends Phaser.Scene {
   }
 
   private createBottomAction(layout: RaceLayout) {
-    this.createUiButton({
+    this.bottomActionObjects.forEach(object => {
+      object.destroy();
+    });
+
+    this.bottomActionObjects = [];
+
+    const button = this.createUiButton({
       x: layout.centerX,
       y: layout.height - 52,
       width: Math.min(layout.contentWidth, 540),
@@ -1012,6 +1020,8 @@ export class RaceSelectScene extends Phaser.Scene {
       },
       depth: 240,
     });
+
+    this.bottomActionObjects = button.objects;
   }
 
   private confirmRace() {
@@ -1045,7 +1055,7 @@ export class RaceSelectScene extends Phaser.Scene {
 
     void saveGameAsync();
 
-    this.scene.start('MainMenuScene');
+    this.scene.start('CampScene');
   }
 
   private createShortStatsText(race: RaceData) {

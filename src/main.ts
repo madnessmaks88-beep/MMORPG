@@ -1,7 +1,5 @@
 import Phaser from 'phaser';
 
-import { BootScene } from './scenes/BootScene';
-import { MainMenuScene } from './scenes/MainMenuScene';
 import { CampScene } from './scenes/CampScene';
 import { DungeonScene } from './scenes/DungeonScene';
 import { BattleScene } from './scenes/BattleScene';
@@ -13,6 +11,7 @@ import { ForgeScene } from './scenes/ForgeScene';
 import { RaceSelectScene } from './scenes/RaceSelectScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { TrainingScene } from './scenes/TrainingScene';
+import { BootScene } from './scenes/BootScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -21,10 +20,9 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#090909',
   parent: 'app',
   scene: [
-    BootScene,
-    RaceSelectScene,
-    MainMenuScene,
     CampScene,
+    RaceSelectScene,
+    BootScene,
     DungeonSelectScene,
     DungeonScene,
     BattleScene,

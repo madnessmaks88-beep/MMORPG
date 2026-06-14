@@ -64,7 +64,7 @@ export const player: PlayerData = {
   level: 1,
   exp: 0,
   expToNextLevel: 70,
-  gold: 0,
+  gold: 500,
 
   hp: 100,
   maxHp: 100,

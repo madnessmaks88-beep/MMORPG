@@ -1414,7 +1414,13 @@ export class ShopScene extends Phaser.Scene {
 
     const rawPrice = Math.round((rarityBase + statPrice) * slotMultiplier);
 
-    return Math.ceil(rawPrice / 10) * 10;
+    let price = Math.ceil(rawPrice / 10) * 10;
+
+    if (item.slot === 'weapon' && item.rarity === 'common') {
+      price = Math.max(1, Math.ceil((price / 2) / 10) * 10);
+    }
+
+    return price;
   }
 
   private applyDiscount(price: number, discountPercent: number) {
