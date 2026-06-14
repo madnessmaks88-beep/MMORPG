@@ -6,6 +6,7 @@ import { getRaceById } from '../data/races';
 import { getRelicById } from '../data/relics';
 
 import { getPlayerStats } from '../systems/InventorySystem';
+import { getCachedVKUser } from '../systems/VKBridgeSystem';
 
 import { createBottomNav } from '../ui/createBottomNav';
 
@@ -69,6 +70,8 @@ export class ProfileScene extends Phaser.Scene {
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
     const safeBottom = 116;
 
+    // Профиль начинается почти сразу после safe area.
+    // Раньше было safeTop + 96 — из-за этого сверху оставалась большая пустая зона.
     const contentTop = safeTop + 10;
     const contentBottom = height - safeBottom;
     const contentWidth = Math.min(width - safeX * 2, 620);
@@ -153,88 +156,206 @@ export class ProfileScene extends Phaser.Scene {
     }
   }
 
-  private createHeroAvatar(
-    container: Phaser.GameObjects.Container,
-    x: number,
-    y: number,
-    size: number,
-    depth = 20,
-    accentColor = UI.colors.goldDark
-  ) {
-    const race = player.raceId ? getRaceById(player.raceId) : undefined;
+  private createVkAvatar(
+  container: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  size: number,
+  depth = 20
+) {
+  type VKUserWithPhoto = {
+    id?: number | string;
+    first_name?: string;
+    last_name?: string;
+    photo_50?: string;
+    photo_100?: string;
+    photo_200?: string;
+  };
 
-    const savedName = player.name?.trim() ?? '';
-    const initial =
-      savedName.length > 0 && savedName !== 'Безымянный'
-        ? savedName[0].toUpperCase()
-        : '?';
+  const vkUser = getCachedVKUser() as VKUserWithPhoto | null;
 
-    const avatarSymbol = race
-      ? this.getRaceIcon(race.id)
-      : initial;
+  // Сразу рисуем заглушку, чтобы профиль не ждал загрузку VK-фото
+  this.createAvatarFallback(container, x, y, size, depth);
 
-    const avatarColor = race
-      ? this.getRaceColor(race.id)
-      : accentColor;
+  const photoUrl =
+    vkUser?.photo_100 ||
+    vkUser?.photo_50 ||
+    vkUser?.photo_200;
 
-    this.addTo(
-      container,
-      this.add.circle(x, y + 6, size / 2 + 8, 0x000000, 0.36)
-        .setDepth(depth)
-    );
-
-    this.addTo(
-      container,
-      this.add.circle(x, y, size / 2 + 7, avatarColor, 0.92)
-        .setDepth(depth + 1)
-    );
-
-    this.addTo(
-      container,
-      this.add.circle(x, y, size / 2 + 2, 0x17100c, 1)
-        .setDepth(depth + 2)
-    );
-
-    this.addTo(
-      container,
-      this.add.circle(x - size * 0.15, y - size * 0.17, size * 0.18, 0xffffff, 0.08)
-        .setDepth(depth + 3)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(x, y - 1, avatarSymbol, {
-        fontFamily: UI.font.title,
-        fontSize: `${Math.floor(size * 0.42)}px`,
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center',
-        wordWrap: {
-          width: size - 16,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(depth + 4)
-    );
-
-    if (race) {
-      this.addTo(
-        container,
-        this.add.text(x, y + size * 0.31, initial, {
-          fontFamily: UI.font.body,
-          fontSize: `${Math.floor(size * 0.14)}px`,
-          color: UI.colors.textMuted,
-          stroke: '#000000',
-          strokeThickness: 2,
-          align: 'center',
-          wordWrap: {
-            width: size - 22,
-          },
-          maxLines: 1,
-        }).setOrigin(0.5).setDepth(depth + 5)
-      );
-    }
+  if (!photoUrl) {
+    return;
   }
+
+  const avatarKey = `vk_avatar_${vkUser?.id ?? 'local'}`;
+
+  if (this.textures.exists(avatarKey)) {
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth + 4);
+    return;
+  }
+
+  this.load.setCORS('anonymous');
+  this.load.image(avatarKey, photoUrl);
+
+  this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+    if (!this.textures.exists(avatarKey)) {
+      return;
+    }
+
+    this.drawRoundAvatar(container, avatarKey, x, y, size, depth + 4);
+  });
+
+  this.load.start();
+}
+
+  private drawRoundAvatar(
+  container: Phaser.GameObjects.Container,
+  textureKey: string,
+  x: number,
+  y: number,
+  size: number,
+  depth: number
+) {
+  const roundTextureKey = `${textureKey}_round_${size}`;
+
+  if (!this.textures.exists(roundTextureKey)) {
+    this.createRoundAvatarTexture(textureKey, roundTextureKey, size);
+  }
+
+  const avatar = this.add.image(x, y, roundTextureKey)
+    .setDisplaySize(size, size)
+    .setDepth(depth + 3);
+
+  const border = this.add.circle(x, y, size / 2 + 5, 0x000000, 0)
+    .setStrokeStyle(3, UI.colors.goldDark, 0.95)
+    .setDepth(depth + 4);
+
+  const shine = this.add.circle(
+    x - size * 0.18,
+    y - size * 0.2,
+    size * 0.17,
+    0xffffff,
+    0.08
+  ).setDepth(depth + 5);
+
+  container.add([
+    avatar,
+    border,
+    shine,
+  ]);
+
+  return {
+    avatar,
+    border,
+    shine,
+  };
+}
+
+private createRoundAvatarTexture(
+  sourceTextureKey: string,
+  targetTextureKey: string,
+  size: number
+) {
+  const sourceImage = this.textures.get(sourceTextureKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+
+  const canvasTexture = this.textures.createCanvas(targetTextureKey, size, size);
+
+  if (!canvasTexture) {
+    return;
+  }
+
+  const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    return;
+  }
+
+  const sourceWidth =
+    sourceImage instanceof HTMLImageElement
+      ? sourceImage.naturalWidth || sourceImage.width
+      : sourceImage.width;
+
+  const sourceHeight =
+    sourceImage instanceof HTMLImageElement
+      ? sourceImage.naturalHeight || sourceImage.height
+      : sourceImage.height;
+
+  const cropSize = Math.min(sourceWidth, sourceHeight);
+  const cropX = Math.floor((sourceWidth - cropSize) / 2);
+  const cropY = Math.floor((sourceHeight - cropSize) / 2);
+
+  context.clearRect(0, 0, size, size);
+
+  context.save();
+
+  context.beginPath();
+  context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  context.closePath();
+  context.clip();
+
+  context.drawImage(
+    sourceImage,
+    cropX,
+    cropY,
+    cropSize,
+    cropSize,
+    0,
+    0,
+    size,
+    size
+  );
+
+  context.restore();
+
+  canvasTexture.refresh();
+}
+
+  private createAvatarFallback(
+  container: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+  size: number,
+  depth: number
+) {
+  const vkUser = getCachedVKUser() as {
+    first_name?: string;
+    last_name?: string;
+  } | null;
+
+  const firstLetter =
+    vkUser?.first_name?.[0] ||
+    player.name?.[0] ||
+    '?';
+
+  this.addTo(
+    container,
+    this.add.circle(x, y + 5, size / 2 + 7, 0x000000, 0.35)
+      .setDepth(depth)
+  );
+
+  this.addTo(
+    container,
+    this.add.circle(x, y, size / 2 + 5, UI.colors.goldDark, 0.95)
+      .setDepth(depth + 1)
+  );
+
+  this.addTo(
+    container,
+    this.add.circle(x, y, size / 2 + 1, 0x17100c, 1)
+      .setDepth(depth + 2)
+  );
+
+  this.addTo(
+    container,
+    this.add.text(x, y, firstLetter.toUpperCase(), {
+      fontFamily: UI.font.title,
+      fontSize: `${Math.floor(size * 0.42)}px`,
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(depth + 3)
+  );
+}
 
   private createScrollInput(layout: ProfileLayout) {
     this.scrollZone?.destroy();
@@ -350,7 +471,7 @@ export class ProfileScene extends Phaser.Scene {
     const avatarX = innerLeft + 54;
     const avatarY = topY + 84;
 
-    this.createHeroAvatar(container, avatarX, avatarY, 92, 5, raceColor);
+    this.createVkAvatar(container, avatarX, avatarY, 92, 5);
 
     const textX = innerLeft + 122;
     const titleMaxWidth = Math.max(150, innerRight - textX - 78);
@@ -1172,30 +1293,24 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   private getHeroDisplayName() {
+    const vkUser = getCachedVKUser();
+
+    const vkFirstName = vkUser?.first_name?.trim() ?? '';
+    const vkLastName = vkUser?.last_name?.trim() ?? '';
+
+    if (vkFirstName.length > 0) {
+      return vkLastName.length > 0
+        ? `${vkFirstName} ${vkLastName}`
+        : vkFirstName;
+    }
+
     const savedName = player.name?.trim() ?? '';
 
     if (savedName.length > 0 && savedName !== 'Безымянный') {
       return savedName;
     }
 
-    const race = player.raceId ? getRaceById(player.raceId) : undefined;
-
-    if (race) {
-      return race.name;
-    }
-
-    return 'Безымянный';
-  }
-
-  private getRaceIcon(id: string) {
-    if (id === 'human') return '◆';
-    if (id === 'tainted_halfblood') return '☾';
-    if (id === 'stoneborn') return '▣';
-    if (id === 'night_elf') return '◐';
-    if (id === 'goblin') return '!';
-    if (id === 'demon') return '◆';
-
-    return '◆';
+    return 'локальный режим';
   }
 
   private getRaceRole(id: string) {

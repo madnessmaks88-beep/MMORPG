@@ -72,7 +72,7 @@ export const player: PlayerData = {
   energy: 3,
   maxEnergy: 3,
 
-  potions: 2,
+  potions: 6,
 
   attack: 12,
   defense: 3,
