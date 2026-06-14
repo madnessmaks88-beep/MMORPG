@@ -69,7 +69,7 @@ export class ProfileScene extends Phaser.Scene {
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
     const safeBottom = 116;
 
-    const contentTop = safeTop + 96;
+    const contentTop = safeTop + 10;
     const contentBottom = height - safeBottom;
     const contentWidth = Math.min(width - safeX * 2, 620);
 
@@ -134,7 +134,7 @@ export class ProfileScene extends Phaser.Scene {
     const mask = maskGraphics.createGeometryMask();
     this.contentContainer.setMask(mask);
 
-    let cursorY = layout.contentTop + 18;
+    let cursorY = layout.contentTop + 8;
 
     cursorY = this.createHeroPanel(layout, cursorY);
     cursorY = this.createStatsPanel(layout, cursorY + 16);
