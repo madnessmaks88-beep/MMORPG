@@ -924,9 +924,9 @@ export class RaceSelectScene extends Phaser.Scene {
   ) {
     const gridWidth = layout.contentWidth - 42;
     const chipGap = layout.veryCompact ? 8 : 10;
-    const chipWidth = (gridWidth - chipGap * 2) / 3;
+    const chipWidth = (gridWidth - chipGap * 2) / 3 - 10;
     const chipHeight = layout.veryCompact ? 52 : 58;
-    const startX = layout.centerX - gridWidth / 2 + chipWidth / 2;
+    const startX = layout.centerX - gridWidth / 2 + chipWidth / 2 + 20;
 
     const stats = [
       { label: 'HP', value: `${race.hp * 10}`, icon: '♥', color: 0xff6b6b },
