@@ -6,11 +6,22 @@ export type LevelUpResult = {
   levelsGained: number;
   oldLevel: number;
   newLevel: number;
+  upgradePointsGained: number;
 };
 
+type PlayerWithUpgradePoints = PlayerData & {
+  upgradePoints?: number;
+  totalUpgradePointsEarned?: number;
+};
+
+const UPGRADE_POINTS_PER_LEVEL = 3;
+
 export function addExperience(player: PlayerData, amount: number): LevelUpResult {
+  const progressionPlayer = player as PlayerWithUpgradePoints;
+
   const oldLevel = player.level;
   let levelsGained = 0;
+  let upgradePointsGained = 0;
 
   player.exp += amount;
 
@@ -22,31 +33,20 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
 
     player.expToNextLevel = Math.floor(player.expToNextLevel * 1.55);
 
-    player.maxHp += 10;
-    player.attack += 1;
+    progressionPlayer.upgradePoints =
+      (progressionPlayer.upgradePoints ?? 0) + UPGRADE_POINTS_PER_LEVEL;
 
-    if (player.level % 2 === 0) {
-      player.defense += 1;
-    }
+    progressionPlayer.totalUpgradePointsEarned =
+      (progressionPlayer.totalUpgradePointsEarned ?? 0) + UPGRADE_POINTS_PER_LEVEL;
 
-    if (player.level % 2 === 0) {
-      player.agility += 1;
-    }
-
-    if (player.level % 3 === 0) {
-      player.luck += 1;
-    }
-
-    if (player.level % 4 === 0) {
-      player.maxEnergy += 1;
-    }
+    upgradePointsGained += UPGRADE_POINTS_PER_LEVEL;
   }
 
   if (levelsGained > 0) {
     const stats = getPlayerStats(player);
 
     player.hp = stats.maxHp;
-    player.energy = player.maxEnergy;
+    player.energy = stats.maxEnergy;
   }
 
   return {
@@ -54,6 +54,7 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
     levelsGained,
     oldLevel,
     newLevel: player.level,
+    upgradePointsGained,
   };
 }
 
@@ -63,33 +64,21 @@ export function createLevelUpText(result: LevelUpResult): string {
   }
 
   if (result.levelsGained === 1) {
-    const lines = [
+    return [
       `Новый уровень: ${result.newLevel}`,
       '',
-      '+10 к максимальному HP',
-      '+1 к атаке',
-    ];
-
-    if (result.newLevel % 2 === 0) {
-      lines.push('+1 к защите');
-      lines.push('+1 к ловкости');
-    }
-
-    if (result.newLevel % 3 === 0) {
-      lines.push('+1 к удаче');
-    }
-
-    if (result.newLevel % 4 === 0) {
-      lines.push('+1 к максимальной энергии');
-    }
-
-    return lines.join('\n');
+      `+${result.upgradePointsGained} очка прокачки`,
+      '',
+      'Открой дерево характеристик в лагере, чтобы усилить героя.',
+    ].join('\n');
   }
 
   return [
     `Получено уровней: ${result.levelsGained}`,
     `Новый уровень: ${result.newLevel}`,
     '',
-    'Характеристики немного выросли.',
+    `+${result.upgradePointsGained} очков прокачки`,
+    '',
+    'Открой дерево характеристик в лагере, чтобы распределить очки.',
   ].join('\n');
 }

@@ -44,6 +44,9 @@ export type PlayerData = {
   strength: number;
   intelligence: number;
 
+  upgradePoints: number;
+  totalUpgradePointsEarned: number;
+
   relicIds: RelicId[];
 
   inventory: InventoryItem[];
@@ -83,6 +86,9 @@ export const player: PlayerData = {
 
   strength: 11,
   intelligence: 11,
+
+  upgradePoints: 0,
+  totalUpgradePointsEarned: 0,
 
   relicIds: [],
 

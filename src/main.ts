@@ -12,6 +12,7 @@ import { RaceSelectScene } from './scenes/RaceSelectScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { TrainingScene } from './scenes/TrainingScene';
 import { BootScene } from './scenes/BootScene';
+import { StatsTreeScene } from './scenes/StatsTreeScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -23,6 +24,7 @@ const config: Phaser.Types.Core.GameConfig = {
     CampScene,
     RaceSelectScene,
     BootScene,
+    StatsTreeScene,
     DungeonSelectScene,
     DungeonScene,
     BattleScene,
