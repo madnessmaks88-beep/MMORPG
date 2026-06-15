@@ -508,8 +508,10 @@ export class RaceSelectScene extends Phaser.Scene {
     const container = this.requireContentContainer();
 
     const collapsedCardHeight = layout.veryCompact ? 126 : 138;
-    const expandedCardHeight = layout.veryCompact ? 584 : 626;
-    const cardGap = 12;
+    // Раскрытая карточка должна вмещать полное описание, преимущества, статы и навыки.
+    // Поэтому делаем её заметно выше, чтобы блоки не налезали друг на друга.
+    const expandedCardHeight = layout.veryCompact ? 720 : 800;
+    const cardGap = 16;
     const headerHeight = layout.veryCompact ? 66 : 74;
     const bottomPadding = 24;
 
@@ -773,10 +775,10 @@ export class RaceSelectScene extends Phaser.Scene {
   ) {
     const innerWidth = config.cardWidth - 42;
     const innerLeft = config.cardX - innerWidth / 2;
-    const descriptionTop = config.top + 112;
-    const descriptionHeight = layout.veryCompact ? 72 : 82;
-    const advantagesTop = descriptionTop + descriptionHeight + 12;
-    const advantagesHeight = layout.veryCompact ? 78 : 88;
+    const descriptionTop = config.top + (layout.veryCompact ? 110 : 120);
+    const descriptionHeight = layout.veryCompact ? 92 : 112;
+    const advantagesTop = descriptionTop + descriptionHeight + 14;
+    const advantagesHeight = layout.veryCompact ? 100 : 122;
 
     this.createRoundedPanel({
       parent: container,
@@ -808,7 +810,7 @@ export class RaceSelectScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(innerLeft + 18, descriptionTop + (layout.veryCompact ? 42 : 48), race.description, {
+      this.add.text(innerLeft + 18, descriptionTop + (layout.veryCompact ? 38 : 42), race.description, {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '12px' : '13px',
         color: '#d8c7a3',
@@ -817,8 +819,8 @@ export class RaceSelectScene extends Phaser.Scene {
           width: innerWidth - 36,
           useAdvancedWrap: true,
         },
-        maxLines: layout.veryCompact ? 3 : 4,
-      }).setOrigin(0, 0.5).setDepth(12)
+        maxLines: layout.veryCompact ? 4 : 5,
+      }).setOrigin(0, 0).setDepth(12)
     );
 
     this.createRoundedPanel({
@@ -852,15 +854,16 @@ export class RaceSelectScene extends Phaser.Scene {
     this.getRaceAdvantages(race.id).forEach((line, index) => {
       this.addTo(
         container,
-        this.add.text(innerLeft + 20, advantagesTop + 40 + index * (layout.veryCompact ? 18 : 20), `• ${line}`, {
+        this.add.text(innerLeft + 20, advantagesTop + 38 + index * (layout.veryCompact ? 24 : 26), `• ${line}`, {
           fontFamily: UI.font.body,
           fontSize: layout.veryCompact ? '11px' : '12px',
           color: '#b8aa91',
+          lineSpacing: 2,
           wordWrap: {
             width: innerWidth - 40,
             useAdvancedWrap: true,
           },
-          maxLines: 1,
+          maxLines: 2,
         }).setOrigin(0, 0.5).setDepth(12)
       );
     });
@@ -869,15 +872,15 @@ export class RaceSelectScene extends Phaser.Scene {
       container,
       layout,
       race,
-      config.top + (layout.veryCompact ? 330 : 356)
+      config.top + (layout.veryCompact ? 390 : 456)
     );
 
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 438 : 480),
+      y: config.top + (layout.veryCompact ? 524 : 590),
       width: innerWidth,
-      height: layout.veryCompact ? 88 : 96,
+      height: layout.veryCompact ? 112 : 120,
       icon: '◇',
       title: `Пассивка: ${race.passiveName}`,
       description: race.passiveDescription,
@@ -888,9 +891,9 @@ export class RaceSelectScene extends Phaser.Scene {
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 536 : 588),
+      y: config.top + (layout.veryCompact ? 646 : 722),
       width: innerWidth,
-      height: layout.veryCompact ? 88 : 96,
+      height: layout.veryCompact ? 118 : 130,
       icon: '✦',
       title: `Активка: ${race.activeName}`,
       description: race.activeDescription,
@@ -1097,7 +1100,7 @@ export class RaceSelectScene extends Phaser.Scene {
 
     this.addTo(
       config.parent,
-      this.add.text(textX, top + (config.compact ? 68 : 74), config.description, {
+      this.add.text(textX, top + (config.compact ? 64 : 68), config.description, {
         fontFamily: UI.font.body,
         fontSize: config.compact ? '12px' : '13px',
         color: '#d8c7a3',
@@ -1106,7 +1109,7 @@ export class RaceSelectScene extends Phaser.Scene {
           width: textWidth,
           useAdvancedWrap: true,
         },
-        maxLines: 4,
+        maxLines: config.compact ? 4 : 5,
       }).setOrigin(0, 0).setDepth(12)
     );
   }
