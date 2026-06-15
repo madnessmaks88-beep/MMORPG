@@ -60,6 +60,21 @@ type BattleStats = {
   lootChanceBonus: number;
 };
 
+
+type CharacterTreeBranchId =
+  | 'hp'
+  | 'energy'
+  | 'attack'
+  | 'defense'
+  | 'crit'
+  | 'agility'
+  | 'luck'
+  | 'intelligence';
+
+type BattleTreePlayer = typeof player & {
+  characterTree?: Partial<Record<CharacterTreeBranchId, number>>;
+};
+
 type ActivePlayerDebuff = {
   id: EnemyDebuffId;
   name: string;
@@ -157,6 +172,16 @@ export class BattleScene extends Phaser.Scene {
 
   private isBossBattle = false;
 
+
+  private treeLastBreathUsed = false;
+  private treeUnbreakableUsed = false;
+  private treeFirstIncomingHitReduced = false;
+  private treeFirstPlayerHitBonusUsed = false;
+  private treeNextHitDamageBonus = 0;
+  private treeFullEnergySkillBonusPending = false;
+  private treeDodgeStreak = 0;
+  private treeGuaranteedCrit = false;
+
   
 
 
@@ -191,6 +216,16 @@ export class BattleScene extends Phaser.Scene {
 
   this.playerDebuffs = [];
   this.nextIncomingDamageBonus = 0;
+
+
+  this.treeLastBreathUsed = false;
+  this.treeUnbreakableUsed = false;
+  this.treeFirstIncomingHitReduced = false;
+  this.treeFirstPlayerHitBonusUsed = false;
+  this.treeNextHitDamageBonus = 0;
+  this.treeFullEnergySkillBonusPending = false;
+  this.treeDodgeStreak = 0;
+  this.treeGuaranteedCrit = false;
 
   const room = getCurrentRoom();
 
@@ -260,6 +295,7 @@ export class BattleScene extends Phaser.Scene {
     this.createBattleLogPanel();
     this.createActionButtons();
 
+    this.applyStartOfBattleTreeEffects();
     this.updateTexts();
     this.updateStatusText();
   }
@@ -893,6 +929,8 @@ private handleRaceSkill() {
     return;
   }
 
+  this.prepareFullEnergySkillTreeBonus();
+
   if (player.raceId === 'human') {
     this.handleHumanSkill();
     return;
@@ -939,6 +977,7 @@ private handleHumanSkill() {
     multiplier,
     varianceMin: 0,
     varianceMax: 6,
+    isSkill: true,
   });
 
   const finalDamage = Math.floor(damage);
@@ -977,6 +1016,7 @@ private handleTaintedSkill() {
     multiplier: lowHp ? 1.7 : 1.4,
     varianceMin: 0,
     varianceMax: 5,
+    isSkill: true,
   });
 
   const weaknessText = this.getEnemyWeaknessText();
@@ -1045,6 +1085,7 @@ private handleGoblinSkill() {
     multiplier: 0.9,
     varianceMin: 0,
     varianceMax: 4,
+    isSkill: true,
   });
 
   const dirtyTrick = Math.random() < 0.5;
@@ -1085,6 +1126,7 @@ private handleDemonSkill() {
     multiplier: lowHp ? 2.1 : 1.7,
     varianceMin: 0,
     varianceMax: 5,
+    isSkill: true,
   });
 
   const weaknessText = this.getEnemyWeaknessText();
@@ -1130,6 +1172,7 @@ private handleDemonSkill() {
     }
 
     this.isBusy = true;
+    this.prepareFullEnergySkillTreeBonus();
 
     player.energy -= cost;
 
@@ -1140,16 +1183,18 @@ private handleDemonSkill() {
       multiplier: 1.65,
       varianceMin: -1,
       varianceMax: 5,
+      isSkill: true,
     });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.5) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.5)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Критический сильный удар! Ты наносишь ${finalDamage} урона.`
+      ? `Критический сильный удар! Ты наносишь ${finalDamage} урона.${treeCritText}`
       : `Ты наносишь сильный удар на ${finalDamage} урона.`;
 
     this.afterPlayerAttack(playerActionText);
@@ -1257,13 +1302,191 @@ private handleDemonSkill() {
     return bonus;
   }
 
+
+  private getTreeLevel(branchId: CharacterTreeBranchId) {
+    const treePlayer = player as BattleTreePlayer;
+
+    return treePlayer.characterTree?.[branchId] ?? 0;
+  }
+
+  private hasTreeLevel(branchId: CharacterTreeBranchId, level: number) {
+    return this.getTreeLevel(branchId) >= level;
+  }
+
+  private applyStartOfBattleTreeEffects() {
+    if (!this.hasTreeLevel('energy', 4)) {
+      return;
+    }
+
+    const stats = getPlayerStats(player);
+
+    if (player.energy < stats.maxEnergy) {
+      player.energy = Math.min(stats.maxEnergy, player.energy + 1);
+    }
+  }
+
+  private prepareFullEnergySkillTreeBonus() {
+    if (!this.hasTreeLevel('energy', 6)) {
+      this.treeFullEnergySkillBonusPending = false;
+      return;
+    }
+
+    const stats = this.getBattleStats();
+    this.treeFullEnergySkillBonusPending = player.energy >= stats.maxEnergy;
+  }
+
+  private rollPlayerCrit(chance: number) {
+    if (this.treeGuaranteedCrit) {
+      this.treeGuaranteedCrit = false;
+      return true;
+    }
+
+    return Math.random() < chance;
+  }
+
+  private getPlayerCritMultiplier(defaultMultiplier: number) {
+    return this.hasTreeLevel('crit', 2)
+      ? Math.max(defaultMultiplier, 1.6)
+      : defaultMultiplier;
+  }
+
+  private applyCriticalTreeEffects(isCrit: boolean, damage: number) {
+    if (!isCrit) {
+      return '';
+    }
+
+    const lines: string[] = [];
+
+    if (this.hasTreeLevel('crit', 4) && Math.random() < 0.25) {
+      const bleedDamage = Math.max(1, Math.floor(damage * 0.18));
+      this.enemyBleedTurns = Math.max(this.enemyBleedTurns, 2);
+      this.enemyBleedDamage = Math.max(this.enemyBleedDamage, bleedDamage);
+      lines.push('Критическая рана вызвала кровотечение.');
+    }
+
+    if (this.hasTreeLevel('crit', 6)) {
+      this.treeNextHitDamageBonus = Math.max(this.treeNextHitDamageBonus, 0.17);
+      lines.push('Серия ударов: следующий удар будет сильнее.');
+    }
+
+    return lines.length > 0
+      ? `\n${lines.join('\n')}`
+      : '';
+  }
+
+  private resolveTreeSurvivalAfterDamage() {
+    const stats = getPlayerStats(player);
+    const lines: string[] = [];
+
+    if (player.hp <= 0 && this.hasTreeLevel('hp', 20) && !this.treeUnbreakableUsed) {
+      this.treeUnbreakableUsed = true;
+      player.hp = 1;
+      lines.push('Несломленный: смертельный удар оставил героя с 1 HP.');
+    }
+
+    if (
+      player.hp > 0 &&
+      this.hasTreeLevel('hp', 10) &&
+      !this.treeLastBreathUsed &&
+      stats.maxHp > 0 &&
+      player.hp / stats.maxHp <= 0.2
+    ) {
+      this.treeLastBreathUsed = true;
+      const heal = Math.max(1, Math.floor(stats.maxHp * 0.08));
+      player.hp = Math.min(stats.maxHp, player.hp + heal);
+      lines.push(`Последний вдох: восстановлено ${heal} HP.`);
+    }
+
+    return lines.length > 0
+      ? `\n${lines.join('\n')}`
+      : '';
+  }
+
+  private applyDefenseTreeDamageReduction(damage: number, isDefending: boolean) {
+    let finalDamage = damage;
+    const lines: string[] = [];
+
+    if (this.hasTreeLevel('defense', 5)) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * 0.97));
+    }
+
+    if (isDefending && this.hasTreeLevel('defense', 10)) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * 0.9));
+      lines.push('Стойкость дополнительно смягчила удар.');
+    }
+
+    if (this.hasTreeLevel('defense', 15) && !this.treeFirstIncomingHitReduced) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * 0.6));
+      this.treeFirstIncomingHitReduced = true;
+      lines.push('Каменная стойка ослабила первый удар врага.');
+    }
+
+    if (this.hasTreeLevel('defense', 20) && Math.random() < 0.12) {
+      finalDamage = Math.max(1, Math.floor(finalDamage * 0.5));
+      lines.push('Глухой блок уменьшил входящий урон вдвое.');
+    }
+
+    return {
+      damage: finalDamage,
+      text: lines.length > 0 ? `\n${lines.join('\n')}` : '',
+    };
+  }
+
+  private handleTreeDodgeEffects() {
+    const lines: string[] = [];
+
+    if (this.hasTreeLevel('agility', 4)) {
+      restoreEnergy(player, 1);
+      lines.push('Лёгкий шаг: дополнительно восстановлена 1 энергия.');
+    }
+
+    if (this.hasTreeLevel('agility', 6)) {
+      this.treeDodgeStreak += 1;
+
+      if (this.treeDodgeStreak >= 2) {
+        this.treeDodgeStreak = 0;
+        this.treeGuaranteedCrit = true;
+        lines.push('Танец клинков: следующая атака гарантированно критует.');
+      }
+    }
+
+    return lines.length > 0
+      ? `\n${lines.join('\n')}`
+      : '';
+  }
+
   private calculateDamage(config: {
     baseDamage: number;
     multiplier: number;
     varianceMin: number;
     varianceMax: number;
+    isBasicAttack?: boolean;
+    isSkill?: boolean;
   }) {
     let multiplier = config.multiplier;
+
+    if (config.isBasicAttack && this.hasTreeLevel('attack', 5)) {
+      multiplier *= 1.05;
+    }
+
+    if (this.hasTreeLevel('attack', 15) && this.enemy.maxHp > 0 && this.enemy.hp / this.enemy.maxHp < 0.3) {
+      multiplier *= 1.12;
+    }
+
+    if (this.hasTreeLevel('attack', 20) && !this.treeFirstPlayerHitBonusUsed) {
+      multiplier *= 1.25;
+      this.treeFirstPlayerHitBonusUsed = true;
+    }
+
+    if (this.treeNextHitDamageBonus > 0) {
+      multiplier *= 1 + this.treeNextHitDamageBonus;
+      this.treeNextHitDamageBonus = 0;
+    }
+
+    if (config.isSkill && this.treeFullEnergySkillBonusPending) {
+      multiplier *= 1.1;
+      this.treeFullEnergySkillBonusPending = false;
+    }
 
     if (this.nightElfShadowDanceActive) {
       multiplier *= 1.25;
@@ -1281,7 +1504,8 @@ private handleDemonSkill() {
       config.baseDamage * multiplier +
       Phaser.Math.Between(config.varianceMin, config.varianceMax);
 
-    const reducedDamage = rawDamage - this.enemy.defense * 0.45;
+    const effectiveEnemyDefense = this.enemy.defense * (this.hasTreeLevel('attack', 10) ? 0.9 : 1);
+    const reducedDamage = rawDamage - effectiveEnemyDefense * 0.45;
 
     return Math.max(1, Math.floor(reducedDamage));
   }
@@ -1347,8 +1571,12 @@ private applyDebuffDamageBeforePlayerAction() {
 
   this.playerDebuffs.forEach(debuff => {
     if (debuff.id === 'bleeding' || debuff.id === 'poison') {
-      totalDamage += debuff.power;
-      lines.push(`${debuff.name}: -${debuff.power} HP`);
+      const damage = this.hasTreeLevel('hp', 15)
+        ? Math.max(1, Math.floor(debuff.power * 0.75))
+        : debuff.power;
+
+      totalDamage += damage;
+      lines.push(`${debuff.name}: -${damage} HP`);
     }
   });
 
@@ -1357,6 +1585,7 @@ private applyDebuffDamageBeforePlayerAction() {
   }
 
   player.hp = Math.max(0, player.hp - totalDamage);
+  const survivalText = this.resolveTreeSurvivalAfterDamage();
 
   this.showFloatingText(
     this.playerCard.x,
@@ -1368,7 +1597,7 @@ private applyDebuffDamageBeforePlayerAction() {
   this.animateHit(this.playerCard);
   this.updateTexts();
 
-  return lines.join('\n');
+  return `${lines.join('\n')}${survivalText}`;
 }
 
 private applyDebuffDamageAndCheckDeath() {
@@ -2851,10 +3080,12 @@ ${effect.duration} х.`,
       multiplier: 1,
       varianceMin: -2,
       varianceMax: 3,
+      isBasicAttack: true,
     });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.6) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.6)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     const weaknessText = this.getEnemyWeaknessText();
 
@@ -2862,7 +3093,7 @@ ${effect.duration} х.`,
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${weaknessText}`
+      ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${weaknessText}${treeCritText}`
       : `Ты наносишь удар мечом: ${finalDamage} урона.${weaknessText}`;
 
     this.afterPlayerAttack(playerActionText);
@@ -2874,6 +3105,7 @@ ${effect.duration} х.`,
   const hits: {
     damage: number;
     isCrit: boolean;
+    treeCritText: string;
   }[] = [];
 
   for (let i = 0; i < 3; i += 1) {
@@ -2882,19 +3114,22 @@ ${effect.duration} х.`,
       multiplier: 0.45,
       varianceMin: -1,
       varianceMax: 2,
+      isBasicAttack: true,
     });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.45)) : damage;
 
     hits.push({
       damage: finalDamage,
       isCrit,
+      treeCritText: this.applyCriticalTreeEffects(isCrit, finalDamage),
     });
   }
 
   let totalDamage = 0;
   let critCount = 0;
+  const daggerTreeCritTexts: string[] = [];
   let finished = false;
 
   const finishDaggerAttack = () => {
@@ -2931,6 +3166,10 @@ ${effect.duration} х.`,
 
       if (hit.isCrit) {
         critCount += 1;
+
+        if (hit.treeCritText) {
+          daggerTreeCritTexts.push(hit.treeCritText);
+        }
       }
 
       this.updateTexts();
@@ -2957,10 +3196,12 @@ ${effect.duration} х.`,
      multiplier: isArmoredEnemy ? 1.42 : 1.18,
      varianceMin: -2,
      varianceMax: 6,
+     isBasicAttack: true,
    });
 
-   const isCrit = Math.random() < stats.critChance;
-   const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+   const isCrit = this.rollPlayerCrit(stats.critChance);
+   const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.55)) : damage;
+   const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
    const weaknessText = this.getEnemyWeaknessText();
 
@@ -2968,7 +3209,7 @@ ${effect.duration} х.`,
    this.damageEnemy(finalDamage);
 
    let playerActionText = isCrit
-     ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.${weaknessText}`
+     ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.${weaknessText}${treeCritText}`
      : `Топор наносит тяжёлый рубящий удар: ${finalDamage} урона.${weaknessText}`;
 
    if (isArmoredEnemy) {
@@ -2986,10 +3227,12 @@ ${effect.duration} х.`,
       multiplier: 0.95,
       varianceMin: 0,
       varianceMax: 5,
+      isBasicAttack: true,
     });
 
-    const isCrit = Math.random() < stats.critChance + 0.03;
-    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance + 0.03);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.55)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     const bleedDamage = Math.max(1, Math.floor(stats.attack * 0.22));
 
@@ -3002,7 +3245,7 @@ ${effect.duration} х.`,
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Катана наносит точный критический разрез: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.`
+      ? `Катана наносит точный критический разрез: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.${treeCritText}`
       : `Катана рассекает врага: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.`;
 
     this.afterPlayerAttack(playerActionText);
@@ -3017,10 +3260,12 @@ ${effect.duration} х.`,
       multiplier: 1.1,
       varianceMin: -3,
       varianceMax: 7,
+      isBasicAttack: true,
     });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.55) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.55)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     const isBoss = room?.type === 'boss' || room?.type === 'tier_boss';
     const stunChance = isBoss ? 0.15 : 0.35;
@@ -3033,7 +3278,7 @@ ${effect.duration} х.`,
     this.shakeBattle(0.008, 220);
 
     let playerActionText = isCrit
-      ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.${weaknessText}`
+      ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.${weaknessText}${treeCritText}`
       : `Молот обрушивается на врага: ${finalDamage} урона.${weaknessText}`;
 
     if (isStunned) {
@@ -3053,10 +3298,12 @@ ${effect.duration} х.`,
       multiplier: 0.82,
       varianceMin: -1,
       varianceMax: 3,
+      isBasicAttack: true,
     });
 
-    const isCrit = Math.random() < stats.critChance;
-    const finalDamage = isCrit ? Math.floor(damage * 1.45) : damage;
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.45)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     this.shieldSwordGuardActive = true;
 
@@ -3066,7 +3313,7 @@ ${effect.duration} х.`,
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`
+      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.${treeCritText}`
       : `Ты атакуешь из-за щита: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`;
 
     this.afterPlayerAttack(playerActionText);
@@ -3100,6 +3347,13 @@ ${effect.duration} х.`,
     const expResult = addExperience(player, this.enemy.expReward);
 
     const loot = rollEnemyLoot(this.enemy);
+
+    let treeVictoryText = '';
+
+    if (this.hasTreeLevel('energy', 2)) {
+      restoreEnergy(player, 1);
+      treeVictoryText += '\nВторое дыхание: восстановлена 1 энергия.';
+    }
 
     const lootText = loot.text.length > 0
       ? `\n\nДобыча:\n${loot.text}`
@@ -3144,6 +3398,7 @@ ${effect.duration} х.`,
       `${this.enemy.name} повержен.\n` +
       `Получено золота: ${gold}\n` +
       `Получено опыта: ${this.enemy.expReward}` +
+      `${treeVictoryText}` +
       `${demonHealText}` +
       `${lootText}` +
       `${levelText}` +
@@ -3525,11 +3780,12 @@ ${effect.duration} х.`,
         );
 
         restoreEnergy(player, 1);
+        const treeDodgeText = this.handleTreeDodgeEffects();
 
         const passiveText = this.checkHumanPassive();
 
         this.logText.setText(
-          `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.${passiveText}`
+          `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.${treeDodgeText}${passiveText}`
         );
 
         this.updateTexts();
@@ -3588,7 +3844,13 @@ ${effect.duration} х.`,
         damage = Math.max(1, Math.floor(damage * 0.45));
       }
 
+      const defenseTreeResult = this.applyDefenseTreeDamageReduction(damage, isDefending);
+      damage = defenseTreeResult.damage;
+
+      this.treeDodgeStreak = 0;
+
       player.hp = Math.max(0, player.hp - damage);
+      const survivalText = this.resolveTreeSurvivalAfterDamage();
 
       const debuffText = this.tryApplyEnemyDebuffOnHit();
 
@@ -3623,12 +3885,12 @@ ${effect.duration} х.`,
           ? `${playerActionText}
 
 Ты заблокировал часть удара.
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${debuffText}
 
 Ты пал в катакомбах...`
           : `${playerActionText}
 
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${debuffText}
 
 Ты пал в катакомбах...`;
 
@@ -3639,8 +3901,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${debuf
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
       );
 
       this.updateTexts();

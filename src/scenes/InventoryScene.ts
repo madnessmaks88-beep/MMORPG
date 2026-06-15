@@ -1887,17 +1887,27 @@ export class InventoryScene extends Phaser.Scene {
     if (!item) {
       return {
         hp: 0,
+        energy: 0,
         attack: 0,
         defense: 0,
         critChance: 0,
+        agility: 0,
+        luck: 0,
+        strength: 0,
+        intelligence: 0,
       };
     }
 
     return {
       hp: (item.bonusHp ?? 0) + upgradeLevel * 4,
+      energy: item.bonusEnergy ?? 0,
       attack: (item.bonusAttack ?? 0) + upgradeLevel * 2,
       defense: (item.bonusDefense ?? 0) + upgradeLevel,
       critChance: (item.bonusCritChance ?? 0) + upgradeLevel * 0.005,
+      agility: item.bonusAgility ?? 0,
+      luck: item.bonusLuck ?? 0,
+      strength: item.bonusStrength ?? 0,
+      intelligence: item.bonusIntelligence ?? 0,
     };
   }
 
@@ -1931,15 +1941,26 @@ export class InventoryScene extends Phaser.Scene {
       ? ` +${equippedInventoryItem.upgradeLevel}`
       : '';
 
-    const lines = [
-      `Сравнение с надетым: ${equippedItem.name}${equippedUpgrade}`,
+    const rows = [
       this.createComparisonLine('HP', selectedBonus.hp, equippedBonus.hp),
+      this.createComparisonLine('Энергия', selectedBonus.energy, equippedBonus.energy),
       this.createComparisonLine('Атака', selectedBonus.attack, equippedBonus.attack),
       this.createComparisonLine('Защита', selectedBonus.defense, equippedBonus.defense),
       this.createComparisonLine('Крит', selectedBonus.critChance, equippedBonus.critChance, true),
-    ];
+      this.createComparisonLine('Ловкость', selectedBonus.agility, equippedBonus.agility),
+      this.createComparisonLine('Удача', selectedBonus.luck, equippedBonus.luck),
+      this.createComparisonLine('Сила', selectedBonus.strength, equippedBonus.strength),
+      this.createComparisonLine('Интеллект', selectedBonus.intelligence, equippedBonus.intelligence),
+    ].filter(line => !line.endsWith('(0)') && !line.endsWith('(0%)'));
 
-    return lines.join('\n');
+    if (rows.length === 0) {
+      rows.push('Разницы по характеристикам нет.');
+    }
+
+    return [
+      `Сравнение с надетым: ${equippedItem.name}${equippedUpgrade}`,
+      ...rows.slice(0, 6),
+    ].join('\n');
   }
 
   private createComparisonLine(

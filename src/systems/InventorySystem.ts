@@ -156,26 +156,66 @@ export function getUpgradeCost(inventoryItem: InventoryItem): number {
   }
 
   if (item.rarity === 'legendary') {
-    baseCost = 85;
+    baseCost = 90;
   }
 
   if (item.rarity === 'mythic') {
-    baseCost = 120;
+    baseCost = 140;
   }
 
   return baseCost + level * baseCost;
 }
 
+
 export function upgradeItem(
-  _player: PlayerData,
-  _instanceId: string
+  player: PlayerData,
+  instanceId: string
 ): {
   success: boolean;
   message: string;
 } {
+  const inventoryItem = getInventoryItemByInstanceId(player, instanceId);
+
+  if (!inventoryItem) {
+    return {
+      success: false,
+      message: 'Предмет не найден.',
+    };
+  }
+
+  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+  if (!item) {
+    return {
+      success: false,
+      message: 'Базовый предмет не найден.',
+    };
+  }
+
+  const currentLevel = inventoryItem.upgradeLevel;
+
+  if (currentLevel >= 5) {
+    return {
+      success: false,
+      message: 'Предмет уже улучшен до максимума.',
+    };
+  }
+
+  const cost = getUpgradeCost(inventoryItem);
+
+  if (player.gold < cost) {
+    return {
+      success: false,
+      message: 'Недостаточно золота.',
+    };
+  }
+
+  player.gold -= cost;
+  inventoryItem.upgradeLevel += 1;
+
   return {
-    success: false,
-    message: 'Улучшение предметов теперь выполняется в кузнице через материалы.',
+    success: true,
+    message: `${item.name} улучшен до +${inventoryItem.upgradeLevel}.`,
   };
 }
 
@@ -239,6 +279,11 @@ export function getItemBonusWithUpgrade(
   bonusAttack: number;
   bonusDefense: number;
   bonusCritChance: number;
+  bonusEnergy: number;
+  bonusAgility: number;
+  bonusLuck: number;
+  bonusStrength: number;
+  bonusIntelligence: number;
 } {
   const item = getBaseItemFromInventoryItem(inventoryItem);
 
@@ -248,6 +293,11 @@ export function getItemBonusWithUpgrade(
       bonusAttack: 0,
       bonusDefense: 0,
       bonusCritChance: 0,
+      bonusEnergy: 0,
+      bonusAgility: 0,
+      bonusLuck: 0,
+      bonusStrength: 0,
+      bonusIntelligence: 0,
     };
   }
 
@@ -263,6 +313,110 @@ export function getItemBonusWithUpgrade(
     bonusAttack,
     bonusDefense,
     bonusCritChance,
+    bonusEnergy: item.bonusEnergy ?? 0,
+    bonusAgility: item.bonusAgility ?? 0,
+    bonusLuck: item.bonusLuck ?? 0,
+    bonusStrength: item.bonusStrength ?? 0,
+    bonusIntelligence: item.bonusIntelligence ?? 0,
+  };
+}
+
+
+type CharacterTreeBranchId =
+  | 'hp'
+  | 'energy'
+  | 'attack'
+  | 'defense'
+  | 'crit'
+  | 'agility'
+  | 'luck'
+  | 'intelligence';
+
+type PlayerWithCharacterTree = PlayerData & {
+  characterTree?: Partial<Record<CharacterTreeBranchId, number>>;
+};
+
+type CharacterTreeDerivedBonuses = {
+  trapDodgeChance: number;
+  lootChanceBonus: number;
+};
+
+function getCharacterTreeLevel(player: PlayerData, branchId: CharacterTreeBranchId) {
+  const treePlayer = player as PlayerWithCharacterTree;
+
+  return Math.max(0, treePlayer.characterTree?.[branchId] ?? 0);
+}
+
+function isMilestoneLevel(level: number) {
+  return level === 5 || level === 10 || level === 15 || level === 20;
+}
+
+function countNormalLevels(level: number, maxLevel: number) {
+  let result = 0;
+  const safeLevel = Math.min(Math.max(0, level), maxLevel);
+
+  for (let index = 1; index <= safeLevel; index += 1) {
+    if (!isMilestoneLevel(index)) {
+      result += 1;
+    }
+  }
+
+  return result;
+}
+
+function applyCharacterTreeStatBonuses(player: PlayerData, stats: PlayerStats) {
+  const hpLevel = getCharacterTreeLevel(player, 'hp');
+  const attackLevel = getCharacterTreeLevel(player, 'attack');
+  const defenseLevel = getCharacterTreeLevel(player, 'defense');
+  const energyLevel = getCharacterTreeLevel(player, 'energy');
+  const critLevel = getCharacterTreeLevel(player, 'crit');
+  const agilityLevel = getCharacterTreeLevel(player, 'agility');
+  const luckLevel = getCharacterTreeLevel(player, 'luck');
+
+  // Живучесть: обычные уровни дают +10 HP, 5-й особый узел даёт +30 HP.
+  stats.maxHp += countNormalLevels(hpLevel, 20) * 10;
+
+  if (hpLevel >= 5) {
+    stats.maxHp += 30;
+  }
+
+  // Выносливость: 1, 3 и 5 уровни дают +1 к максимальной энергии.
+  if (energyLevel >= 1) stats.maxEnergy += 1;
+  if (energyLevel >= 3) stats.maxEnergy += 1;
+  if (energyLevel >= 5) stats.maxEnergy += 1;
+
+  // Урон: обычные уровни дают +3 атаки. Особые уровни дают боевые эффекты отдельно.
+  stats.attack += countNormalLevels(attackLevel, 20) * 3;
+
+  // Броня: обычные уровни дают +1 защиты. Особые уровни дают боевые эффекты отдельно.
+  stats.defense += countNormalLevels(defenseLevel, 20);
+
+  // Крит: 1, 3 и 5 уровни дают +1% к шансу критического удара.
+  if (critLevel >= 1) stats.critChance += 0.01;
+  if (critLevel >= 3) stats.critChance += 0.01;
+  if (critLevel >= 5) stats.critChance += 0.01;
+
+  // Реакция: 1, 3 и 5 уровни дают +1 ловкости.
+  if (agilityLevel >= 1) stats.agility += 1;
+  if (agilityLevel >= 3) stats.agility += 1;
+  if (agilityLevel >= 5) stats.agility += 1;
+
+  // Фортуна: 1, 3 и 5 уровни дают +1 удачи.
+  if (luckLevel >= 1) stats.luck += 1;
+  if (luckLevel >= 3) stats.luck += 1;
+  if (luckLevel >= 5) stats.luck += 1;
+}
+
+function getCharacterTreeDerivedBonuses(player: PlayerData): CharacterTreeDerivedBonuses {
+  const agilityLevel = getCharacterTreeLevel(player, 'agility');
+  const luckLevel = getCharacterTreeLevel(player, 'luck');
+
+  return {
+    // Чутьё ловушек: +10% к уклонению от ловушек.
+    trapDodgeChance: agilityLevel >= 2 ? 0.10 : 0,
+
+    // Редкая добыча: +5% к шансу ценной добычи.
+    lootChanceBonus: luckLevel >= 6 ? 0.05 : 0,
   };
 }
 
@@ -285,15 +439,24 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
     lootChanceBonus: 0,
   };
 
+  applyCharacterTreeStatBonuses(player, stats);
+
   const equippedItems = getEquippedInventoryItems(player);
 
   for (const inventoryItem of equippedItems) {
     const bonus = getItemBonusWithUpgrade(inventoryItem);
 
     stats.maxHp += bonus.bonusHp;
+    stats.maxEnergy += bonus.bonusEnergy;
+
     stats.attack += bonus.bonusAttack;
     stats.defense += bonus.bonusDefense;
     stats.critChance += bonus.bonusCritChance;
+
+    stats.agility += bonus.bonusAgility;
+    stats.luck += bonus.bonusLuck;
+    stats.strength += bonus.bonusStrength;
+    stats.intelligence += bonus.bonusIntelligence;
   }
 
   for (const relicId of player.relicIds) {
@@ -315,23 +478,31 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
     stats.intelligence += relic.bonusIntelligence ?? 0;
   }
 
+  const treeDerivedBonuses = getCharacterTreeDerivedBonuses(player);
+
   stats.critChance = Math.min(0.75, stats.critChance);
 
   stats.dodgeChance = Math.min(0.22, stats.agility * 0.01);
-  stats.trapDodgeChance = Math.min(0.30, stats.agility * 0.012);
-  stats.lootChanceBonus = Math.min(0.20, stats.luck * 0.01);
+  stats.trapDodgeChance = Math.min(
+    0.45,
+    stats.agility * 0.012 + treeDerivedBonuses.trapDodgeChance
+  );
+  stats.lootChanceBonus = Math.min(
+    0.30,
+    stats.luck * 0.01 + treeDerivedBonuses.lootChanceBonus
+  );
 
   return stats;
 }
 
 export function getRarityText(item: ItemData): string {
-  if (item.rarity === 'common') return 'Обычная';
-  if (item.rarity === 'rare') return 'Редкая';
-  if (item.rarity === 'epic') return 'Эпическая';
-  if (item.rarity === 'legendary') return 'Легендарная';
-  if (item.rarity === 'mythic') return 'Мифическая';
+  if (item.rarity === 'common') return 'Обычный';
+  if (item.rarity === 'rare') return 'Редкий';
+  if (item.rarity === 'epic') return 'Эпический';
+  if (item.rarity === 'legendary') return 'Легендарный';
+  if (item.rarity === 'mythic') return 'Мифический';
 
-  return 'Обычная';
+  return 'Предмет';
 }
 
 export function getSlotText(slot: EquipmentSlot): string {
@@ -348,6 +519,10 @@ export function createItemStatsText(inventoryItem: InventoryItem): string {
     parts.push(`HP ${bonuses.bonusHp > 0 ? '+' : ''}${bonuses.bonusHp}`);
   }
 
+  if (bonuses.bonusEnergy) {
+    parts.push(`Энергия ${bonuses.bonusEnergy > 0 ? '+' : ''}${bonuses.bonusEnergy}`);
+  }
+
   if (bonuses.bonusAttack) {
     parts.push(`Атака ${bonuses.bonusAttack > 0 ? '+' : ''}${bonuses.bonusAttack}`);
   }
@@ -360,8 +535,25 @@ export function createItemStatsText(inventoryItem: InventoryItem): string {
     parts.push(`Крит ${bonuses.bonusCritChance > 0 ? '+' : ''}${Math.round(bonuses.bonusCritChance * 100)}%`);
   }
 
+  if (bonuses.bonusAgility) {
+    parts.push(`Ловкость ${bonuses.bonusAgility > 0 ? '+' : ''}${bonuses.bonusAgility}`);
+  }
+
+  if (bonuses.bonusLuck) {
+    parts.push(`Удача ${bonuses.bonusLuck > 0 ? '+' : ''}${bonuses.bonusLuck}`);
+  }
+
+  if (bonuses.bonusStrength) {
+    parts.push(`Сила ${bonuses.bonusStrength > 0 ? '+' : ''}${bonuses.bonusStrength}`);
+  }
+
+  if (bonuses.bonusIntelligence) {
+    parts.push(`Интеллект ${bonuses.bonusIntelligence > 0 ? '+' : ''}${bonuses.bonusIntelligence}`);
+  }
+
   return parts.join(', ');
 }
+
 
 
 
@@ -377,7 +569,7 @@ export function getItemSellPrice(item: ItemData, upgradeLevel = 0): number {
   }
 
   if (item.rarity === 'legendary') {
-    basePrice = 90;
+    basePrice = 95;
   }
 
   if (item.rarity === 'mythic') {
@@ -433,8 +625,7 @@ export function getRarityColor(item: ItemData): string {
   if (item.rarity === 'common') return '#b8aa91';
   if (item.rarity === 'rare') return '#70a6ff';
   if (item.rarity === 'epic') return '#c084fc';
-  if (item.rarity === 'legendary') return '#f0d58a';
-  if (item.rarity === 'mythic') return '#ff6b6b';
+  
 
   return '#b8aa91';
 }
@@ -443,8 +634,8 @@ export function getRarityColorHex(item: ItemData): number {
   if (item.rarity === 'common') return 0xb8aa91;
   if (item.rarity === 'rare') return 0x70a6ff;
   if (item.rarity === 'epic') return 0xc084fc;
-  if (item.rarity === 'legendary') return 0xf0d58a;
-  if (item.rarity === 'mythic') return 0xff6b6b;
+  if (item.rarity === 'legendary') return 0xf0a040;
+  if (item.rarity === 'mythic') return 0xb45cff;
 
   return 0xb8aa91;
 }
@@ -453,8 +644,8 @@ export function getRarityStrokeColor(item: ItemData): number {
   if (item.rarity === 'common') return 0x6f6658;
   if (item.rarity === 'rare') return 0x3f6fa8;
   if (item.rarity === 'epic') return 0x7c3fb0;
-  if (item.rarity === 'legendary') return 0xb8943f;
-  if (item.rarity === 'mythic') return 0x9c1f1f;
+  if (item.rarity === 'legendary') return 0xb77920;
+  if (item.rarity === 'mythic') return 0x7e3fba;
 
   return 0x6f6658;
 }

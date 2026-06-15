@@ -34,7 +34,6 @@ type ShopOffer = {
 type ShopAssortment = {
   version: number;
   generatedAt: number;
-  potionDiscountPercent: number;
   weapons: ShopOffer[];
   armors: ShopOffer[];
   trinkets: ShopOffer[];
@@ -68,8 +67,33 @@ type CouponPlayer = typeof player & {
   dailyCoupons?: number;
 };
 
+type ExpandedShopItemData = ItemData & {
+  bonusEnergy?: number;
+  bonusAgility?: number;
+  bonusLuck?: number;
+  bonusStrength?: number;
+  bonusIntelligence?: number;
+};
+
+const SHOP_COLORS = {
+  ink: 0x050608,
+  panel: 0x0a0b0d,
+  panelWarm: 0x11100d,
+  card: 0x101014,
+  cardWarm: 0x17110c,
+  stone: 0x24262b,
+  ash: 0x8f887b,
+  bronze: 0x705434,
+  gold: 0xb99257,
+  goldLight: 0xd2b87a,
+  red: 0x8c2f32,
+  blue: 0x3e688f,
+  violet: 0x7253a8,
+  green: 0x4e745d,
+};
+
 export class ShopScene extends Phaser.Scene {
-  private readonly shopStorageKey = 'catacombs_shop_assortment_v2';
+  private readonly shopStorageKey = 'catacombs_shop_assortment_v3';
 
   private contentContainer?: Phaser.GameObjects.Container;
 
@@ -133,13 +157,15 @@ export class ShopScene extends Phaser.Scene {
   private getLayout(): ShopLayout {
     const { width, height } = this.scale;
 
+    const compact = height < 1120;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.024), 20, 34);
     const safeBottom = 154;
 
-    const contentTop = safeTop + 190;
+    const contentWidth = Math.min(width - safeX * 2, 640);
+    const headerHeight = compact ? 176 : 188;
+    const contentTop = safeTop + headerHeight;
     const contentBottom = height - safeBottom;
-    const contentWidth = Math.min(width - safeX * 2, 620);
 
     return {
       width,
@@ -153,111 +179,177 @@ export class ShopScene extends Phaser.Scene {
       contentTop,
       contentBottom,
       contentWidth,
-      viewportHeight: Math.max(320, contentBottom - contentTop),
+      viewportHeight: Math.max(300, contentBottom - contentTop),
 
-      compact: height < 1120,
+      compact,
     };
   }
-
   private createShopBackdrop(layout: ShopLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.circle(centerX, layout.safeTop + 130, width * 0.46, 0x4a2b14, 0.12).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 145, width * 0.28, 0xf0a040, 0.055).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, SHOP_COLORS.ink, 0.88).setDepth(0);
+    this.add.rectangle(centerX, height - 178, width, 360, 0x020202, 0.62).setDepth(0);
 
-    this.add.rectangle(centerX, height - 230, width, 430, 0x030202, 0.38).setDepth(0);
+    const counterY = layout.safeTop + 146;
 
-    for (let i = 0; i < 18; i += 1) {
-      const x = layout.safeX + 18 + i * ((width - layout.safeX * 2 - 36) / 17);
-      const y = layout.safeTop + 95 + (i % 6) * 76;
+    this.add.circle(centerX, counterY, width * 0.5, SHOP_COLORS.violet, 0.09).setDepth(0);
+    this.add.circle(centerX, counterY + 8, width * 0.33, SHOP_COLORS.bronze, 0.12).setDepth(0);
+    this.add.circle(centerX, counterY + 18, width * 0.17, SHOP_COLORS.gold, 0.065).setDepth(0);
 
-      this.add.circle(x, y, 2, 0xf0d58a, 0.055).setDepth(1);
-    }
+    const shelfWidth = Math.min(layout.contentWidth * 0.86, 520);
+    const shelfTop = layout.safeTop + 90;
 
-    this.add.text(centerX, layout.safeTop + 142, '⚖', {
+    this.add.rectangle(centerX, shelfTop + 54, shelfWidth, 94, 0x0b0908, 0.7)
+      .setStrokeStyle(2, 0x3f3324, 0.52)
+      .setDepth(1);
+
+    this.add.rectangle(centerX, shelfTop + 104, shelfWidth + 36, 18, 0x16120e, 0.92)
+      .setStrokeStyle(1, 0x5d4d33, 0.45)
+      .setDepth(2);
+
+    this.add.rectangle(centerX, shelfTop + 11, shelfWidth + 22, 14, 0x15100d, 0.84)
+      .setStrokeStyle(1, 0x4d4030, 0.42)
+      .setDepth(2);
+
+    const leftColumnX = centerX - shelfWidth / 2 - 24;
+    const rightColumnX = centerX + shelfWidth / 2 + 24;
+
+    [leftColumnX, rightColumnX].forEach(x => {
+      this.add.rectangle(x, shelfTop + 60, 24, 132, 0x111113, 0.9)
+        .setStrokeStyle(1, 0x4a4034, 0.48)
+        .setDepth(2);
+
+      this.add.rectangle(x, shelfTop - 8, 40, 18, 0x17130f, 0.92)
+        .setStrokeStyle(1, 0x5b513e, 0.42)
+        .setDepth(3);
+
+      this.add.rectangle(x, shelfTop + 128, 44, 20, 0x17130f, 0.94)
+        .setStrokeStyle(1, 0x5b513e, 0.42)
+        .setDepth(3);
+    });
+
+    this.add.text(centerX, shelfTop + 54, '⚖', {
       fontFamily: UI.font.body,
-      fontSize: '92px',
+      fontSize: layout.compact ? '72px' : '84px',
       color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
     })
       .setOrigin(0.5)
-      .setAlpha(0.028)
-      .setDepth(1);
-  }
+      .setAlpha(0.04)
+      .setDepth(2);
 
+    for (let i = 0; i < 34; i += 1) {
+      const x = layout.safeX + 12 + ((i * 41) % Math.max(1, width - layout.safeX * 2 - 24));
+      const y = layout.safeTop + 78 + ((i * 67) % Math.max(1, height - layout.safeTop - layout.safeBottom - 160));
+      const color = i % 5 === 0 ? SHOP_COLORS.blue : SHOP_COLORS.gold;
+      const alpha = 0.025 + (i % 4) * 0.009;
+
+      this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
+    }
+
+    this.add.rectangle(22, height / 2, 44, height, 0x000000, 0.28).setDepth(4);
+    this.add.rectangle(width - 22, height / 2, 44, height, 0x000000, 0.28).setDepth(4);
+  }
   private createHeader(layout: ShopLayout) {
-    this.add.text(layout.centerX, layout.safeTop + 26, 'Лавка снабжения', {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '30px' : '34px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 5,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth,
-      },
-    }).setOrigin(0.5).setDepth(100);
-
-    this.add.text(layout.centerX, layout.safeTop + 64, 'Катакомбы забвения • товары меняются за купоны', {
-      fontFamily: UI.font.body,
-      fontSize: '14px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 40,
-      },
-    }).setOrigin(0.5).setDepth(100);
-  }
-
-  private createResourcePanel(layout: ShopLayout) {
-    const panelY = layout.safeTop + 128;
+    const panelHeight = layout.compact ? 92 : 102;
+    const panelY = layout.safeTop + panelHeight / 2 + 2;
 
     this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
-      height: 82,
-      radius: 26,
-      color: 0x100c09,
+      height: panelHeight,
+      radius: 28,
+      color: SHOP_COLORS.panel,
+      alpha: 0.94,
+      strokeColor: SHOP_COLORS.bronze,
+      strokeAlpha: 0.62,
+      strokeWidth: 2,
+      depth: 96,
+      glowColor: SHOP_COLORS.gold,
+    });
+
+    this.add.text(layout.centerX, panelY - 28, 'Лавка Пепельного торговца', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '26px' : '30px',
+      color: '#d2b87a',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 42,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(100);
+
+    this.add.text(layout.centerX, panelY + 6, 'Тихий прилавок у входа в катакомбы', {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '13px' : '15px',
+      color: '#8f887b',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 60,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(100);
+
+    this.add.text(layout.centerX, panelY + 33, 'Оружие • броня • талисманы', {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: '#6f675c',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 60,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(100);
+  }
+  private createResourcePanel(layout: ShopLayout) {
+    const panelY = layout.safeTop + (layout.compact ? 135 : 148);
+
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: layout.contentWidth,
+      height: layout.compact ? 72 : 76,
+      radius: 24,
+      color: 0x09090b,
       alpha: 0.95,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.56,
+      strokeColor: 0x3b3328,
+      strokeAlpha: 0.68,
+      strokeWidth: 1,
       depth: 10,
     });
 
-    const chipWidth = Math.min((layout.contentWidth - 52) / 3, 176);
-    const startX = layout.centerX - chipWidth - 10;
+    const chipGap = 10;
+    const chipWidth = Math.min((layout.contentWidth - 44 - chipGap) / 2, 250);
+    const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
+    const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
 
     this.createResourceChip({
-      x: startX,
+      x: leftX,
       y: panelY,
       width: chipWidth,
       icon: '◆',
       title: 'Золото',
       value: `${player.gold}`,
-      color: UI.colors.gold,
+      color: SHOP_COLORS.gold,
     });
 
     this.createResourceChip({
-      x: layout.centerX,
+      x: rightX,
       y: panelY,
       width: chipWidth,
-      icon: '✚',
-      title: 'Зелья',
-      value: `${player.potions}`,
-      color: 0x75d184,
-    });
-
-    this.createResourceChip({
-      x: layout.centerX + chipWidth + 10,
-      y: panelY,
-      width: chipWidth,
-      icon: '券',
+      icon: '☾',
       title: 'Купоны',
       value: `${this.getRefreshCoupons()}`,
-      color: 0x70a6ff,
+      color: SHOP_COLORS.blue,
     });
   }
-
   private createScrollableContent(layout: ShopLayout) {
     this.contentContainer = this.add.container(0, 0).setDepth(5);
 
@@ -274,12 +366,14 @@ export class ShopScene extends Phaser.Scene {
     const mask = maskGraphics.createGeometryMask();
     this.contentContainer.setMask(mask);
 
-    let cursorY = layout.contentTop + 18;
-    
-    cursorY = this.createItemSection(layout, cursorY + 16, 'weapons', 'Оружие', '⚔');
-    cursorY = this.createItemSection(layout, cursorY + 16, 'armors', 'Броня', '🛡');
-    cursorY = this.createItemSection(layout, cursorY + 16, 'trinkets', 'Талисманы', '✦');
-    cursorY = this.createInfoSection(layout, cursorY + 16);
+    let cursorY = layout.contentTop + 14;
+
+    // Правила лавки теперь находятся в самом верху списка,
+    // чтобы игрок сразу видел механику обновления ассортимента.
+    cursorY = this.createInfoSection(layout, cursorY + 14);
+    cursorY = this.createItemSection(layout, cursorY + 14, 'weapons', 'Оружие', '⚔');
+    cursorY = this.createItemSection(layout, cursorY + 14, 'armors', 'Броня', '▣');
+    cursorY = this.createItemSection(layout, cursorY + 14, 'trinkets', 'Талисманы', '☥');
 
     const contentHeight = cursorY - layout.contentTop + 28;
 
@@ -293,7 +387,6 @@ export class ShopScene extends Phaser.Scene {
       this.createScrollHint(layout);
     }
   }
-
   private createScrollInput(layout: ShopLayout) {
     this.input.off('pointerdown');
     this.input.off('pointermove');
@@ -413,6 +506,19 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
+
+  private getSectionDescription(sectionId: ShopSectionId) {
+    if (sectionId === 'weapons') return 'Клинки, топоры и иное железо для спуска.';
+    if (sectionId === 'armors') return 'Пластины, кольчуги и тяжёлые одеяния.';
+    return 'Обереги, печати и вещи с тихой магией.';
+  }
+
+  private getSectionAccentColor(sectionId: ShopSectionId) {
+    if (sectionId === 'weapons') return SHOP_COLORS.red;
+    if (sectionId === 'armors') return SHOP_COLORS.blue;
+    return SHOP_COLORS.violet;
+  }
+
   private createItemSection(
     layout: ShopLayout,
     topY: number,
@@ -423,9 +529,10 @@ export class ShopScene extends Phaser.Scene {
     const container = this.requireContentContainer();
 
     const offers = this.assortment[sectionId];
-    const cardHeight = 126;
+    const accentColor = this.getSectionAccentColor(sectionId);
+    const cardHeight = layout.compact ? 136 : 146;
     const cardGap = 14;
-    const headerHeight = 92;
+    const headerHeight = layout.compact ? 94 : 102;
     const bottomPadding = 22;
 
     const panelHeight =
@@ -442,40 +549,78 @@ export class ShopScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 30,
-      color: 0x100c09,
-      alpha: 0.96,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.52,
+      color: SHOP_COLORS.panel,
+      alpha: 0.95,
+      strokeColor: accentColor,
+      strokeAlpha: 0.42,
+      strokeWidth: 2,
       depth: 2,
+      glowColor: accentColor,
     });
+
+    const headerX = layout.centerX - layout.contentWidth / 2 + 30;
+    const counterX = layout.centerX + layout.contentWidth / 2 - 30;
 
     this.addTo(
       container,
-      this.add.text(layout.centerX - layout.contentWidth / 2 + 30, topY + 34, `${icon} ${title}`, {
-        fontFamily: UI.font.title,
-        fontSize: '24px',
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 4,
-        wordWrap: {
-          width: layout.contentWidth - 60,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(7)
+      this.add.circle(headerX + 16, topY + 35, 21, accentColor, 0.16)
+        .setStrokeStyle(1, accentColor, 0.6)
+        .setDepth(7)
     );
 
     this.addTo(
       container,
-      this.add.text(layout.centerX + layout.contentWidth / 2 - 30, topY + 34, `${offers.length} товара`, {
+      this.add.text(headerX + 16, topY + 35, icon, {
         fontFamily: UI.font.body,
-        fontSize: '14px',
-        color: UI.colors.textMuted,
-        align: 'right',
+        fontSize: '16px',
+        color: '#d2b87a',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(headerX + 48, topY + 28, title, {
+        fontFamily: UI.font.title,
+        fontSize: layout.compact ? '22px' : '25px',
+        color: '#d2b87a',
+        stroke: '#000000',
+        strokeThickness: 4,
         wordWrap: {
-          width: 120,
+          width: layout.contentWidth - 190,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
-      }).setOrigin(1, 0.5).setDepth(7)
+      }).setOrigin(0, 0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(headerX + 48, topY + 60, this.getSectionDescription(sectionId), {
+        fontFamily: UI.font.body,
+        fontSize: '12px',
+        color: '#8f887b',
+        wordWrap: {
+          width: layout.contentWidth - 120,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(counterX, topY + 35, `${offers.length} товара`, {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: '#8f887b',
+        align: 'right',
+        wordWrap: {
+          width: 118,
+        },
+        maxLines: 1,
+      }).setOrigin(1, 0.5).setDepth(8)
     );
 
     offers.forEach((offer, index) => {
@@ -495,7 +640,6 @@ export class ShopScene extends Phaser.Scene {
 
     return topY + panelHeight;
   }
-
   private createShopItemCard(config: {
     parent: Phaser.GameObjects.Container;
     layout: ShopLayout;
@@ -532,40 +676,41 @@ export class ShopScene extends Phaser.Scene {
       width: config.width,
       height: config.height,
       radius: 24,
-      color: config.offer.purchased ? 0x0b0b0b : 0x17100c,
-      alpha: config.offer.purchased ? 0.72 : 0.96,
-      strokeColor: config.offer.purchased ? UI.colors.goldDark : rarityStrokeColor,
+      color: config.offer.purchased ? 0x090909 : SHOP_COLORS.cardWarm,
+      alpha: config.offer.purchased ? 0.68 : 0.96,
+      strokeColor: config.offer.purchased ? 0x40372e : rarityStrokeColor,
       strokeAlpha: config.offer.purchased ? 0.28 : 0.72,
       strokeWidth: config.offer.purchased ? 1 : 2,
       depth: 4,
+      glowColor: config.offer.purchased ? undefined : rarityColor,
     });
 
-    const iconX = left + 46;
-    const textX = left + 86;
-    const buttonWidth = Phaser.Math.Clamp(Math.round(config.width * 0.24), 98, 132);
+    const iconX = left + 48;
+    const textX = left + 92;
+    const buttonWidth = Phaser.Math.Clamp(Math.round(config.width * 0.25), 104, 138);
     const buttonX = right - buttonWidth / 2 - 18;
-    const textWidth = Math.max(150, buttonX - buttonWidth / 2 - textX - 18);
+    const textWidth = Math.max(145, buttonX - buttonWidth / 2 - textX - 16);
 
     this.addTo(
       container,
-      this.add.circle(iconX, config.y - 26, 27, rarityColor, 0.22)
-        .setStrokeStyle(2, rarityStrokeColor, 0.76)
+      this.add.circle(iconX, config.y - 34, 31, rarityColor, config.offer.purchased ? 0.08 : 0.18)
+        .setStrokeStyle(2, rarityStrokeColor, config.offer.purchased ? 0.32 : 0.76)
         .setDepth(7)
     );
 
     this.addTo(
       container,
-      this.add.circle(iconX, config.y - 26, 20, rarityColor, 0.86)
-        .setStrokeStyle(1, rarityStrokeColor, 0.95)
+      this.add.circle(iconX, config.y - 34, 22, rarityColor, config.offer.purchased ? 0.38 : 0.9)
+        .setStrokeStyle(1, rarityStrokeColor, config.offer.purchased ? 0.42 : 0.95)
         .setDepth(8)
     );
 
     this.addTo(
       container,
-      this.add.text(iconX, config.y - 26, getSlotIcon(item.slot), {
+      this.add.text(iconX, config.y - 34, getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
-        fontSize: '17px',
-        color: '#ffffff',
+        fontSize: '18px',
+        color: config.offer.purchased ? '#7b746b' : '#ffffff',
         stroke: '#000000',
         strokeThickness: 2,
       }).setOrigin(0.5).setDepth(9)
@@ -573,16 +718,18 @@ export class ShopScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(textX, config.y - 42, item.name, {
+      this.add.text(textX, config.y - 53, item.name, {
         fontFamily: UI.font.title,
-        fontSize: '17px',
-        color: config.offer.purchased ? UI.colors.textMuted : UI.colors.goldText,
+        fontSize: config.layout.compact ? '15px' : '17px',
+        color: config.offer.purchased ? '#6f675c' : '#d2b87a',
         stroke: '#000000',
         strokeThickness: 3,
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 2,
+        lineSpacing: -2,
       }).setOrigin(0, 0).setDepth(9)
     );
 
@@ -593,12 +740,13 @@ export class ShopScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(textX, config.y + 4, `${typeText} • ${getRarityText(item)}`, {
+      this.add.text(textX, config.y - 5, `${typeText} • ${getRarityText(item)}`, {
         fontFamily: UI.font.body,
-        fontSize: '13px',
-        color: '#b8aa91',
+        fontSize: '12px',
+        color: config.offer.purchased ? '#5f5a52' : '#b8aa91',
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(9)
@@ -606,20 +754,36 @@ export class ShopScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(textX, config.y + 29, this.createItemStatsText(item), {
+      this.add.text(textX, config.y + 23, this.createItemStatsText(item), {
         fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: UI.colors.textMuted,
+        fontSize: '11px',
+        color: config.offer.purchased ? '#5f5a52' : '#9b9386',
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 2,
+        lineSpacing: 2,
+      }).setOrigin(0, 0.5).setDepth(9)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(textX, config.y + 55, item.description, {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: config.offer.purchased ? '#4f4b45' : '#756f66',
+        wordWrap: {
+          width: textWidth,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(9)
     );
 
     this.createPriceText(container, {
       x: buttonX,
-      y: config.y - 31,
+      y: config.y - 35,
       basePrice,
       price,
       discount: config.offer.discountPercent,
@@ -632,13 +796,13 @@ export class ShopScene extends Phaser.Scene {
       x: buttonX,
       y: config.y + 34,
       width: buttonWidth,
-      height: 42,
+      height: 44,
       text: config.offer.purchased
         ? 'Куплено'
         : canBuy
           ? 'Купить'
           : 'Мало',
-      accentColor: config.offer.purchased ? UI.colors.goldDark : rarityStrokeColor,
+      accentColor: config.offer.purchased ? 0x4c4031 : rarityStrokeColor,
       disabled: config.offer.purchased || !canBuy,
       onClick: () => {
         this.showItemBuyModal(config.sectionId, config.offerIndex);
@@ -647,11 +811,10 @@ export class ShopScene extends Phaser.Scene {
       small: true,
     });
   }
-
   private createInfoSection(layout: ShopLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const panelHeight = 124;
+    const panelHeight = 138;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -661,24 +824,26 @@ export class ShopScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 28,
-      color: 0x0d0d0d,
+      color: 0x09090b,
       alpha: 0.92,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.4,
+      strokeColor: 0x3b3328,
+      strokeAlpha: 0.52,
+      strokeWidth: 1,
       depth: 2,
     });
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 35, 'Правила лавки', {
+      this.add.text(layout.centerX, topY + 34, 'Правила лавки', {
         fontFamily: UI.font.title,
         fontSize: '22px',
-        color: UI.colors.goldText,
+        color: '#c9a86a',
         stroke: '#000000',
         strokeThickness: 3,
         align: 'center',
         wordWrap: {
           width: layout.contentWidth - 60,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(7)
@@ -688,17 +853,18 @@ export class ShopScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 78,
-        'Один купон обновляет сразу оружие, броню и талисманы. Легендарные и мифические товары стоят значительно дороже, но иногда появляются со скидкой.',
+        topY + 86,
+        'Купон полностью меняет ассортимент. Купленные товары остаются отмеченными до обновления лавки. Чем выше редкость — тем дороже предмет и тем реже он появляется у торговца.',
         {
           fontFamily: UI.font.body,
-          fontSize: '14px',
-          color: UI.colors.textMuted,
+          fontSize: layout.compact ? '12px' : '14px',
+          color: '#8f887b',
           align: 'center',
           wordWrap: {
             width: layout.contentWidth - 64,
+            useAdvancedWrap: true,
           },
-          maxLines: 3,
+          maxLines: 4,
           lineSpacing: 4,
         }
       ).setOrigin(0.5).setDepth(7)
@@ -706,21 +872,35 @@ export class ShopScene extends Phaser.Scene {
 
     return topY + panelHeight;
   }
-
   private createBottomActions(layout: ShopLayout) {
     const refreshY = layout.height - 112;
+    const panelHeight = 68;
+
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: refreshY,
+      width: layout.contentWidth,
+      height: panelHeight,
+      radius: 24,
+      color: 0x050506,
+      alpha: 0.86,
+      strokeColor: 0x30271e,
+      strokeAlpha: 0.62,
+      strokeWidth: 1,
+      depth: 232,
+    });
 
     const canRefresh = this.getRefreshCoupons() > 0;
 
     this.createUiButton({
       x: layout.centerX,
       y: refreshY,
-      width: Math.min(layout.contentWidth, 540),
-      height: 52,
+      width: Math.min(layout.contentWidth - 42, 540),
+      height: 50,
       text: canRefresh
         ? 'Обновить ассортимент за 1 купон'
         : 'Нет купонов для обновления',
-      accentColor: canRefresh ? 0x70a6ff : UI.colors.goldDark,
+      accentColor: canRefresh ? SHOP_COLORS.blue : SHOP_COLORS.bronze,
       disabled: !canRefresh,
       onClick: () => {
         this.handleRefreshAssortment();
@@ -728,7 +908,6 @@ export class ShopScene extends Phaser.Scene {
       depth: 240,
     });
   }
-
   private createResourceChip(config: {
     x: number;
     y: number;
@@ -744,51 +923,53 @@ export class ShopScene extends Phaser.Scene {
       width: config.width,
       height: 54,
       radius: 18,
-      color: 0x17100c,
+      color: SHOP_COLORS.card,
       alpha: 0.96,
       strokeColor: config.color,
-      strokeAlpha: 0.3,
+      strokeAlpha: 0.28,
       strokeWidth: 1,
       depth: 12,
+      glowColor: config.color,
     });
 
     const left = config.x - config.width / 2;
 
-    this.add.circle(left + 27, config.y, 16, config.color, 0.18)
-      .setStrokeStyle(1, config.color, 0.55)
+    this.add.circle(left + 27, config.y, 16, config.color, 0.14)
+      .setStrokeStyle(1, config.color, 0.46)
       .setDepth(15);
 
     this.add.text(left + 27, config.y, config.icon, {
       fontFamily: UI.font.body,
       fontSize: '13px',
-      color: UI.colors.goldText,
+      color: '#d2b87a',
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(16);
 
-    this.add.text(left + 50, config.y - 9, config.title, {
+    this.add.text(left + 50, config.y - 10, config.title, {
       fontFamily: UI.font.body,
-      fontSize: '11px',
-      color: UI.colors.textMuted,
+      fontSize: '10px',
+      color: '#8f887b',
       wordWrap: {
         width: config.width - 56,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(16);
 
-    this.add.text(left + 50, config.y + 11, config.value, {
+    this.add.text(left + 50, config.y + 10, config.value, {
       fontFamily: UI.font.title,
-      fontSize: '16px',
-      color: UI.colors.text,
+      fontSize: '15px',
+      color: '#d1c7b4',
       stroke: '#000000',
       strokeThickness: 2,
       wordWrap: {
         width: config.width - 56,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(16);
   }
-
   private createPriceText(
     parent: Phaser.GameObjects.Container,
     config: {
@@ -806,10 +987,24 @@ export class ShopScene extends Phaser.Scene {
     if (hasDiscount) {
       this.addTo(
         parent,
-        this.add.text(config.x, config.y - 9, `-${config.discount}%`, {
+        this.add.text(config.x, config.y - 15, `${config.basePrice} зол.`, {
+          fontFamily: UI.font.body,
+          fontSize: config.small ? '10px' : '12px',
+          color: '#665f55',
+          align: 'center',
+          wordWrap: {
+            width: config.width,
+          },
+          maxLines: 1,
+        }).setOrigin(0.5).setDepth(12)
+      );
+
+      this.addTo(
+        parent,
+        this.add.text(config.x, config.y + 1, `−${config.discount}%`, {
           fontFamily: UI.font.title,
-          fontSize: config.small ? '13px' : '15px',
-          color: '#75d184',
+          fontSize: config.small ? '12px' : '14px',
+          color: '#8fc89b',
           stroke: '#000000',
           strokeThickness: 2,
           align: 'center',
@@ -822,10 +1017,10 @@ export class ShopScene extends Phaser.Scene {
 
       this.addTo(
         parent,
-        this.add.text(config.x, config.y + 10, `${config.price} зол.`, {
+        this.add.text(config.x, config.y + 19, `${config.price} зол.`, {
           fontFamily: UI.font.title,
-          fontSize: config.small ? '15px' : '17px',
-          color: UI.colors.goldText,
+          fontSize: config.small ? '14px' : '17px',
+          color: '#d2b87a',
           stroke: '#000000',
           strokeThickness: 2,
           align: 'center',
@@ -844,7 +1039,7 @@ export class ShopScene extends Phaser.Scene {
       this.add.text(config.x, config.y, `${config.price} зол.`, {
         fontFamily: UI.font.title,
         fontSize: config.small ? '15px' : '17px',
-        color: UI.colors.goldText,
+        color: '#d2b87a',
         stroke: '#000000',
         strokeThickness: 2,
         align: 'center',
@@ -855,7 +1050,6 @@ export class ShopScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(12)
     );
   }
-
   private createUiButton(config: {
     parent?: Phaser.GameObjects.Container;
     x: number;
@@ -876,36 +1070,47 @@ export class ShopScene extends Phaser.Scene {
     const depth = config.depth ?? 40;
 
     const bgColor = disabled
-      ? 0x151515
+      ? 0x101010
       : danger
-        ? 0x2a1010
-        : 0x17100c;
+        ? 0x241010
+        : 0x12100d;
 
     const hoverColor = disabled
       ? bgColor
       : danger
-        ? 0x3a1515
-        : 0x2b1d13;
+        ? 0x351515
+        : 0x241a12;
 
     const textColor = disabled
-      ? '#555555'
+      ? '#545454'
       : danger
-        ? '#ffb3b3'
-        : UI.colors.goldText;
+        ? '#d9928c'
+        : '#d2b87a';
 
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillStyle(0x000000, 0.34);
     shadow.fillRoundedRect(
       config.x - config.width / 2,
-      config.y - config.height / 2 + 4,
+      config.y - config.height / 2 + 5,
       config.width,
       config.height,
       radius
     );
     shadow.setDepth(depth);
 
+    const glow = this.add.graphics();
+    glow.fillStyle(config.accentColor, disabled ? 0.025 : 0.075);
+    glow.fillRoundedRect(
+      config.x - config.width / 2 + 4,
+      config.y - config.height / 2 + 4,
+      config.width - 8,
+      config.height - 8,
+      radius
+    );
+    glow.setDepth(depth + 1);
+
     const bg = this.add.graphics();
-    bg.fillStyle(bgColor, disabled ? 0.7 : 0.96);
+    bg.fillStyle(bgColor, disabled ? 0.66 : 0.98);
     bg.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -914,7 +1119,7 @@ export class ShopScene extends Phaser.Scene {
       radius
     );
 
-    bg.lineStyle(2, config.accentColor, disabled ? 0.35 : 0.85);
+    bg.lineStyle(2, config.accentColor, disabled ? 0.28 : 0.8);
     bg.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -923,7 +1128,7 @@ export class ShopScene extends Phaser.Scene {
       radius
     );
 
-    bg.setDepth(depth + 1);
+    bg.setDepth(depth + 2);
 
     const label = this.add.text(config.x, config.y, config.text, {
       fontFamily: UI.font.body,
@@ -932,14 +1137,15 @@ export class ShopScene extends Phaser.Scene {
       align: 'center',
       wordWrap: {
         width: config.width - 14,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(depth + 2);
+    }).setOrigin(0.5).setDepth(depth + 3);
 
     const zone = this.add.zone(config.x, config.y, config.width, config.height)
-      .setDepth(depth + 3);
+      .setDepth(depth + 4);
 
-    const objects: Phaser.GameObjects.GameObject[] = [shadow, bg, label, zone];
+    const objects: Phaser.GameObjects.GameObject[] = [shadow, glow, bg, label, zone];
 
     if (config.parent) {
       config.parent.add(objects);
@@ -971,19 +1177,19 @@ export class ShopScene extends Phaser.Scene {
       });
 
       zone.on('pointerover', () => {
-        redraw(hoverColor, 1, 1);
-        label.setColor(danger ? '#ffd0d0' : '#ffffff');
+        redraw(hoverColor, 1, 0.98);
+        label.setColor(danger ? '#ffd0d0' : '#f2e4bf');
       });
 
       zone.on('pointerout', () => {
-        redraw(bgColor, 0.96, 0.85);
+        redraw(bgColor, 0.98, 0.8);
         bg.setAlpha(1);
         label.setY(config.y);
         label.setColor(textColor);
       });
 
       zone.on('pointerdown', () => {
-        bg.setAlpha(0.78);
+        bg.setAlpha(0.76);
         label.setY(config.y + 1);
       });
 
@@ -1009,7 +1215,6 @@ export class ShopScene extends Phaser.Scene {
       zone,
     };
   }
-
   private showItemBuyModal(sectionId: ShopSectionId, offerIndex: number) {
     const offer = this.assortment[sectionId][offerIndex];
     const item = this.getItemByOffer(offer);
@@ -1048,6 +1253,7 @@ export class ShopScene extends Phaser.Scene {
     disabled?: boolean;
     onConfirm: () => void;
   }) {
+    const layout = this.layout ?? this.getLayout();
     const { width, height } = this.scale;
 
     this.isModalOpen = true;
@@ -1060,47 +1266,57 @@ export class ShopScene extends Phaser.Scene {
       width,
       height,
       0x000000,
-      0.72
+      0.78
     ).setInteractive();
 
     modal.add(overlay);
 
+    const panelWidth = Math.min(layout.contentWidth, 620);
+    const panelHeight = Math.min(540, height - layout.safeTop - layout.safeBottom - 34);
+    const panelY = height / 2;
+    const top = panelY - panelHeight / 2;
+    const bottom = panelY + panelHeight / 2;
+
     this.createRoundedPanel({
       parent: modal,
       x: width / 2,
-      y: height / 2,
-      width: Math.min(width - 52, 610),
-      height: 500,
+      y: panelY,
+      width: panelWidth,
+      height: panelHeight,
       radius: 30,
-      color: 0x17100c,
-      alpha: 0.98,
-      strokeColor: UI.colors.goldDark,
+      color: 0x0f0d0c,
+      alpha: 0.985,
+      strokeColor: SHOP_COLORS.bronze,
       strokeAlpha: 0.9,
+      strokeWidth: 3,
       depth: 1001,
+      glowColor: SHOP_COLORS.gold,
     });
 
-    const titleText = this.add.text(width / 2, height / 2 - 180, config.title, {
+    const titleText = this.add.text(width / 2, top + 54, config.title, {
       fontFamily: UI.font.title,
-      fontSize: '25px',
-      color: UI.colors.goldText,
+      fontSize: layout.compact ? '23px' : '26px',
+      color: '#d2b87a',
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
       wordWrap: {
-        width: Math.min(width - 100, 520),
+        width: panelWidth - 58,
+        useAdvancedWrap: true,
       },
       maxLines: 2,
     }).setOrigin(0.5).setDepth(1004);
 
-    const descriptionText = this.add.text(width / 2, height / 2 - 38, config.description, {
+    const descriptionText = this.add.text(width / 2, top + panelHeight / 2 - 18, config.description, {
       fontFamily: UI.font.body,
-      fontSize: '16px',
-      color: UI.colors.text,
+      fontSize: layout.compact ? '14px' : '16px',
+      color: '#d1c7b4',
       align: 'center',
       wordWrap: {
-        width: Math.min(width - 100, 520),
+        width: panelWidth - 70,
+        useAdvancedWrap: true,
       },
-      maxLines: 10,
+      maxLines: layout.compact ? 10 : 12,
       lineSpacing: 5,
     }).setOrigin(0.5).setDepth(1004);
 
@@ -1111,14 +1327,16 @@ export class ShopScene extends Phaser.Scene {
       this.isModalOpen = false;
     };
 
+    const buttonWidth = Math.min(panelWidth - 130, 380);
+
     this.createUiButton({
       parent: modal,
       x: width / 2,
-      y: height / 2 + 152,
-      width: 360,
-      height: 54,
+      y: bottom - 118,
+      width: buttonWidth,
+      height: 52,
       text: config.confirmText,
-      accentColor: 0x75d184,
+      accentColor: SHOP_COLORS.green,
       disabled: config.disabled ?? false,
       onClick: () => {
         close();
@@ -1130,19 +1348,19 @@ export class ShopScene extends Phaser.Scene {
     this.createUiButton({
       parent: modal,
       x: width / 2,
-      y: height / 2 + 216,
-      width: 360,
-      height: 54,
+      y: bottom - 54,
+      width: buttonWidth,
+      height: 52,
       text: 'Отмена',
-      accentColor: UI.colors.goldDark,
+      accentColor: SHOP_COLORS.bronze,
       onClick: () => {
         close();
       },
       depth: 1004,
     });
   }
-
   private showMessage(message: string) {
+    const layout = this.layout ?? this.getLayout();
     const { width, height } = this.scale;
 
     this.isModalOpen = true;
@@ -1155,42 +1373,55 @@ export class ShopScene extends Phaser.Scene {
       width,
       height,
       0x000000,
-      0.72
+      0.78
     ).setInteractive();
 
     modal.add(overlay);
 
+    const panelWidth = Math.min(layout.contentWidth, 600);
+    const panelHeight = Math.min(310, height - 130);
+    const panelY = height / 2;
+
     this.createRoundedPanel({
       parent: modal,
       x: width / 2,
-      y: height / 2,
-      width: Math.min(width - 52, 600),
-      height: 290,
+      y: panelY,
+      width: panelWidth,
+      height: panelHeight,
       radius: 28,
-      color: 0x17100c,
-      alpha: 0.98,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.9,
+      color: 0x0f0d0c,
+      alpha: 0.985,
+      strokeColor: SHOP_COLORS.bronze,
+      strokeAlpha: 0.86,
+      strokeWidth: 3,
       depth: 1001,
+      glowColor: SHOP_COLORS.gold,
     });
 
-    const titleText = this.add.text(width / 2, height / 2 - 92, 'Лавка', {
+    const titleText = this.add.text(width / 2, panelY - panelHeight / 2 + 52, 'Лавка', {
       fontFamily: UI.font.title,
-      fontSize: '30px',
-      color: UI.colors.goldText,
+      fontSize: layout.compact ? '27px' : '30px',
+      color: '#d2b87a',
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(1004);
-
-    const messageText = this.add.text(width / 2, height / 2 - 12, message, {
-      fontFamily: UI.font.body,
-      fontSize: '18px',
-      color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: Math.min(width - 100, 520),
+        width: panelWidth - 60,
+        useAdvancedWrap: true,
       },
-      maxLines: 6,
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1004);
+
+    const messageText = this.add.text(width / 2, panelY - 4, message, {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '16px' : '18px',
+      color: '#d1c7b4',
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 72,
+        useAdvancedWrap: true,
+      },
+      maxLines: 7,
       lineSpacing: 5,
     }).setOrigin(0.5).setDepth(1004);
 
@@ -1199,11 +1430,11 @@ export class ShopScene extends Phaser.Scene {
     this.createUiButton({
       parent: modal,
       x: width / 2,
-      y: height / 2 + 98,
-      width: 260,
-      height: 54,
+      y: panelY + panelHeight / 2 - 54,
+      width: Math.min(280, panelWidth - 110),
+      height: 52,
       text: 'Понятно',
-      accentColor: UI.colors.goldDark,
+      accentColor: SHOP_COLORS.bronze,
       onClick: () => {
         modal.destroy(true);
         this.isModalOpen = false;
@@ -1212,7 +1443,6 @@ export class ShopScene extends Phaser.Scene {
       depth: 1004,
     });
   }
-
   private buyOffer(sectionId: ShopSectionId, offerIndex: number, price: number) {
     const offer = this.assortment[sectionId][offerIndex];
     const item = this.getItemByOffer(offer);
@@ -1293,7 +1523,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private isValidAssortment(assortment: ShopAssortment) {
-    if (!assortment || assortment.version !== 2) {
+    if (!assortment || assortment.version !== 3) {
       return false;
     }
 
@@ -1314,9 +1544,8 @@ export class ShopScene extends Phaser.Scene {
 
   private generateAssortment(): ShopAssortment {
     return {
-      version: 2,
+      version: 3,
       generatedAt: Date.now(),
-      potionDiscountPercent: this.rollDiscount(),
       weapons: this.generateOffersForSlot('weapon', 2),
       armors: this.generateOffersForSlot('armor', 2),
       trinkets: this.generateOffersForSlot('trinket', 2),
@@ -1391,6 +1620,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private getBaseItemPrice(item: ItemData) {
+    const expanded = item as ExpandedShopItemData;
+
     const rarityBase = {
       common: 260,
       rare: 820,
@@ -1400,10 +1631,15 @@ export class ShopScene extends Phaser.Scene {
     }[item.rarity];
 
     const statPrice =
-      (item.bonusAttack ?? 0) * 62 +
-      (item.bonusDefense ?? 0) * 62 +
-      (item.bonusHp ?? 0) * 8 +
-      Math.round((item.bonusCritChance ?? 0) * 12000);
+      (expanded.bonusAttack ?? 0) * 62 +
+      (expanded.bonusDefense ?? 0) * 62 +
+      (expanded.bonusHp ?? 0) * 8 +
+      (expanded.bonusEnergy ?? 0) * 380 +
+      (expanded.bonusAgility ?? 0) * 72 +
+      (expanded.bonusLuck ?? 0) * 82 +
+      (expanded.bonusStrength ?? 0) * 72 +
+      (expanded.bonusIntelligence ?? 0) * 72 +
+      Math.round((expanded.bonusCritChance ?? 0) * 12000);
 
     const slotMultiplier =
       item.slot === 'weapon'
@@ -1422,7 +1658,6 @@ export class ShopScene extends Phaser.Scene {
 
     return price;
   }
-
   private applyDiscount(price: number, discountPercent: number) {
     if (discountPercent <= 0) {
       return price;
@@ -1432,16 +1667,21 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private createItemStatsText(item: ItemData) {
+    const expanded = item as ExpandedShopItemData;
     const parts: string[] = [];
 
-    if (item.bonusHp) parts.push(`HP +${item.bonusHp}`);
-    if (item.bonusAttack) parts.push(`АТК +${item.bonusAttack}`);
-    if (item.bonusDefense) parts.push(`ЗАЩ +${item.bonusDefense}`);
-    if (item.bonusCritChance) parts.push(`Крит +${Math.round(item.bonusCritChance * 100)}%`);
+    if (expanded.bonusHp) parts.push(`HP +${expanded.bonusHp}`);
+    if (expanded.bonusAttack) parts.push(`АТК +${expanded.bonusAttack}`);
+    if (expanded.bonusDefense) parts.push(`ЗАЩ +${expanded.bonusDefense}`);
+    if (expanded.bonusEnergy) parts.push(`ЭН +${expanded.bonusEnergy}`);
+    if (expanded.bonusStrength) parts.push(`СИЛ +${expanded.bonusStrength}`);
+    if (expanded.bonusAgility) parts.push(`ЛОВ +${expanded.bonusAgility}`);
+    if (expanded.bonusLuck) parts.push(`УДАЧ +${expanded.bonusLuck}`);
+    if (expanded.bonusIntelligence) parts.push(`ИНТ +${expanded.bonusIntelligence}`);
+    if (expanded.bonusCritChance) parts.push(`Крит +${Math.round(expanded.bonusCritChance * 100)}%`);
 
     return parts.length > 0 ? parts.join(' • ') : 'Без характеристик';
   }
-
   private getItemByOffer(offer: ShopOffer) {
     return items.find(item => item.id === offer.itemId);
   }
@@ -1492,11 +1732,12 @@ export class ShopScene extends Phaser.Scene {
     strokeAlpha?: number;
     strokeWidth?: number;
     depth?: number;
+    glowColor?: number;
   }) {
     const radius = config.radius ?? 24;
-    const color = config.color ?? 0x14100d;
+    const color = config.color ?? SHOP_COLORS.panel;
     const alpha = config.alpha ?? 0.92;
-    const strokeColor = config.strokeColor ?? UI.colors.goldDark;
+    const strokeColor = config.strokeColor ?? SHOP_COLORS.bronze;
     const strokeAlpha = config.strokeAlpha ?? 0.45;
     const strokeWidth = config.strokeWidth ?? 2;
     const depth = config.depth ?? 1;
@@ -1504,16 +1745,33 @@ export class ShopScene extends Phaser.Scene {
     const safeWidth = Math.min(config.width, this.scale.width - 24);
     const safeHeight = Math.min(config.height, this.scale.height - 24);
 
+    const objects: Phaser.GameObjects.GameObject[] = [];
+
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillStyle(0x000000, 0.36);
     shadow.fillRoundedRect(
       config.x - safeWidth / 2,
-      config.y - safeHeight / 2 + 6,
+      config.y - safeHeight / 2 + 7,
       safeWidth,
       safeHeight,
       radius
     );
     shadow.setDepth(depth);
+    objects.push(shadow);
+
+    if (config.glowColor !== undefined) {
+      const glow = this.add.graphics();
+      glow.fillStyle(config.glowColor, 0.045);
+      glow.fillRoundedRect(
+        config.x - safeWidth / 2 + 7,
+        config.y - safeHeight / 2 + 7,
+        safeWidth - 14,
+        safeHeight - 14,
+        radius
+      );
+      glow.setDepth(depth + 0.5);
+      objects.push(glow);
+    }
 
     const panel = this.add.graphics();
     panel.fillStyle(color, alpha);
@@ -1534,10 +1792,20 @@ export class ShopScene extends Phaser.Scene {
       radius
     );
 
+    panel.lineStyle(1, 0xffffff, 0.035);
+    panel.strokeRoundedRect(
+      config.x - safeWidth / 2 + 3,
+      config.y - safeHeight / 2 + 3,
+      safeWidth - 6,
+      safeHeight - 6,
+      Math.max(1, radius - 4)
+    );
+
     panel.setDepth(depth + 1);
+    objects.push(panel);
 
     if (config.parent) {
-      config.parent.add([shadow, panel]);
+      config.parent.add(objects);
     }
 
     return {
@@ -1545,7 +1813,6 @@ export class ShopScene extends Phaser.Scene {
       panel,
     };
   }
-
   private requireContentContainer() {
     if (!this.contentContainer) {
       throw new Error('Shop content container was not created.');

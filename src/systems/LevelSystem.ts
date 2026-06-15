@@ -9,15 +9,42 @@ export type LevelUpResult = {
   upgradePointsGained: number;
 };
 
-type PlayerWithUpgradePoints = PlayerData & {
+type PlayerWithProgression = PlayerData & {
   upgradePoints?: number;
   totalUpgradePointsEarned?: number;
+  characterTreePoints?: number;
+  characterTree?: Record<string, number>;
 };
 
 const UPGRADE_POINTS_PER_LEVEL = 3;
 
+function ensureProgressionFields(player: PlayerData) {
+  const progressionPlayer = player as PlayerWithProgression;
+
+  if (typeof progressionPlayer.upgradePoints !== 'number') {
+    progressionPlayer.upgradePoints = 0;
+  }
+
+  if (typeof progressionPlayer.totalUpgradePointsEarned !== 'number') {
+    progressionPlayer.totalUpgradePointsEarned = 0;
+  }
+
+  // Важно: StatsTreeScene читает characterTreePoints, а старый LevelSystem
+  // начислял только upgradePoints. Поэтому переносим старые свободные очки,
+  // если дерево ещё не получало своё поле.
+  if (typeof progressionPlayer.characterTreePoints !== 'number') {
+    progressionPlayer.characterTreePoints = progressionPlayer.upgradePoints ?? 0;
+  }
+
+  if (!progressionPlayer.characterTree) {
+    progressionPlayer.characterTree = {};
+  }
+
+  return progressionPlayer;
+}
+
 export function addExperience(player: PlayerData, amount: number): LevelUpResult {
-  const progressionPlayer = player as PlayerWithUpgradePoints;
+  const progressionPlayer = ensureProgressionFields(player);
 
   const oldLevel = player.level;
   let levelsGained = 0;
@@ -31,10 +58,13 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
     player.level += 1;
     levelsGained += 1;
 
-    player.expToNextLevel = Math.floor(player.expToNextLevel * 1.55);
+    player.expToNextLevel = Math.max(1, Math.floor(player.expToNextLevel * 1.55));
 
     progressionPlayer.upgradePoints =
       (progressionPlayer.upgradePoints ?? 0) + UPGRADE_POINTS_PER_LEVEL;
+
+    progressionPlayer.characterTreePoints =
+      (progressionPlayer.characterTreePoints ?? 0) + UPGRADE_POINTS_PER_LEVEL;
 
     progressionPlayer.totalUpgradePointsEarned =
       (progressionPlayer.totalUpgradePointsEarned ?? 0) + UPGRADE_POINTS_PER_LEVEL;
@@ -67,7 +97,7 @@ export function createLevelUpText(result: LevelUpResult): string {
     return [
       `Новый уровень: ${result.newLevel}`,
       '',
-      `+${result.upgradePointsGained} очка прокачки`,
+      `+${result.upgradePointsGained} очка дерева характеристик`,
       '',
       'Открой дерево характеристик в лагере, чтобы усилить героя.',
     ].join('\n');
@@ -77,7 +107,7 @@ export function createLevelUpText(result: LevelUpResult): string {
     `Получено уровней: ${result.levelsGained}`,
     `Новый уровень: ${result.newLevel}`,
     '',
-    `+${result.upgradePointsGained} очков прокачки`,
+    `+${result.upgradePointsGained} очков дерева характеристик`,
     '',
     'Открой дерево характеристик в лагере, чтобы распределить очки.',
   ].join('\n');

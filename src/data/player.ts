@@ -16,6 +16,16 @@ export type InventoryItem = {
   upgradeLevel: number;
 };
 
+export type CharacterTreeBranchId =
+  | 'hp'
+  | 'energy'
+  | 'attack'
+  | 'defense'
+  | 'crit'
+  | 'agility'
+  | 'luck'
+  | 'intelligence';
+
 export type PlayerData = {
   name: string;
 
@@ -44,8 +54,13 @@ export type PlayerData = {
   strength: number;
   intelligence: number;
 
+  // Старые очки прокачки. Оставлены для совместимости с уже существующими сценами.
   upgradePoints: number;
   totalUpgradePointsEarned: number;
+
+  // Очки именно для дерева характеристик StatsTreeScene.
+  characterTreePoints: number;
+  characterTree: Partial<Record<CharacterTreeBranchId, number>>;
 
   relicIds: RelicId[];
 
@@ -89,6 +104,9 @@ export const player: PlayerData = {
 
   upgradePoints: 0,
   totalUpgradePointsEarned: 0,
+
+  characterTreePoints: 0,
+  characterTree: {},
 
   relicIds: [],
 

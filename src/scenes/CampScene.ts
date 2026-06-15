@@ -13,7 +13,6 @@ import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   getActiveCampfireBattleCheckpoint,
-  restoreCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
   clearCampfireBattleCheckpoint,
 } from '../systems/CampfireCheckpointSystem';
@@ -523,16 +522,16 @@ export class CampScene extends Phaser.Scene {
     currentY += 24 + mainHeight / 2;
 
     const dungeonTitle = activeCheckpoint
-      ? 'Вернуться к костру'
+      ? 'Выбрать костёр или ярус'
       : hasActiveRun
-        ? 'Продолжить спуск'
-        : 'Войти в катакомбы';
+        ? 'Выбрать активный спуск'
+        : 'Выбрать ярус';
 
     const dungeonDesc = activeCheckpoint
-      ? `Чекпоинт: этаж ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
+      ? `В выборе яруса доступен костёр: этаж ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
       : hasActiveRun
-        ? `Ты остановился на этаже ${gameState.floorRun.currentFloor}.`
-        : 'Начать новый спуск в холодные нижние залы.';
+        ? `Есть активный спуск на этаже ${gameState.floorRun.currentFloor}. Открой выбор яруса.`
+        : 'Открыть карту ярусов и начать спуск.';
 
     this.createMainDungeonButton({
       layout,
@@ -544,12 +543,7 @@ export class CampScene extends Phaser.Scene {
       description: dungeonDesc,
       hasActiveRun: hasActiveRun || hasActiveCheckpoint,
       onClick: () => {
-        if (activeCheckpoint) {
-          this.returnToCampfireCheckpoint();
-          return;
-        }
-
-        this.tryEnterCatacombs(hasActiveRun);
+        this.tryEnterCatacombs();
       },
     });
 
@@ -1434,7 +1428,7 @@ export class CampScene extends Phaser.Scene {
     return Math.max(0, left);
   }
 
-  private tryEnterCatacombs(hasActiveRun: boolean) {
+  private tryEnterCatacombs() {
     if (!player.raceId) {
       this.showMessage(
         'Герой не создан',
@@ -1450,19 +1444,14 @@ export class CampScene extends Phaser.Scene {
       : 1;
 
     if (hpPercent < 0.7) {
-      this.showLowHpWarning(hasActiveRun);
-      return;
-    }
-
-    if (hasActiveRun) {
-      this.scene.start('DungeonScene');
+      this.showLowHpWarning();
       return;
     }
 
     this.scene.start('DungeonSelectScene');
   }
 
-  private showLowHpWarning(hasActiveRun: boolean) {
+  private showLowHpWarning() {
     const layout = this.getLayout();
     const stats = getPlayerStats(player);
 
@@ -1558,11 +1547,6 @@ export class CampScene extends Phaser.Scene {
       centerY + 108,
       'Всё равно идти',
       () => {
-        if (hasActiveRun) {
-          this.scene.start('DungeonScene');
-          return;
-        }
-
         this.scene.start('DungeonSelectScene');
       },
       buttonWidth,
@@ -1595,23 +1579,6 @@ export class CampScene extends Phaser.Scene {
     const seconds = totalSeconds % 60;
 
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  private returnToCampfireCheckpoint() {
-    const result = restoreCampfireBattleCheckpoint();
-
-    if (!result.success) {
-      this.showMessage(
-        'Костёр погас',
-        `${result.message}\n\nВернуться к чекпоинту уже нельзя.`
-      );
-
-      return;
-    }
-
-    void saveGameAsync();
-
-    this.scene.start('DungeonScene');
   }
 
   private showLeaveRunMessage() {
