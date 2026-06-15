@@ -186,59 +186,6 @@ export class ProfileScene extends Phaser.Scene {
       .setDepth(1);
   }
 
-  private createScrollableHeader(layout: ProfileLayout, topY: number) {
-    const container = this.requireContentContainer();
-    const headerHeight = layout.headerHeight;
-    const headerY = topY + headerHeight / 2;
-
-    this.createStonePanel({
-      parent: container,
-      x: layout.centerX,
-      y: headerY,
-      width: layout.contentWidth,
-      height: headerHeight,
-      radius: 28,
-      fill: PROFILE.stone,
-      alpha: 0.94,
-      stroke: PROFILE.bronze,
-      strokeAlpha: 0.72,
-      depth: 2,
-    });
-
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, headerY - 20, 'Профиль героя', {
-        fontFamily: UI.font.title,
-        fontSize: layout.compact ? '29px' : '33px',
-        color: '#d9c28b',
-        stroke: '#000000',
-        strokeThickness: 5,
-        align: 'center',
-        wordWrap: {
-          width: layout.contentWidth - 44,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(8)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, headerY + 22, 'Печать выжившего в катакомбах', {
-        fontFamily: UI.font.body,
-        fontSize: '14px',
-        color: '#8f8a80',
-        align: 'center',
-        wordWrap: {
-          width: layout.contentWidth - 54,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(8)
-    );
-
-    return topY + headerHeight;
-  }
 
   private createScrollableContent(layout: ProfileLayout) {
     this.contentContainer = this.add.container(0, 0).setDepth(5);
@@ -257,7 +204,6 @@ export class ProfileScene extends Phaser.Scene {
 
     let cursorY = layout.contentTop + 8;
 
-    cursorY = this.createScrollableHeader(layout, cursorY);
     cursorY = this.createHeroIdentityPanel(layout, cursorY + 14);
     cursorY = this.createVitalityPanel(layout, cursorY + 14);
     cursorY = this.createStatsPanel(layout, cursorY + 14);

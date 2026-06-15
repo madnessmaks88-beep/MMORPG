@@ -98,7 +98,7 @@ export function getWeaponTypeText(weaponType?: string): string {
 
 export function getWeaponTypeDescription(weaponType?: string): string {
   if (weaponType === 'dagger') {
-    return 'Обычная атака наносит 3 быстрых удара.';
+    return 'Обычная атака наносит 3 быстрых удара. Каждый удар имеет 8% шанс восстановить 50% нанесённого этим ударом урона.';
   }
 
   if (weaponType === 'axe') {
@@ -118,7 +118,7 @@ export function getWeaponTypeDescription(weaponType?: string): string {
   }
 
   if (weaponType === 'sword') {
-    return 'Обычная атака наносит стабильный урон.';
+    return 'Обычная атака наносит стабильный урон. Если максимальное HP врага выше максимального HP героя в 1,5 / 2 / 3 раза, урон мечом увеличивается на 10% / 15% / 20%.';
   }
 
   return '';

@@ -12,7 +12,7 @@ import { RaceSelectScene } from './scenes/RaceSelectScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { TrainingScene } from './scenes/TrainingScene';
 import { BootScene } from './scenes/BootScene';
-import { StatsTreeScene } from './scenes/StatsTreeScene';
+import { StatsTreeScene } from './scenes/StatsTreeScene.ts';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

@@ -43,7 +43,7 @@ type BranchData = {
   stages: StageData[];
 };
 
-type TreeLayout = {
+type FreeTreeLayout = {
   width: number;
   height: number;
   centerX: number;
@@ -70,11 +70,17 @@ type TreeButton = {
   zone: Phaser.GameObjects.Zone;
 };
 
-const TREE_DARK = {
+type NodePoint = {
+  stage: StageData;
+  x: number;
+  y: number;
+};
+
+const TREE_STYLE = {
   black: 0x030304,
   void: 0x060607,
-  graphite: 0x0c0d10,
-  stone: 0x111217,
+  graphite: 0x0b0c10,
+  stone: 0x101116,
   stoneSoft: 0x171821,
   warmStone: 0x17100c,
   soot: 0x0a0706,
@@ -345,7 +351,7 @@ export class StatsTreeScene extends Phaser.Scene {
     this.contentContainer.y = -this.currentScrollY;
   }
 
-  private getLayout(): TreeLayout {
+  private getLayout(): FreeTreeLayout {
     const { width, height } = this.scale;
 
     const compact = height < 1120;
@@ -353,7 +359,7 @@ export class StatsTreeScene extends Phaser.Scene {
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.024), 18, 34);
     const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.026), 24, 38);
     const bottomBarHeight = compact ? 104 : 112;
-    const headerHeight = compact ? 126 : 138;
+    const headerHeight = compact ? 132 : 146;
     const contentWidth = Math.min(width - safeX * 2, 640);
 
     const contentTop = safeTop + headerHeight + 12;
@@ -380,28 +386,28 @@ export class StatsTreeScene extends Phaser.Scene {
     };
   }
 
-  private createBackdrop(layout: TreeLayout) {
+  private createBackdrop(layout: FreeTreeLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.rectangle(centerX, height / 2, width, height, TREE_DARK.black, 0.96).setDepth(0);
-    this.add.rectangle(centerX, height - 180, width, 360, 0x020202, 0.58).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, TREE_STYLE.black, 0.96).setDepth(0);
+    this.add.rectangle(centerX, height - 190, width, 380, 0x020202, 0.58).setDepth(0);
 
-    this.add.circle(centerX, layout.safeTop + 144, width * 0.5, TREE_DARK.violet, 0.11).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 154, width * 0.34, TREE_DARK.bronze, 0.08).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 164, width * 0.16, TREE_DARK.gold, 0.04).setDepth(0);
+    this.add.circle(centerX, layout.safeTop + 150, width * 0.52, TREE_STYLE.violet, 0.11).setDepth(0);
+    this.add.circle(centerX, layout.safeTop + 162, width * 0.34, TREE_STYLE.bronze, 0.07).setDepth(0);
+    this.add.circle(centerX, layout.safeTop + 176, width * 0.16, TREE_STYLE.gold, 0.035).setDepth(0);
 
     const trunkX = centerX;
-    const trunkTop = layout.contentTop - 18;
-    const trunkBottom = layout.contentBottom + 14;
+    const trunkTop = layout.contentTop - 24;
+    const trunkBottom = layout.contentBottom + 16;
 
-    this.add.line(0, 0, trunkX, trunkTop, trunkX, trunkBottom, TREE_DARK.bronze, 0.18)
+    this.add.line(0, 0, trunkX, trunkTop, trunkX, trunkBottom, TREE_STYLE.bronze, 0.16)
       .setLineWidth(3)
       .setDepth(1);
 
-    for (let index = 0; index < 16; index += 1) {
+    for (let index = 0; index < 18; index += 1) {
       const side = index % 2 === 0 ? -1 : 1;
-      const y = trunkTop + 42 + index * 48;
-      const length = Phaser.Math.Clamp(width * 0.18 + (index % 4) * 16, 90, 170);
+      const y = trunkTop + 38 + index * 44;
+      const length = Phaser.Math.Clamp(width * 0.16 + (index % 4) * 15, 82, 160);
 
       this.add.line(
         0,
@@ -409,31 +415,31 @@ export class StatsTreeScene extends Phaser.Scene {
         trunkX,
         y,
         trunkX + side * length,
-        y + 20 + (index % 3) * 8,
-        TREE_DARK.bronze,
-        0.08
+        y + 16 + (index % 3) * 7,
+        TREE_STYLE.bronze,
+        0.07
       )
         .setLineWidth(2)
         .setDepth(1);
     }
 
-    for (let i = 0; i < 38; i += 1) {
+    for (let i = 0; i < 42; i += 1) {
       const x = Phaser.Math.Between(layout.safeX + 10, width - layout.safeX - 10);
       const y = Phaser.Math.Between(layout.safeTop + 74, height - layout.safeBottom - 96);
-      const color = i % 5 === 0 ? TREE_DARK.gold : i % 3 === 0 ? TREE_DARK.violet : TREE_DARK.ash;
-      const alpha = i % 5 === 0 ? 0.035 : 0.022;
+      const color = i % 5 === 0 ? TREE_STYLE.gold : i % 3 === 0 ? TREE_STYLE.violet : TREE_STYLE.ash;
+      const alpha = i % 5 === 0 ? 0.034 : 0.02;
 
       this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
     }
 
     this.add.text(centerX, layout.safeTop + 152, '✦', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '80px' : '96px',
+      fontSize: layout.compact ? '82px' : '98px',
       color: '#ffffff',
-    }).setOrigin(0.5).setAlpha(0.026).setDepth(1);
+    }).setOrigin(0.5).setAlpha(0.024).setDepth(1);
   }
 
-  private createHeader(layout: TreeLayout) {
+  private createHeader(layout: FreeTreeLayout) {
     const panelY = layout.safeTop + layout.headerHeight / 2;
 
     this.createRoundedPanel({
@@ -442,18 +448,18 @@ export class StatsTreeScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: layout.headerHeight,
       radius: 32,
-      color: TREE_DARK.graphite,
-      alpha: 0.94,
-      strokeColor: TREE_DARK.bronze,
+      color: TREE_STYLE.graphite,
+      alpha: 0.95,
+      strokeColor: TREE_STYLE.bronze,
       strokeAlpha: 0.62,
       strokeWidth: 2,
-      glowColor: TREE_DARK.violet,
+      glowColor: TREE_STYLE.violet,
       depth: 100,
     });
 
-    this.add.text(layout.centerX, panelY - (layout.compact ? 42 : 46), 'Дерево характеристик', {
+    this.add.text(layout.centerX, panelY - (layout.compact ? 48 : 54), 'Свободное развитие', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '27px' : '32px',
+      fontSize: layout.compact ? '29px' : '34px',
       color: '#d8c088',
       stroke: '#000000',
       strokeThickness: 5,
@@ -465,23 +471,23 @@ export class StatsTreeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(106);
 
-    this.createPointChip(layout.centerX, panelY - 6, layout.contentWidth - 52);
+    this.createPointChip(layout.centerX, panelY - 8, layout.contentWidth - 52);
 
     this.add.text(
       layout.centerX,
-      panelY + (layout.compact ? 36 : 40),
-      'Каждый уровень героя даёт 3 очка. Особые узлы отмечены печатью и стоят дороже.',
+      panelY + (layout.compact ? 36 : 42),
+      'Выбирай узлы в ветках. Особые печати открываются на ключевых этапах и стоят дороже.',
       {
         fontFamily: UI.font.body,
         fontSize: layout.compact ? '12px' : '13px',
         color: '#9b9488',
         align: 'center',
+        lineSpacing: 3,
         wordWrap: {
-          width: layout.contentWidth - 70,
+          width: layout.contentWidth - 72,
           useAdvancedWrap: true,
         },
         maxLines: 2,
-        lineSpacing: 3,
       }
     ).setOrigin(0.5).setDepth(106);
   }
@@ -495,14 +501,14 @@ export class StatsTreeScene extends Phaser.Scene {
       x,
       y,
       width,
-      height: 38,
-      radius: 18,
+      height: 40,
+      radius: 19,
       color: canSpend ? 0x0f1510 : 0x11100e,
       alpha: 0.96,
-      strokeColor: canSpend ? TREE_DARK.green : TREE_DARK.bronze,
+      strokeColor: canSpend ? TREE_STYLE.green : TREE_STYLE.bronze,
       strokeAlpha: canSpend ? 0.72 : 0.42,
       strokeWidth: 1,
-      glowColor: canSpend ? TREE_DARK.green : TREE_DARK.gold,
+      glowColor: canSpend ? TREE_STYLE.green : TREE_STYLE.gold,
       depth: 103,
     });
 
@@ -520,7 +526,7 @@ export class StatsTreeScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(107);
   }
 
-  private createScrollableContent(layout: TreeLayout) {
+  private createScrollableContent(layout: FreeTreeLayout) {
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
 
@@ -566,21 +572,21 @@ export class StatsTreeScene extends Phaser.Scene {
     }
   }
 
-  private getBranchCardHeight(layout: TreeLayout, branch: BranchData) {
+  private getBranchCardHeight(layout: FreeTreeLayout, branch: BranchData) {
     if (branch.locked) {
-      return layout.compact ? 204 : 216;
+      return layout.compact ? 214 : 226;
     }
 
     if (branch.maxLevel > 10) {
-      return layout.compact ? 314 : 334;
+      return layout.compact ? 392 : 420;
     }
 
-    return layout.compact ? 292 : 310;
+    return layout.compact ? 354 : 378;
   }
 
-  private createIntroPanel(layout: TreeLayout, topY: number) {
+  private createIntroPanel(layout: FreeTreeLayout, topY: number) {
     const container = this.requireContentContainer();
-    const panelHeight = layout.compact ? 108 : 118;
+    const panelHeight = layout.compact ? 112 : 124;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -590,20 +596,20 @@ export class StatsTreeScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 30,
-      color: TREE_DARK.warmStone,
+      color: TREE_STYLE.warmStone,
       alpha: 0.92,
-      strokeColor: TREE_DARK.bronze,
-      strokeAlpha: 0.46,
+      strokeColor: TREE_STYLE.bronze,
+      strokeAlpha: 0.44,
       strokeWidth: 2,
-      glowColor: TREE_DARK.gold,
+      glowColor: TREE_STYLE.gold,
       depth: 2,
     });
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 30, 'Печати развития', {
+      this.add.text(layout.centerX, topY + 32, 'Ветки силы', {
         fontFamily: UI.font.title,
-        fontSize: layout.compact ? '21px' : '23px',
+        fontSize: layout.compact ? '22px' : '24px',
         color: '#d8c088',
         stroke: '#000000',
         strokeThickness: 4,
@@ -620,8 +626,8 @@ export class StatsTreeScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 74,
-        'Прокачивай ветки под свой стиль: живучесть, урон, броню, уклонение, добычу или энергию. Следующий узел всегда показан внутри карточки.',
+        topY + 78,
+        'Каждая ветка — это цепь печатей. Обычные узлы дают стабильные характеристики, крупные печати меняют стиль боя.',
         {
           fontFamily: UI.font.body,
           fontSize: layout.compact ? '12px' : '13px',
@@ -640,7 +646,7 @@ export class StatsTreeScene extends Phaser.Scene {
     return topY + panelHeight;
   }
 
-  private createBranchCard(layout: TreeLayout, branch: BranchData, y: number, height: number) {
+  private createBranchCard(layout: FreeTreeLayout, branch: BranchData, y: number, height: number) {
     const container = this.requireContentContainer();
 
     const level = this.getBranchLevel(branch.id);
@@ -662,7 +668,7 @@ export class StatsTreeScene extends Phaser.Scene {
       width,
       height,
       radius: 32,
-      color: isLocked ? TREE_DARK.graphite : TREE_DARK.soot,
+      color: isLocked ? TREE_STYLE.graphite : TREE_STYLE.soot,
       alpha: 0.96,
       strokeColor: isLocked ? 0x4a3a27 : branch.accentColor,
       strokeAlpha: isLocked ? 0.34 : 0.66,
@@ -673,7 +679,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.rectangle(left + 8, y, 5, height - 36, branch.accentColor, isLocked ? 0.22 : 0.78)
+      this.add.rectangle(left + 8, y, 5, height - 36, branch.accentColor, isLocked ? 0.2 : 0.72)
         .setDepth(7)
     );
 
@@ -730,21 +736,27 @@ export class StatsTreeScene extends Phaser.Scene {
     this.createLevelPill(container, right - 70, top + 52, branch, level, isLocked, isMaxed);
 
     if (isLocked) {
-      this.createLockedBranchContent(container, layout, branch, top + 106, width - 54);
+      this.createLockedBranchContent(container, layout, branch, top + 110, width - 54);
       return;
     }
 
-    this.createProgressBlock({
+    const treeTop = top + 100;
+    const treeHeight = branch.maxLevel > 10
+      ? layout.compact ? 158 : 176
+      : layout.compact ? 130 : 146;
+
+    this.createBranchTreeMap({
       parent: container,
       branch,
       level,
-      x: left + 28,
-      y: top + 100,
-      width: width - 56,
+      x: left + 26,
+      y: treeTop,
+      width: width - 52,
+      height: treeHeight,
       compact: layout.compact,
     });
 
-    const infoY = top + (branch.maxLevel > 10 ? (layout.compact ? 176 : 190) : (layout.compact ? 164 : 174));
+    const infoY = treeTop + treeHeight + (layout.compact ? 58 : 64);
 
     this.createNextStageBox({
       parent: container,
@@ -753,7 +765,6 @@ export class StatsTreeScene extends Phaser.Scene {
       width: width - 56,
       height: layout.compact ? 86 : 94,
       branch,
-      level,
       nextStage,
       isMaxed,
       canUpgrade,
@@ -800,7 +811,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
     const width = isMaxed ? 104 : 86;
     const color = isLocked ? 0x12100d : isMaxed ? 0x0f1510 : 0x17100c;
-    const stroke = isLocked ? 0x4a3a27 : isMaxed ? TREE_DARK.green : branch.accentColor;
+    const stroke = isLocked ? 0x4a3a27 : isMaxed ? TREE_STYLE.green : branch.accentColor;
 
     this.createRoundedPanel({
       parent: container,
@@ -837,7 +848,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
   private createLockedBranchContent(
     container: Phaser.GameObjects.Container,
-    layout: TreeLayout,
+    layout: FreeTreeLayout,
     branch: BranchData,
     y: number,
     width: number
@@ -845,13 +856,13 @@ export class StatsTreeScene extends Phaser.Scene {
     this.createRoundedPanel({
       parent: container,
       x: layout.centerX,
-      y: y + 42,
+      y: y + 46,
       width,
-      height: 104,
+      height: 112,
       radius: 24,
-      color: TREE_DARK.graphite,
+      color: TREE_STYLE.graphite,
       alpha: 0.88,
-      strokeColor: TREE_DARK.bronzeDark,
+      strokeColor: TREE_STYLE.bronzeDark,
       strokeAlpha: 0.42,
       strokeWidth: 1,
       glowColor: branch.accentColor,
@@ -877,7 +888,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, y + 65, branch.normalText, {
+      this.add.text(layout.centerX, y + 68, branch.normalText, {
         fontFamily: UI.font.body,
         fontSize: '13px',
         color: '#8f806d',
@@ -892,170 +903,197 @@ export class StatsTreeScene extends Phaser.Scene {
     );
   }
 
-  private createProgressBlock(config: {
+  private createBranchTreeMap(config: {
     parent: Phaser.GameObjects.Container;
     branch: BranchData;
     level: number;
     x: number;
     y: number;
     width: number;
+    height: number;
     compact: boolean;
   }) {
-    const { parent, branch, level, x, y, width, compact } = config;
+    const { parent, branch, level, x, y, width, height, compact } = config;
 
-    const progress = branch.maxLevel <= 0
-      ? 0
-      : Phaser.Math.Clamp(level / branch.maxLevel, 0, 1);
-
-    const barY = y + 10;
-    const barHeight = 10;
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.42);
-    bg.fillRoundedRect(x, barY - barHeight / 2, width, barHeight, 5);
-    bg.setDepth(8);
-
-    const track = this.add.graphics();
-    track.fillStyle(0x1b1714, 0.96);
-    track.fillRoundedRect(x, barY - barHeight / 2, width, barHeight, 5);
-    track.setDepth(9);
-
-    parent.add([bg, track]);
-
-    if (progress > 0) {
-      const fill = this.add.graphics();
-      fill.fillStyle(branch.accentColor, 0.9);
-      fill.fillRoundedRect(x, barY - barHeight / 2, width * progress, barHeight, 5);
-      fill.setDepth(10);
-      parent.add(fill);
-    }
+    this.createRoundedPanel({
+      parent,
+      x: x + width / 2,
+      y: y + height / 2,
+      width,
+      height,
+      radius: 24,
+      color: TREE_STYLE.graphite,
+      alpha: 0.72,
+      strokeColor: TREE_STYLE.bronzeDark,
+      strokeAlpha: 0.28,
+      strokeWidth: 1,
+      glowColor: branch.accentColor,
+      depth: 7,
+    });
 
     this.addTo(
       parent,
-      this.add.text(x, y + 34, this.getProgressLabel(branch, level), {
+      this.add.text(x + 18, y + 20, this.getBranchTreeLabel(branch, level), {
         fontFamily: UI.font.body,
         fontSize: compact ? '11px' : '12px',
-        color: '#9b9488',
+        color: '#8f806d',
         wordWrap: {
-          width,
+          width: width - 36,
           useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(10)
     );
 
-    if (branch.maxLevel > 10) {
-      this.createMilestoneRow(parent, branch, x, y + 66, width, level);
-      return;
+    const mapTop = y + 42;
+    const mapHeight = height - 56;
+    const points = this.getNodePoints(branch, x + 24, mapTop, width - 48, mapHeight);
+
+    const lines = this.add.graphics();
+    lines.setDepth(9);
+
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      const unlocked = level >= current.stage.level;
+
+      lines.lineStyle(
+        unlocked ? 4 : 2,
+        unlocked ? branch.accentColor : TREE_STYLE.bronzeDark,
+        unlocked ? 0.7 : 0.42
+      );
+
+      lines.beginPath();
+      lines.moveTo(previous.x, previous.y);
+
+      const midX = (previous.x + current.x) / 2;
+      lines.lineTo(midX, previous.y);
+      lines.lineTo(midX, current.y);
+      lines.lineTo(current.x, current.y);
+      lines.strokePath();
     }
 
-    this.createShortNodeRow(parent, branch, x, y + 66, width, level);
-  }
+    parent.add(lines);
 
-  private createMilestoneRow(
-    container: Phaser.GameObjects.Container,
-    branch: BranchData,
-    x: number,
-    y: number,
-    width: number,
-    level: number
-  ) {
-    const milestones = branch.stages.filter(stage => stage.special);
-    const count = Math.max(1, milestones.length);
-    const gap = width / count;
-
-    milestones.forEach((stage, index) => {
-      const nodeX = x + gap * index + gap / 2;
-      const unlocked = level >= stage.level;
-      const next = level + 1 === stage.level;
-
-      this.addTo(
-        container,
-        this.add.circle(
-          nodeX,
-          y,
-          next ? 18 : 15,
-          unlocked ? branch.accentColor : 0x17100c,
-          unlocked ? 0.95 : 0.96
-        )
-          .setStrokeStyle(2, next ? TREE_DARK.gold : branch.accentColor, unlocked || next ? 0.86 : 0.42)
-          .setDepth(10)
-      );
-
-      this.addTo(
-        container,
-        this.add.text(nodeX, y, '★', {
-          fontFamily: UI.font.body,
-          fontSize: next ? '13px' : '11px',
-          color: unlocked ? '#ffffff' : '#d8c088',
-          stroke: '#000000',
-          strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(11)
-      );
-
-      this.addTo(
-        container,
-        this.add.text(nodeX, y + 26, `${stage.level}`, {
-          fontFamily: UI.font.body,
-          fontSize: '10px',
-          color: unlocked ? '#d8d0bf' : '#6f665b',
-          align: 'center',
-          wordWrap: {
-            width: 46,
-          },
-          maxLines: 1,
-        }).setOrigin(0.5).setDepth(11)
-      );
+    points.forEach(point => {
+      this.createTreeNode(parent, branch, point, level);
     });
   }
 
-  private createShortNodeRow(
+  private getNodePoints(branch: BranchData, x: number, y: number, width: number, height: number): NodePoint[] {
+    const stages = branch.maxLevel > 10
+      ? branch.stages.filter(stage => stage.special)
+      : branch.stages;
+
+    if (stages.length === 0) {
+      return [];
+    }
+
+    const count = stages.length;
+    const stepX = count <= 1 ? 0 : width / (count - 1);
+    const centerY = y + height / 2;
+
+    return stages.map((stage, index) => {
+      const wave = index % 3 === 0
+        ? -height * 0.24
+        : index % 3 === 1
+          ? height * 0.18
+          : -height * 0.03;
+
+      return {
+        stage,
+        x: x + stepX * index,
+        y: centerY + wave,
+      };
+    });
+  }
+
+  private createTreeNode(
     container: Phaser.GameObjects.Container,
     branch: BranchData,
-    x: number,
-    y: number,
-    width: number,
-    level: number
+    point: NodePoint,
+    currentLevel: number
   ) {
-    const nodeCount = branch.maxLevel;
-    const nodeSize = 18;
-    const gap = Math.min(32, (width - nodeSize * nodeCount) / Math.max(1, nodeCount - 1));
-    const totalWidth = nodeCount * nodeSize + (nodeCount - 1) * gap;
-    const startX = x + Math.max(0, (width - totalWidth) / 2) + nodeSize / 2;
+    const unlocked = currentLevel >= point.stage.level;
+    const next = currentLevel + 1 === point.stage.level;
+    const completedPrevious = currentLevel >= point.stage.level - 1;
+    const available = next && completedPrevious;
+    const special = point.stage.special ?? false;
 
-    for (let index = 0; index < nodeCount; index += 1) {
-      const stage = branch.stages[index];
-      const nodeX = startX + index * (nodeSize + gap);
-      const unlocked = index < level;
-      const isNext = index === level;
-      const special = stage?.special ?? false;
+    const radius = special ? 21 : 17;
+    const fill = unlocked
+      ? branch.accentColor
+      : next
+        ? TREE_STYLE.warmStone
+        : TREE_STYLE.stoneSoft;
 
-      this.addTo(
-        container,
-        this.add.circle(
-          nodeX,
-          y,
-          special || isNext ? 13 : 10,
-          unlocked ? branch.accentColor : 0x17100c,
-          unlocked ? 0.95 : 0.96
-        )
-          .setStrokeStyle(2, isNext ? TREE_DARK.gold : special ? TREE_DARK.gold : branch.accentColor, unlocked || isNext ? 0.86 : 0.42)
-          .setDepth(10)
-      );
+    const stroke = special || next ? TREE_STYLE.gold : branch.accentColor;
+    const alpha = unlocked ? 0.95 : next ? 0.92 : 0.72;
 
-      if (special) {
-        this.addTo(
-          container,
-          this.add.text(nodeX, y, '★', {
-            fontFamily: UI.font.body,
-            fontSize: '10px',
-            color: unlocked ? '#ffffff' : '#d8c088',
-            stroke: '#000000',
-            strokeThickness: 1,
-          }).setOrigin(0.5).setDepth(11)
-        );
-      }
+    this.addTo(
+      container,
+      this.add.circle(point.x, point.y, radius, fill, alpha)
+        .setStrokeStyle(next ? 3 : 2, stroke, unlocked || next ? 0.9 : 0.42)
+        .setDepth(11)
+    );
+
+    this.addTo(
+      container,
+      this.add.circle(point.x, point.y, radius + 7, stroke, next ? 0.08 : unlocked ? 0.045 : 0.018)
+        .setDepth(10)
+    );
+
+    const iconText = unlocked
+      ? '✓'
+      : special
+        ? '★'
+        : `${point.stage.level}`;
+
+    this.addTo(
+      container,
+      this.add.text(point.x, point.y, iconText, {
+        fontFamily: UI.font.title,
+        fontSize: special ? '13px' : '11px',
+        color: unlocked ? '#ffffff' : next ? '#d8c088' : '#8f806d',
+        stroke: '#000000',
+        strokeThickness: 2,
+        align: 'center',
+        wordWrap: {
+          width: radius * 2,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(12)
+    );
+
+    if (available) {
+      const zone = this.add.zone(point.x, point.y, 54, 54)
+        .setDepth(14)
+        .setInteractive({ useHandCursor: true });
+
+      zone.on('pointerup', () => {
+        if (this.didDrag) {
+          return;
+        }
+
+        this.showUpgradeConfirm(branch);
+      });
+
+      container.add(zone);
     }
+
+    this.addTo(
+      container,
+      this.add.text(point.x, point.y + radius + 12, `${point.stage.cost} очк.`, {
+        fontFamily: UI.font.body,
+        fontSize: '10px',
+        color: unlocked ? '#9fd0a6' : next ? '#d8c088' : '#6f665b',
+        align: 'center',
+        wordWrap: {
+          width: 58,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(12)
+    );
   }
 
   private createNextStageBox(config: {
@@ -1065,7 +1103,6 @@ export class StatsTreeScene extends Phaser.Scene {
     width: number;
     height: number;
     branch: BranchData;
-    level: number;
     nextStage?: StageData;
     isMaxed: boolean;
     canUpgrade: boolean;
@@ -1107,7 +1144,7 @@ export class StatsTreeScene extends Phaser.Scene {
       radius: 22,
       color: isMaxed ? 0x0f1510 : 0x12100d,
       alpha: 0.92,
-      strokeColor: isMaxed ? TREE_DARK.green : canUpgrade ? branch.accentColor : TREE_DARK.bronzeDark,
+      strokeColor: isMaxed ? TREE_STYLE.green : canUpgrade ? branch.accentColor : TREE_STYLE.bronzeDark,
       strokeAlpha: isMaxed ? 0.58 : canUpgrade ? 0.58 : 0.38,
       strokeWidth: 1,
       glowColor: branch.accentColor,
@@ -1166,9 +1203,9 @@ export class StatsTreeScene extends Phaser.Scene {
     );
   }
 
-  private createAdvicePanel(layout: TreeLayout, topY: number) {
+  private createAdvicePanel(layout: FreeTreeLayout, topY: number) {
     const container = this.requireContentContainer();
-    const panelHeight = 118;
+    const panelHeight = 120;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -1178,12 +1215,12 @@ export class StatsTreeScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 28,
-      color: TREE_DARK.graphite,
+      color: TREE_STYLE.graphite,
       alpha: 0.92,
-      strokeColor: TREE_DARK.bronze,
+      strokeColor: TREE_STYLE.bronze,
       strokeAlpha: 0.38,
       strokeWidth: 1,
-      glowColor: TREE_DARK.violet,
+      glowColor: TREE_STYLE.violet,
       depth: 2,
     });
 
@@ -1208,8 +1245,8 @@ export class StatsTreeScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 76,
-        'Для стабильного старта возьми Живучесть или Урон. Для рискованного билда — Крит и Реакцию. Для фарма — Фортуну.',
+        topY + 78,
+        'Сначала открой 1–2 ветки под роль героя. Длинные ветки дают стабильный рост, короткие — дорогие сильные эффекты.',
         {
           fontFamily: UI.font.body,
           fontSize: '13px',
@@ -1228,7 +1265,7 @@ export class StatsTreeScene extends Phaser.Scene {
     return topY + panelHeight;
   }
 
-  private createScrollInput(layout: TreeLayout) {
+  private createScrollInput(layout: FreeTreeLayout) {
     this.input.off('pointerdown');
     this.input.off('pointermove');
     this.input.off('pointerup');
@@ -1305,7 +1342,7 @@ export class StatsTreeScene extends Phaser.Scene {
     );
   }
 
-  private isPointerInsideContent(pointer: Phaser.Input.Pointer, layout: TreeLayout) {
+  private isPointerInsideContent(pointer: Phaser.Input.Pointer, layout: FreeTreeLayout) {
     return (
       pointer.x >= layout.safeX &&
       pointer.x <= layout.width - layout.safeX &&
@@ -1314,13 +1351,13 @@ export class StatsTreeScene extends Phaser.Scene {
     );
   }
 
-  private createScrollHint(layout: TreeLayout) {
+  private createScrollHint(layout: FreeTreeLayout) {
     const hintY = layout.contentBottom - 18;
 
     const bg = this.add.rectangle(layout.centerX, hintY, 250, 28, 0x000000, 0.4)
       .setDepth(230);
 
-    const text = this.add.text(layout.centerX, hintY, 'Прокручивай дерево', {
+    const text = this.add.text(layout.centerX, hintY, 'Прокручивай ветки', {
       fontFamily: UI.font.body,
       fontSize: '12px',
       color: '#8f806d',
@@ -1340,7 +1377,7 @@ export class StatsTreeScene extends Phaser.Scene {
     });
   }
 
-  private createBottomButton(layout: TreeLayout) {
+  private createBottomButton(layout: FreeTreeLayout) {
     const y = layout.height - layout.safeBottom - 32;
 
     this.add.rectangle(
@@ -1357,7 +1394,7 @@ export class StatsTreeScene extends Phaser.Scene {
       y - 42,
       layout.contentWidth,
       1,
-      TREE_DARK.bronze,
+      TREE_STYLE.bronze,
       0.24
     ).setDepth(237);
 
@@ -1367,7 +1404,7 @@ export class StatsTreeScene extends Phaser.Scene {
       width: Math.min(layout.contentWidth, 540),
       height: 56,
       text: 'Вернуться в лагерь',
-      accentColor: TREE_DARK.gold,
+      accentColor: TREE_STYLE.gold,
       variant: 'gold',
       onClick: () => {
         this.scene.start('CampScene');
@@ -1492,12 +1529,12 @@ export class StatsTreeScene extends Phaser.Scene {
       width: modalWidth,
       height: modalHeight,
       radius: 32,
-      color: TREE_DARK.warmStone,
+      color: TREE_STYLE.warmStone,
       alpha: 0.98,
-      strokeColor: TREE_DARK.bronze,
+      strokeColor: TREE_STYLE.bronze,
       strokeAlpha: 0.88,
       strokeWidth: 3,
-      glowColor: TREE_DARK.gold,
+      glowColor: TREE_STYLE.gold,
       depth: 1001,
     });
 
@@ -1520,7 +1557,7 @@ export class StatsTreeScene extends Phaser.Scene {
       centerY - modalHeight / 2 + 88,
       modalWidth - 92,
       2,
-      TREE_DARK.gold,
+      TREE_STYLE.gold,
       0.24
     ).setDepth(1005);
 
@@ -1548,7 +1585,7 @@ export class StatsTreeScene extends Phaser.Scene {
       width: Math.min(modalWidth - 94, 390),
       height: 54,
       text: config.confirmText,
-      accentColor: config.confirmVariant === 'green' ? TREE_DARK.green : TREE_DARK.gold,
+      accentColor: config.confirmVariant === 'green' ? TREE_STYLE.green : TREE_STYLE.gold,
       variant: config.confirmVariant,
       onClick: () => {
         closeModal();
@@ -1563,7 +1600,7 @@ export class StatsTreeScene extends Phaser.Scene {
       width: Math.min(modalWidth - 94, 390),
       height: 52,
       text: 'Отмена',
-      accentColor: TREE_DARK.bronze,
+      accentColor: TREE_STYLE.bronze,
       variant: 'dark',
       onClick: () => {
         closeModal();
@@ -1616,7 +1653,7 @@ export class StatsTreeScene extends Phaser.Scene {
     return state;
   }
 
-  private getProgressLabel(branch: BranchData, level: number) {
+  private getBranchTreeLabel(branch: BranchData, level: number) {
     if (branch.maxLevel <= 0) {
       return 'Ветка закрыта';
     }
@@ -1630,10 +1667,10 @@ export class StatsTreeScene extends Phaser.Scene {
       .sort((a, b) => a.level - b.level)[0];
 
     if (nextSpecial) {
-      return `Прогресс ${level}/${branch.maxLevel} • ближайшая особая печать: ${nextSpecial.level} ур.`;
+      return `Открыто ${level}/${branch.maxLevel} • ближайшая особая печать: ${nextSpecial.level} ур.`;
     }
 
-    return `Прогресс ${level}/${branch.maxLevel}`;
+    return `Открыто ${level}/${branch.maxLevel}`;
   }
 
   private createTreeButton(config: {
@@ -1657,11 +1694,11 @@ export class StatsTreeScene extends Phaser.Scene {
     const strokeColor = disabled
       ? 0x3c342c
       : variant === 'green'
-        ? TREE_DARK.green
+        ? TREE_STYLE.green
         : variant === 'red'
-          ? TREE_DARK.blood
+          ? TREE_STYLE.blood
           : variant === 'dark'
-            ? TREE_DARK.bronze
+            ? TREE_STYLE.bronze
             : config.accentColor;
 
     const fillColor = disabled
@@ -1671,7 +1708,7 @@ export class StatsTreeScene extends Phaser.Scene {
         : variant === 'red'
           ? 0x241010
           : variant === 'dark'
-            ? TREE_DARK.graphite
+            ? TREE_STYLE.graphite
             : 0x21150f;
 
     const hoverColor = variant === 'green'
@@ -1833,12 +1870,12 @@ export class StatsTreeScene extends Phaser.Scene {
     depth?: number;
   }) {
     const radius = config.radius ?? 24;
-    const color = config.color ?? TREE_DARK.warmStone;
+    const color = config.color ?? TREE_STYLE.warmStone;
     const alpha = config.alpha ?? 0.92;
-    const strokeColor = config.strokeColor ?? TREE_DARK.bronze;
+    const strokeColor = config.strokeColor ?? TREE_STYLE.bronze;
     const strokeAlpha = config.strokeAlpha ?? 0.45;
     const strokeWidth = config.strokeWidth ?? 2;
-    const glowColor = config.glowColor ?? TREE_DARK.gold;
+    const glowColor = config.glowColor ?? TREE_STYLE.gold;
     const depth = config.depth ?? 1;
 
     const safeWidth = Math.min(config.width, this.scale.width - 24);
@@ -1895,7 +1932,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
   private requireContentContainer() {
     if (!this.contentContainer) {
-      throw new Error('Stats tree content container was not created.');
+      throw new Error('Stats free content container was not created.');
     }
 
     return this.contentContainer;

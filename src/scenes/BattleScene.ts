@@ -21,6 +21,9 @@ import {
 } from '../systems/InventorySystem';
 import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
 import { rollEnemyLoot } from '../systems/LootSystem';
+import { addMaterialsPack } from '../systems/MaterialSystem';
+import { trackFloorMaterials } from '../systems/FloorMaterialLogSystem';
+import { getMaterialName, type MaterialId } from '../data/materials';
 import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
 import { createScaledEnemy } from '../systems/EnemyScalingSystem';
 import { getRaceById } from '../data/races';
@@ -82,6 +85,12 @@ type ActivePlayerDebuff = {
   power: number;
 };
 
+const GOBLIN_EXTRA_MATERIAL_POOL: MaterialId[] = [
+  'darkened_bone',
+  'dim_gem',
+  'old_leather',
+];
+
 type BattleLayout = {
   width: number;
   height: number;
@@ -141,16 +150,22 @@ export class BattleScene extends Phaser.Scene {
   private potionCooldown = 0;
 
   private taintedHpCost = 0;
-  
-  private stoneGuardActive = false;
-  
-  private nightElfShadowStepActive = false;
+
+  private humanBattleFocusTurns = 0;
+  private humanBattleFocusDamageBonus = 0;
+  private humanBattleFocusDefenseBonus = 0;
+
+  private stoneQuartzSpikesTurns = 0;
+
+  private nightElfShadowStepTurns = 0;
   private nightElfShadowDanceActive = false;
-  
-  private goblinDirtyTrickActive = false;
-  
+
+  private goblinGreedyMarkTurns = 0;
+
   private demonRageStacks = 0;
   private demonHpSpentByHellfire = 0;
+
+  private raceAttackEffectText = '';
 
   private playerDebuffs: ActivePlayerDebuff[] = [];
   private nextIncomingDamageBonus = 0;
@@ -200,15 +215,21 @@ export class BattleScene extends Phaser.Scene {
 
   this.taintedHpCost = 0;
 
-  this.stoneGuardActive = false;
+  this.humanBattleFocusTurns = 0;
+  this.humanBattleFocusDamageBonus = 0;
+  this.humanBattleFocusDefenseBonus = 0;
 
-  this.nightElfShadowStepActive = false;
+  this.stoneQuartzSpikesTurns = 0;
+
+  this.nightElfShadowStepTurns = 0;
   this.nightElfShadowDanceActive = false;
 
-  this.goblinDirtyTrickActive = false;
+  this.goblinGreedyMarkTurns = 0;
 
   this.demonRageStacks = 0;
   this.demonHpSpentByHellfire = 0;
+
+  this.raceAttackEffectText = '';
 
   this.enemyBleedTurns = 0;
   this.enemyBleedDamage = 0;
@@ -382,6 +403,78 @@ private getEnemyWeaknessDamageMultiplier() {
     }
 
     return '';
+  }
+
+
+  private getSwordLargeEnemyDamageBonus(playerMaxHp: number) {
+    const safePlayerMaxHp = Math.max(1, playerMaxHp);
+    const enemyHpRatio = this.enemy.maxHp / safePlayerMaxHp;
+
+    if (enemyHpRatio >= 3) {
+      return {
+        multiplier: 1.2,
+        bonusPercent: 20,
+      };
+    }
+
+    if (enemyHpRatio >= 2) {
+      return {
+        multiplier: 1.15,
+        bonusPercent: 15,
+      };
+    }
+
+    if (enemyHpRatio >= 1.5) {
+      return {
+        multiplier: 1.1,
+        bonusPercent: 10,
+      };
+    }
+
+    return {
+      multiplier: 1,
+      bonusPercent: 0,
+    };
+  }
+
+  private tryApplyDaggerLifesteal(damage: number) {
+    if (damage <= 0) {
+      return 0;
+    }
+
+    if (Math.random() >= 0.08) {
+      return 0;
+    }
+
+    if (this.hasPlayerDebuff('heal_block')) {
+      return 0;
+    }
+
+    const stats = this.getBattleStats();
+
+    if (player.hp >= stats.maxHp) {
+      return 0;
+    }
+
+    const rot = this.getPlayerDebuff('rot');
+    const healMultiplier = rot ? Math.max(0, 1 - rot.power / 100) : 1;
+    const healAmount = Math.max(1, Math.floor(damage * 0.5 * healMultiplier));
+    const previousHp = player.hp;
+
+    player.hp = Math.min(stats.maxHp, player.hp + healAmount);
+
+    const actualHeal = Math.max(0, player.hp - previousHp);
+
+    if (actualHeal > 0) {
+      this.showFloatingText(
+        this.playerCard.x,
+        this.playerCard.y - 55,
+        `+${actualHeal}`,
+        '#75d184'
+      );
+    }
+
+    return actualHeal;
   }
 
   private createBattleHeader(title: string, subtitle: string, isBoss: boolean) {
@@ -882,18 +975,18 @@ private getRaceSkillEnergyCost() {
   if (player.raceId === 'tainted_halfblood') return 2;
   if (player.raceId === 'stoneborn') return 2;
   if (player.raceId === 'night_elf') return 3;
-  if (player.raceId === 'goblin') return 2;
+  if (player.raceId === 'goblin') return 3;
   if (player.raceId === 'demon') return 2;
 
   return 2;
 }
 
 private getRaceSkillCooldownTurns() {
-  if (player.raceId === 'human') return 2;
+  if (player.raceId === 'human') return 4;
   if (player.raceId === 'tainted_halfblood') return 3;
   if (player.raceId === 'stoneborn') return 3;
   if (player.raceId === 'night_elf') return 4;
-  if (player.raceId === 'goblin') return 3;
+  if (player.raceId === 'goblin') return 4;
   if (player.raceId === 'demon') return 3;
 
   return 3;
@@ -968,33 +1061,35 @@ private handleHumanSkill() {
   this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
 
   const stats = this.getBattleStats();
-  const hpLostRatio = 1 - player.hp / stats.maxHp;
+  const hpRatio = stats.maxHp > 0 ? player.hp / stats.maxHp : 1;
 
-  const multiplier = 1.35 + hpLostRatio * 1.25;
+  if (hpRatio <= 0.25) {
+    this.humanBattleFocusDamageBonus = 0.25;
+    this.humanBattleFocusDefenseBonus = 0.20;
+  } else if (hpRatio <= 0.5) {
+    this.humanBattleFocusDamageBonus = 0.20;
+    this.humanBattleFocusDefenseBonus = 0.15;
+  } else {
+    this.humanBattleFocusDamageBonus = 0.15;
+    this.humanBattleFocusDefenseBonus = 0.10;
+  }
 
-  const damage = this.calculateDamage({
-    baseDamage: stats.attack,
-    multiplier,
-    varianceMin: 0,
-    varianceMax: 6,
-    isSkill: true,
-  });
+  this.humanBattleFocusTurns = 3;
 
-  const finalDamage = Math.floor(damage);
-
-  const weaknessText = this.getEnemyWeaknessText();
-
-  this.animatePlayerAttack();
-  this.damageEnemy(finalDamage);
-
-  const hpLostPercent = Math.round(hpLostRatio * 100);
+  const damagePercent = Math.round(this.humanBattleFocusDamageBonus * 100);
+  const defensePercent = Math.round(this.humanBattleFocusDefenseBonus * 100);
 
   const playerActionText =
-    `Отчаянный удар!\n` +
-    `Потеряно HP: ${hpLostPercent}%.\n` +
-    `Ты наносишь ${finalDamage} урона.${weaknessText}`;
+    `Боевой настрой.\n` +
+    `На 3 хода: +${damagePercent}% к урону и +${defensePercent}% к защите.`;
 
-  this.afterPlayerAttack(playerActionText);
+  this.logText.setText(playerActionText);
+  this.updateTexts();
+  this.createActionButtons();
+
+  this.time.delayedCall(450, () => {
+    this.enemyTurn(playerActionText, false);
+  });
 }
 
 private handleTaintedSkill() {
@@ -1013,7 +1108,7 @@ private handleTaintedSkill() {
 
   const damage = this.calculateDamage({
     baseDamage: stats.attack,
-    multiplier: lowHp ? 1.7 : 1.4,
+    multiplier: lowHp ? 1.7 : 1.45,
     varianceMin: 0,
     varianceMax: 5,
     isSkill: true,
@@ -1037,11 +1132,11 @@ private handleStonebornSkill() {
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
-  this.stoneGuardActive = true;
+  this.stoneQuartzSpikesTurns = 2;
 
   const playerActionText =
-    `Глухая стойка.\n` +
-    `Следующий удар врага нанесёт на 60% меньше урона.`;
+    `Кварцевые шипы.\n` +
+    `На 2 хода: +10% к защите и отражение 30% полученного урона.`;
 
   this.logText.setText(playerActionText);
   this.updateTexts();
@@ -1057,11 +1152,11 @@ private handleNightElfSkill() {
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
-  this.nightElfShadowStepActive = true;
+  this.nightElfShadowStepTurns = 3;
 
   const playerActionText =
     `Шаг в тень.\n` +
-    `Следующая атака врага будет гарантированно уклонена.`;
+    `На 3 хода шанс уклониться от атаки врага становится не ниже 50%.`;
 
   this.logText.setText(playerActionText);
   this.updateTexts();
@@ -1077,34 +1172,20 @@ private handleGoblinSkill() {
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
-
-  const stats = this.getBattleStats();
-
-  const damage = this.calculateDamage({
-    baseDamage: stats.attack,
-    multiplier: 0.9,
-    varianceMin: 0,
-    varianceMax: 4,
-    isSkill: true,
-  });
-
-  const dirtyTrick = Math.random() < 0.5;
-
-  if (dirtyTrick) {
-    this.goblinDirtyTrickActive = true;
-  }
-
-  const weaknessText = this.getEnemyWeaknessText();
-
-  this.animatePlayerAttack();
-  this.damageEnemy(damage);
+  this.goblinGreedyMarkTurns = 3;
 
   const playerActionText =
-    dirtyTrick
-      ? `Подлый удар!\nТы наносишь ${damage} урона.${weaknessText}\nГрязный приём ослабит следующий удар врага на 25%.`
-      : `Подлый удар!\nТы наносишь ${damage} урона.${weaknessText}`;
+    `Воровская метка.\n` +
+    `Враг помечен на 3 хода. Он получает на 20% больше урона от гоблина.\n` +
+    `Если враг умрёт под меткой: +25% золота и 10% шанс дополнительного материала.`;
 
-  this.afterPlayerAttack(playerActionText);
+  this.logText.setText(playerActionText);
+  this.updateTexts();
+  this.createActionButtons();
+
+  this.time.delayedCall(450, () => {
+    this.enemyTurn(playerActionText, false);
+  });
 }
 
 private handleDemonSkill() {
@@ -1119,11 +1200,11 @@ private handleDemonSkill() {
   player.hp = Math.max(1, player.hp - hpCost);
   this.demonHpSpentByHellfire += hpCost;
 
-  const lowHp = player.hp / stats.maxHp <= 0.4;
+  const lowHp = player.hp / stats.maxHp <= 0.35;
 
   const damage = this.calculateDamage({
     baseDamage: stats.attack,
-    multiplier: lowHp ? 2.1 : 1.7,
+    multiplier: lowHp ? 2.0 : 1.6,
     varianceMin: 0,
     varianceMax: 5,
     isSkill: true,
@@ -1242,11 +1323,15 @@ private handleDemonSkill() {
     const battleIntelligence = player.intelligence + bonus.intelligence;
 
     const baseDodgeChance = Math.min(0.22, battleAgility * 0.01);
+    const humanPassiveDodgeMultiplier =
+      player.raceId === 'human' && this.humanPassiveActivated
+        ? 1.02
+        : 1;
 
     const dodgeChance =
       player.raceId === 'stoneborn'
-        ? baseDodgeChance * 0.7
-        : baseDodgeChance;
+        ? baseDodgeChance * 0.7 * humanPassiveDodgeMultiplier
+        : baseDodgeChance * humanPassiveDodgeMultiplier;
 
     return {
       ...stats,
@@ -1279,27 +1364,107 @@ private handleDemonSkill() {
       critChance: 0,
     };
 
-    if (player.raceId === 'human' && this.humanPassiveActivated) {
-      bonus.attack += 2;
-      bonus.defense += 2;
-      bonus.agility += 2;
-      bonus.intelligence += 2;
-    }
-
     if (player.raceId === 'tainted_halfblood') {
       const lowHp = player.hp / maxHp <= 0.35;
 
       if (lowHp) {
-        bonus.attack += 3;
         bonus.critChance += 0.08;
       }
     }
 
-    if (player.raceId === 'demon') {
-      bonus.attack += this.demonRageStacks;
+    return bonus;
+  }
+
+  private getRaceDamageMultiplier() {
+    let multiplier = 1;
+    const stats = getPlayerStats(player);
+    const maxHp = Math.max(1, stats.maxHp || player.maxHp || 1);
+
+    if (player.raceId === 'human') {
+      if (this.humanPassiveActivated) {
+        multiplier *= 1.02;
+      }
+
+      if (this.humanBattleFocusTurns > 0) {
+        multiplier *= 1 + this.humanBattleFocusDamageBonus;
+      }
     }
 
-    return bonus;
+    if (player.raceId === 'tainted_halfblood' && player.hp / maxHp <= 0.35) {
+      multiplier *= 1.03;
+    }
+
+    if (player.raceId === 'goblin' && this.goblinGreedyMarkTurns > 0) {
+      multiplier *= 1.2;
+    }
+
+    if (player.raceId === 'demon' && this.demonRageStacks > 0) {
+      multiplier *= 1 + this.demonRageStacks * 0.01;
+    }
+
+    return multiplier;
+  }
+
+  private getRaceIncomingDamageMultiplier() {
+    let multiplier = 1;
+
+    if (player.raceId === 'human') {
+      if (this.humanPassiveActivated) {
+        multiplier *= 0.98;
+      }
+
+      if (this.humanBattleFocusTurns > 0) {
+        multiplier *= 1 - this.humanBattleFocusDefenseBonus;
+      }
+    }
+
+    if (player.raceId === 'stoneborn') {
+      multiplier *= 0.98;
+
+      if (this.stoneQuartzSpikesTurns > 0) {
+        multiplier *= 0.9;
+      }
+    }
+
+    return multiplier;
+  }
+
+  private consumeRaceAttackEffectText() {
+    const text = this.raceAttackEffectText;
+    this.raceAttackEffectText = '';
+
+    return text;
+  }
+
+  private tickGoblinMarkAfterPlayerAttack() {
+    if (player.raceId !== 'goblin' || this.goblinGreedyMarkTurns <= 0) {
+      return '';
+    }
+
+    this.goblinGreedyMarkTurns = Math.max(0, this.goblinGreedyMarkTurns - 1);
+
+    return this.goblinGreedyMarkTurns > 0
+      ? `\nВоровская метка: осталось ${this.goblinGreedyMarkTurns} х.`
+      : '\nВоровская метка погасла.';
+  }
+
+  private tickRaceTurnEffectsAfterEnemyAction() {
+    if (this.humanBattleFocusTurns > 0) {
+      this.humanBattleFocusTurns = Math.max(0, this.humanBattleFocusTurns - 1);
+
+      if (this.humanBattleFocusTurns === 0) {
+        this.humanBattleFocusDamageBonus = 0;
+        this.humanBattleFocusDefenseBonus = 0;
+      }
+    }
+
+    if (this.stoneQuartzSpikesTurns > 0) {
+      this.stoneQuartzSpikesTurns = Math.max(0, this.stoneQuartzSpikesTurns - 1);
+    }
+
+    if (this.nightElfShadowStepTurns > 0) {
+      this.nightElfShadowStepTurns = Math.max(0, this.nightElfShadowStepTurns - 1);
+    }
   }
 
 
@@ -1491,8 +1656,15 @@ private handleDemonSkill() {
     if (this.nightElfShadowDanceActive) {
       multiplier *= 1.25;
       this.nightElfShadowDanceActive = false;
+
+      const bleedDamage = Math.max(1, Math.floor(config.baseDamage * 0.22));
+      this.enemyBleedTurns = Math.max(this.enemyBleedTurns, 2);
+      this.enemyBleedDamage = Math.max(this.enemyBleedDamage, bleedDamage);
+      this.raceAttackEffectText =
+        '\nТанец теней: удар усилен на 25% и накладывает кровотечение.';
     }
 
+    multiplier *= this.getRaceDamageMultiplier();
     multiplier *= this.getEnemyWeaknessDamageMultiplier();
 
     if (this.hasPlayerDebuff('weakness')) {
@@ -1645,12 +1817,24 @@ private getSkillCostPenalty() {
       skipEnemyTurn?: boolean;
     }
   ) {
+    const raceEffectText = this.consumeRaceAttackEffectText();
+
+    if (raceEffectText) {
+      playerActionText += raceEffectText;
+    }
+
     this.updateTexts();
     this.createActionButtons();
 
     if (this.enemy.hp <= 0) {
       this.handleVictory(playerActionText);
       return;
+    }
+
+    const goblinMarkText = this.tickGoblinMarkAfterPlayerAttack();
+
+    if (goblinMarkText) {
+      playerActionText += goblinMarkText;
     }
 
     if (options?.skipEnemyTurn) {
@@ -1823,13 +2007,13 @@ private getSkillCostPenalty() {
     const stats = getPlayerStats(player);
     const hpPercent = player.hp / stats.maxHp;
 
-    if (hpPercent > 0.25) {
+    if (hpPercent > 0.3) {
       return '';
     }
 
     this.humanPassiveActivated = true;
 
-    return '\n\nПассивный навык сработал: Воля к борьбе.\nДо конца боя характеристики увеличены.';
+    return '\n\nПассивный навык сработал: Воля к борьбе.\nДо конца боя: +2% к атаке, защите и ловкости.';
   }
 
 
@@ -2814,24 +2998,28 @@ ${effect.duration} х.`,
       statuses.push(`Расовый навык: КД ${this.raceSkillCooldown}`);
     }
 
-    if (this.stoneGuardActive) {
-      statuses.push('Глухая стойка');
+    if (this.humanBattleFocusTurns > 0) {
+      statuses.push(`Боевой настрой: ${this.humanBattleFocusTurns} х.`);
     }
 
-    if (this.nightElfShadowStepActive) {
-      statuses.push('Шаг в тень');
+    if (this.stoneQuartzSpikesTurns > 0) {
+      statuses.push(`Кварцевые шипы: ${this.stoneQuartzSpikesTurns} х.`);
+    }
+
+    if (this.nightElfShadowStepTurns > 0) {
+      statuses.push(`Шаг в тень: ${this.nightElfShadowStepTurns} х.`);
     }
 
     if (this.nightElfShadowDanceActive) {
       statuses.push('Танец теней');
     }
 
-    if (this.goblinDirtyTrickActive) {
-      statuses.push('Грязный приём');
+    if (this.goblinGreedyMarkTurns > 0) {
+      statuses.push(`Воровская метка: ${this.goblinGreedyMarkTurns} х.`);
     }
 
     if (this.demonRageStacks > 0) {
-      statuses.push(`Адская ярость: +${this.demonRageStacks}`);
+      statuses.push(`Адская ярость: +${this.demonRageStacks}%`);
     }
 
     if (this.playerDebuffs.length > 0) {
@@ -3074,10 +3262,11 @@ ${effect.duration} х.`,
 
   private handleSwordAttack() {
     const stats = this.getBattleStats();
+    const swordBonus = this.getSwordLargeEnemyDamageBonus(stats.maxHp);
 
     const damage = this.calculateDamage({
       baseDamage: stats.attack,
-      multiplier: 1,
+      multiplier: swordBonus.multiplier,
       varianceMin: -2,
       varianceMax: 3,
       isBasicAttack: true,
@@ -3088,13 +3277,17 @@ ${effect.duration} х.`,
     const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
     const weaknessText = this.getEnemyWeaknessText();
+    const swordBonusText = swordBonus.bonusPercent > 0
+      ? `
+Преимущество меча: враг крупнее, урон +${swordBonus.bonusPercent}%.`
+      : '';
 
     this.animatePlayerAttack();
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
-      ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${weaknessText}${treeCritText}`
-      : `Ты наносишь удар мечом: ${finalDamage} урона.${weaknessText}`;
+      ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${swordBonusText}${weaknessText}${treeCritText}`
+      : `Ты наносишь удар мечом: ${finalDamage} урона.${swordBonusText}${weaknessText}`;
 
     this.afterPlayerAttack(playerActionText);
   }
@@ -3128,6 +3321,7 @@ ${effect.duration} х.`,
   }
 
   let totalDamage = 0;
+  let totalHeal = 0;
   let critCount = 0;
   const daggerTreeCritTexts: string[] = [];
   let finished = false;
@@ -3145,10 +3339,13 @@ ${effect.duration} х.`,
         : '';
 
     const weaknessText = this.getEnemyWeaknessText();
+    const lifestealText = totalHeal > 0
+      ? `\nКинжальная жажда: восстановлено ${totalHeal} HP.`
+      : '';
 
     const playerActionText =
       `Кинжалы проводят серию из 3 быстрых ударов.\n` +
-      `Общий урон: ${totalDamage}.${critText}${weaknessText}`;
+      `Общий урон: ${totalDamage}.${critText}${lifestealText}${weaknessText}`;
 
     this.afterPlayerAttack(playerActionText);
   };
@@ -3163,6 +3360,7 @@ ${effect.duration} х.`,
       this.damageEnemy(hit.damage);
 
       totalDamage += hit.damage;
+      totalHeal += this.tryApplyDaggerLifesteal(hit.damage);
 
       if (hit.isCrit) {
         critCount += 1;
@@ -3319,6 +3517,43 @@ ${effect.duration} х.`,
     this.afterPlayerAttack(playerActionText);
   }
 
+  private rollGoblinExtraMaterials(enemyDiedUnderMark: boolean) {
+    if (player.raceId !== 'goblin') {
+      return '';
+    }
+
+    const materials: {
+      id: MaterialId;
+      amount: number;
+    }[] = [];
+
+    const addRandomGoblinMaterial = () => {
+      materials.push({
+        id: GOBLIN_EXTRA_MATERIAL_POOL[Phaser.Math.Between(0, GOBLIN_EXTRA_MATERIAL_POOL.length - 1)],
+        amount: 1,
+      });
+    };
+
+    if (Math.random() < 0.05) {
+      addRandomGoblinMaterial();
+    }
+
+    if (enemyDiedUnderMark && Math.random() < 0.10) {
+      addRandomGoblinMaterial();
+    }
+
+    if (materials.length === 0) {
+      return '';
+    }
+
+    addMaterialsPack(materials);
+    trackFloorMaterials(materials);
+
+    return materials
+      .map(material => `Гоблинская добыча: +${material.amount} ${getMaterialName(material.id)}`)
+      .join('\n');
+  }
+
   private handleVictory(playerActionText: string) {
     this.hideTooltip();
     if (this.isBattleEnded) {
@@ -3329,11 +3564,12 @@ ${effect.duration} х.`,
     this.isBusy = true;
 
     const baseGold = this.enemy.goldReward;
-
-    const gold =
+    const goblinMarkedKill = player.raceId === 'goblin' && this.goblinGreedyMarkTurns > 0;
+    const goldMultiplier =
       player.raceId === 'goblin'
-        ? Math.floor(baseGold * 1.2)
-        : baseGold;
+        ? 1.2 + (goblinMarkedKill ? 0.25 : 0)
+        : 1;
+    const gold = Math.floor(baseGold * goldMultiplier);
 
     player.gold += gold;
 
@@ -3347,6 +3583,7 @@ ${effect.duration} х.`,
     const expResult = addExperience(player, this.enemy.expReward);
 
     const loot = rollEnemyLoot(this.enemy);
+    const goblinExtraLootText = this.rollGoblinExtraMaterials(goblinMarkedKill);
 
     let treeVictoryText = '';
 
@@ -3355,8 +3592,16 @@ ${effect.duration} х.`,
       treeVictoryText += '\nВторое дыхание: восстановлена 1 энергия.';
     }
 
-    const lootText = loot.text.length > 0
-      ? `\n\nДобыча:\n${loot.text}`
+    const combinedLootText = [loot.text, goblinExtraLootText]
+      .filter(Boolean)
+      .join('\n');
+
+    const lootText = combinedLootText.length > 0
+      ? `\n\nДобыча:\n${combinedLootText}`
+      : '';
+
+    const goblinGoldText = goblinMarkedKill
+      ? '\nВоровская метка: золото за бой увеличено дополнительно на 25%.'
       : '';
 
     let regenerationText = '';
@@ -3398,6 +3643,7 @@ ${effect.duration} х.`,
       `${this.enemy.name} повержен.\n` +
       `Получено золота: ${gold}\n` +
       `Получено опыта: ${this.enemy.expReward}` +
+      `${goblinGoldText}` +
       `${treeVictoryText}` +
       `${demonHealText}` +
       `${lootText}` +
@@ -3764,11 +4010,10 @@ ${effect.duration} х.`,
     
       const stats = this.getBattleStats();
 
-      const guaranteedDodge = this.nightElfShadowStepActive;
+      const shadowStepChance = this.nightElfShadowStepTurns > 0 ? 0.5 : 0;
+      const finalDodgeChance = Math.max(stats.dodgeChance, shadowStepChance);
 
-      if (guaranteedDodge || Math.random() < stats.dodgeChance) {
-        this.nightElfShadowStepActive = false;
-      
+      if (Math.random() < finalDodgeChance) {
         if (player.raceId === 'night_elf') {
           this.nightElfShadowDanceActive = true;
         }
@@ -3789,6 +4034,7 @@ ${effect.duration} х.`,
         );
 
         this.updateTexts();
+        this.tickRaceTurnEffectsAfterEnemyAction();
         this.tickRaceSkillCooldown();
         this.tickPotionCooldown();
         this.tickPlayerDebuffs();
@@ -3818,19 +4064,7 @@ ${effect.duration} х.`,
         this.nextIncomingDamageBonus = 0;
       }
 
-      if (player.raceId === 'stoneborn') {
-        damage = Math.max(1, damage - 2);
-      }
-
-      if (this.stoneGuardActive) {
-        damage = Math.max(1, Math.floor(damage * 0.4));
-        this.stoneGuardActive = false;
-      }
-
-      if (this.goblinDirtyTrickActive) {
-        damage = Math.max(1, Math.floor(damage * 0.75));
-        this.goblinDirtyTrickActive = false;
-      }
+      damage = Math.max(1, Math.floor(damage * this.getRaceIncomingDamageMultiplier()));
 
       let shieldSwordText = '';
 
@@ -3852,6 +4086,15 @@ ${effect.duration} х.`,
       player.hp = Math.max(0, player.hp - damage);
       const survivalText = this.resolveTreeSurvivalAfterDamage();
 
+      let stoneThornsText = '';
+
+      if (player.raceId === 'stoneborn' && this.stoneQuartzSpikesTurns > 0 && damage > 0) {
+        const thornDamage = Math.max(1, Math.floor(damage * 0.3));
+        this.damageEnemy(thornDamage);
+        stoneThornsText = `
+Кварцевые шипы отражают ${thornDamage} урона.`;
+      }
+
       const debuffText = this.tryApplyEnemyDebuffOnHit();
 
       let demonRageText = '';
@@ -3859,11 +4102,27 @@ ${effect.duration} х.`,
       if (player.raceId === 'demon' && damage > 0) {
         const previousStacks = this.demonRageStacks;
       
-        this.demonRageStacks = Math.min(4, this.demonRageStacks + 1);
+        this.demonRageStacks = Math.min(5, this.demonRageStacks + 1);
       
         if (this.demonRageStacks > previousStacks) {
-          demonRageText = `\nАдская ярость: атака +${this.demonRageStacks}.`;
+          demonRageText = `\nАдская ярость: атака +${this.demonRageStacks}%.`;
         }
+      }
+
+      if (this.enemy.hp <= 0 && player.hp > 0) {
+        const thornVictoryText = isDefending
+          ? `${playerActionText}
+
+Ты заблокировал часть удара.
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}`
+          : `${playerActionText}
+
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}`;
+
+        this.tickRaceTurnEffectsAfterEnemyAction();
+        this.handleVictory(thornVictoryText);
+
+        return;
       }
 
       this.showFloatingText(
@@ -3885,12 +4144,12 @@ ${effect.duration} х.`,
           ? `${playerActionText}
 
 Ты заблокировал часть удара.
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
 
 Ты пал в катакомбах...`
           : `${playerActionText}
 
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
 
 Ты пал в катакомбах...`;
 
@@ -3901,11 +4160,12 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
       );
 
       this.updateTexts();
+      this.tickRaceTurnEffectsAfterEnemyAction();
       this.tickRaceSkillCooldown();
       this.tickPotionCooldown();
       this.tickPlayerDebuffs();
