@@ -510,7 +510,7 @@ export class RaceSelectScene extends Phaser.Scene {
     const collapsedCardHeight = layout.veryCompact ? 126 : 138;
     // Раскрытая карточка должна вмещать полное описание, преимущества, статы и навыки.
     // Поэтому делаем её заметно выше, чтобы блоки не налезали друг на друга.
-    const expandedCardHeight = layout.veryCompact ? 770 : 860;
+    const expandedCardHeight = layout.veryCompact ? 890 : 950;
     const cardGap = 22;
     const headerHeight = layout.veryCompact ? 66 : 74;
     const bottomPadding = 24;
@@ -872,13 +872,13 @@ export class RaceSelectScene extends Phaser.Scene {
       container,
       layout,
       race,
-      config.top + (layout.veryCompact ? 418 : 472)
+      config.top + (layout.veryCompact ? 430 : 492)
     );
 
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 555 : 615),
+      y: config.top + (layout.veryCompact ? 595 : 650),
       width: innerWidth,
       height: layout.veryCompact ? 124 : 132,
       icon: '◇',
@@ -891,7 +891,7 @@ export class RaceSelectScene extends Phaser.Scene {
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 690 : 764),
+      y: config.top + (layout.veryCompact ? 770 : 815),
       width: innerWidth,
       height: layout.veryCompact ? 132 : 144,
       icon: '✦',
@@ -976,11 +976,11 @@ export class RaceSelectScene extends Phaser.Scene {
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: 17,
-      color: RACE_SCENE.panelWarm,
-      alpha: 0.96,
+      radius: 15,
+      color: RACE_SCENE.graphite,
+      alpha: 0.88,
       strokeColor: config.color,
-      strokeAlpha: 0.34,
+      strokeAlpha: 0.24,
       strokeWidth: 1,
       glowColor: config.color,
       depth: 8,
