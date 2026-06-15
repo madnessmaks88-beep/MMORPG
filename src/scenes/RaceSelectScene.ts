@@ -176,9 +176,9 @@ export class RaceSelectScene extends Phaser.Scene {
     this.add.rectangle(centerX, height - 190, width, 380, 0x020202, 0.56).setDepth(0);
 
     const haloY = layout.safeTop + 118;
-    this.add.circle(centerX, haloY, width * 0.55, RACE_SCENE.violet, 0.08).setDepth(0);
-    this.add.circle(centerX, haloY + 12, width * 0.34, RACE_SCENE.bronze, 0.09).setDepth(0);
-    this.add.circle(centerX, haloY + 18, width * 0.16, RACE_SCENE.gold, 0.045).setDepth(0);
+    this.add.circle(centerX, haloY, width * 0.55, RACE_SCENE.violet, 0.055).setDepth(0);
+    this.add.circle(centerX, haloY + 12, width * 0.34, RACE_SCENE.bronze, 0.06).setDepth(0);
+    this.add.circle(centerX, haloY + 18, width * 0.16, RACE_SCENE.gold, 0.03).setDepth(0);
 
     const archWidth = Math.min(layout.contentWidth * 0.84, 520);
     const archY = layout.safeTop + 158;
@@ -510,8 +510,8 @@ export class RaceSelectScene extends Phaser.Scene {
     const collapsedCardHeight = layout.veryCompact ? 126 : 138;
     // Раскрытая карточка должна вмещать полное описание, преимущества, статы и навыки.
     // Поэтому делаем её заметно выше, чтобы блоки не налезали друг на друга.
-    const expandedCardHeight = layout.veryCompact ? 720 : 800;
-    const cardGap = 16;
+    const expandedCardHeight = layout.veryCompact ? 770 : 860;
+    const cardGap = 22;
     const headerHeight = layout.veryCompact ? 66 : 74;
     const bottomPadding = 24;
 
@@ -614,10 +614,10 @@ export class RaceSelectScene extends Phaser.Scene {
       width: cardWidth,
       height: cardHeight,
       radius: selected ? 30 : 26,
-      color: selected ? 0x21150f : RACE_SCENE.stone,
+      color: selected ? RACE_SCENE.panelWarm : RACE_SCENE.stone,
       alpha: selected ? 0.98 : 0.94,
       strokeColor: selected ? UI.colors.gold : raceColor,
-      strokeAlpha: selected ? 0.92 : 0.46,
+      strokeAlpha: selected ? 0.82 : 0.46,
       strokeWidth: selected ? 3 : 1,
       glowColor: raceColor,
       depth: 5,
@@ -775,10 +775,10 @@ export class RaceSelectScene extends Phaser.Scene {
   ) {
     const innerWidth = config.cardWidth - 42;
     const innerLeft = config.cardX - innerWidth / 2;
-    const descriptionTop = config.top + (layout.veryCompact ? 110 : 120);
-    const descriptionHeight = layout.veryCompact ? 92 : 112;
+    const descriptionTop = config.top + (layout.veryCompact ? 112 : 122);
+    const descriptionHeight = layout.veryCompact ? 102 : 118;
     const advantagesTop = descriptionTop + descriptionHeight + 14;
-    const advantagesHeight = layout.veryCompact ? 100 : 122;
+    const advantagesHeight = layout.veryCompact ? 120 : 134;
 
     this.createRoundedPanel({
       parent: container,
@@ -854,11 +854,11 @@ export class RaceSelectScene extends Phaser.Scene {
     this.getRaceAdvantages(race.id).forEach((line, index) => {
       this.addTo(
         container,
-        this.add.text(innerLeft + 20, advantagesTop + 38 + index * (layout.veryCompact ? 24 : 26), `• ${line}`, {
+        this.add.text(innerLeft + 20, advantagesTop + 42 + index * (layout.veryCompact ? 27 : 29), `• ${line}`, {
           fontFamily: UI.font.body,
-          fontSize: layout.veryCompact ? '11px' : '12px',
-          color: '#b8aa91',
-          lineSpacing: 2,
+          fontSize: layout.veryCompact ? '12px' : '13px',
+          color: '#c5b89f',
+          lineSpacing: 3,
           wordWrap: {
             width: innerWidth - 40,
             useAdvancedWrap: true,
@@ -872,15 +872,15 @@ export class RaceSelectScene extends Phaser.Scene {
       container,
       layout,
       race,
-      config.top + (layout.veryCompact ? 390 : 456)
+      config.top + (layout.veryCompact ? 418 : 472)
     );
 
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 524 : 590),
+      y: config.top + (layout.veryCompact ? 555 : 615),
       width: innerWidth,
-      height: layout.veryCompact ? 112 : 120,
+      height: layout.veryCompact ? 124 : 132,
       icon: '◇',
       title: `Пассивка: ${race.passiveName}`,
       description: race.passiveDescription,
@@ -891,9 +891,9 @@ export class RaceSelectScene extends Phaser.Scene {
     this.createSkillBox({
       parent: container,
       x: config.cardX,
-      y: config.top + (layout.veryCompact ? 646 : 722),
+      y: config.top + (layout.veryCompact ? 690 : 764),
       width: innerWidth,
-      height: layout.veryCompact ? 118 : 130,
+      height: layout.veryCompact ? 132 : 144,
       icon: '✦',
       title: `Активка: ${race.activeName}`,
       description: race.activeDescription,
