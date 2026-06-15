@@ -94,7 +94,6 @@ export class ProfileScene extends Phaser.Scene {
     const layout = this.getLayout();
 
     this.createCatacombBackdrop(layout);
-    this.createFixedHeader(layout);
     this.createScrollableContent(layout);
 
     createBottomNav(this, {
@@ -124,7 +123,9 @@ export class ProfileScene extends Phaser.Scene {
     const safeBottom = 116;
     const headerHeight = Phaser.Math.Clamp(Math.round(height * 0.095), 86, 112);
 
-    const contentTop = safeTop + headerHeight + 8;
+    // Вся верхняя плашка теперь находится внутри прокручиваемого контента.
+    // Поэтому видимая область начинается сразу после safe area, без фиксированного заголовка.
+    const contentTop = safeTop + 6;
     const contentBottom = height - safeBottom;
     const contentWidth = Math.min(width - safeX * 2, 620);
 
@@ -185,47 +186,58 @@ export class ProfileScene extends Phaser.Scene {
       .setDepth(1);
   }
 
-  private createFixedHeader(layout: ProfileLayout) {
-    const headerY = layout.safeTop + layout.headerHeight / 2;
+  private createScrollableHeader(layout: ProfileLayout, topY: number) {
+    const container = this.requireContentContainer();
+    const headerHeight = layout.headerHeight;
+    const headerY = topY + headerHeight / 2;
 
     this.createStonePanel({
+      parent: container,
       x: layout.centerX,
       y: headerY,
       width: layout.contentWidth,
-      height: layout.headerHeight,
+      height: headerHeight,
       radius: 28,
       fill: PROFILE.stone,
       alpha: 0.94,
       stroke: PROFILE.bronze,
       strokeAlpha: 0.72,
-      depth: 240,
+      depth: 2,
     });
 
-    this.add.text(layout.centerX, headerY - 20, 'Профиль героя', {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '29px' : '33px',
-      color: '#d9c28b',
-      stroke: '#000000',
-      strokeThickness: 5,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 44,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(244);
+    this.addTo(
+      container,
+      this.add.text(layout.centerX, headerY - 20, 'Профиль героя', {
+        fontFamily: UI.font.title,
+        fontSize: layout.compact ? '29px' : '33px',
+        color: '#d9c28b',
+        stroke: '#000000',
+        strokeThickness: 5,
+        align: 'center',
+        wordWrap: {
+          width: layout.contentWidth - 44,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(8)
+    );
 
-    this.add.text(layout.centerX, headerY + 22, 'Печать выжившего в катакомбах', {
-      fontFamily: UI.font.body,
-      fontSize: '14px',
-      color: '#8f8a80',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 54,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(244);
+    this.addTo(
+      container,
+      this.add.text(layout.centerX, headerY + 22, 'Печать выжившего в катакомбах', {
+        fontFamily: UI.font.body,
+        fontSize: '14px',
+        color: '#8f8a80',
+        align: 'center',
+        wordWrap: {
+          width: layout.contentWidth - 54,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(8)
+    );
+
+    return topY + headerHeight;
   }
 
   private createScrollableContent(layout: ProfileLayout) {
@@ -243,9 +255,10 @@ export class ProfileScene extends Phaser.Scene {
 
     this.contentContainer.setMask(maskGraphics.createGeometryMask());
 
-    let cursorY = layout.contentTop + 10;
+    let cursorY = layout.contentTop + 8;
 
-    cursorY = this.createHeroIdentityPanel(layout, cursorY);
+    cursorY = this.createScrollableHeader(layout, cursorY);
+    cursorY = this.createHeroIdentityPanel(layout, cursorY + 14);
     cursorY = this.createVitalityPanel(layout, cursorY + 14);
     cursorY = this.createStatsPanel(layout, cursorY + 14);
     cursorY = this.createRaceAbilitiesPanel(layout, cursorY + 14);
