@@ -29,7 +29,7 @@ import {
   createSceneBackground,
 } from '../ui/theme';
 
-type InventoryCategory = 'all' | 'weapon' | 'armor' | 'potions' | 'materials';
+type InventoryCategory = 'all' | 'weapon' | 'armor' | 'trinket' | 'potions' | 'materials';
 
 type InventoryLayout = {
   width: number;
@@ -480,6 +480,7 @@ export class InventoryScene extends Phaser.Scene {
       { id: 'all', label: 'Все', icon: '▦' },
       { id: 'weapon', label: 'Оруж.', icon: '⚔' },
       { id: 'armor', label: 'Броня', icon: '🛡' },
+      { id: 'trinket', label: 'Амул.', icon: '☥' },
       { id: 'potions', label: 'Зелья', icon: '✚' },
       { id: 'materials', label: 'Мат.', icon: '◇' },
     ];
@@ -681,6 +682,7 @@ export class InventoryScene extends Phaser.Scene {
     if (this.selectedCategory === 'all') return 'Все предметы';
     if (this.selectedCategory === 'weapon') return 'Оружие';
     if (this.selectedCategory === 'armor') return 'Броня';
+    if (this.selectedCategory === 'trinket') return 'Амулеты и талисманы';
 
     return 'Предметы';
   }
@@ -698,23 +700,63 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private getFilteredInventoryItems() {
+    const itemCategories: InventoryCategory[] = ['weapon', 'armor', 'trinket'];
+
     if (this.selectedCategory === 'all') {
-      return player.inventory;
+      return this.sortInventoryItemsByRarity(player.inventory);
     }
 
-    if (this.selectedCategory === 'potions' || this.selectedCategory === 'materials') {
+    if (!itemCategories.includes(this.selectedCategory)) {
       return [];
     }
 
-    return player.inventory.filter(inventoryItem => {
-      const item = getBaseItemFromInventoryItem(inventoryItem);
+    return this.sortInventoryItemsByRarity(
+      player.inventory.filter(inventoryItem => {
+        const item = getBaseItemFromInventoryItem(inventoryItem);
 
-      if (!item) {
-        return false;
+        if (!item) {
+          return false;
+        }
+
+        return item.slot === this.selectedCategory;
+      })
+    );
+  }
+
+  private sortInventoryItemsByRarity(items: InventoryItem[]) {
+    return [...items].sort((leftItem, rightItem) => {
+      const leftBase = getBaseItemFromInventoryItem(leftItem);
+      const rightBase = getBaseItemFromInventoryItem(rightItem);
+
+      const rightRank = rightBase ? this.getRaritySortRank(rightBase.rarity) : -1;
+      const leftRank = leftBase ? this.getRaritySortRank(leftBase.rarity) : -1;
+
+      if (rightRank !== leftRank) {
+        return rightRank - leftRank;
       }
 
-      return item.slot === this.selectedCategory;
+      const leftEquipped = isItemEquipped(player, leftItem.instanceId) ? 1 : 0;
+      const rightEquipped = isItemEquipped(player, rightItem.instanceId) ? 1 : 0;
+
+      if (rightEquipped !== leftEquipped) {
+        return rightEquipped - leftEquipped;
+      }
+
+      const leftName = leftBase?.name ?? '';
+      const rightName = rightBase?.name ?? '';
+
+      return leftName.localeCompare(rightName, 'ru');
     });
+  }
+
+  private getRaritySortRank(rarity: string) {
+    if (rarity === 'common') return 1;
+    if (rarity === 'rare') return 2;
+    if (rarity === 'epic') return 3;
+    if (rarity === 'legendary') return 4;
+    if (rarity === 'mythic') return 5;
+
+    return 0;
   }
 
   private getVisibleMaterials() {
@@ -1543,7 +1585,7 @@ export class InventoryScene extends Phaser.Scene {
     ).setInteractive();
 
     const panelWidth = Math.min(layout.contentWidth, 620);
-    const panelHeight = Math.min(620, layout.height - layout.safeTop - layout.safeBottom - 24);
+    const panelHeight = Math.min(690, layout.height - layout.safeTop - layout.safeBottom - 24);
     const panelY = layout.height / 2;
 
     const panelObjects = this.createRoundedPanelAsObjects({
@@ -1632,8 +1674,11 @@ export class InventoryScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
+    const comparisonText = this.createItemComparisonText(inventoryItem);
+
     const statsLines = [
       `Характеристики: ${createItemStatsText(inventoryItem) || 'нет'}`,
+      comparisonText,
       weaponDescription,
       `Цена продажи: ${sellPrice} золота`,
       equipped ? 'Статус: надето' : 'Статус: в сумке',
@@ -1641,18 +1686,19 @@ export class InventoryScene extends Phaser.Scene {
 
     const statsText = this.add.text(
       layout.centerX,
-      top + 335,
+      top + 346,
       statsLines.join('\n'),
       {
         fontFamily: UI.font.body,
-        fontSize: '15px',
+        fontSize: '13px',
         color: UI.colors.goldText,
         align: 'center',
-        lineSpacing: 6,
+        lineSpacing: 4,
         wordWrap: {
           width: panelWidth - 80,
+          useAdvancedWrap: true,
         },
-        maxLines: 6,
+        maxLines: 12,
       }
     ).setOrigin(0.5);
 
@@ -1726,6 +1772,118 @@ export class InventoryScene extends Phaser.Scene {
       ...sellButton.objects,
       ...closeButton.objects,
     ]);
+  }
+
+  private getEquippedInventoryItemForSlot(slot: EquipmentSlot) {
+    const equippedInstanceId = player.equipment[slot];
+
+    if (!equippedInstanceId) {
+      return undefined;
+    }
+
+    return player.inventory.find(item => item.instanceId === equippedInstanceId);
+  }
+
+  private getItemBonusValues(inventoryItem?: InventoryItem) {
+    const item = inventoryItem
+      ? getBaseItemFromInventoryItem(inventoryItem)
+      : undefined;
+
+    const upgradeLevel = inventoryItem?.upgradeLevel ?? 0;
+
+    if (!item) {
+      return {
+        hp: 0,
+        attack: 0,
+        defense: 0,
+        critChance: 0,
+      };
+    }
+
+    return {
+      hp: (item.bonusHp ?? 0) + upgradeLevel * 4,
+      attack: (item.bonusAttack ?? 0) + upgradeLevel * 2,
+      defense: (item.bonusDefense ?? 0) + upgradeLevel,
+      critChance: (item.bonusCritChance ?? 0) + upgradeLevel * 0.005,
+    };
+  }
+
+  private createItemComparisonText(inventoryItem: InventoryItem) {
+    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+    if (!item) {
+      return '';
+    }
+
+    const equippedInventoryItem = this.getEquippedInventoryItemForSlot(item.slot);
+
+    if (!equippedInventoryItem) {
+      return `Сравнение с надетым:\nВ слоте «${getSlotText(item.slot)}» сейчас ничего не надето.`;
+    }
+
+    const equippedItem = getBaseItemFromInventoryItem(equippedInventoryItem);
+
+    if (!equippedItem) {
+      return '';
+    }
+
+    if (equippedInventoryItem.instanceId === inventoryItem.instanceId) {
+      return 'Сравнение с надетым:\nЭтот предмет уже надет.';
+    }
+
+    const selectedBonus = this.getItemBonusValues(inventoryItem);
+    const equippedBonus = this.getItemBonusValues(equippedInventoryItem);
+
+    const equippedUpgrade = equippedInventoryItem.upgradeLevel > 0
+      ? ` +${equippedInventoryItem.upgradeLevel}`
+      : '';
+
+    const lines = [
+      `Сравнение с надетым: ${equippedItem.name}${equippedUpgrade}`,
+      this.createComparisonLine('HP', selectedBonus.hp, equippedBonus.hp),
+      this.createComparisonLine('Атака', selectedBonus.attack, equippedBonus.attack),
+      this.createComparisonLine('Защита', selectedBonus.defense, equippedBonus.defense),
+      this.createComparisonLine('Крит', selectedBonus.critChance, equippedBonus.critChance, true),
+    ];
+
+    return lines.join('\n');
+  }
+
+  private createComparisonLine(
+    label: string,
+    selectedValue: number,
+    equippedValue: number,
+    percent = false
+  ) {
+    const diff = selectedValue - equippedValue;
+
+    return `${label}: ${this.formatStatValue(selectedValue, percent)} / ${this.formatStatValue(equippedValue, percent)} (${this.formatDelta(diff, percent)})`;
+  }
+
+  private formatStatValue(value: number, percent = false) {
+    const displayValue = percent
+      ? `${Math.round(value * 100)}%`
+      : `${value}`;
+
+    return value > 0
+      ? `+${displayValue}`
+      : displayValue;
+  }
+
+  private formatDelta(value: number, percent = false) {
+    const displayValue = percent
+      ? `${Math.abs(Math.round(value * 100))}%`
+      : `${Math.abs(value)}`;
+
+    if (value > 0) {
+      return `+${displayValue}`;
+    }
+
+    if (value < 0) {
+      return `-${displayValue}`;
+    }
+
+    return percent ? '0%' : '0';
   }
 
   private showSellConfirm(inventoryItem: InventoryItem) {
