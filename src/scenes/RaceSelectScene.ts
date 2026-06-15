@@ -19,12 +19,19 @@ type RaceLayout = {
   safeTop: number;
   safeBottom: number;
 
+  headerTop: number;
+  headerHeight: number;
+
   contentTop: number;
   contentBottom: number;
   contentWidth: number;
   viewportHeight: number;
 
+  bottomBarHeight: number;
+  bottomButtonY: number;
+
   compact: boolean;
+  veryCompact: boolean;
 };
 
 type RaceButton = {
@@ -32,9 +39,29 @@ type RaceButton = {
   zone: Phaser.GameObjects.Zone;
 };
 
+const RACE_SCENE = {
+  black: 0x030405,
+  void: 0x06070a,
+  graphite: 0x0c0d11,
+  stone: 0x11131a,
+  stoneSoft: 0x181a22,
+  panel: 0x0d0a08,
+  panelWarm: 0x15100c,
+  bronze: 0x6a4d30,
+  bronzeDark: 0x342418,
+  gold: 0xb9985b,
+  goldSoft: 0xd8c088,
+  ash: 0x9b9488,
+  red: 0x8f2f2f,
+  blue: 0x4f789f,
+  violet: 0x65458f,
+  green: 0x5c8b66,
+};
+
 export class RaceSelectScene extends Phaser.Scene {
   private selectedRace?: RaceData;
   private bottomActionObjects: Phaser.GameObjects.GameObject[] = [];
+  private modalObjects: Phaser.GameObjects.GameObject[] = [];
 
   private layout!: RaceLayout;
   private contentContainer?: Phaser.GameObjects.Container;
@@ -54,26 +81,30 @@ export class RaceSelectScene extends Phaser.Scene {
   }
 
   create() {
-    this.selectedRace = races[0];
+    this.selectedRace = this.getInitialRace();
     this.layout = this.getLayout();
 
     createSceneBackground(this);
-    this.createBackground(this.layout);
-    this.createHeader(this.layout);
+    this.createCatacombBackground(this.layout);
+    this.createFixedHeader(this.layout);
     this.createScrollableContent(this.layout);
     this.createBottomAction(this.layout);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown');
+      this.input.off('pointermove');
+      this.input.off('pointerup');
+      this.input.off('pointerupoutside');
+      this.input.off('wheel');
+    });
   }
 
   update() {
-    if (!this.contentContainer) {
+    if (!this.contentContainer || this.isDraggingContent) {
       return;
     }
 
-    if (this.isDraggingContent) {
-      return;
-    }
-
-    if (Math.abs(this.currentScrollY - this.targetScrollY) < 0.5) {
+    if (Math.abs(this.currentScrollY - this.targetScrollY) < 0.45) {
       this.currentScrollY = this.targetScrollY;
     } else {
       this.currentScrollY = Phaser.Math.Linear(
@@ -86,16 +117,31 @@ export class RaceSelectScene extends Phaser.Scene {
     this.contentContainer.y = -this.currentScrollY;
   }
 
+  private getInitialRace() {
+    if (player.raceId) {
+      return races.find(race => race.id === player.raceId) ?? races[0];
+    }
+
+    return races[0];
+  }
+
   private getLayout(): RaceLayout {
     const { width, height } = this.scale;
 
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
-    const safeBottom = 112;
+    const compact = height < 1120;
+    const veryCompact = height < 920;
 
-    const contentTop = safeTop + 118;
-    const contentBottom = height - safeBottom;
-    const contentWidth = Math.min(width - safeX * 2, 620);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.023), 18, 34);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.02), 18, 28);
+
+    const contentWidth = Math.min(width - safeX * 2, 640);
+    const headerHeight = veryCompact ? 118 : compact ? 130 : 142;
+    const bottomBarHeight = veryCompact ? 102 : 112;
+
+    const headerTop = safeTop;
+    const contentTop = headerTop + headerHeight + 10;
+    const contentBottom = height - bottomBarHeight - safeBottom;
 
     return {
       width,
@@ -106,68 +152,130 @@ export class RaceSelectScene extends Phaser.Scene {
       safeTop,
       safeBottom,
 
+      headerTop,
+      headerHeight,
+
       contentTop,
       contentBottom,
       contentWidth,
-      viewportHeight: Math.max(320, contentBottom - contentTop),
+      viewportHeight: Math.max(300, contentBottom - contentTop),
 
-      compact: height < 1120,
+      bottomBarHeight,
+      bottomButtonY: height - safeBottom - bottomBarHeight / 2,
+
+      compact,
+      veryCompact,
     };
   }
 
-  private createBackground(layout: RaceLayout) {
+  private createCatacombBackground(layout: RaceLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.circle(centerX, layout.safeTop + 120, width * 0.48, 0x8a3f1c, 0.075).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 125, width * 0.28, 0xf0a040, 0.045).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 125, width * 0.12, 0xf0d58a, 0.028).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, RACE_SCENE.black, 0.94).setDepth(0);
+    this.add.rectangle(centerX, height * 0.38, width, height * 0.78, RACE_SCENE.void, 0.64).setDepth(0);
+    this.add.rectangle(centerX, height - 190, width, 380, 0x020202, 0.56).setDepth(0);
 
-    this.add.rectangle(centerX, height - 190, width, 380, 0x050302, 0.42).setDepth(0);
+    const haloY = layout.safeTop + 118;
+    this.add.circle(centerX, haloY, width * 0.55, RACE_SCENE.violet, 0.08).setDepth(0);
+    this.add.circle(centerX, haloY + 12, width * 0.34, RACE_SCENE.bronze, 0.09).setDepth(0);
+    this.add.circle(centerX, haloY + 18, width * 0.16, RACE_SCENE.gold, 0.045).setDepth(0);
 
-    for (let i = 0; i < 32; i += 1) {
-      const x = layout.safeX + 18 + i * ((width - layout.safeX * 2 - 36) / 31);
-      const y = layout.safeTop + 86 + (i % 8) * 72;
-      const size = 1 + (i % 3);
-      const alpha = 0.035 + (i % 5) * 0.012;
+    const archWidth = Math.min(layout.contentWidth * 0.84, 520);
+    const archY = layout.safeTop + 158;
 
-      this.add.circle(x, y, size, 0xd8b56d, alpha).setDepth(1);
+    this.add.rectangle(centerX, archY + 22, archWidth, 170, 0x070708, 0.32)
+      .setStrokeStyle(2, RACE_SCENE.bronze, 0.22)
+      .setDepth(1);
+
+    this.add.ellipse(centerX, archY - 42, archWidth * 0.72, 112, 0x111018, 0.32)
+      .setStrokeStyle(2, RACE_SCENE.bronze, 0.24)
+      .setDepth(1);
+
+    for (let i = 0; i < 38; i += 1) {
+      const x = layout.safeX + 10 + (i * 53) % Math.max(1, width - layout.safeX * 2 - 20);
+      const y = layout.safeTop + 72 + (i * 89) % Math.max(1, height - layout.safeTop - layout.safeBottom - 160);
+      const color = i % 5 === 0 ? RACE_SCENE.gold : i % 3 === 0 ? RACE_SCENE.violet : RACE_SCENE.ash;
+      const alpha = 0.022 + (i % 4) * 0.006;
+
+      this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
     }
 
-    this.add.text(centerX, layout.safeTop + 138, '✦', {
-      fontFamily: UI.font.body,
-      fontSize: '104px',
-      color: '#ffffff',
-    })
-      .setOrigin(0.5)
-      .setAlpha(0.025)
-      .setDepth(1);
+    for (let i = 0; i < 8; i += 1) {
+      const y = height - 330 + i * 48;
+      this.add.line(
+        0,
+        0,
+        layout.safeX + 8,
+        y,
+        width - layout.safeX - 8,
+        y + (i % 2) * 10,
+        0x211a14,
+        0.2
+      )
+        .setOrigin(0, 0)
+        .setDepth(1);
+    }
   }
 
-  private createHeader(layout: RaceLayout) {
-    this.add.text(layout.centerX, layout.safeTop + 26, 'Создание героя', {
+  private createFixedHeader(layout: RaceLayout) {
+    const panelY = layout.headerTop + layout.headerHeight / 2;
+
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: layout.contentWidth,
+      height: layout.headerHeight,
+      radius: 30,
+      color: RACE_SCENE.panel,
+      alpha: 0.94,
+      strokeColor: RACE_SCENE.bronze,
+      strokeAlpha: 0.58,
+      strokeWidth: 2,
+      glowColor: RACE_SCENE.violet,
+      depth: 180,
+    });
+
+    this.add.text(layout.centerX, layout.headerTop + (layout.veryCompact ? 26 : 30), 'Создание героя', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '30px' : '35px',
+      fontSize: layout.veryCompact ? '27px' : layout.compact ? '31px' : '35px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth,
+        width: layout.contentWidth - 42,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(200);
+    }).setOrigin(0.5).setDepth(190);
 
-    this.add.text(layout.centerX, layout.safeTop + 65, 'Выбери расу, пассивку и активный навык перед первым спуском', {
+    this.add.text(layout.centerX, layout.headerTop + (layout.veryCompact ? 62 : 72), 'Выбери кровь, с которой герой спустится под пепел', {
       fontFamily: UI.font.body,
-      fontSize: '14px',
+      fontSize: layout.veryCompact ? '12px' : '14px',
       color: UI.colors.textMuted,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 40,
+        width: layout.contentWidth - 60,
+        useAdvancedWrap: true,
       },
       maxLines: 2,
-      lineSpacing: 4,
-    }).setOrigin(0.5).setDepth(200);
+      lineSpacing: 3,
+    }).setOrigin(0.5).setDepth(190);
+
+    if (this.selectedRace) {
+      const raceColor = this.getRaceColor(this.selectedRace.id);
+      const chipY = layout.headerTop + layout.headerHeight - (layout.veryCompact ? 24 : 28);
+
+      this.createMiniSelectedChip({
+        x: layout.centerX,
+        y: chipY,
+        width: Math.min(layout.contentWidth - 58, 430),
+        height: layout.veryCompact ? 32 : 36,
+        race: this.selectedRace,
+        raceColor,
+        depth: 190,
+      });
+    }
   }
 
   private createScrollableContent(layout: RaceLayout) {
@@ -189,18 +297,13 @@ export class RaceSelectScene extends Phaser.Scene {
     const mask = this.contentMaskGraphics.createGeometryMask();
     this.contentContainer.setMask(mask);
 
-    let cursorY = layout.contentTop + 18;
+    let cursorY = layout.contentTop + 16;
 
     cursorY = this.createIntroPanel(layout, cursorY);
-    cursorY = this.createRaceListPanel(layout, cursorY + 16);
+    cursorY = this.createRaceListPanel(layout, cursorY + 14);
+    cursorY = this.createAdvicePanel(layout, cursorY + 14);
 
-    if (this.selectedRace) {
-      cursorY = this.createSelectedRacePanel(layout, cursorY + 16, this.selectedRace);
-    }
-
-    cursorY = this.createAdvicePanel(layout, cursorY + 16);
-
-    const contentHeight = cursorY - layout.contentTop + 28;
+    const contentHeight = cursorY - layout.contentTop + 26;
 
     this.maxScrollY = Math.max(0, contentHeight - layout.viewportHeight);
     this.currentScrollY = Phaser.Math.Clamp(this.currentScrollY, 0, this.maxScrollY);
@@ -223,7 +326,7 @@ export class RaceSelectScene extends Phaser.Scene {
     this.input.off('wheel');
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.maxScrollY <= 0) {
+      if (this.maxScrollY <= 0 || this.modalObjects.length > 0) {
         return;
       }
 
@@ -238,7 +341,7 @@ export class RaceSelectScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isDraggingContent) {
+      if (!this.isDraggingContent || this.modalObjects.length > 0) {
         return;
       }
 
@@ -287,7 +390,7 @@ export class RaceSelectScene extends Phaser.Scene {
         _deltaX: number,
         deltaY: number
       ) => {
-        if (this.maxScrollY <= 0) {
+        if (this.maxScrollY <= 0 || this.modalObjects.length > 0) {
           return;
         }
 
@@ -316,18 +419,23 @@ export class RaceSelectScene extends Phaser.Scene {
   private createScrollHint(layout: RaceLayout) {
     const hintY = layout.contentBottom - 18;
 
-    const bg = this.add.rectangle(layout.centerX, hintY, 230, 28, 0x000000, 0.34)
+    const bg = this.add.rectangle(layout.centerX, hintY, 238, 28, 0x000000, 0.44)
       .setDepth(230);
 
-    const text = this.add.text(layout.centerX, hintY, 'Прокручивай список рас', {
+    const text = this.add.text(layout.centerX, hintY, 'Прокручивай список происхождений', {
       fontFamily: UI.font.body,
       fontSize: '12px',
-      color: UI.colors.textMuted,
+      color: '#928a7d',
+      align: 'center',
+      wordWrap: {
+        width: 224,
+      },
+      maxLines: 1,
     }).setOrigin(0.5).setDepth(231);
 
     this.tweens.add({
       targets: [bg, text],
-      alpha: 0.25,
+      alpha: 0.24,
       duration: 900,
       yoyo: true,
       repeat: -1,
@@ -337,7 +445,7 @@ export class RaceSelectScene extends Phaser.Scene {
   private createIntroPanel(layout: RaceLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const panelHeight = 126;
+    const panelHeight = layout.veryCompact ? 116 : 132;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -347,25 +455,26 @@ export class RaceSelectScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 30,
-      color: 0x100b08,
-      alpha: 0.93,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.52,
-      glowColor: 0xf0a040,
+      color: RACE_SCENE.graphite,
+      alpha: 0.94,
+      strokeColor: RACE_SCENE.bronze,
+      strokeAlpha: 0.48,
+      glowColor: RACE_SCENE.violet,
       depth: 2,
     });
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 35, 'Раса — это стиль игры', {
+      this.add.text(layout.centerX, topY + 34, 'Раса задаёт стиль выживания', {
         fontFamily: UI.font.title,
-        fontSize: '24px',
-        color: UI.colors.goldText,
+        fontSize: layout.veryCompact ? '20px' : '23px',
+        color: '#d8c088',
         stroke: '#000000',
         strokeThickness: 4,
         align: 'center',
         wordWrap: {
-          width: layout.contentWidth - 60,
+          width: layout.contentWidth - 58,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(8)
@@ -375,15 +484,16 @@ export class RaceSelectScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 82,
-        'Смотри не только на стартовые характеристики, но и на пассивный эффект, активный навык, цену энергии и перезарядку.',
+        topY + (layout.veryCompact ? 76 : 86),
+        'Смотри на характеристики, пассивку и активный навык. Одни расы прощают ошибки, другие дают силу только на грани смерти.',
         {
           fontFamily: UI.font.body,
-          fontSize: '14px',
-          color: UI.colors.text,
+          fontSize: layout.veryCompact ? '12px' : '14px',
+          color: '#b9ad9b',
           align: 'center',
           wordWrap: {
             width: layout.contentWidth - 64,
+            useAdvancedWrap: true,
           },
           maxLines: 3,
           lineSpacing: 4,
@@ -397,16 +507,21 @@ export class RaceSelectScene extends Phaser.Scene {
   private createRaceListPanel(layout: RaceLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const cards = races;
-    const cardHeight = 134;
+    const collapsedCardHeight = layout.veryCompact ? 126 : 138;
+    const expandedCardHeight = layout.veryCompact ? 584 : 626;
     const cardGap = 12;
-    const headerHeight = 72;
-    const bottomPadding = 22;
+    const headerHeight = layout.veryCompact ? 66 : 74;
+    const bottomPadding = 24;
+
+    const cardsHeight = races.reduce((sum, race) => {
+      const selected = this.selectedRace?.id === race.id;
+      return sum + (selected ? expandedCardHeight : collapsedCardHeight);
+    }, 0);
 
     const panelHeight =
       headerHeight +
-      cards.length * cardHeight +
-      Math.max(0, cards.length - 1) * cardGap +
+      cardsHeight +
+      Math.max(0, races.length - 1) * cardGap +
       bottomPadding;
 
     const panelY = topY + panelHeight / 2;
@@ -418,24 +533,28 @@ export class RaceSelectScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 32,
-      color: 0x0d0907,
-      alpha: 0.95,
-      strokeColor: UI.colors.goldDark,
+      color: RACE_SCENE.panel,
+      alpha: 0.96,
+      strokeColor: RACE_SCENE.bronze,
       strokeAlpha: 0.5,
-      glowColor: 0x8a3f1c,
+      glowColor: RACE_SCENE.bronze,
       depth: 2,
     });
 
+    const left = layout.centerX - layout.contentWidth / 2;
+    const right = layout.centerX + layout.contentWidth / 2;
+
     this.addTo(
       container,
-      this.add.text(layout.centerX - layout.contentWidth / 2 + 30, topY + 34, 'Доступные расы', {
+      this.add.text(left + 28, topY + 34, 'Доступные происхождения', {
         fontFamily: UI.font.title,
-        fontSize: '24px',
+        fontSize: layout.veryCompact ? '20px' : '23px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 4,
         wordWrap: {
-          width: layout.contentWidth - 160,
+          width: layout.contentWidth - 152,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(8)
@@ -443,38 +562,28 @@ export class RaceSelectScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(layout.centerX + layout.contentWidth / 2 - 30, topY + 34, `${cards.length} рас`, {
+      this.add.text(right - 28, topY + 34, `${races.length} рас`, {
         fontFamily: UI.font.body,
-        fontSize: '14px',
-        color: UI.colors.textMuted,
+        fontSize: '13px',
+        color: '#928a7d',
         align: 'right',
         wordWrap: {
-          width: 110,
+          width: 100,
         },
         maxLines: 1,
       }).setOrigin(1, 0.5).setDepth(8)
     );
 
-    if (cards.length === 0) {
-      this.addTo(
-        container,
-        this.add.text(layout.centerX, topY + 132, 'Расы пока не добавлены.', {
-          fontFamily: UI.font.body,
-          fontSize: '18px',
-          color: UI.colors.textMuted,
-          align: 'center',
-          wordWrap: {
-            width: layout.contentWidth - 70,
-          },
-        }).setOrigin(0.5).setDepth(8)
-      );
+    let cardTop = topY + headerHeight;
 
-      return topY + 260;
-    }
+    races.forEach((race) => {
+      const selected = this.selectedRace?.id === race.id;
+      const cardHeight = selected ? expandedCardHeight : collapsedCardHeight;
+      const y = cardTop + cardHeight / 2;
 
-    cards.forEach((race, index) => {
-      const y = topY + headerHeight + cardHeight / 2 + index * (cardHeight + cardGap);
       this.createRaceCard(container, layout, race, y, cardHeight);
+
+      cardTop += cardHeight + cardGap;
     });
 
     return topY + panelHeight;
@@ -488,10 +597,11 @@ export class RaceSelectScene extends Phaser.Scene {
     cardHeight: number
   ) {
     const selected = this.selectedRace?.id === race.id;
-    const cardWidth = layout.contentWidth - 44;
+    const cardWidth = layout.contentWidth - 36;
     const cardX = layout.centerX;
     const left = cardX - cardWidth / 2;
     const right = cardX + cardWidth / 2;
+    const top = y - cardHeight / 2;
     const raceColor = this.getRaceColor(race.id);
     const raceIcon = this.getRaceIcon(race.id);
 
@@ -501,101 +611,86 @@ export class RaceSelectScene extends Phaser.Scene {
       y,
       width: cardWidth,
       height: cardHeight,
-      radius: 24,
-      color: selected ? 0x21150f : 0x14100d,
-      alpha: 0.96,
+      radius: selected ? 30 : 26,
+      color: selected ? 0x21150f : RACE_SCENE.stone,
+      alpha: selected ? 0.98 : 0.94,
       strokeColor: selected ? UI.colors.gold : raceColor,
-      strokeAlpha: selected ? 0.95 : 0.58,
-      strokeWidth: selected ? 3 : 2,
+      strokeAlpha: selected ? 0.92 : 0.46,
+      strokeWidth: selected ? 3 : 1,
       glowColor: raceColor,
       depth: 5,
     });
 
+    const marker = this.add.graphics();
+    marker.fillStyle(raceColor, selected ? 0.96 : 0.58);
+    marker.fillRoundedRect(left + 8, top + 12, 8, cardHeight - 24, 5);
+    marker.setDepth(9);
+    container.add(marker);
+
+    const iconX = left + 52;
+    const textX = left + 92;
+    const buttonWidth = selected ? (layout.veryCompact ? 112 : 126) : (layout.veryCompact ? 104 : 116);
+    const buttonX = right - buttonWidth / 2 - 18;
+    const textWidth = Math.max(160, buttonX - buttonWidth / 2 - textX - 12);
+
     this.addTo(
       container,
-      this.add.circle(left + 48, y - 34, 29, raceColor, 0.18)
-        .setStrokeStyle(2, raceColor, 0.75)
-        .setDepth(9)
+      this.add.circle(iconX, top + 52, selected ? 33 : 30, raceColor, selected ? 0.22 : 0.14)
+        .setStrokeStyle(2, raceColor, selected ? 0.82 : 0.56)
+        .setDepth(10)
     );
 
     this.addTo(
       container,
-      this.add.text(left + 48, y - 34, raceIcon, {
+      this.add.text(iconX, top + 52, raceIcon, {
         fontFamily: UI.font.body,
-        fontSize: '24px',
-        color: UI.colors.goldText,
+        fontSize: selected ? (layout.veryCompact ? '23px' : '26px') : (layout.veryCompact ? '21px' : '24px'),
+        color: '#f1eadc',
         stroke: '#000000',
         strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(10)
+      }).setOrigin(0.5).setDepth(11)
     );
-
-    const buttonWidth = 112;
-    const buttonX = right - buttonWidth / 2 - 18;
-    const textX = left + 90;
-    const textWidth = Math.max(210, buttonX - buttonWidth / 2 - textX - 16);
 
     this.addTo(
       container,
-      this.add.text(textX, y - 56, race.name, {
+      this.add.text(textX, top + 31, race.name, {
         fontFamily: UI.font.title,
-        fontSize: '20px',
-        color: selected ? UI.colors.goldText : UI.colors.text,
+        fontSize: selected ? (layout.veryCompact ? '19px' : '22px') : (layout.veryCompact ? '17px' : '20px'),
+        color: selected ? UI.colors.goldText : '#ded4bd',
         stroke: '#000000',
         strokeThickness: 3,
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(10)
+        maxLines: selected ? 2 : 1,
+        lineSpacing: -1,
+      }).setOrigin(0, 0.5).setDepth(11)
     );
 
     this.addTo(
       container,
-      this.add.text(textX, y - 30, this.getRaceRole(race.id), {
+      this.add.text(textX, top + (selected ? 67 : 58), selected
+        ? `${this.getRaceRole(race.id)}  •  ${this.getRaceDifficulty(race.id)}`
+        : this.getRaceRole(race.id), {
         fontFamily: UI.font.body,
-        fontSize: '12px',
+        fontSize: layout.veryCompact ? '11px' : '12px',
         color: this.getRaceColorText(race.id),
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(10)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(textX, y - 2, race.description, {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: UI.colors.textMuted,
-        lineSpacing: 3,
-        wordWrap: {
-          width: textWidth,
-        },
-        maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(10)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(textX, y + 36, this.createShortStatsText(race), {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: UI.colors.text,
-        wordWrap: {
-          width: textWidth,
-        },
-        maxLines: 2,
-        lineSpacing: 3,
-      }).setOrigin(0, 0.5).setDepth(10)
+        maxLines: selected ? 2 : 1,
+        lineSpacing: 2,
+      }).setOrigin(0, 0.5).setDepth(11)
     );
 
     this.createUiButton({
       parent: container,
       x: buttonX,
-      y: y + 28,
+      y: top + (selected ? 68 : 96),
       width: buttonWidth,
-      height: 42,
+      height: layout.veryCompact ? 40 : 44,
       text: selected ? 'Выбрано' : 'Выбрать',
       accentColor: selected ? UI.colors.gold : raceColor,
       disabled: false,
@@ -608,11 +703,50 @@ export class RaceSelectScene extends Phaser.Scene {
 
         this.selectRacePreview(race);
       },
-      depth: 11,
+      depth: 22,
     });
 
+    if (selected) {
+      this.createExpandedRaceCardDetails(container, layout, race, {
+        cardX,
+        cardWidth,
+        top,
+        raceColor,
+      });
+    } else {
+      this.addTo(
+        container,
+        this.add.text(textX, top + 84, race.description, {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '11px' : '12px',
+          color: '#9b9488',
+          lineSpacing: 3,
+          wordWrap: {
+            width: textWidth,
+            useAdvancedWrap: true,
+          },
+          maxLines: 2,
+        }).setOrigin(0, 0.5).setDepth(11)
+      );
+
+      this.addTo(
+        container,
+        this.add.text(textX, top + 124, this.createShortStatsText(race), {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '10px' : '11px',
+          color: '#d8c7a3',
+          wordWrap: {
+            width: textWidth,
+            useAdvancedWrap: true,
+          },
+          maxLines: 2,
+          lineSpacing: 3,
+        }).setOrigin(0, 0.5).setDepth(11)
+      );
+    }
+
     const zone = this.add.zone(cardX, y, cardWidth, cardHeight)
-      .setDepth(14)
+      .setDepth(15)
       .setInteractive({ useHandCursor: true });
 
     zone.on('pointerup', () => {
@@ -626,127 +760,157 @@ export class RaceSelectScene extends Phaser.Scene {
     container.add(zone);
   }
 
+  private createExpandedRaceCardDetails(
+    container: Phaser.GameObjects.Container,
+    layout: RaceLayout,
+    race: RaceData,
+    config: {
+      cardX: number;
+      cardWidth: number;
+      top: number;
+      raceColor: number;
+    }
+  ) {
+    const innerWidth = config.cardWidth - 42;
+    const innerLeft = config.cardX - innerWidth / 2;
+    const descriptionTop = config.top + 112;
+    const descriptionHeight = layout.veryCompact ? 72 : 82;
+    const advantagesTop = descriptionTop + descriptionHeight + 12;
+    const advantagesHeight = layout.veryCompact ? 78 : 88;
+
+    this.createRoundedPanel({
+      parent: container,
+      x: config.cardX,
+      y: descriptionTop + descriptionHeight / 2,
+      width: innerWidth,
+      height: descriptionHeight,
+      radius: 20,
+      color: RACE_SCENE.panelWarm,
+      alpha: 0.92,
+      strokeColor: config.raceColor,
+      strokeAlpha: 0.28,
+      strokeWidth: 1,
+      glowColor: config.raceColor,
+      depth: 8,
+    });
+
+    this.addTo(
+      container,
+      this.add.text(innerLeft + 18, descriptionTop + 16, 'Описание расы', {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '13px' : '15px',
+        color: UI.colors.goldText,
+        stroke: '#000000',
+        strokeThickness: 2,
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(12)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(innerLeft + 18, descriptionTop + (layout.veryCompact ? 42 : 48), race.description, {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '12px' : '13px',
+        color: '#d8c7a3',
+        lineSpacing: 4,
+        wordWrap: {
+          width: innerWidth - 36,
+          useAdvancedWrap: true,
+        },
+        maxLines: layout.veryCompact ? 3 : 4,
+      }).setOrigin(0, 0.5).setDepth(12)
+    );
+
+    this.createRoundedPanel({
+      parent: container,
+      x: config.cardX,
+      y: advantagesTop + advantagesHeight / 2,
+      width: innerWidth,
+      height: advantagesHeight,
+      radius: 20,
+      color: 0x10141a,
+      alpha: 0.9,
+      strokeColor: RACE_SCENE.blue,
+      strokeAlpha: 0.3,
+      strokeWidth: 1,
+      glowColor: RACE_SCENE.violet,
+      depth: 8,
+    });
+
+    this.addTo(
+      container,
+      this.add.text(innerLeft + 18, advantagesTop + 16, 'Преимущества', {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '13px' : '15px',
+        color: '#d8c088',
+        stroke: '#000000',
+        strokeThickness: 2,
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(12)
+    );
+
+    this.getRaceAdvantages(race.id).forEach((line, index) => {
+      this.addTo(
+        container,
+        this.add.text(innerLeft + 20, advantagesTop + 40 + index * (layout.veryCompact ? 18 : 20), `• ${line}`, {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '11px' : '12px',
+          color: '#b8aa91',
+          wordWrap: {
+            width: innerWidth - 40,
+            useAdvancedWrap: true,
+          },
+          maxLines: 1,
+        }).setOrigin(0, 0.5).setDepth(12)
+      );
+    });
+
+    this.createStatsGrid(
+      container,
+      layout,
+      race,
+      config.top + (layout.veryCompact ? 330 : 356)
+    );
+
+    this.createSkillBox({
+      parent: container,
+      x: config.cardX,
+      y: config.top + (layout.veryCompact ? 438 : 480),
+      width: innerWidth,
+      height: layout.veryCompact ? 88 : 96,
+      icon: '◇',
+      title: `Пассивка: ${race.passiveName}`,
+      description: race.passiveDescription,
+      color: 0x75d184,
+      compact: layout.veryCompact,
+    });
+
+    this.createSkillBox({
+      parent: container,
+      x: config.cardX,
+      y: config.top + (layout.veryCompact ? 536 : 588),
+      width: innerWidth,
+      height: layout.veryCompact ? 88 : 96,
+      icon: '✦',
+      title: `Активка: ${race.activeName}`,
+      description: race.activeDescription,
+      color: 0x70a6ff,
+      compact: layout.veryCompact,
+    });
+  }
+
   private selectRacePreview(race: RaceData) {
     this.selectedRace = race;
     this.targetScrollY = 0;
     this.currentScrollY = 0;
+
+    this.children.removeAll();
+
+    createSceneBackground(this);
+    this.createCatacombBackground(this.layout);
+    this.createFixedHeader(this.layout);
     this.createScrollableContent(this.layout);
     this.createBottomAction(this.layout);
-  }
-
-  private createSelectedRacePanel(layout: RaceLayout, topY: number, race: RaceData) {
-    const container = this.requireContentContainer();
-    const raceColor = this.getRaceColor(race.id);
-
-    const panelHeight = 650;
-    const panelY = topY + panelHeight / 2;
-    const left = layout.centerX - layout.contentWidth / 2;
-    const right = layout.centerX + layout.contentWidth / 2;
-
-    this.createRoundedPanel({
-      parent: container,
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: 34,
-      color: 0x100b08,
-      alpha: 0.96,
-      strokeColor: raceColor,
-      strokeAlpha: 0.72,
-      strokeWidth: 2,
-      glowColor: raceColor,
-      depth: 2,
-    });
-
-    this.addTo(
-      container,
-      this.add.circle(left + 58, topY + 58, 38, raceColor, 0.18)
-        .setStrokeStyle(2, raceColor, 0.85)
-        .setDepth(8)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(left + 58, topY + 58, this.getRaceIcon(race.id), {
-        fontFamily: UI.font.body,
-        fontSize: '30px',
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(9)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(left + 112, topY + 37, race.name, {
-        fontFamily: UI.font.title,
-        fontSize: '27px',
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 5,
-        wordWrap: {
-          width: right - left - 150,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(9)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(left + 112, topY + 72, this.getRaceRole(race.id), {
-        fontFamily: UI.font.body,
-        fontSize: '15px',
-        color: this.getRaceColorText(race.id),
-        wordWrap: {
-          width: right - left - 150,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(9)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, topY + 122, race.description, {
-        fontFamily: UI.font.body,
-        fontSize: '15px',
-        color: UI.colors.text,
-        align: 'center',
-        lineSpacing: 4,
-        wordWrap: {
-          width: layout.contentWidth - 64,
-        },
-        maxLines: 3,
-      }).setOrigin(0.5).setDepth(9)
-    );
-
-    this.createStatsGrid(container, layout, race, topY + 206);
-
-    this.createSkillBox({
-      parent: container,
-      x: layout.centerX,
-      y: topY + 372,
-      width: layout.contentWidth - 44,
-      height: 128,
-      icon: '◇',
-      title: `Пассивный навык: ${race.passiveName}`,
-      description: race.passiveDescription,
-      color: 0x75d184,
-    });
-
-    this.createSkillBox({
-      parent: container,
-      x: layout.centerX,
-      y: topY + 518,
-      width: layout.contentWidth - 44,
-      height: 142,
-      icon: '✦',
-      title: `Активный навык: ${race.activeName}`,
-      description: race.activeDescription,
-      color: 0x70a6ff,
-    });
-
-    return topY + panelHeight;
   }
 
   private createStatsGrid(
@@ -755,18 +919,18 @@ export class RaceSelectScene extends Phaser.Scene {
     race: RaceData,
     centerY: number
   ) {
-    const gridWidth = layout.contentWidth - 44;
-    const chipGap = 10;
+    const gridWidth = layout.contentWidth - 42;
+    const chipGap = layout.veryCompact ? 8 : 10;
     const chipWidth = (gridWidth - chipGap * 2) / 3;
-    const chipHeight = 56;
+    const chipHeight = layout.veryCompact ? 52 : 58;
     const startX = layout.centerX - gridWidth / 2 + chipWidth / 2;
 
     const stats = [
       { label: 'HP', value: `${race.hp * 10}`, icon: '♥', color: 0xff6b6b },
       { label: 'Сила', value: `${race.strength}`, icon: '⚔', color: 0xf0d58a },
-      { label: 'Защита', value: `${race.defense}`, icon: '🛡', color: 0x9ca3af },
-      { label: 'Ловкость', value: `${race.agility}`, icon: '↯', color: 0x70a6ff },
-      { label: 'Интеллект', value: `${race.intelligence}`, icon: '✧', color: 0xc084fc },
+      { label: 'Защита', value: `${race.defense}`, icon: '▣', color: 0x9ca3af },
+      { label: 'Ловк.', value: `${race.agility}`, icon: '↯', color: 0x70a6ff },
+      { label: 'Интел.', value: `${race.intelligence}`, icon: '✧', color: 0xc084fc },
       { label: 'Удача', value: `${race.luck}`, icon: '✦', color: 0x75d184 },
     ];
 
@@ -774,7 +938,7 @@ export class RaceSelectScene extends Phaser.Scene {
       const col = index % 3;
       const row = Math.floor(index / 3);
       const x = startX + col * (chipWidth + chipGap);
-      const y = centerY - 34 + row * 68;
+      const y = centerY - (layout.veryCompact ? 30 : 34) + row * (chipHeight + 10);
 
       this.createStatChip({
         parent: container,
@@ -786,6 +950,7 @@ export class RaceSelectScene extends Phaser.Scene {
         label: stat.label,
         value: stat.value,
         color: stat.color,
+        compact: layout.veryCompact,
       });
     });
   }
@@ -800,6 +965,7 @@ export class RaceSelectScene extends Phaser.Scene {
     label: string;
     value: string;
     color: number;
+    compact: boolean;
   }) {
     this.createRoundedPanel({
       parent: config.parent,
@@ -807,8 +973,8 @@ export class RaceSelectScene extends Phaser.Scene {
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: 18,
-      color: 0x17100c,
+      radius: 17,
+      color: RACE_SCENE.panelWarm,
       alpha: 0.96,
       strokeColor: config.color,
       strokeAlpha: 0.34,
@@ -823,7 +989,7 @@ export class RaceSelectScene extends Phaser.Scene {
       config.parent,
       this.add.text(left + 18, config.y, config.icon, {
         fontFamily: UI.font.body,
-        fontSize: '14px',
+        fontSize: config.compact ? '12px' : '14px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 2,
@@ -834,10 +1000,11 @@ export class RaceSelectScene extends Phaser.Scene {
       config.parent,
       this.add.text(left + 34, config.y - 10, config.label, {
         fontFamily: UI.font.body,
-        fontSize: '11px',
-        color: UI.colors.textMuted,
+        fontSize: config.compact ? '10px' : '11px',
+        color: '#928a7d',
         wordWrap: {
           width: config.width - 40,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(11)
@@ -847,12 +1014,13 @@ export class RaceSelectScene extends Phaser.Scene {
       config.parent,
       this.add.text(left + 34, config.y + 11, config.value, {
         fontFamily: UI.font.title,
-        fontSize: '16px',
-        color: UI.colors.text,
+        fontSize: config.compact ? '14px' : '16px',
+        color: '#ded4bd',
         stroke: '#000000',
         strokeThickness: 2,
         wordWrap: {
           width: config.width - 40,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(11)
@@ -869,6 +1037,7 @@ export class RaceSelectScene extends Phaser.Scene {
     title: string;
     description: string;
     color: number;
+    compact: boolean;
   }) {
     this.createRoundedPanel({
       parent: config.parent,
@@ -877,31 +1046,32 @@ export class RaceSelectScene extends Phaser.Scene {
       width: config.width,
       height: config.height,
       radius: 24,
-      color: 0x14100d,
+      color: RACE_SCENE.panelWarm,
       alpha: 0.96,
       strokeColor: config.color,
-      strokeAlpha: 0.58,
+      strokeAlpha: 0.54,
       strokeWidth: 2,
       glowColor: config.color,
       depth: 8,
     });
 
     const left = config.x - config.width / 2;
+    const top = config.y - config.height / 2;
     const textX = left + 76;
-    const textWidth = config.width - 102;
+    const textWidth = config.width - 104;
 
     this.addTo(
       config.parent,
-      this.add.circle(left + 39, config.y - config.height / 2 + 42, 25, config.color, 0.18)
+      this.add.circle(left + 39, top + 40, 25, config.color, 0.18)
         .setStrokeStyle(2, config.color, 0.68)
         .setDepth(11)
     );
 
     this.addTo(
       config.parent,
-      this.add.text(left + 39, config.y - config.height / 2 + 42, config.icon, {
+      this.add.text(left + 39, top + 40, config.icon, {
         fontFamily: UI.font.body,
-        fontSize: '20px',
+        fontSize: config.compact ? '18px' : '20px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 3,
@@ -910,14 +1080,15 @@ export class RaceSelectScene extends Phaser.Scene {
 
     this.addTo(
       config.parent,
-      this.add.text(textX, config.y - config.height / 2 + 28, config.title, {
+      this.add.text(textX, top + 24, config.title, {
         fontFamily: UI.font.title,
-        fontSize: '16px',
+        fontSize: config.compact ? '14px' : '16px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 3,
         wordWrap: {
           width: textWidth,
+          useAdvancedWrap: true,
         },
         maxLines: 2,
         lineSpacing: 2,
@@ -926,10 +1097,10 @@ export class RaceSelectScene extends Phaser.Scene {
 
     this.addTo(
       config.parent,
-      this.add.text(textX, config.y - config.height / 2 + 74, config.description, {
+      this.add.text(textX, top + (config.compact ? 68 : 74), config.description, {
         fontFamily: UI.font.body,
-        fontSize: '13px',
-        color: UI.colors.text,
+        fontSize: config.compact ? '12px' : '13px',
+        color: '#d8c7a3',
         lineSpacing: 4,
         wordWrap: {
           width: textWidth,
@@ -942,7 +1113,7 @@ export class RaceSelectScene extends Phaser.Scene {
 
   private createAdvicePanel(layout: RaceLayout, topY: number) {
     const container = this.requireContentContainer();
-    const panelHeight = 128;
+    const panelHeight = layout.veryCompact ? 118 : 132;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -952,25 +1123,26 @@ export class RaceSelectScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 28,
-      color: 0x0d0d0d,
-      alpha: 0.92,
-      strokeColor: UI.colors.goldDark,
+      color: RACE_SCENE.panel,
+      alpha: 0.93,
+      strokeColor: RACE_SCENE.bronze,
       strokeAlpha: 0.4,
-      glowColor: 0x8a3f1c,
+      glowColor: RACE_SCENE.bronze,
       depth: 2,
     });
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 34, 'Подсказка', {
+      this.add.text(layout.centerX, topY + 34, 'Подсказка перед первым спуском', {
         fontFamily: UI.font.title,
-        fontSize: '22px',
+        fontSize: layout.veryCompact ? '19px' : '22px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 3,
         align: 'center',
         wordWrap: {
           width: layout.contentWidth - 60,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(8)
@@ -980,15 +1152,16 @@ export class RaceSelectScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 82,
-        'Для первого прохождения проще всего Человек или Камнерожденный. Для риска и урона — Демон или Полукровка Скверны. Для добычи — Гоблин.',
+        topY + (layout.veryCompact ? 78 : 86),
+        'Для спокойного старта подойдут Человек и Камнерожденный. Для риска и высокого урона — Демон или Полукровка Скверны. Для добычи — Гоблин.',
         {
           fontFamily: UI.font.body,
-          fontSize: '14px',
-          color: UI.colors.textMuted,
+          fontSize: layout.veryCompact ? '12px' : '14px',
+          color: '#9b9488',
           align: 'center',
           wordWrap: {
             width: layout.contentWidth - 64,
+            useAdvancedWrap: true,
           },
           maxLines: 3,
           lineSpacing: 4,
@@ -1000,36 +1173,178 @@ export class RaceSelectScene extends Phaser.Scene {
   }
 
   private createBottomAction(layout: RaceLayout) {
-    this.bottomActionObjects.forEach(object => {
-      object.destroy();
-    });
-
+    this.bottomActionObjects.forEach(object => object.destroy());
     this.bottomActionObjects = [];
+
+    const barY = layout.height - layout.safeBottom - layout.bottomBarHeight / 2;
+
+    const shadow = this.add.rectangle(
+      layout.centerX,
+      barY,
+      layout.width,
+      layout.bottomBarHeight + layout.safeBottom * 2,
+      0x020202,
+      0.78
+    ).setDepth(232);
+
+    const divider = this.add.rectangle(
+      layout.centerX,
+      barY - layout.bottomBarHeight / 2 + 6,
+      layout.contentWidth,
+      1,
+      RACE_SCENE.bronze,
+      0.28
+    ).setDepth(233);
 
     const button = this.createUiButton({
       x: layout.centerX,
-      y: layout.height - 52,
+      y: layout.bottomButtonY,
       width: Math.min(layout.contentWidth, 540),
-      height: 56,
+      height: layout.veryCompact ? 54 : 58,
       text: this.selectedRace ? `Начать путь: ${this.selectedRace.name}` : 'Выбери расу',
       accentColor: UI.colors.gold,
       disabled: !this.selectedRace,
       variant: 'gold',
       onClick: () => {
-        this.confirmRace();
+        this.showRaceConfirm();
       },
       depth: 240,
     });
 
-    this.bottomActionObjects = button.objects;
+    this.bottomActionObjects = [shadow, divider, ...button.objects];
   }
 
-  private confirmRace() {
+  private showRaceConfirm() {
     if (!this.selectedRace) {
       return;
     }
 
-    this.selectRace(this.selectedRace);
+    const race = this.selectedRace;
+    const raceColor = this.getRaceColor(race.id);
+    const { width, height } = this.scale;
+    const modalWidth = Math.min(width - 48, 610);
+    const modalHeight = Math.min(height - 150, 430);
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    this.clearModalObjects();
+
+    const modal = this.add.container(0, 0).setDepth(1000);
+
+    const overlay = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.76)
+      .setInteractive();
+
+    modal.add(overlay);
+
+    const panel = this.createRoundedPanel({
+      parent: modal,
+      x: centerX,
+      y: centerY,
+      width: modalWidth,
+      height: modalHeight,
+      radius: 32,
+      color: RACE_SCENE.panelWarm,
+      alpha: 0.99,
+      strokeColor: raceColor,
+      strokeAlpha: 0.82,
+      strokeWidth: 3,
+      glowColor: raceColor,
+      depth: 1001,
+    });
+
+    const title = this.add.text(centerX, centerY - modalHeight / 2 + 48, 'Подтвердить происхождение', {
+      fontFamily: UI.font.title,
+      fontSize: this.layout.veryCompact ? '24px' : '28px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: modalWidth - 72,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(1005);
+
+    const icon = this.add.circle(centerX, centerY - modalHeight / 2 + 118, 40, raceColor, 0.18)
+      .setStrokeStyle(2, raceColor, 0.82)
+      .setDepth(1005);
+
+    const iconText = this.add.text(centerX, centerY - modalHeight / 2 + 118, this.getRaceIcon(race.id), {
+      fontFamily: UI.font.body,
+      fontSize: '31px',
+      color: '#f1eadc',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(1006);
+
+    const body = this.add.text(
+      centerX,
+      centerY - modalHeight / 2 + 190,
+      `${race.name}\n${this.getRaceRole(race.id)}\n\nПосле выбора герой получит стартовые характеристики этой расы и начнёт путь в лагере.`,
+      {
+        fontFamily: UI.font.body,
+        fontSize: this.layout.veryCompact ? '15px' : '17px',
+        color: UI.colors.text,
+        align: 'center',
+        lineSpacing: 6,
+        wordWrap: {
+          width: modalWidth - 82,
+          useAdvancedWrap: true,
+        },
+        maxLines: 7,
+      }
+    ).setOrigin(0.5).setDepth(1005);
+
+    const cancel = this.createUiButton({
+      parent: modal,
+      x: centerX,
+      y: centerY + modalHeight / 2 - 104,
+      width: Math.min(modalWidth - 90, 390),
+      height: 54,
+      text: 'Вернуться к выбору',
+      accentColor: UI.colors.goldDark,
+      variant: 'dark',
+      onClick: () => {
+        this.clearModalObjects();
+      },
+      depth: 1006,
+    });
+
+    const confirm = this.createUiButton({
+      parent: modal,
+      x: centerX,
+      y: centerY + modalHeight / 2 - 42,
+      width: Math.min(modalWidth - 90, 390),
+      height: 56,
+      text: 'Начать путь',
+      accentColor: raceColor,
+      variant: 'gold',
+      onClick: () => {
+        this.clearModalObjects();
+        this.selectRace(race);
+      },
+      depth: 1006,
+    });
+
+    this.modalObjects = [
+      modal,
+      overlay,
+      panel.shadow,
+      panel.panel,
+      panel.glow,
+      title,
+      icon,
+      iconText,
+      body,
+      ...cancel.objects,
+      ...confirm.objects,
+    ];
+  }
+
+  private clearModalObjects() {
+    this.modalObjects.forEach(object => object.destroy());
+    this.modalObjects = [];
   }
 
   private selectRace(race: RaceData) {
@@ -1058,6 +1373,51 @@ export class RaceSelectScene extends Phaser.Scene {
     this.scene.start('CampScene');
   }
 
+  private createMiniSelectedChip(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    race: RaceData;
+    raceColor: number;
+    depth: number;
+  }) {
+    const radius = config.height / 2;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x17100c, 0.92);
+    bg.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+    bg.lineStyle(1, config.raceColor, 0.48);
+    bg.strokeRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+    bg.setDepth(config.depth);
+
+    this.add.text(config.x, config.y, `${this.getRaceIcon(config.race.id)}  Выбрано: ${config.race.name}`, {
+      fontFamily: UI.font.body,
+      fontSize: this.layout.veryCompact ? '12px' : '14px',
+      color: UI.colors.text,
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 28,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(config.depth + 1);
+  }
+
   private createShortStatsText(race: RaceData) {
     return [
       `HP ${race.hp * 10}`,
@@ -1074,7 +1434,7 @@ export class RaceSelectScene extends Phaser.Scene {
     if (id === 'stoneborn') return '▣';
     if (id === 'night_elf') return '◐';
     if (id === 'goblin') return '!';
-    if (id === 'demon') return '◆';
+    if (id === 'demon') return '♦';
 
     return '◆';
   }
@@ -1088,6 +1448,73 @@ export class RaceSelectScene extends Phaser.Scene {
     if (id === 'demon') return 'Урон / жертва HP';
 
     return 'Боец';
+  }
+
+  private getRaceDifficulty(id: RaceId | string) {
+    if (id === 'human') return 'сложность: лёгкая';
+    if (id === 'stoneborn') return 'сложность: лёгкая';
+    if (id === 'goblin') return 'сложность: средняя';
+    if (id === 'night_elf') return 'сложность: средняя';
+    if (id === 'tainted_halfblood') return 'сложность: высокая';
+    if (id === 'demon') return 'сложность: высокая';
+
+    return 'сложность: средняя';
+  }
+
+  private getRaceAdvantages(id: RaceId | string) {
+    if (id === 'human') {
+      return [
+        'Ровный старт без слабых сторон.',
+        'Хорош для первого прохождения и обучения.',
+        'Становится сильнее на низком HP.',
+      ];
+    }
+
+    if (id === 'tainted_halfblood') {
+      return [
+        'Высокий урон на грани смерти.',
+        'Подходит для агрессивной игры через крит.',
+        'Активный навык быстро добивает опасных врагов.',
+      ];
+    }
+
+    if (id === 'stoneborn') {
+      return [
+        'Лучшее выживание и защита на старте.',
+        'Прощает ошибки в ловушках и тяжёлых боях.',
+        'Хорош против боссов и длинных этажей.',
+      ];
+    }
+
+    if (id === 'night_elf') {
+      return [
+        'Высокая ловкость и частые уклонения.',
+        'Силен в темповой игре без лишнего урона.',
+        'Активка спасает от опасного удара.',
+      ];
+    }
+
+    if (id === 'goblin') {
+      return [
+        'Больше золота и добычи за счёт удачи.',
+        'Быстрее развивает кузницу и экипировку.',
+        'Хорош для фарма материалов и предметов.',
+      ];
+    }
+
+    if (id === 'demon') {
+      return [
+        'Самый агрессивный стиль через силу.',
+        'Урон растёт после полученных ударов.',
+        'Силен, если быстро заканчивать бой.',
+      ];
+    }
+
+    return [
+      'Сбалансированный стиль боя.',
+      'Подходит для прохождения катакомб.',
+      'Имеет пассивный и активный навык.',
+    ];
   }
 
   private getRaceColor(id: RaceId | string) {
@@ -1199,13 +1626,14 @@ export class RaceSelectScene extends Phaser.Scene {
 
     const label = this.add.text(config.x, config.y, config.text, {
       fontFamily: UI.font.body,
-      fontSize: config.small ? '12px' : '15px',
+      fontSize: config.small ? '12px' : '16px',
       color: textColor,
       stroke: '#000000',
       strokeThickness: disabled ? 1 : 2,
       align: 'center',
       wordWrap: {
-        width: config.width - 12,
+        width: config.width - 18,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(depth + 2);
@@ -1325,12 +1753,12 @@ export class RaceSelectScene extends Phaser.Scene {
     depth?: number;
   }) {
     const radius = config.radius ?? 26;
-    const color = config.color ?? 0x14100d;
+    const color = config.color ?? RACE_SCENE.stone;
     const alpha = config.alpha ?? 0.92;
     const strokeColor = config.strokeColor ?? UI.colors.goldDark;
     const strokeAlpha = config.strokeAlpha ?? 0.45;
     const strokeWidth = config.strokeWidth ?? 2;
-    const glowColor = config.glowColor ?? 0xf0a040;
+    const glowColor = config.glowColor ?? RACE_SCENE.bronze;
     const depth = config.depth ?? 1;
 
     const safeWidth = Math.min(config.width, this.scale.width - 24);
@@ -1370,10 +1798,10 @@ export class RaceSelectScene extends Phaser.Scene {
 
     const glow = this.add.circle(
       config.x,
-      config.y - safeHeight / 2 + 28,
-      safeWidth * 0.26,
+      config.y - safeHeight / 2 + 30,
+      safeWidth * 0.24,
       glowColor,
-      0.042
+      0.04
     ).setDepth(depth + 2);
 
     if (config.parent) {
