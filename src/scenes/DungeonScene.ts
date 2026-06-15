@@ -79,6 +79,48 @@ type CampfirePlayer = typeof player & {
   premiumFlintUnlocked?: boolean;
 };
 
+
+type DungeonLayout = {
+  width: number;
+  height: number;
+  centerX: number;
+  safeX: number;
+  safeTop: number;
+  safeBottom: number;
+  contentWidth: number;
+  compact: boolean;
+  veryCompact: boolean;
+  headerY: number;
+  floorInfoY: number;
+  routeY: number;
+  roomCardTop: number;
+  roomCardHeight: number;
+  actionDockTop: number;
+  mainButtonY: number;
+  prepareButtonY: number;
+  exitButtonY: number;
+  primaryButtonHeight: number;
+  secondaryButtonHeight: number;
+};
+
+const DUNGEON_DARK = {
+  black: 0x030304,
+  void: 0x050607,
+  graphite: 0x0c0d10,
+  stone: 0x11141a,
+  stoneLight: 0x191a21,
+  soot: 0x080504,
+  brown: 0x17100c,
+  bronze: 0x6b4b2d,
+  gold: 0xb89a5e,
+  goldSoft: 0xd8c088,
+  ash: 0x8d877b,
+  blood: 0x8d2f2f,
+  cold: 0x5f7f9d,
+  violet: 0x62518a,
+  green: 0x5f8f66,
+};
+
 export class DungeonScene extends Phaser.Scene {
 
   private readonly maxPotionCount = 6;
@@ -114,69 +156,164 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
-  private createHeader() {
-    const { width } = this.scale;
+  private getLayout(): DungeonLayout {
+    const { width, height } = this.scale;
 
+    const compact = height < 1120;
+    const veryCompact = height < 940;
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 34);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 34);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 28, 46);
+    const contentWidth = Math.min(width - safeX * 2, 640);
+
+    const primaryButtonHeight = veryCompact ? 64 : 72;
+    const secondaryButtonHeight = veryCompact ? 54 : 58;
+
+    // Нижняя зона теперь предназначена только для кнопки выхода в город.
+    // Все действия текущей комнаты находятся выше — внутри основной карточки комнаты.
+    const exitButtonY = height - safeBottom - secondaryButtonHeight / 2;
+    const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - 18;
+
+    const headerY = safeTop + (compact ? 44 : 50);
+    const floorInfoY = headerY + (compact ? 82 : 92);
+    const routeY = floorInfoY + (veryCompact ? 86 : compact ? 98 : 112);
+    const roomCardTop = routeY + (veryCompact ? 50 : 62);
+
+    const minRoomCardHeight = veryCompact ? 390 : compact ? 450 : 500;
+    const maxRoomCardHeight = veryCompact ? 430 : compact ? 540 : 620;
+    const availableRoomCardHeight = actionDockTop - roomCardTop - 16;
+    const roomCardHeight = Phaser.Math.Clamp(
+      availableRoomCardHeight,
+      minRoomCardHeight,
+      maxRoomCardHeight
+    );
+
+    const roomCardBottom = roomCardTop + roomCardHeight;
+    const actionGap = veryCompact ? 10 : 12;
+    const actionBottomPadding = veryCompact ? 18 : 24;
+
+    const prepareButtonY = roomCardBottom - actionBottomPadding - secondaryButtonHeight / 2;
+    const mainButtonY = prepareButtonY - secondaryButtonHeight / 2 - actionGap - primaryButtonHeight / 2;
+
+    return {
+      width,
+      height,
+      centerX: width / 2,
+      safeX,
+      safeTop,
+      safeBottom,
+      contentWidth,
+      compact,
+      veryCompact,
+      headerY,
+      floorInfoY,
+      routeY,
+      roomCardTop,
+      roomCardHeight,
+      actionDockTop,
+      mainButtonY,
+      prepareButtonY,
+      exitButtonY,
+      primaryButtonHeight,
+      secondaryButtonHeight,
+    };
+  }
+
+  private createHeader() {
+    const layout = this.getLayout();
     const floor = gameState.floorRun.currentFloor;
     const tier = getCurrentTierByFloor(floor);
     const modifierName = getFloorModifierName(gameState.floorRun.modifier);
-
     const theme = getCryptDepthTheme(floor);
 
     this.createRoundedPanel({
-      x: width / 2,
-      y: 82,
-      width: 620,
-      height: 92,
+      x: layout.centerX,
+      y: layout.headerY,
+      width: layout.contentWidth,
+      height: layout.compact ? 78 : 88,
       radius: 28,
-      color: 0x0d0a08,
-      alpha: 0.92,
+      color: DUNGEON_DARK.graphite,
+      alpha: 0.94,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.45,
+      strokeAlpha: 0.56,
+      strokeWidth: 2,
       depth: 2,
     });
 
-    this.add.text(width / 2, 62, `Ярус ${tier}  •  Этаж ${floor}`, {
+    this.add.circle(layout.centerX, layout.headerY - 4, layout.contentWidth * 0.35, theme.glow, 0.035)
+      .setDepth(3);
+
+    this.add.text(layout.centerX, layout.headerY - (layout.compact ? 15 : 18), `Ярус ${tier}  •  Этаж ${floor}`, {
       fontFamily: UI.font.title,
-      fontSize: '28px',
+      fontSize: layout.compact ? '25px' : '29px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 44,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
     }).setOrigin(0.5).setDepth(6);
 
-    this.add.text(width / 2, 100, `${theme.name}  •  ${modifierName}`, {
+    this.add.text(layout.centerX, layout.headerY + (layout.compact ? 18 : 22), `${theme.name}  •  ${modifierName}`, {
       fontFamily: UI.font.body,
-      fontSize: '16px',
+      fontSize: layout.compact ? '13px' : '15px',
       color: theme.mutedText,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 56,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
     }).setOrigin(0.5).setDepth(6);
   }
 
   private createDungeonBackdrop() {
+    const layout = this.getLayout();
     const { width, height } = this.scale;
 
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
 
-    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 0.55).setDepth(0);
+    this.add.rectangle(width / 2, height / 2, width, height, DUNGEON_DARK.black, 1).setDepth(0);
+    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 0.7).setDepth(0);
+    this.add.rectangle(width / 2, height - 170, width, 340, 0x020202, 0.56).setDepth(0);
 
-    this.add.circle(width / 2, 120, 260, theme.glow, 0.075).setDepth(0);
-    this.add.circle(width / 2, 120, 130, theme.accent, 0.035).setDepth(0);
+    this.add.circle(width / 2, layout.safeTop + 116, width * 0.48, theme.glow, 0.08).setDepth(0);
+    this.add.circle(width / 2, layout.safeTop + 130, width * 0.30, theme.accent, 0.035).setDepth(0);
+    this.add.circle(width / 2, layout.safeTop + 145, width * 0.16, DUNGEON_DARK.gold, 0.024).setDepth(0);
 
-    for (let i = 0; i < 14; i += 1) {
-      const x = 45 + i * 52;
-      const y = 165 + (i % 6) * 92;
+    for (let i = 0; i < 18; i += 1) {
+      const x = layout.safeX + 8 + i * ((width - layout.safeX * 2 - 16) / 17);
+      const y = layout.safeTop + 150 + (i % 7) * 84;
+      const radius = 26 + (i % 4) * 9;
 
-      this.add.circle(x, y, 34 + (i % 4) * 8, theme.fog, 0.018).setDepth(0);
+      this.add.circle(x, y, radius, theme.fog, 0.014 + (i % 3) * 0.004).setDepth(0);
     }
 
-    this.add.rectangle(width / 2, height - 180, width, 330, 0x020202, 0.36).setDepth(0);
-
-    for (let i = 0; i < 34; i += 1) {
-      const x = Phaser.Math.Between(35, width - 35);
-      const y = Phaser.Math.Between(80, height - 170);
+    for (let i = 0; i < 42; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop + 70, height - layout.safeBottom - 110);
       const size = Phaser.Math.Between(1, 2);
+      const color = i % 5 === 0 ? theme.accent : DUNGEON_DARK.ash;
 
-      this.add.circle(x, y, size, theme.accent, 0.055).setDepth(1);
+      this.add.circle(x, y, size, color, 0.035 + (i % 4) * 0.006).setDepth(1);
+    }
+
+    for (let i = 0; i < 8; i += 1) {
+      const y = height - 320 + i * 42;
+      this.add.line(
+        0,
+        0,
+        layout.safeX,
+        y,
+        width - layout.safeX,
+        y + (i % 2) * 8,
+        0x211a14,
+        0.18
+      ).setOrigin(0, 0).setDepth(1);
     }
   }
 
@@ -224,34 +361,37 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private createFloorProgress() {
-    const { width } = this.scale;
-
+    const layout = this.getLayout();
     const floor = gameState.floorRun.currentFloor;
-
     const theme = getCryptDepthTheme(floor);
 
+    const panelHeight = layout.veryCompact ? 78 : layout.compact ? 86 : 96;
+
     this.createRoundedPanel({
-      x: width / 2,
-      y: 178,
-      width: 620,
-      height: 94,
+      x: layout.centerX,
+      y: layout.floorInfoY,
+      width: layout.contentWidth,
+      height: panelHeight,
       radius: 24,
       color: theme.panel,
-      alpha: 0.86,
+      alpha: 0.88,
       strokeColor: theme.stroke,
-      strokeAlpha: 0.3,
+      strokeAlpha: 0.42,
+      strokeWidth: 2,
       depth: 2,
     });
 
-    this.add.text(width / 2, 178, getFloorDescription(floor), {
+    this.add.text(layout.centerX, layout.floorInfoY, getFloorDescription(floor), {
       fontFamily: UI.font.body,
-      fontSize: '14px',
+      fontSize: layout.veryCompact ? '12px' : layout.compact ? '13px' : '14px',
       color: theme.mutedText,
       align: 'center',
       wordWrap: {
-        width: 545,
+        width: layout.contentWidth - 56,
+        useAdvancedWrap: true,
       },
       lineSpacing: 2,
+      maxLines: layout.veryCompact ? 4 : 5,
     }).setOrigin(0.5).setDepth(6);
   }
 
@@ -536,75 +676,98 @@ export class DungeonScene extends Phaser.Scene {
 }
 
   private createRoomMap() {
-   const { width } = this.scale;
+    const layout = this.getLayout();
 
-   const rooms = gameState.floorRun.rooms;
-   const currentIndex = gameState.floorRun.currentRoomIndex;
+    const rooms = gameState.floorRun.rooms;
+    const currentIndex = gameState.floorRun.currentRoomIndex;
+    const theme = getCryptDepthTheme(gameState.floorRun.currentFloor || 1);
 
-   const y = 315;
-   const gap = 88;
-   const startX = width / 2 - ((rooms.length - 1) * gap) / 2;
+    const y = layout.routeY;
+    const roomCount = Math.max(1, rooms.length);
+    const maxRouteWidth = layout.contentWidth - 44;
+    const gap = roomCount <= 1 ? 0 : Math.min(76, maxRouteWidth / (roomCount - 1));
+    const startX = layout.centerX - ((roomCount - 1) * gap) / 2;
+    const nodeRadius = Phaser.Math.Clamp(Math.floor(gap * 0.28), 18, layout.veryCompact ? 23 : 27);
 
-   this.add.text(width / 2, y - 52, 'Маршрут этажа', {
-     fontFamily: UI.font.title,
-     fontSize: '21px',
-     color: UI.colors.text,
-     stroke: '#000000',
-     strokeThickness: 4,
-   }).setOrigin(0.5).setDepth(6);
+    this.add.text(layout.centerX, y - (layout.veryCompact ? 37 : 44), 'Маршрут этажа', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '18px' : '21px',
+      color: UI.colors.text,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 44,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(6);
 
-   rooms.forEach((room, index) => {
-     const x = startX + index * gap;
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y,
+      width: layout.contentWidth,
+      height: layout.veryCompact ? 58 : 68,
+      radius: 24,
+      color: DUNGEON_DARK.soot,
+      alpha: 0.7,
+      strokeColor: theme.stroke,
+      strokeAlpha: 0.18,
+      strokeWidth: 1,
+      depth: 2,
+    });
 
-     const isCompleted = room.completed || index < currentIndex;
-     const isCurrent = index === currentIndex;
-     const isLocked = index > currentIndex;
+    rooms.forEach((room, index) => {
+      const x = startX + index * gap;
 
-     const fillColor = isCompleted
-       ? 0x102016
-       : isCurrent
-         ? 0x2b1d13
-         : 0x0d0d0d;
+      const isCompleted = room.completed || index < currentIndex;
+      const isCurrent = index === currentIndex;
+      const isLocked = index > currentIndex;
 
-     const strokeColor = isCompleted
-       ? 0x75d184
-       : isCurrent
-         ? UI.colors.gold
-         : 0x3a2518;
+      const fillColor = isCompleted
+        ? 0x102016
+        : isCurrent
+          ? 0x2b1d13
+          : 0x0d0d0d;
 
-     if (index > 0) {
-       this.add.rectangle(
-         x - gap / 2,
-         y,
-         gap - 34,
-         4,
-         isCompleted ? 0x75d184 : 0x3a2518,
-         isCompleted ? 0.42 : 0.6
-       ).setDepth(4);
-     }
+      const strokeColor = isCompleted
+        ? 0x75d184
+        : isCurrent
+          ? UI.colors.gold
+          : 0x3a2518;
 
-     this.add.circle(x, y + 5, isCurrent ? 32 : 28, 0x000000, 0.34).setDepth(4);
+      if (index > 0) {
+        this.add.rectangle(
+          x - gap / 2,
+          y,
+          Math.max(8, gap - nodeRadius * 1.9),
+          3,
+          isCompleted ? 0x75d184 : 0x3a2518,
+          isCompleted ? 0.42 : 0.56
+        ).setDepth(4);
+      }
 
-     this.add.circle(x, y, isCurrent ? 31 : 27, fillColor, isLocked ? 0.55 : 0.98)
-       .setStrokeStyle(isCurrent ? 3 : 2, strokeColor, isCurrent ? 0.95 : 0.58)
-       .setDepth(5);
+      this.add.circle(x, y + 4, isCurrent ? nodeRadius + 5 : nodeRadius + 2, 0x000000, 0.32).setDepth(4);
 
-     this.add.text(x, y, this.getRoomIcon(room.type), {
-       fontFamily: UI.font.body,
-       fontSize: isCurrent ? '25px' : '21px',
-       color: isLocked
-         ? '#555555'
-         : isCompleted
-           ? UI.colors.green
-           : this.getRoomTextColor(room.type),
-       stroke: '#000000',
-       strokeThickness: 2,
-     }).setOrigin(0.5).setDepth(6);
-   });
+      this.add.circle(x, y, isCurrent ? nodeRadius + 2 : nodeRadius, fillColor, isLocked ? 0.52 : 0.98)
+        .setStrokeStyle(isCurrent ? 3 : 2, strokeColor, isCurrent ? 0.95 : 0.58)
+        .setDepth(5);
+
+      this.add.text(x, y, this.getRoomIcon(room.type), {
+        fontFamily: UI.font.body,
+        fontSize: isCurrent ? (layout.compact ? '20px' : '23px') : (layout.compact ? '17px' : '20px'),
+        color: isLocked
+          ? '#555555'
+          : isCompleted
+            ? UI.colors.green
+            : this.getRoomTextColor(room.type),
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(6);
+    });
   }
 
   private createCurrentRoom() {
-    const { width } = this.scale;
+    const layout = this.getLayout();
 
     if (isCurrentFloorCompleted()) {
       this.showFloorCompleted();
@@ -624,21 +787,23 @@ export class DungeonScene extends Phaser.Scene {
     const isBossRoom = roomType === 'boss' || roomType === 'tier_boss';
     const isCampfireRoom = roomType === 'campfire';
 
-    const panelY = isBossRoom ? 735 : isCampfireRoom ? 735 : 715;
-    const panelHeight = isBossRoom ? 680 : isCampfireRoom ? 650 : 570;
+    const cardTop = layout.roomCardTop;
+    const cardHeight = layout.roomCardHeight;
+    const cardY = cardTop + cardHeight / 2;
+    const cardWidth = layout.contentWidth;
 
     this.createRoundedPanel({
-      x: width / 2,
-      y: panelY,
-      width: 620,
-      height: panelHeight,
-      radius: 36,
+      x: layout.centerX,
+      y: cardY,
+      width: cardWidth,
+      height: cardHeight,
+      radius: layout.compact ? 28 : 34,
       color: isBossRoom
         ? 0x160908
         : isCampfireRoom
           ? 0x1a0f08
           : theme.panel,
-      alpha: 0.94,
+      alpha: 0.95,
       strokeColor: this.getRoomStrokeColor(roomType),
       strokeAlpha: isBossRoom || isCampfireRoom ? 0.82 : 0.52,
       strokeWidth: isBossRoom || isCampfireRoom ? 3 : 2,
@@ -647,18 +812,17 @@ export class DungeonScene extends Phaser.Scene {
 
     const iconColor = this.getRoomTextColor(roomType);
     const strokeColor = this.getRoomStrokeColor(roomType);
+    const iconY = cardTop + (layout.veryCompact ? 44 : 56);
 
-    const topY = panelY - panelHeight / 2;
+    this.add.circle(layout.centerX, iconY, layout.veryCompact ? 42 : 52, strokeColor, isCampfireRoom ? 0.16 : 0.11).setDepth(5);
 
-    this.add.circle(width / 2, topY + 72, 58, strokeColor, isCampfireRoom ? 0.16 : 0.11).setDepth(5);
-
-    this.add.circle(width / 2, topY + 72, 42, 0x20150f, 1)
+    this.add.circle(layout.centerX, iconY, layout.veryCompact ? 31 : 38, 0x20150f, 1)
       .setStrokeStyle(2, strokeColor, 0.76)
       .setDepth(6);
 
-    this.add.text(width / 2, topY + 72, this.getRoomIcon(roomType), {
+    this.add.text(layout.centerX, iconY, this.getRoomIcon(roomType), {
       fontFamily: UI.font.body,
-      fontSize: isCampfireRoom ? '38px' : '34px',
+      fontSize: layout.veryCompact ? '27px' : isCampfireRoom ? '36px' : '32px',
       color: iconColor,
       stroke: '#000000',
       strokeThickness: 3,
@@ -677,44 +841,51 @@ export class DungeonScene extends Phaser.Scene {
                 ? 'Забытый костёр'
                 : room.title;
 
-    this.add.text(width / 2, topY + 140, roomTitle, {
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 94 : 122), roomTitle, {
       fontFamily: UI.font.title,
-      fontSize: isBossRoom ? '36px' : isCampfireRoom ? '33px' : '34px',
+      fontSize: layout.veryCompact ? '24px' : isBossRoom ? '32px' : '30px',
       color: isBossRoom ? UI.colors.red : isCampfireRoom ? UI.colors.goldText : theme.text,
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: 540,
+        width: cardWidth - 70,
+        useAdvancedWrap: true,
       },
       maxLines: 2,
+      lineSpacing: -2,
     }).setOrigin(0.5).setDepth(7);
 
-    this.add.text(width / 2, topY + 200, room.description, {
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 150 : 182), room.description, {
       fontFamily: UI.font.body,
-      fontSize: '17px',
+      fontSize: layout.veryCompact ? '14px' : '16px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 540,
+        width: cardWidth - 78,
+        useAdvancedWrap: true,
       },
       lineSpacing: 4,
-      maxLines: 4,
+      maxLines: layout.veryCompact ? 3 : 4,
     }).setOrigin(0.5).setDepth(7);
 
+    const infoY = cardTop + (layout.veryCompact ? 222 : 270);
     this.createRoomInfoBox(
-      width / 2,
-      topY + 295,
+      layout.centerX,
+      infoY,
       this.getRoomInfo(roomType),
       this.getModifierWarning()
     );
 
-    if (isBossRoom) {
-      this.createBossRequirementInfo(topY + 385);
+    const detailsY = infoY + (layout.veryCompact ? 74 : 92);
+    const actionAreaTop = layout.mainButtonY - layout.primaryButtonHeight / 2 - 12;
+
+    if (isBossRoom && detailsY + 42 < actionAreaTop) {
+      this.createBossRequirementInfo(detailsY);
     }
 
-    if (isCampfireRoom) {
-      this.createCampfireStatusBox(topY + 390);
+    if (isCampfireRoom && detailsY + 45 < actionAreaTop) {
+      this.createCampfireStatusBox(detailsY);
     }
 
     this.createRoomButton(roomType, room.enemyId);
@@ -726,15 +897,18 @@ export class DungeonScene extends Phaser.Scene {
     info: string,
     modifierWarning: string
   ) {
+    const layout = this.getLayout();
     const text = `${info}${modifierWarning}`;
+    const boxWidth = Math.min(layout.contentWidth - 58, 540);
+    const boxHeight = layout.veryCompact ? 64 : 78;
 
     this.createRoundedPanel({
       x,
       y,
-      width: 540,
-      height: 82,
-      radius: 22,
-      color: 0x17100c,
+      width: boxWidth,
+      height: boxHeight,
+      radius: 20,
+      color: DUNGEON_DARK.brown,
       alpha: 0.88,
       strokeColor: UI.colors.goldDark,
       strokeAlpha: 0.3,
@@ -744,18 +918,20 @@ export class DungeonScene extends Phaser.Scene {
 
     this.add.text(x, y, text, {
       fontFamily: UI.font.body,
-      fontSize: '13px',
+      fontSize: layout.veryCompact ? '11px' : '13px',
       color: UI.colors.textMuted,
       align: 'center',
       wordWrap: {
-        width: 490,
+        width: boxWidth - 46,
+        useAdvancedWrap: true,
       },
       lineSpacing: 3,
+      maxLines: layout.veryCompact ? 3 : 4,
     }).setOrigin(0.5).setDepth(8);
   }
 
   private createBossRequirementInfo(y: number) {
-    const { width } = this.scale;
+    const layout = this.getLayout();
 
     const floor = gameState.floorRun.currentFloor;
     const requirement = getFloorRequirement(floor);
@@ -770,12 +946,14 @@ export class DungeonScene extends Phaser.Scene {
     const hpOk = stats.maxHp >= recommendedHp;
 
     const isReady = levelOk && strengthOk && hpOk;
+    const boxWidth = Math.min(layout.contentWidth - 58, 540);
+    const boxHeight = layout.veryCompact ? 66 : 78;
 
     this.createRoundedPanel({
-      x: width / 2,
+      x: layout.centerX,
       y,
-      width: 540,
-      height: 82,
+      width: boxWidth,
+      height: boxHeight,
       radius: 20,
       color: isReady ? 0x102016 : 0x241010,
       alpha: 0.88,
@@ -785,28 +963,35 @@ export class DungeonScene extends Phaser.Scene {
       depth: 5,
     });
 
-    this.add.text(width / 2, y - 24, isReady ? 'Герой готов к боссу' : 'Босс опасен', {
+    this.add.text(layout.centerX, y - (layout.veryCompact ? 18 : 22), isReady ? 'Герой готов к боссу' : 'Босс опасен', {
       fontFamily: UI.font.title,
-      fontSize: '17px',
+      fontSize: layout.veryCompact ? '14px' : '17px',
       color: isReady ? UI.colors.green : UI.colors.red,
       stroke: '#000000',
       strokeThickness: 3,
+      align: 'center',
+      maxLines: 1,
+      wordWrap: {
+        width: boxWidth - 40,
+      },
     }).setOrigin(0.5).setDepth(8);
 
     const text = [
       `Ур. ${recommendedLevel}/${player.level}`,
-      `Сила ${recommendedStrength}/${stats.attack}`,
+      `Атака ${recommendedStrength}/${stats.attack}`,
       `HP ${recommendedHp}/${stats.maxHp}`,
     ].join('  •  ');
 
-    this.add.text(width / 2, y + 15, text, {
+    this.add.text(layout.centerX, y + (layout.veryCompact ? 13 : 16), text, {
       fontFamily: UI.font.body,
-      fontSize: '14px',
+      fontSize: layout.veryCompact ? '12px' : '14px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: 500,
+        width: boxWidth - 36,
+        useAdvancedWrap: true,
       },
+      maxLines: 2,
     }).setOrigin(0.5).setDepth(8);
   }
 
@@ -829,8 +1014,6 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private createRoomButton(type: string, enemyId?: string) {
-    const { width } = this.scale;
-
     const isBattleRoom =
       type === 'monster' ||
       type === 'elite' ||
@@ -844,27 +1027,27 @@ export class DungeonScene extends Phaser.Scene {
     let description = 'Перейти дальше.';
 
     if (type === 'monster') {
-      buttonText = 'В бой';
+      buttonText = 'Войти в бой';
       icon = '☠';
-      description = 'Обычное сражение.';
+      description = 'Обычное сражение. Победи врага, чтобы пройти дальше.';
     }
 
     if (type === 'elite') {
-      buttonText = 'Сразиться с элитой';
+      buttonText = 'Войти в бой';
       icon = '◆';
-      description = 'Опасный враг, награда выше.';
+      description = 'Элитный враг. Опаснее обычного, но награда выше.';
     }
 
     if (type === 'boss') {
       buttonText = 'Войти к боссу';
       icon = '♛';
-      description = 'Финальная битва этажа.';
+      description = 'Финальная битва этажа. Проверь HP, энергию и зелья.';
     }
 
     if (type === 'tier_boss') {
-      buttonText = 'Финальный бой';
+      buttonText = 'Войти в финальный бой';
       icon = '♚';
-      description = 'Битва за переход в следующий ярус.';
+      description = 'Битва за завершение яруса и переход глубже.';
     }
 
     if (type === 'chest') {
@@ -876,7 +1059,7 @@ export class DungeonScene extends Phaser.Scene {
     if (type === 'trap') {
       buttonText = 'Пройти осторожно';
       icon = '!';
-      description = 'Можно избежать урона, если хватит ловкости.';
+      description = 'Ловкость может помочь избежать урона.';
     }
 
     if (type === 'campfire') {
@@ -907,16 +1090,20 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
+    const layout = this.getLayout();
+    this.createActionDock(layout);
+
     this.createRoomActionButton({
-      x: width / 2,
-      y: 875,
-      width: 460,
-      height: 64,
+      x: layout.centerX,
+      y: layout.mainButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.primaryButtonHeight,
       icon,
       title: buttonText,
       subtitle: description,
       accentColor: this.getRoomStrokeColor(type),
       danger: type === 'trap',
+      large: true,
       onClick: () => {
         if (type === 'chest') {
           this.openChest();
@@ -928,22 +1115,39 @@ export class DungeonScene extends Phaser.Scene {
         }
       },
     });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.exitButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.secondaryButtonHeight,
+      icon: '⌂',
+      title: 'Выйти в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
+      },
+    });
   }
 
   private createCampfireStatusBox(y: number) {
-    const { width } = this.scale;
+    const layout = this.getLayout();
     const campfireState = this.getCampfireState();
     const flintName = this.getFlintDisplayName(campfireState.selectedFlint ?? 'none');
     const potionText = `Зелья: ${player.potions}/${this.maxPotionCount}`;
     const chargeText = `Зарядов огнива: ${campfireState.remainingCampfireUses}`;
+    const boxWidth = Math.min(layout.contentWidth - 58, 540);
+    const boxHeight = layout.veryCompact ? 70 : 84;
 
     this.createRoundedPanel({
-      x: width / 2,
+      x: layout.centerX,
       y,
-      width: 540,
-      height: 90,
+      width: boxWidth,
+      height: boxHeight,
       radius: 22,
-      color: 0x17100c,
+      color: DUNGEON_DARK.brown,
       alpha: 0.9,
       strokeColor: 0xf0a040,
       strokeAlpha: 0.42,
@@ -951,33 +1155,34 @@ export class DungeonScene extends Phaser.Scene {
       depth: 5,
     });
 
-    this.add.text(width / 2, y - 24, flintName, {
+    this.add.text(layout.centerX, y - (layout.veryCompact ? 19 : 23), flintName, {
       fontFamily: UI.font.title,
-      fontSize: '18px',
+      fontSize: layout.veryCompact ? '15px' : '18px',
       color: campfireState.remainingCampfireUses > 0 ? UI.colors.goldText : UI.colors.textMuted,
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
       wordWrap: {
-        width: 500,
+        width: boxWidth - 42,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(8);
 
-    this.add.text(width / 2, y + 18, `${potionText}  •  ${chargeText}`, {
+    this.add.text(layout.centerX, y + (layout.veryCompact ? 14 : 18), `${potionText}  •  ${chargeText}`, {
       fontFamily: UI.font.body,
-      fontSize: '15px',
+      fontSize: layout.veryCompact ? '12px' : '15px',
       color: UI.colors.textMuted,
       align: 'center',
       wordWrap: {
-        width: 500,
+        width: boxWidth - 42,
+        useAdvancedWrap: true,
       },
       maxLines: 2,
     }).setOrigin(0.5).setDepth(8);
   }
 
   private createCampfireButtons() {
-    const { width } = this.scale;
+    const layout = this.getLayout();
     const campfireState = this.getCampfireState();
     const stats = getPlayerStats(player);
 
@@ -988,11 +1193,13 @@ export class DungeonScene extends Phaser.Scene {
     const needsCampfire = !hpIsFull || !energyIsFull || !potionsAreFull;
     const canUseCampfire = campfireState.remainingCampfireUses > 0 && needsCampfire;
 
+    this.createActionDock(layout);
+
     this.createRoomActionButton({
-      x: width / 2,
-      y: 905,
-      width: 470,
-      height: 62,
+      x: layout.centerX,
+      y: layout.mainButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.primaryButtonHeight,
       icon: '♨',
       title: canUseCampfire ? 'Разжечь костёр' : 'Костёр не нужен',
       subtitle: canUseCampfire
@@ -1002,16 +1209,17 @@ export class DungeonScene extends Phaser.Scene {
           : `HP и зелья уже полные: ${player.potions}/${this.maxPotionCount}`,
       accentColor: canUseCampfire ? 0xf0a040 : UI.colors.goldDark,
       danger: false,
+      large: true,
       onClick: () => {
         this.handleCampfireUse();
       },
     });
 
     this.createRoomActionButton({
-      x: width / 2,
-      y: 982,
-      width: 470,
-      height: 58,
+      x: layout.centerX,
+      y: layout.prepareButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.secondaryButtonHeight,
       icon: '➤',
       title: 'Пройти мимо',
       subtitle: 'Не тратить заряд огнива',
@@ -1019,6 +1227,21 @@ export class DungeonScene extends Phaser.Scene {
       danger: false,
       onClick: () => {
         this.skipCampfire();
+      },
+    });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.exitButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.secondaryButtonHeight,
+      icon: '⌂',
+      title: 'Выйти в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
       },
     });
   }
@@ -1126,6 +1349,28 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     );
   }
 
+  private createActionDock(layout = this.getLayout()) {
+    const dockHeight = layout.height - layout.actionDockTop;
+
+    this.add.rectangle(
+      layout.centerX,
+      layout.actionDockTop + dockHeight / 2,
+      layout.width,
+      dockHeight,
+      0x020202,
+      0.78
+    ).setDepth(18);
+
+    this.add.rectangle(
+      layout.centerX,
+      layout.actionDockTop + 1,
+      layout.contentWidth,
+      1,
+      UI.colors.goldDark,
+      0.28
+    ).setDepth(19);
+  }
+
   private createNormalBattleButtons(config: {
     enemyId: string;
     buttonText: string;
@@ -1133,22 +1378,38 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     description: string;
     type: string;
   }) {
-    const { width } = this.scale;
+    const layout = this.getLayout();
+    const buttonWidth = Math.min(layout.contentWidth, 560);
 
-    const buttonWidth = 460;
-
-    const prepareY = 820;
-    const battleY = 890;
-    const townY = 960;
+    this.createActionDock(layout);
 
     this.createRoomActionButton({
-      x: width / 2,
-      y: prepareY,
+      x: layout.centerX,
+      y: layout.mainButtonY,
       width: buttonWidth,
-      height: 54,
+      height: layout.primaryButtonHeight,
+      icon: config.icon,
+      title: config.buttonText,
+      subtitle: config.description,
+      accentColor: this.getRoomStrokeColor(config.type),
+      danger: config.type === 'elite',
+      large: true,
+      onClick: () => {
+        this.scene.start('BattleScene', {
+          enemyId: config.enemyId,
+          returnToDungeon: true,
+        });
+      },
+    });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.prepareButtonY,
+      width: buttonWidth,
+      height: layout.secondaryButtonHeight,
       icon: '▣',
-      title: 'Подготовиться',
-      subtitle: 'Открыть сумку перед боем',
+      title: 'Подготовка',
+      subtitle: 'Открыть сумку и проверить снаряжение перед боем',
       accentColor: UI.colors.gold,
       onClick: () => {
         this.scene.start('InventoryScene', {
@@ -1160,30 +1421,12 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     });
 
     this.createRoomActionButton({
-      x: width / 2,
-      y: battleY,
+      x: layout.centerX,
+      y: layout.exitButtonY,
       width: buttonWidth,
-      height: 62,
-      icon: config.icon,
-      title: config.buttonText,
-      subtitle: config.description,
-      accentColor: this.getRoomStrokeColor(config.type),
-      danger: false,
-      onClick: () => {
-        this.scene.start('BattleScene', {
-          enemyId: config.enemyId,
-          returnToDungeon: true,
-        });
-      },
-    });
-
-    this.createRoomActionButton({
-      x: width / 2,
-      y: townY,
-      width: buttonWidth,
-      height: 58,
+      height: layout.secondaryButtonHeight,
       icon: '⌂',
-      title: 'Вернуться в город',
+      title: 'Выйти в город',
       subtitle: this.getTownExitSubtitle(),
       accentColor: UI.colors.goldDark,
       danger: !getActiveCampfireBattleCheckpoint(),
@@ -1200,22 +1443,38 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
     icon: string;
     description: string;
   }) {
-    const { width } = this.scale;
-  
-    const buttonWidth = 480;
-  
-    const prepareY = 875;
-    const battleY = 950;
-    const townY = 1025;
-  
+    const layout = this.getLayout();
+    const buttonWidth = Math.min(layout.contentWidth, 570);
+
+    this.createActionDock(layout);
+
     this.createRoomActionButton({
-      x: width / 2,
-      y: prepareY,
+      x: layout.centerX,
+      y: layout.mainButtonY,
       width: buttonWidth,
-      height: 56,
+      height: layout.primaryButtonHeight,
+      icon: config.icon,
+      title: config.buttonText,
+      subtitle: config.description,
+      accentColor: 0xff6b6b,
+      danger: true,
+      large: true,
+      onClick: () => {
+        this.scene.start('BattleScene', {
+          enemyId: config.enemyId,
+          returnToDungeon: true,
+        });
+      },
+    });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.prepareButtonY,
+      width: buttonWidth,
+      height: layout.secondaryButtonHeight,
       icon: '▣',
-      title: 'Подготовиться',
-      subtitle: 'Проверить снаряжение перед боссом',
+      title: 'Подготовка',
+      subtitle: 'Проверить экипировку, зелья и характеристики перед боссом',
       accentColor: UI.colors.gold,
       onClick: () => {
         this.scene.start('InventoryScene', {
@@ -1225,32 +1484,14 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
         });
       },
     });
-  
+
     this.createRoomActionButton({
-      x: width / 2,
-      y: battleY,
+      x: layout.centerX,
+      y: layout.exitButtonY,
       width: buttonWidth,
-      height: 62,
-      icon: config.icon,
-      title: config.buttonText,
-      subtitle: config.description,
-      accentColor: 0xff6b6b,
-      danger: true,
-      onClick: () => {
-        this.scene.start('BattleScene', {
-          enemyId: config.enemyId,
-          returnToDungeon: true,
-        });
-      },
-    });
-  
-    this.createRoomActionButton({
-      x: width / 2,
-      y: townY,
-      width: buttonWidth,
-      height: 54,
+      height: layout.secondaryButtonHeight,
       icon: '⌂',
-      title: 'Вернуться в город',
+      title: 'Выйти в город',
       subtitle: this.getTownExitSubtitle(),
       accentColor: UI.colors.goldDark,
       danger: !getActiveCampfireBattleCheckpoint(),
@@ -1261,97 +1502,46 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
   }
 
   private createRoomActionButton(config: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  icon: string;
-  title: string;
-  subtitle: string;
-  accentColor: number;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  const danger = config.danger ?? false;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    subtitle: string;
+    accentColor: number;
+    danger?: boolean;
+    large?: boolean;
+    onClick: () => void;
+  }) {
+    const danger = config.danger ?? false;
+    const large = config.large ?? false;
 
-  const bgColor = danger ? 0x241010 : 0x17100c;
-  const hoverColor = danger ? 0x321515 : 0x21150f;
-  const textColor = danger ? UI.colors.red : UI.colors.goldText;
-  const hoverTextColor = danger ? '#ff9a9a' : UI.colors.text;
+    const bgColor = danger ? 0x241010 : 0x17100c;
+    const hoverColor = danger ? 0x321515 : 0x21150f;
+    const textColor = danger ? UI.colors.red : UI.colors.goldText;
+    const hoverTextColor = danger ? '#ff9a9a' : UI.colors.text;
 
-  const radius = 22;
+    const radius = large ? 24 : 20;
+    const titleSize = large ? '22px' : '18px';
+    const subtitleSize = large ? '14px' : '12px';
+    const iconX = config.x - config.width / 2 + (large ? 48 : 42);
+    const textX = config.x - config.width / 2 + (large ? 88 : 78);
+    const textWidth = config.width - (large ? 112 : 104);
 
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.34);
-  shadow.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2 + 5,
-    config.width,
-    config.height,
-    radius
-  );
-  shadow.setDepth(20);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.36);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 5,
+      config.width,
+      config.height,
+      radius
+    );
+    shadow.setDepth(20);
 
-  const bg = this.add.graphics();
-  bg.fillStyle(bgColor, 0.96);
-  bg.fillRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-  bg.lineStyle(2, config.accentColor, danger ? 0.88 : 0.64);
-  bg.strokeRoundedRect(
-    config.x - config.width / 2,
-    config.y - config.height / 2,
-    config.width,
-    config.height,
-    radius
-  );
-  bg.setDepth(21);
-
-  const iconX = config.x - config.width / 2 + 42;
-
-  const iconCircle = this.add.circle(iconX, config.y, 23, config.accentColor, 0.15)
-    .setStrokeStyle(1, config.accentColor, 0.58)
-    .setDepth(22);
-
-  const iconText = this.add.text(iconX, config.y, config.icon, {
-    fontFamily: UI.font.body,
-    fontSize: '20px',
-    color: textColor,
-    stroke: '#000000',
-    strokeThickness: 2,
-  }).setOrigin(0.5).setDepth(23);
-
-  const titleText = this.add.text(config.x - config.width / 2 + 78, config.y - 12, config.title, {
-    fontFamily: UI.font.title,
-    fontSize: '20px',
-    color: textColor,
-    stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0, 0.5).setDepth(23);
-
-  const subtitleText = this.add.text(config.x - config.width / 2 + 78, config.y + 17, config.subtitle, {
-    fontFamily: UI.font.body,
-    fontSize: '13px',
-    color: UI.colors.textMuted,
-    wordWrap: {
-      width: config.width - 105,
-    },
-  }).setOrigin(0, 0.5).setDepth(23);
-
-  const redrawButton = (
-    fillColor: number,
-    fillAlpha: number,
-    strokeAlpha: number,
-    titleColor: string,
-    offsetY = 0
-  ) => {
-    bg.clear();
-
-    bg.fillStyle(fillColor, fillAlpha);
+    const bg = this.add.graphics();
+    bg.fillStyle(bgColor, 0.96);
     bg.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -1359,8 +1549,7 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       config.height,
       radius
     );
-
-    bg.lineStyle(2, config.accentColor, strokeAlpha);
+    bg.lineStyle(large ? 3 : 2, config.accentColor, danger ? 0.9 : large ? 0.82 : 0.62);
     bg.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -1368,79 +1557,155 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       config.height,
       radius
     );
+    bg.setDepth(21);
 
-    iconCircle.setY(config.y + offsetY);
-    iconText.setY(config.y + offsetY);
-    titleText.setY(config.y - 12 + offsetY);
-    subtitleText.setY(config.y + 17 + offsetY);
+    const iconCircle = this.add.circle(iconX, config.y, large ? 26 : 22, config.accentColor, danger ? 0.18 : 0.14)
+      .setStrokeStyle(1, config.accentColor, 0.58)
+      .setDepth(22);
 
-    titleText.setColor(titleColor);
-  };
+    const iconText = this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.body,
+      fontSize: large ? '23px' : '19px',
+      color: textColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(23);
 
-  let isPressed = false;
-  let isLocked = false;
+    const titleText = this.add.text(textX, config.y - (large ? 14 : 11), config.title, {
+      fontFamily: UI.font.title,
+      fontSize: titleSize,
+      color: textColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(23);
 
-  bg.setInteractive(
-    new Phaser.Geom.Rectangle(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height
-    ),
-    Phaser.Geom.Rectangle.Contains
-  );
+    const subtitleText = this.add.text(textX, config.y + (large ? 18 : 16), config.subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: subtitleSize,
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: large ? 2 : 1,
+      lineSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(23);
 
-  bg.on('pointerover', () => {
-    if (isPressed || isLocked) return;
+    const redrawButton = (
+      fillColor: number,
+      fillAlpha: number,
+      strokeAlpha: number,
+      titleColor: string,
+      offsetY = 0
+    ) => {
+      bg.clear();
 
-    redrawButton(hoverColor, 1, 0.95, hoverTextColor);
-  });
+      bg.fillStyle(fillColor, fillAlpha);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
 
-  bg.on('pointerout', () => {
-    isPressed = false;
+      bg.lineStyle(large ? 3 : 2, config.accentColor, strokeAlpha);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
 
-    if (isLocked) return;
+      iconCircle.setY(config.y + offsetY);
+      iconText.setY(config.y + offsetY);
+      titleText.setY(config.y - (large ? 14 : 11) + offsetY);
+      subtitleText.setY(config.y + (large ? 18 : 16) + offsetY);
 
-    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
-  });
+      titleText.setColor(titleColor);
+      iconText.setColor(titleColor);
+    };
 
-  bg.on('pointerdown', () => {
-    if (isLocked) return;
+    let isPressed = false;
+    let isLocked = false;
 
-    isPressed = true;
+    bg.setInteractive(
+      new Phaser.Geom.Rectangle(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height
+      ),
+      Phaser.Geom.Rectangle.Contains
+    );
 
-    redrawButton(hoverColor, 0.92, 0.95, hoverTextColor, 1);
-  });
+    bg.on('pointerover', () => {
+      if (isPressed || isLocked) return;
 
-  bg.on('pointerup', () => {
-    if (!isPressed) return;
-
-    isPressed = false;
-
-    redrawButton(hoverColor, 1, 0.95, hoverTextColor);
-
-    this.time.delayedCall(40, () => {
-      redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
-      config.onClick();
+      redrawButton(hoverColor, 1, 0.96, hoverTextColor);
     });
-  });
 
-  bg.on('pointerupoutside', () => {
-    isPressed = false;
+    bg.on('pointerout', () => {
+      isPressed = false;
 
-    if (isLocked) return;
+      if (isLocked) return;
 
-    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
-  });
+      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+    });
 
-  bg.on('pointercancel', () => {
-    isPressed = false;
+    bg.on('pointerdown', () => {
+      if (isLocked) return;
 
-    if (isLocked) return;
+      isPressed = true;
 
-    redrawButton(bgColor, 0.96, danger ? 0.88 : 0.64, textColor);
-  });
-}
+      redrawButton(hoverColor, 0.92, 0.98, hoverTextColor, 1);
+    });
+
+    bg.on('pointerup', () => {
+      if (!isPressed || isLocked) return;
+
+      isPressed = false;
+      isLocked = true;
+
+      redrawButton(hoverColor, 1, 0.98, hoverTextColor);
+
+      this.time.delayedCall(40, () => {
+        redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+        config.onClick();
+      });
+    });
+
+    bg.on('pointerupoutside', () => {
+      isPressed = false;
+
+      if (isLocked) return;
+
+      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+    });
+
+    bg.on('pointercancel', () => {
+      isPressed = false;
+
+      if (isLocked) return;
+
+      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+    });
+
+    return {
+      shadow,
+      bg,
+      iconCircle,
+      iconText,
+      titleText,
+      subtitleText,
+    };
+  }
 
 private exitToTownKeepingCampfireCheckpoint() {
   const checkpoint = getActiveCampfireBattleCheckpoint();
@@ -1731,129 +1996,144 @@ private exitToTownKeepingCampfireCheckpoint() {
   }
 
   private showExitToTownConfirm() {
-  const { width, height } = this.scale;
+    const { width, height } = this.scale;
+    const layout = this.getLayout();
 
-  const modalObjects: Phaser.GameObjects.GameObject[] = [];
+    const modalObjects: Phaser.GameObjects.GameObject[] = [];
+    const modalWidth = Math.min(width - layout.safeX * 2, 600);
+    const modalHeight = Math.min(height - layout.safeTop - layout.safeBottom - 80, 306);
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-  const overlay = this.add.rectangle(
-    width / 2,
-    height / 2,
-    width,
-    height,
-    0x000000,
-    0.74
-  )
-    .setDepth(200)
-    .setInteractive();
+    const overlay = this.add.rectangle(
+      centerX,
+      centerY,
+      width,
+      height,
+      0x000000,
+      0.76
+    )
+      .setDepth(200)
+      .setInteractive();
 
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.38);
-  shadow.fillRoundedRect(
-    width / 2 - 300,
-    height / 2 - 145 + 8,
-    600,
-    290,
-    30
-  );
-  shadow.setDepth(201);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.38);
+    shadow.fillRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2 + 8,
+      modalWidth,
+      modalHeight,
+      30
+    );
+    shadow.setDepth(201);
 
-  const panel = this.add.graphics();
-  panel.fillStyle(0x14100d, 0.98);
-  panel.fillRoundedRect(
-    width / 2 - 300,
-    height / 2 - 145,
-    600,
-    290,
-    30
-  );
-  panel.lineStyle(3, UI.colors.goldDark, 0.85);
-  panel.strokeRoundedRect(
-    width / 2 - 300,
-    height / 2 - 145,
-    600,
-    290,
-    30
-  );
-  panel.setDepth(202);
+    const panel = this.add.graphics();
+    panel.fillStyle(0x14100d, 0.98);
+    panel.fillRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2,
+      modalWidth,
+      modalHeight,
+      30
+    );
+    panel.lineStyle(3, UI.colors.goldDark, 0.85);
+    panel.strokeRoundedRect(
+      centerX - modalWidth / 2,
+      centerY - modalHeight / 2,
+      modalWidth,
+      modalHeight,
+      30
+    );
+    panel.setDepth(202);
 
-  const glow = this.add.circle(width / 2, height / 2 - 88, 90, 0xf0a040, 0.07)
-    .setDepth(203);
+    const glow = this.add.circle(centerX, centerY - modalHeight / 2 + 62, 90, 0xf0a040, 0.07)
+      .setDepth(203);
 
-  const title = this.add.text(width / 2, height / 2 - 90, 'Выйти в город?', {
-    fontFamily: UI.font.title,
-    fontSize: '31px',
-    color: UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 5,
-  }).setOrigin(0.5).setDepth(204);
-
-  const text = this.add.text(
-    width / 2,
-    height / 2 - 20,
-    'Ты покинешь подземелье и вернёшься в город.\nТекущий забег будет завершён.',
-    {
-      fontFamily: UI.font.body,
-      fontSize: '19px',
-      color: UI.colors.text,
+    const title = this.add.text(centerX, centerY - modalHeight / 2 + 56, 'Выйти в город?', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '27px' : '31px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 5,
       align: 'center',
-      lineSpacing: 6,
       wordWrap: {
-        width: 500,
+        width: modalWidth - 60,
       },
-    }
-  ).setOrigin(0.5).setDepth(204);
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(204);
 
-  const closeModal = () => {
-    modalObjects.forEach(object => {
-      object.destroy();
+    const text = this.add.text(
+      centerX,
+      centerY - 12,
+      'Ты покинешь подземелье и вернёшься в город.\nТекущий забег будет завершён.',
+      {
+        fontFamily: UI.font.body,
+        fontSize: layout.compact ? '16px' : '18px',
+        color: UI.colors.text,
+        align: 'center',
+        lineSpacing: 6,
+        wordWrap: {
+          width: modalWidth - 82,
+          useAdvancedWrap: true,
+        },
+        maxLines: 4,
+      }
+    ).setOrigin(0.5).setDepth(204);
+
+    const closeModal = () => {
+      modalObjects.forEach(object => {
+        object.destroy();
+      });
+
+      modalObjects.length = 0;
+    };
+
+    const buttonWidth = Math.min((modalWidth - 84) / 2, 230);
+    const buttonY = centerY + modalHeight / 2 - 48;
+
+    const cancelButton = this.createRoundedActionButton({
+      x: centerX - buttonWidth / 2 - 12,
+      y: buttonY,
+      width: buttonWidth,
+      height: 54,
+      text: 'Отмена',
+      onClick: () => {
+        closeModal();
+      },
+      variant: 'brown',
+      depth: 204,
     });
-  
-    modalObjects.length = 0;
-  };
 
-  const cancelButton = this.createRoundedActionButton({
-    x: width / 2 - 145,
-    y: height / 2 + 90,
-    width: 230,
-    height: 54,
-    text: 'Отмена',
-    onClick: () => {
-      closeModal();
-    },
-    variant: 'brown',
-    depth: 204,
-  });
+    const confirmButton = this.createRoundedActionButton({
+      x: centerX + buttonWidth / 2 + 12,
+      y: buttonY,
+      width: buttonWidth,
+      height: 54,
+      text: 'Да, выйти',
+      onClick: () => {
+        closeModal();
 
-  const confirmButton = this.createRoundedActionButton({
-    x: width / 2 + 145,
-    y: height / 2 + 90,
-    width: 230,
-    height: 54,
-    text: 'Да, выйти',
-    onClick: () => {
-      closeModal();
+        this.exitToTownKeepingCampfireCheckpoint();
+      },
+      variant: 'green',
+      depth: 204,
+    });
 
-      this.exitToTownKeepingCampfireCheckpoint();
-    },
-    variant: 'green',
-    depth: 204,
-  });
-
-  modalObjects.push(
-    overlay,
-    shadow,
-    panel,
-    glow,
-    title,
-    text,
-    cancelButton.shadow,
-    cancelButton.bg,
-    cancelButton.label,
-    confirmButton.shadow,
-    confirmButton.bg,
-    confirmButton.label
-  );
-}
+    modalObjects.push(
+      overlay,
+      shadow,
+      panel,
+      glow,
+      title,
+      text,
+      cancelButton.shadow,
+      cancelButton.bg,
+      cancelButton.label,
+      confirmButton.shadow,
+      confirmButton.bg,
+      confirmButton.label
+    );
+  }
 
   private createResultPanel(config: {
     x: number;
@@ -2518,7 +2798,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     const subtitle = this.add.text(
       width / 2,
       height / 2 - 252,
-      'Огниво выбирается в начале яруса. Один заряд активирует один найденный костёр. Костёр восстанавливает запас зелий до 6.',
+      'Огниво выбирается в начале яруса. Один заряд активирует костёр, восстанавливает силы и создаёт чекпоинт: обычное — 1 час, редкое — сутки, донатное — навсегда.',
       {
         fontFamily: UI.font.body,
         fontSize: '16px',
@@ -2537,7 +2817,7 @@ private exitToTownKeepingCampfireCheckpoint() {
       y: height / 2 - 145,
       type: 'dim',
       title: 'Тусклое огниво',
-      description: 'Обычный вариант. Позволяет активировать 1 костёр в ярусе.',
+      description: 'Обычное огниво. 1 костёр в ярусе. Чекпоинт действует 1 час.',
       accentColor: 0xd8c7a3,
     });
 
@@ -2546,7 +2826,7 @@ private exitToTownKeepingCampfireCheckpoint() {
       y: height / 2 + 15,
       type: 'black',
       title: 'Чёрное огниво',
-      description: 'Улучшенное огниво. Позволяет активировать 2 костра в ярусе.',
+      description: 'Редкое огниво. 2 костра в ярусе. Чекпоинт действует сутки.',
       accentColor: 0x70a6ff,
     });
 
@@ -2555,7 +2835,7 @@ private exitToTownKeepingCampfireCheckpoint() {
       y: height / 2 + 175,
       type: 'ruby',
       title: 'Огниво с красным рубином',
-      description: 'Донатное огниво. Позволяет активировать все 3 костра в ярусе.',
+      description: 'Донатное огниво. 3 костра в ярусе. Чекпоинт действует всегда.',
       accentColor: 0xff6b6b,
     });
 

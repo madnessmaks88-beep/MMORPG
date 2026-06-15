@@ -9,7 +9,9 @@ export type CheckpointFlintType =
   | 'ruby'
   | 'ordinary'
   | 'regular'
-  | 'red_ruby';
+  | 'red_ruby'
+  | 'donor'
+  | 'premium';
 
 type FloorRunSnapshot = typeof gameState.floorRun;
 
@@ -43,6 +45,11 @@ type RestoreCampfireBattleCheckpointResult = {
 const CAMPFIRE_BATTLE_CHECKPOINT_KEY = 'below_ashes_campfire_battle_checkpoint_v1';
 const MAX_POTION_COUNT = 6;
 
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * ONE_HOUR_MS;
+const FOREVER_CHECKPOINT_EXPIRES_AT = Number.MAX_SAFE_INTEGER;
+const FOREVER_TIME_LEFT_THRESHOLD_MS = 100 * 365 * ONE_DAY_MS;
+
 function cloneData<T>(value: unknown): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -52,7 +59,7 @@ function normalizeFlintType(flintType: CheckpointFlintType): CheckpointFlintType
     return 'dim';
   }
 
-  if (flintType === 'red_ruby') {
+  if (flintType === 'red_ruby' || flintType === 'donor' || flintType === 'premium') {
     return 'ruby';
   }
 
@@ -62,18 +69,20 @@ function normalizeFlintType(flintType: CheckpointFlintType): CheckpointFlintType
 function getCheckpointDurationMs(flintType: CheckpointFlintType) {
   const normalized = normalizeFlintType(flintType);
 
+  // Редкое огниво — чекпоинт действует сутки.
   if (normalized === 'black') {
-    return 10 * 60 * 1000;
+    return ONE_DAY_MS;
   }
 
+  // Донатное огниво — чекпоинт не сгорает.
   if (normalized === 'ruby') {
-    return 60 * 60 * 1000;
+    return Number.POSITIVE_INFINITY;
   }
 
-  // Тусклое / обычное огниво.
-  // Даже если случайно пришло 'none', даём 5 минут, чтобы чекпоинт
+  // Обычное / тусклое огниво — чекпоинт действует 1 час.
+  // Даже если случайно пришло 'none', даём 1 час, чтобы чекпоинт
   // не сгорал мгновенно из-за несовпадения названий типов.
-  return 5 * 60 * 1000;
+  return ONE_HOUR_MS;
 }
 
 function readCheckpointFromStorage(): CampfireBattleCheckpoint | null {
@@ -103,6 +112,10 @@ export function clearCampfireBattleCheckpoint() {
 }
 
 export function formatCheckpointTimeLeft(ms: number) {
+  if (!Number.isFinite(ms) || ms >= FOREVER_TIME_LEFT_THRESHOLD_MS) {
+    return 'навсегда';
+  }
+
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
 
   const hours = Math.floor(totalSeconds / 3600);
@@ -143,6 +156,9 @@ export function createCampfireBattleCheckpoint(
   const now = Date.now();
   const selectedFlint = normalizeFlintType(config.selectedFlint);
   const durationMs = getCheckpointDurationMs(selectedFlint);
+  const expiresAt = Number.isFinite(durationMs)
+    ? now + durationMs
+    : FOREVER_CHECKPOINT_EXPIRES_AT;
 
   const checkpoint: CampfireBattleCheckpoint = {
     id: `campfire_${config.tier}_${config.floor}_${now}`,
@@ -150,7 +166,7 @@ export function createCampfireBattleCheckpoint(
     floor: config.floor,
     selectedFlint,
     createdAt: now,
-    expiresAt: now + durationMs,
+    expiresAt,
     floorRunSnapshot: cloneData<FloorRunSnapshot>(gameState.floorRun),
     playerSnapshot: {
       hp: player.hp,
