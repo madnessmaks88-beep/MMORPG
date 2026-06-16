@@ -22,7 +22,7 @@ import {
   goToNextRoom,
   resetFloorRun,
 } from '../data/gameState';
-import { addExperience, createLevelUpText } from '../systems/LevelSystem';
+import { addExperience, createLevelUpText, type LevelUpResult } from '../systems/LevelSystem';
 import {
   getEquippedWeapon,
   getPlayerStats,
@@ -308,7 +308,7 @@ export class BattleScene extends Phaser.Scene {
     this.createBattleBackground(isBoss);
 
     this.createBattleHeader(
-      `Этаж ${floor}`,
+      `Этаж ${floor}  •  Ур. ${player.level}`,
       room ? room.title : `${player.name} против ${this.enemy.name}`,
       isBoss
     );
@@ -3599,6 +3599,118 @@ ${effect.duration} х.`,
       .join('\n');
   }
 
+
+  private showLevelUpBanner(result: LevelUpResult) {
+    if (!result.leveledUp) {
+      return;
+    }
+
+    const layout = this.getBattleLayout();
+    const bannerWidth = Math.min(layout.contentWidth - 34, 560);
+    const bannerHeight = layout.compact ? 150 : 168;
+    const bannerY = Phaser.Math.Clamp(layout.height * 0.43, 280, layout.height - 360);
+
+    const container = this.add.container(layout.centerX, bannerY)
+      .setDepth(900)
+      .setAlpha(0)
+      .setScale(0.92);
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.52);
+    shadow.fillRoundedRect(-bannerWidth / 2, -bannerHeight / 2 + 8, bannerWidth, bannerHeight, 30);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x11100d, 0.98);
+    panel.fillRoundedRect(-bannerWidth / 2, -bannerHeight / 2, bannerWidth, bannerHeight, 30);
+    panel.lineStyle(3, UI.colors.gold, 0.82);
+    panel.strokeRoundedRect(-bannerWidth / 2, -bannerHeight / 2, bannerWidth, bannerHeight, 30);
+
+    const inner = this.add.graphics();
+    inner.lineStyle(1, 0x62518a, 0.36);
+    inner.strokeRoundedRect(-bannerWidth / 2 + 12, -bannerHeight / 2 + 12, bannerWidth - 24, bannerHeight - 24, 24);
+
+    const glow = this.add.circle(0, -14, bannerWidth * 0.28, 0xb89a5e, 0.08);
+    const rune = this.add.text(0, -bannerHeight / 2 + 36, '✦', {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '30px' : '34px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5);
+
+    const title = this.add.text(0, -bannerHeight / 2 + 64, 'ПЕЧАТЬ УРОВНЯ ПРОБУДИЛАСЬ', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '18px' : '20px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: bannerWidth - 44,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const levelText = this.add.text(0, -bannerHeight / 2 + 99, `Уровень ${result.oldLevel} → ${result.newLevel}`, {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '24px' : '28px',
+      color: '#9fd0a6',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: bannerWidth - 50,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const rewardText = this.add.text(0, -bannerHeight / 2 + (layout.compact ? 128 : 140), `+${result.upgradePointsGained} очк. древа  •  HP +${result.hpRestored}`, {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '13px' : '15px',
+      color: '#c9b99b',
+      align: 'center',
+      wordWrap: {
+        width: bannerWidth - 54,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    container.add([shadow, panel, inner, glow, rune, title, levelText, rewardText]);
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      scale: 1,
+      duration: 260,
+      ease: 'Back.Out',
+    });
+
+    this.tweens.add({
+      targets: [glow, rune],
+      alpha: { from: 0.35, to: 1 },
+      scale: { from: 0.96, to: 1.08 },
+      duration: 620,
+      yoyo: true,
+      repeat: 3,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.time.delayedCall(2600, () => {
+      this.tweens.add({
+        targets: container,
+        alpha: 0,
+        scale: 0.96,
+        duration: 420,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          container.destroy(true);
+        },
+      });
+    });
+  }
+
   private handleVictory(playerActionText: string) {
     this.hideTooltip();
     if (this.isBattleEnded) {
@@ -3709,7 +3821,11 @@ ${effect.duration} х.`,
 
     this.updateTexts();
 
-    this.time.delayedCall(2200, () => {
+    if (expResult.leveledUp) {
+      this.showLevelUpBanner(expResult);
+    }
+
+    this.time.delayedCall(expResult.leveledUp ? 3800 : 2200, () => {
       if (this.returnToDungeon) {
         this.scene.start('DungeonScene');
         return;

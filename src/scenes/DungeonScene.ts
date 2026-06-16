@@ -250,9 +250,9 @@ export class DungeonScene extends Phaser.Scene {
     this.add.circle(layout.centerX, layout.headerY - 4, layout.contentWidth * 0.35, theme.glow, 0.035)
       .setDepth(3);
 
-    this.add.text(layout.centerX, layout.headerY - (layout.compact ? 15 : 18), `Ярус ${tier}  •  Этаж ${floor}`, {
+    this.add.text(layout.centerX, layout.headerY - (layout.compact ? 15 : 18), `Ярус ${tier}  •  Этаж ${floor}  •  Ур. ${player.level}`, {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '25px' : '29px',
+      fontSize: layout.compact ? '22px' : '26px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
@@ -264,7 +264,7 @@ export class DungeonScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(6);
 
-    this.add.text(layout.centerX, layout.headerY + (layout.compact ? 18 : 22), `${theme.name}  •  ${modifierName}`, {
+    this.add.text(layout.centerX, layout.headerY + (layout.compact ? 18 : 22), `${theme.name}  •  ${modifierName}  •  HP ${player.hp}`, {
       fontFamily: UI.font.body,
       fontSize: layout.compact ? '13px' : '15px',
       color: theme.mutedText,

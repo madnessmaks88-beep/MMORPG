@@ -7,6 +7,7 @@ export type LevelUpResult = {
   oldLevel: number;
   newLevel: number;
   upgradePointsGained: number;
+  hpRestored: number;
 };
 
 type PlayerWithProgression = PlayerData & {
@@ -49,6 +50,7 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
   const oldLevel = player.level;
   let levelsGained = 0;
   let upgradePointsGained = 0;
+  let hpRestored = 0;
 
   player.exp += amount;
 
@@ -74,9 +76,13 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
 
   if (levelsGained > 0) {
     const stats = getPlayerStats(player);
+    const healAmount = Math.max(1, Math.floor(stats.maxHp * 0.3));
+    const hpBefore = player.hp;
 
-    player.hp = stats.maxHp;
-    player.energy = stats.maxEnergy;
+    player.hp = Math.min(stats.maxHp, player.hp + healAmount);
+    player.energy = Math.min(player.energy, stats.maxEnergy);
+
+    hpRestored = Math.max(0, player.hp - hpBefore);
   }
 
   return {
@@ -85,6 +91,7 @@ export function addExperience(player: PlayerData, amount: number): LevelUpResult
     oldLevel,
     newLevel: player.level,
     upgradePointsGained,
+    hpRestored,
   };
 }
 
@@ -98,6 +105,7 @@ export function createLevelUpText(result: LevelUpResult): string {
       `Новый уровень: ${result.newLevel}`,
       '',
       `+${result.upgradePointsGained} очка дерева характеристик`,
+      `Восстановлено HP: +${result.hpRestored}`,
       '',
       'Открой дерево характеристик в лагере, чтобы усилить героя.',
     ].join('\n');
@@ -108,6 +116,7 @@ export function createLevelUpText(result: LevelUpResult): string {
     `Новый уровень: ${result.newLevel}`,
     '',
     `+${result.upgradePointsGained} очков дерева характеристик`,
+    `Восстановлено HP: +${result.hpRestored}`,
     '',
     'Открой дерево характеристик в лагере, чтобы распределить очки.',
   ].join('\n');
