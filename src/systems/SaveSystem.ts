@@ -1,4 +1,5 @@
 import { player, type PlayerData } from '../data/player';
+import { getPlayerStats } from './InventorySystem';
 
 import {
   gameState,
@@ -286,8 +287,13 @@ function fixMissingPlayerFields() {
   savePlayer.characterTree ??= {};
   savePlayer.shopRefreshCoupons ??= 0;
 
-  player.hp = clamp(player.hp, 1, player.maxHp);
-  player.energy = clamp(player.energy, 0, player.maxEnergy);
+  const derivedStats = getPlayerStats(player);
+
+  // Важно: player.maxHp / player.maxEnergy — это базовые значения героя.
+  // Максимумы из дерева характеристик, предметов и реликвий считаются только через getPlayerStats().
+  // Поэтому нельзя обрезать HP/энергию по player.maxHp/player.maxEnergy.
+  player.hp = clamp(player.hp, 1, derivedStats.maxHp);
+  player.energy = clamp(player.energy, 0, derivedStats.maxEnergy);
 
   player.materials ??= {};
   player.anvilLevel ??= 1;

@@ -1378,6 +1378,7 @@ export class CampScene extends Phaser.Scene {
 
     const maxPotions = 6;
     const hpIsFull = player.hp >= stats.maxHp;
+    const energyIsFull = player.energy >= stats.maxEnergy;
     const potionsAreFull = player.potions >= maxPotions;
 
     const cooldownLeft = this.getCampfireCooldownLeft();
@@ -1390,16 +1391,15 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
-    if (hpIsFull && potionsAreFull) {
+    if (hpIsFull && energyIsFull && potionsAreFull) {
       this.showMessage(
         'Костёр не нужен',
-        `HP уже полное, а зелий максимум: ${player.potions}/${maxPotions}.`
+        `HP, энергия и зелья уже полные.\nHP: ${player.hp}/${stats.maxHp}\nЭнергия: ${player.energy}/${stats.maxEnergy}\nЗелья: ${player.potions}/${maxPotions}.`
       );
       return;
     }
 
-    restorePlayerVitalsToMaximum(player, 6);
-    player.potions = maxPotions;
+    const restored = restorePlayerVitalsToMaximum(player, maxPotions);
 
     localStorage.setItem(
       this.CAMPFIRE_LAST_USE_KEY,
@@ -1410,7 +1410,7 @@ export class CampScene extends Phaser.Scene {
 
     this.showMessage(
       'Отдых у костра',
-      `HP полностью восстановлено.\nЗелья восстановлены до ${maxPotions}.\n\nКостёр снова будет доступен через 30 минут.`
+      `Пламя восстановило силы героя.\nHP: ${restored.hpBefore}/${restored.hpMax} → ${restored.hpAfter}/${restored.hpMax} (+${restored.hpRestored})\nЭнергия: ${restored.energyBefore}/${restored.energyMax} → ${restored.energyAfter}/${restored.energyMax} (+${restored.energyRestored})\nЗелья: ${restored.potionsBefore}/${maxPotions} → ${restored.potionsAfter}/${maxPotions}\n\nКостёр снова будет доступен через 30 минут.`
     );
   }
 
