@@ -45,6 +45,7 @@ import {
 
 import {
   getPlayerStats,
+  restorePlayerVitalsToMaximum,
 } from '../systems/InventorySystem';
 
 import { giveFloorReward } from '../systems/FloorRewardSystem';
@@ -1228,6 +1229,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
 
+
   private handleCampfireUse() {
     const room = getCurrentRoom();
 
@@ -1236,11 +1238,6 @@ export class DungeonScene extends Phaser.Scene {
     }
 
     const campfireState = this.getCampfireState();
-    const stats = getPlayerStats(player);
-
-    const hpBefore = player.hp;
-    const energyBefore = player.energy;
-    const potionsBefore = player.potions ?? 0;
 
     if (campfireState.remainingCampfireUses <= 0) {
       this.showMessage(
@@ -1253,17 +1250,15 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    // Костёр можно активировать даже при полном HP/энергии/зельях:
-    // тогда он работает как тактический чекпоинт.
+    // Важно: максимум HP/энергии берём через итоговые характеристики героя.
+    // Так костёр учитывает дерево характеристик, предметы и реликвии.
+    const restoredBeforeCheckpoint = restorePlayerVitalsToMaximum(player, this.maxPotionCount);
+
     campfireState.remainingCampfireUses = Math.max(0, campfireState.remainingCampfireUses - 1);
     campfireState.usedCampfireFloors = Array.from(new Set([
       ...campfireState.usedCampfireFloors,
       gameState.floorRun.currentFloor,
     ]));
-
-    player.hp = stats.maxHp;
-    player.energy = stats.maxEnergy;
-    player.potions = this.maxPotionCount;
 
     markCurrentRoomCompleted();
     trackCampfireUsed();
@@ -1276,10 +1271,9 @@ export class DungeonScene extends Phaser.Scene {
       campfireStateSnapshot: this.createCampfireStateSnapshot(),
     });
 
-    player.hp = stats.maxHp;
-    player.energy = stats.maxEnergy;
-    player.potions = this.maxPotionCount;
-
+    // Повторно применяем после создания чекпоинта, чтобы в сохранение и UI точно ушли
+    // текущие максимумы после дерева характеристик.
+    const restored = restorePlayerVitalsToMaximum(player, this.maxPotionCount);
     const checkpointTime = formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now());
 
     void saveGameAsync();
@@ -1287,9 +1281,9 @@ export class DungeonScene extends Phaser.Scene {
     this.showMessage(
       'Костёр разожжён',
       `Пламя восстановило силы.
-HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
-Энергия: ${energyBefore}/${stats.maxEnergy} → ${player.energy}/${stats.maxEnergy}
-Зелья: ${potionsBefore}/${this.maxPotionCount} → ${player.potions}/${this.maxPotionCount}
+HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfter}/${restored.hpMax} (+${restored.hpRestored})
+Энергия: ${restoredBeforeCheckpoint.energyBefore}/${restored.energyMax} → ${restored.energyAfter}/${restored.energyMax} (+${restored.energyRestored})
+Зелья: ${restoredBeforeCheckpoint.potionsBefore}/${this.maxPotionCount} → ${restored.potionsAfter}/${this.maxPotionCount}
 
 Осталось зарядов: ${campfireState.remainingCampfireUses}.
 Костёр стал чекпоинтом. При смерти можно вернуться сюда ещё ${checkpointTime}.`,

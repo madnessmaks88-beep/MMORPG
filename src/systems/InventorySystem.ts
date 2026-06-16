@@ -495,6 +495,55 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
   return stats;
 }
 
+
+export type RestoreVitalsResult = {
+  hpBefore: number;
+  hpAfter: number;
+  hpMax: number;
+  hpRestored: number;
+  energyBefore: number;
+  energyAfter: number;
+  energyMax: number;
+  energyRestored: number;
+  potionsBefore: number;
+  potionsAfter: number;
+  potionsRestored: number;
+};
+
+export function restorePlayerVitalsToMaximum(
+  targetPlayer: PlayerData,
+  maxPotionCount = 6
+): RestoreVitalsResult {
+  const stats = getPlayerStats(targetPlayer);
+
+  const hpMax = Math.max(1, Math.floor(stats.maxHp));
+  const energyMax = Math.max(1, Math.floor(stats.maxEnergy));
+
+  const hpBefore = Phaser.Math.Clamp(Math.floor(targetPlayer.hp ?? 0), 0, hpMax);
+  const energyBefore = Phaser.Math.Clamp(Math.floor(targetPlayer.energy ?? 0), 0, energyMax);
+  const potionsBefore = Math.max(0, Math.floor(targetPlayer.potions ?? 0));
+  const potionsAfter = Math.max(potionsBefore, maxPotionCount);
+
+  targetPlayer.hp = hpMax;
+  targetPlayer.energy = energyMax;
+  targetPlayer.potions = potionsAfter;
+
+  return {
+    hpBefore,
+    hpAfter: targetPlayer.hp,
+    hpMax,
+    hpRestored: Math.max(0, targetPlayer.hp - hpBefore),
+    energyBefore,
+    energyAfter: targetPlayer.energy,
+    energyMax,
+    energyRestored: Math.max(0, targetPlayer.energy - energyBefore),
+    potionsBefore,
+    potionsAfter,
+    potionsRestored: Math.max(0, potionsAfter - potionsBefore),
+  };
+}
+
+
 export function getRarityText(item: ItemData): string {
   if (item.rarity === 'common') return 'Обычный';
   if (item.rarity === 'rare') return 'Редкий';

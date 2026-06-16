@@ -1,6 +1,6 @@
 import { player } from '../data/player';
 import { gameState } from '../data/gameState';
-import { getPlayerStats } from './InventorySystem';
+import { getPlayerStats, restorePlayerVitalsToMaximum } from './InventorySystem';
 
 export type CheckpointFlintType =
   | 'none'
@@ -213,6 +213,8 @@ export function createCampfireBattleCheckpoint(
     ? now + durationMs
     : FOREVER_CHECKPOINT_EXPIRES_AT;
 
+  const stats = getPlayerStats(player);
+
   const checkpoint: CampfireBattleCheckpoint = {
     id: `campfire_${config.tier}_${config.floor}_${now}`,
     tier: config.tier,
@@ -225,8 +227,8 @@ export function createCampfireBattleCheckpoint(
       ? cloneData<CampfireStateSnapshot>(config.campfireStateSnapshot)
       : undefined,
     playerSnapshot: {
-      hp: Math.max(player.hp, getPlayerStats(player).maxHp),
-      energy: Math.max(player.energy, getPlayerStats(player).maxEnergy),
+      hp: Math.max(player.hp, Math.floor(stats.maxHp)),
+      energy: Math.max(player.energy, Math.floor(stats.maxEnergy)),
       potions: Math.max(player.potions, MAX_POTION_COUNT),
     },
   };
@@ -264,15 +266,11 @@ export function restoreCampfireBattleCheckpoint(checkpointId?: string): RestoreC
     stateOwner.dungeonCampfireState.selectionDone = true;
   }
 
-  const stats = getPlayerStats(player);
-
-  player.hp = stats.maxHp;
-  player.energy = stats.maxEnergy;
-  player.potions = MAX_POTION_COUNT;
+  const restored = restorePlayerVitalsToMaximum(player, MAX_POTION_COUNT);
 
   return {
     success: true,
-    message: `Ты вернулся к костру на этаже ${checkpoint.floor}. HP, энергия и зелья восстановлены полностью.`,
+    message: `Ты вернулся к костру на этаже ${checkpoint.floor}. HP ${restored.hpAfter}/${restored.hpMax}, энергия ${restored.energyAfter}/${restored.energyMax}, зелья ${restored.potionsAfter}/${MAX_POTION_COUNT}.`,
     checkpoint,
   };
 }
