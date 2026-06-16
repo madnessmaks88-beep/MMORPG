@@ -144,6 +144,7 @@ export class DungeonScene extends Phaser.Scene {
     this.ensureCampfireState();
     this.injectCampfireRoomIfNeeded();
     markDungeonResumePoint('enter-dungeon');
+    void flushSaveNow('enter-dungeon');
 
     createSceneBackground(this);
     this.createDungeonBackdrop();

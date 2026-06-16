@@ -9,6 +9,8 @@ import {
   isVKEnvironment,
 } from '../systems/VKBridgeSystem';
 
+const REQUIRE_VK_ACCOUNT = true;
+
 export class BootScene extends Phaser.Scene {
   private statusText?: Phaser.GameObjects.Text;
   private detailText?: Phaser.GameObjects.Text;
@@ -27,13 +29,13 @@ export class BootScene extends Phaser.Scene {
     this.clearRetryButton();
     this.setStatus('Подключение к VK...', 'Проверяем аккаунт и облачное сохранение.');
 
-    const strictVKAccountMode = isVKEnvironment();
+    const strictVKAccountMode = REQUIRE_VK_ACCOUNT || isVKEnvironment();
     const vkReady = await initVKBridge();
 
     if (!vkReady && strictVKAccountMode) {
       this.showConnectionError(
         'Не удалось подключиться к аккаунту VK.',
-        'Игра не будет запускаться в локальном режиме, чтобы случайно не сбросить прогресс. Проверь VK Mini Apps и нажми “Повторить”.'
+        'Чтобы на телефоне и ПК был один прогресс, игра запускается только через VK-аккаунт. Открой игру внутри VK Mini Apps, а не прямой Vercel/preview-ссылкой, и нажми “Повторить”.'
       );
       return;
     }
@@ -43,7 +45,7 @@ export class BootScene extends Phaser.Scene {
     if (!vkUser && strictVKAccountMode) {
       this.showConnectionError(
         'Не удалось получить профиль VK.',
-        'Без аккаунта нельзя безопасно загрузить облачное сохранение. Локальный режим заблокирован для защиты прогресса.'
+        'VK ID не получен, поэтому локальный профиль браузера заблокирован. Это защищает от разных аккаунтов на ПК и телефоне.'
       );
       return;
     }
@@ -52,15 +54,15 @@ export class BootScene extends Phaser.Scene {
       this.setStatus('Загрузка сохранения...', 'Получаем прогресс из VK Storage.');
 
       await loadGameAsync({
-        preferVK: vkReady,
+        preferVK: true,
         blockLocalFallback: strictVKAccountMode,
       });
 
       installAutoSaveGuards();
     } catch (error) {
       this.showConnectionError(
-        'Сохранение временно недоступно.',
-        'VK Storage не ответил. Прогресс не сброшен: игра не создаёт нового героя поверх старого сохранения. Нажми “Повторить”.',
+        'Сохранение VK временно недоступно.',
+        'Прогресс не сброшен. Игра не запускает отдельный локальный аккаунт и не создаёт нового героя поверх облачного сохранения. Нажми “Повторить”.',
         error
       );
       return;

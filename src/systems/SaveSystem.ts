@@ -46,6 +46,8 @@ function normalizePlayerSave() {
 const SAVE_KEY = 'below_ashes_save_v3';
 const LOCAL_BACKUP_KEY = `${SAVE_KEY}_local_backup`;
 const LAST_GOOD_SAVE_KEY = `${SAVE_KEY}_last_good`;
+const ACCOUNT_LOCAL_BACKUP_PREFIX = `${SAVE_KEY}_vk_account_`;
+const ACCOUNT_LAST_GOOD_PREFIX = `${SAVE_KEY}_vk_account_last_good_`;
 
 const STARTING_PLAYER_STATE: SavePlayerData = {
   name: 'Безымянный',
@@ -381,12 +383,92 @@ function normalizeResumeState(value?: Partial<ResumeState>): ResumeState {
   };
 }
 
-function writeLocalBackups(json: string) {
+
+function getCurrentVKUserId() {
+  return getCachedVKUser()?.id;
+}
+
+function getAccountLocalBackupKey(vkUserId: number) {
+  return `${ACCOUNT_LOCAL_BACKUP_PREFIX}${vkUserId}`;
+}
+
+function getAccountLastGoodKey(vkUserId: number) {
+  return `${ACCOUNT_LAST_GOOD_PREFIX}${vkUserId}`;
+}
+
+function getSaveOwnerId(rawSave: string) {
   try {
-    localStorage.setItem(LOCAL_BACKUP_KEY, json);
-    localStorage.setItem(LAST_GOOD_SAVE_KEY, json);
+    const data = JSON.parse(rawSave) as Partial<SaveData>;
+    return typeof data.vkUserId === 'number' ? data.vkUserId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRawSaveOwnedByCurrentAccount(rawSave: string) {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return false;
+  }
+
+  const ownerId = getSaveOwnerId(rawSave);
+
+  return ownerId === currentVKUserId;
+}
+
+function isCloudSaveAllowedForCurrentAccount(rawSave: string) {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return false;
+  }
+
+  const ownerId = getSaveOwnerId(rawSave);
+
+  // Старые облачные сохранения могли быть без vkUserId.
+  // Их можно загрузить из VK Storage текущего пользователя и сразу пересохранить уже с vkUserId.
+  return ownerId === undefined || ownerId === currentVKUserId;
+}
+
+function withCurrentVKOwner(json: string) {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return json;
+  }
+
+  try {
+    const data = JSON.parse(json) as Partial<SaveData>;
+
+    if (data.vkUserId && data.vkUserId !== currentVKUserId) {
+      return json;
+    }
+
+    data.vkUserId = currentVKUserId;
+
+    return JSON.stringify(data);
+  } catch {
+    return json;
+  }
+}
+
+function writeLocalBackups(json: string) {
+  const ownedJson = withCurrentVKOwner(json);
+  const currentVKUserId = getCurrentVKUserId();
+
+  try {
+    // Глобальные ключи оставляем как зеркало, но при загрузке они фильтруются по vkUserId.
+    localStorage.setItem(SAVE_KEY, ownedJson);
+    localStorage.setItem(LOCAL_BACKUP_KEY, ownedJson);
+    localStorage.setItem(LAST_GOOD_SAVE_KEY, ownedJson);
+
+    if (currentVKUserId) {
+      localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), ownedJson);
+      localStorage.setItem(getAccountLastGoodKey(currentVKUserId), ownedJson);
+    }
   } catch (error) {
-    console.warn('Local backup save failed.', error);
+    console.warn('Local account backup save failed.', error);
   }
 }
 
@@ -409,6 +491,13 @@ async function saveJsonToCloud(json: string) {
     return false;
   }
 
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    console.warn('Cloud save skipped: VK account is not available.');
+    return false;
+  }
+
   let saveData: SaveData | null = null;
 
   try {
@@ -417,16 +506,28 @@ async function saveJsonToCloud(json: string) {
     return false;
   }
 
+  if (saveData.vkUserId && saveData.vkUserId !== currentVKUserId) {
+    console.warn('Cloud save skipped: save belongs to another VK account.');
+    return false;
+  }
+
+  saveData.vkUserId = currentVKUserId;
+
   if (cloudSaveWriteBlocked && isDangerousFreshDefaultSave(saveData)) {
     console.warn('Cloud save skipped: refusing to upload a fresh default save after VK storage read failure.');
     return false;
   }
 
-  const saved = await vkStorageSet(SAVE_KEY, json);
+  const ownedJson = JSON.stringify(saveData);
+  const saved = await vkStorageSet(SAVE_KEY, ownedJson);
 
   if (saved) {
     try {
-      localStorage.setItem(SAVE_KEY, json);
+      localStorage.setItem(SAVE_KEY, ownedJson);
+      localStorage.setItem(LOCAL_BACKUP_KEY, ownedJson);
+      localStorage.setItem(LAST_GOOD_SAVE_KEY, ownedJson);
+      localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), ownedJson);
+      localStorage.setItem(getAccountLastGoodKey(currentVKUserId), ownedJson);
     } catch (error) {
       console.warn('Local cloud mirror save failed.', error);
     }
@@ -436,7 +537,7 @@ async function saveJsonToCloud(json: string) {
   }
 
   if (wasLastVKStorageSetFailed()) {
-    console.warn('Cloud save failed. Local backup was kept and will be retried later.');
+    console.warn('Cloud save failed. Account local backup was kept and will be retried later.');
   }
 
   return false;
@@ -469,12 +570,22 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
 
   lastLoadHadCloudFailure = false;
 
+  if (blockLocalFallback && !getCurrentVKUserId()) {
+    cloudSaveWriteBlocked = true;
+    throw new Error('VK account is required. Local standalone profile is disabled.');
+  }
+
   const localRawSaveAtStart = getBestLocalSave();
 
   if (preferVK && isVKBridgeReady()) {
     const rawVKSave = await vkStorageGet(SAVE_KEY);
 
     if (rawVKSave) {
+      if (!isCloudSaveAllowedForCurrentAccount(rawVKSave)) {
+        cloudSaveWriteBlocked = true;
+        throw new Error('VK save belongs to another account. Loading is blocked.');
+      }
+
       const saveChoice = chooseAccountSafeNewestSave(rawVKSave, localRawSaveAtStart);
       const loaded = tryApplyRawSave(saveChoice.raw);
 
@@ -492,9 +603,9 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
         vkSaveConfirmedEmptyThisSession = false;
         cloudSaveWriteBlocked = false;
 
-        if (saveChoice.usedLocalBackup) {
-          // VK Storage отстал, а локальный резерв свежее. Не запускаем локальный режим,
-          // а сразу восстанавливаем свежий прогресс и отправляем его в аккаунт VK.
+        if (saveChoice.usedLocalBackup || getSaveOwnerId(saveChoice.raw) === undefined) {
+          // VK Storage отстал, локальный резерв свежее или старое облако было без vkUserId.
+          // Не запускаем отдельный локальный профиль, а синхронизируем текущее состояние в VK-аккаунт.
           void saveGameAsync();
         }
 
@@ -528,13 +639,15 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
 
   const localRawSave = localRawSaveAtStart;
 
-  if (localRawSave) {
+  if (localRawSave && isRawSaveOwnedByCurrentAccount(localRawSave)) {
     const loaded = tryApplyRawSave(localRawSave);
 
     if (loaded) {
       lastLoadSource = 'local';
 
       if (isVKBridgeReady() && vkSaveConfirmedEmptyThisSession && !isDangerousFreshDefaultSave(createSaveData())) {
+        // Это не локальный режим. Это восстановление свежего резерва этого же VK ID
+        // с последующей отправкой обратно в VK Storage.
         void saveGameAsync();
       }
 
@@ -544,6 +657,8 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
         cloudFailed: lastLoadHadCloudFailure,
       };
     }
+  } else if (localRawSave && blockLocalFallback) {
+    console.warn('Ignored local save because it is not bound to the current VK account.');
   }
 
   fixMissingPlayerFields();
@@ -600,15 +715,17 @@ function isLocalBackupSafeForCurrentAccount(localSave: Partial<SaveData>, cloudS
     return false;
   }
 
-  const vkUser = getCachedVKUser();
-  const localVkUserId = localSave.vkUserId;
-  const cloudVkUserId = cloudSave?.vkUserId;
+  const currentVKUserId = getCurrentVKUserId();
 
-  if (vkUser?.id && localVkUserId && localVkUserId !== vkUser.id) {
+  if (!currentVKUserId) {
     return false;
   }
 
-  if (cloudVkUserId && localVkUserId && localVkUserId !== cloudVkUserId) {
+  if (localSave.vkUserId !== currentVKUserId) {
+    return false;
+  }
+
+  if (cloudSave?.vkUserId && cloudSave.vkUserId !== currentVKUserId) {
     return false;
   }
 
@@ -635,11 +752,21 @@ function isDangerousFreshDefaultPartialSave(saveData: Partial<SaveData>) {
 }
 
 function getBestLocalSave() {
-  const regular = localStorage.getItem(SAVE_KEY);
-  const backup = localStorage.getItem(LOCAL_BACKUP_KEY);
-  const lastGood = localStorage.getItem(LAST_GOOD_SAVE_KEY);
+  const currentVKUserId = getCurrentVKUserId();
 
-  return pickNewestSave([regular, backup, lastGood]);
+  if (!currentVKUserId) {
+    return null;
+  }
+
+  const rawSaves = [
+    localStorage.getItem(getAccountLocalBackupKey(currentVKUserId)),
+    localStorage.getItem(getAccountLastGoodKey(currentVKUserId)),
+    localStorage.getItem(SAVE_KEY),
+    localStorage.getItem(LOCAL_BACKUP_KEY),
+    localStorage.getItem(LAST_GOOD_SAVE_KEY),
+  ].filter((raw): raw is string => typeof raw === 'string' && isRawSaveOwnedByCurrentAccount(raw));
+
+  return pickNewestSave(rawSaves);
 }
 
 function pickNewestSave(rawSaves: Array<string | null>) {
@@ -699,6 +826,10 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+export function getCurrentSaveAccountId() {
+  return getCurrentVKUserId();
+}
+
 export function getLastLoadSource() {
   return lastLoadSource;
 }
@@ -715,6 +846,15 @@ export function wasVKSaveConfirmedEmptyThisSession() {
   return vkSaveConfirmedEmptyThisSession;
 }
 
+
+
+function writeImmediateAccountBackup(_reason = 'resume') {
+  try {
+    writeLocalBackups(JSON.stringify(createSaveData()));
+  } catch (error) {
+    console.warn('Immediate account backup failed.', error);
+  }
+}
 
 export function requestAutoSave(_reason = 'auto') {
   if (autoSaveTimer !== undefined) {
@@ -836,6 +976,7 @@ export function markDungeonResumePoint(reason = 'dungeon') {
     roomIndex: gameState.floorRun.currentRoomIndex,
   };
 
+  writeImmediateAccountBackup(`resume:${reason}`);
   requestAutoSave(`resume:${reason}`);
 }
 
@@ -863,6 +1004,7 @@ export function markBattleResumePoint(state: Omit<BattleResumeState, 'savedAt'> 
     },
   };
 
+  writeImmediateAccountBackup('resume:battle');
   requestAutoSave('resume:battle');
 }
 
@@ -872,6 +1014,7 @@ export function clearResumePoint(reason = 'clear') {
     updatedAt: Date.now(),
   };
 
+  writeImmediateAccountBackup(`resume:${reason}`);
   requestAutoSave(`resume:${reason}`);
 }
 
@@ -919,7 +1062,18 @@ export function loadGame() {
 }
 
 function clearLocalResetKeys() {
-  LOCAL_RESET_KEYS.forEach(key => {
+  const currentVKUserId = getCurrentVKUserId();
+  const keys = [
+    ...LOCAL_RESET_KEYS,
+    ...(currentVKUserId
+      ? [
+          getAccountLocalBackupKey(currentVKUserId),
+          getAccountLastGoodKey(currentVKUserId),
+        ]
+      : []),
+  ];
+
+  keys.forEach(key => {
     try {
       localStorage.removeItem(key);
     } catch (error) {
