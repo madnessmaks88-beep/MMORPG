@@ -48,6 +48,8 @@ const LOCAL_BACKUP_KEY = `${SAVE_KEY}_local_backup`;
 const LAST_GOOD_SAVE_KEY = `${SAVE_KEY}_last_good`;
 const ACCOUNT_LOCAL_BACKUP_PREFIX = `${SAVE_KEY}_vk_account_`;
 const ACCOUNT_LAST_GOOD_PREFIX = `${SAVE_KEY}_vk_account_last_good_`;
+const ACCOUNT_ACTIVE_RUN_PREFIX = `${SAVE_KEY}_vk_account_active_run_`;
+const ACTIVE_RUN_BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const STARTING_PLAYER_STATE: SavePlayerData = {
   name: 'Безымянный',
@@ -396,6 +398,10 @@ function getAccountLastGoodKey(vkUserId: number) {
   return `${ACCOUNT_LAST_GOOD_PREFIX}${vkUserId}`;
 }
 
+function getAccountActiveRunKey(vkUserId: number) {
+  return `${ACCOUNT_ACTIVE_RUN_PREFIX}${vkUserId}`;
+}
+
 function getSaveOwnerId(rawSave: string) {
   try {
     const data = JSON.parse(rawSave) as Partial<SaveData>;
@@ -453,6 +459,70 @@ function withCurrentVKOwner(json: string) {
   }
 }
 
+
+function getRawSaveData(rawSave: string): Partial<SaveData> | null {
+  try {
+    return JSON.parse(rawSave) as Partial<SaveData>;
+  } catch {
+    return null;
+  }
+}
+
+function hasActiveFloorRunData(saveData?: Partial<SaveData> | null) {
+  const floorRun = saveData?.gameState?.floorRun;
+
+  return Boolean(
+    saveData?.player?.raceId &&
+    floorRun?.active &&
+    Array.isArray(floorRun.rooms) &&
+    floorRun.rooms.length > 0
+  );
+}
+
+function hasResumeTargetData(saveData?: Partial<SaveData> | null) {
+  const resume = normalizeResumeState(saveData?.resumeState);
+
+  return resume.scene === 'DungeonScene' || resume.scene === 'BattleScene';
+}
+
+function hasActiveRunOrResume(rawSave: string) {
+  const data = getRawSaveData(rawSave);
+
+  return hasActiveFloorRunData(data) || hasResumeTargetData(data);
+}
+
+function isActiveRunBackupFresh(rawSave: string) {
+  const data = getRawSaveData(rawSave);
+
+  if (!data) {
+    return false;
+  }
+
+  const savedAt = typeof data.savedAt === 'number' ? data.savedAt : 0;
+
+  return Date.now() - savedAt <= ACTIVE_RUN_BACKUP_MAX_AGE_MS;
+}
+
+function writeActiveRunBackup(ownedJson: string) {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return;
+  }
+
+  const activeRunKey = getAccountActiveRunKey(currentVKUserId);
+
+  try {
+    if (hasActiveRunOrResume(ownedJson)) {
+      localStorage.setItem(activeRunKey, ownedJson);
+    } else {
+      localStorage.removeItem(activeRunKey);
+    }
+  } catch (error) {
+    console.warn('Active run backup update failed.', error);
+  }
+}
+
 function writeLocalBackups(json: string) {
   const ownedJson = withCurrentVKOwner(json);
   const currentVKUserId = getCurrentVKUserId();
@@ -466,6 +536,8 @@ function writeLocalBackups(json: string) {
     if (currentVKUserId) {
       localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), ownedJson);
       localStorage.setItem(getAccountLastGoodKey(currentVKUserId), ownedJson);
+      writeActiveRunBackup(ownedJson);
+      writeActiveRunBackup(ownedJson);
     }
   } catch (error) {
     console.warn('Local account backup save failed.', error);
@@ -528,6 +600,7 @@ async function saveJsonToCloud(json: string) {
       localStorage.setItem(LAST_GOOD_SAVE_KEY, ownedJson);
       localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), ownedJson);
       localStorage.setItem(getAccountLastGoodKey(currentVKUserId), ownedJson);
+      writeActiveRunBackup(ownedJson);
     } catch (error) {
       console.warn('Local cloud mirror save failed.', error);
     }
@@ -594,6 +667,14 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
           localStorage.setItem(SAVE_KEY, saveChoice.raw);
           localStorage.setItem(LOCAL_BACKUP_KEY, saveChoice.raw);
           localStorage.setItem(LAST_GOOD_SAVE_KEY, saveChoice.raw);
+
+          const currentVKUserId = getCurrentVKUserId();
+
+          if (currentVKUserId) {
+            localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), saveChoice.raw);
+            localStorage.setItem(getAccountLastGoodKey(currentVKUserId), saveChoice.raw);
+            writeActiveRunBackup(saveChoice.raw);
+          }
         } catch (error) {
           console.warn('Local save mirror update failed.', error);
         }
@@ -680,15 +761,35 @@ function chooseAccountSafeNewestSave(rawVKSave: string, localRawSave: string | n
 
   if (
     localRawSave &&
-    vkInfo &&
     localInfo &&
-    localInfo.savedAt > vkInfo.savedAt + 1000 &&
-    isLocalBackupSafeForCurrentAccount(localInfo.data, vkInfo.data)
+    isLocalBackupSafeForCurrentAccount(localInfo.data, vkInfo?.data)
   ) {
-    return {
-      raw: localRawSave,
-      usedLocalBackup: true,
-    };
+    const localHasActiveRun = hasActiveFloorRunData(localInfo.data) || hasResumeTargetData(localInfo.data);
+    const vkHasActiveRun = hasActiveFloorRunData(vkInfo?.data) || hasResumeTargetData(vkInfo?.data);
+
+    // Главное исправление:
+    // если локальный аварийный снимок говорит, что игрок был в бою/спуске,
+    // не даём более свежему облачному сохранению из главного меню затереть этот возврат.
+    if (localHasActiveRun && !vkHasActiveRun) {
+      return {
+        raw: localRawSave,
+        usedLocalBackup: true,
+      };
+    }
+
+    if (localHasActiveRun && vkHasActiveRun && localInfo.savedAt >= (vkInfo?.savedAt ?? 0)) {
+      return {
+        raw: localRawSave,
+        usedLocalBackup: true,
+      };
+    }
+
+    if (localInfo.savedAt > (vkInfo?.savedAt ?? 0) + 1000) {
+      return {
+        raw: localRawSave,
+        usedLocalBackup: true,
+      };
+    }
   }
 
   return {
@@ -759,12 +860,22 @@ function getBestLocalSave() {
   }
 
   const rawSaves = [
+    localStorage.getItem(getAccountActiveRunKey(currentVKUserId)),
     localStorage.getItem(getAccountLocalBackupKey(currentVKUserId)),
     localStorage.getItem(getAccountLastGoodKey(currentVKUserId)),
     localStorage.getItem(SAVE_KEY),
     localStorage.getItem(LOCAL_BACKUP_KEY),
     localStorage.getItem(LAST_GOOD_SAVE_KEY),
-  ].filter((raw): raw is string => typeof raw === 'string' && isRawSaveOwnedByCurrentAccount(raw));
+  ].filter((raw): raw is string => (
+    typeof raw === 'string' &&
+    isRawSaveOwnedByCurrentAccount(raw)
+  ));
+
+  const activeRunSaves = rawSaves.filter(raw => hasActiveRunOrResume(raw) && isActiveRunBackupFresh(raw));
+
+  if (activeRunSaves.length > 0) {
+    return pickNewestSave(activeRunSaves);
+  }
 
   return pickNewestSave(rawSaves);
 }
@@ -1069,6 +1180,7 @@ function clearLocalResetKeys() {
       ? [
           getAccountLocalBackupKey(currentVKUserId),
           getAccountLastGoodKey(currentVKUserId),
+          getAccountActiveRunKey(currentVKUserId),
         ]
       : []),
   ];
