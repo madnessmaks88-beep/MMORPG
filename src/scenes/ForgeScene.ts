@@ -20,6 +20,7 @@ import {
   getAnvilUpgradeCost,
   upgradeAnvil,
 } from '../systems/ForgeSystem';
+import { trackWeaponUpgraded } from '../systems/QuestSystem';
 
 import { getMaterialName, type MaterialId } from '../data/materials';
 import { saveGameAsync } from '../systems/SaveSystem';
@@ -1352,8 +1353,9 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private showMessage(message: string) {
+
     this.isActionLocked = false;
-    
+
     this.showModal({
       title: 'Кузница',
       description: message,
@@ -1405,6 +1407,7 @@ export class ForgeScene extends Phaser.Scene {
     });
 
     inventoryItem.upgradeLevel = (inventoryItem.upgradeLevel ?? 0) + 1;
+    trackWeaponUpgraded();
 
     void saveGameAsync();
 

@@ -13,6 +13,7 @@ import {
   getQuestDisplayProgressValue,
   getQuestProgressValue,
   getQuestRewardText,
+  getQuestGroupResetText,
   getQuestStatus,
   getQuestTypeLabel,
   getQuests,
@@ -109,6 +110,10 @@ export class QuestScene extends Phaser.Scene {
     this.createHeader(this.layout);
     this.createTabs(this.layout);
     this.createScrollableContent(this.layout);
+
+    // Если при входе наступил новый дневной/недельный период,
+    // QuestSystem обновит состояние, а здесь мы сразу сохраним это в VK/local save.
+    void saveGameAsync();
 
     createBottomNav(this, {
       activeScene: 'CampScene',
@@ -214,7 +219,7 @@ export class QuestScene extends Phaser.Scene {
       depth: 100,
     });
 
-    this.add.text(layout.centerX, panelY - (layout.compact ? 48 : 54), 'Квесты', {
+    this.add.text(layout.centerX, panelY - (layout.compact ? 48 : 54), 'Задания', {
       fontFamily: UI.font.title,
       fontSize: layout.compact ? '31px' : '36px',
       color: '#d8c088',
@@ -242,7 +247,11 @@ export class QuestScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(106);
 
-    this.add.text(layout.centerX, panelY + (layout.compact ? 28 : 34), getQuestGroupDescription(this.selectedGroup), {
+    this.add.text(
+      layout.centerX,
+      panelY + (layout.compact ? 28 : 34),
+      `${getQuestGroupDescription(this.selectedGroup)}\n${getQuestGroupResetText(this.selectedGroup)}`,
+      {
       fontFamily: UI.font.body,
       fontSize: layout.compact ? '12px' : '13px',
       color: '#9b9488',

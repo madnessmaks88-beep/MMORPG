@@ -6,6 +6,7 @@ import { getMaterialName } from '../data/materials';
 import { gameState, type FloorModifier } from '../data/gameState';
 import { addMaterial } from './MaterialSystem';
 import { trackFloorMaterials } from './FloorMaterialLogSystem';
+import { trackChestOpened, trackGoldEarned, trackMaterialsCollected } from './QuestSystem';
 
 export type ChestRewardResult = {
   gold: number;
@@ -126,6 +127,9 @@ export function claimChestReward(): ChestRewardResult {
   });
 
   trackFloorMaterials(materials);
+  trackChestOpened();
+  trackGoldEarned(gold);
+  trackMaterialsCollected(materials.reduce((sum, material) => sum + material.amount, 0));
 
   gameState.floorRun.chestsOpened += 1;
   gameState.floorRun.goldEarned += gold;

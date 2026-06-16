@@ -3737,7 +3737,19 @@ ${effect.duration} х.`,
 
     player.gold += gold;
 
-    trackEnemyKilled();
+    const currentRoom = getCurrentRoom();
+    const roomType = currentRoom?.type;
+    const isEliteKill = roomType === 'elite';
+    const isBossKill = roomType === 'boss' || roomType === 'tier_boss' || this.isBossBattle;
+    const isMorveinKill =
+      this.enemy.id === 'morvein_sealed_crypt_lord' ||
+      this.enemy.name.toLowerCase().includes('морвеин');
+
+    trackEnemyKilled({
+      elite: isEliteKill,
+      boss: isBossKill,
+      morvein: isMorveinKill,
+    });
     trackGoldEarned(gold);
 
     gameState.floorRun.monstersDefeated += 1;

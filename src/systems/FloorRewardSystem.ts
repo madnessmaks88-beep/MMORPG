@@ -11,7 +11,19 @@ import {
   rollItemDrop,
 } from './InventorySystem';
 
-import { trackGoldEarned } from './QuestSystem';
+import { trackGoldEarned, trackItemObtainedByRarity } from './QuestSystem';
+
+function addRunItemsEarned(amount: number) {
+  if (amount <= 0 || !gameState.floorRun.active) {
+    return;
+  }
+
+  const run = gameState.floorRun as typeof gameState.floorRun & {
+    itemsEarned?: number;
+  };
+
+  run.itemsEarned = (run.itemsEarned ?? 0) + amount;
+}
 
 export type FloorRewardResult = {
   gold: number;
@@ -87,6 +99,8 @@ export function giveFloorReward(floor: number): FloorRewardResult {
     const item = getRandomLootItem();
 
     addItemToInventory(player, item.id);
+    trackItemObtainedByRarity(item.rarity);
+    addRunItemsEarned(1);
 
     itemText = `\nПредмет: ${item.name} (${getRarityText(item)})`;
   }

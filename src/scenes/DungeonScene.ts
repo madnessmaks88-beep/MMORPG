@@ -51,6 +51,14 @@ import { giveFloorReward } from '../systems/FloorRewardSystem';
 
 import { claimChestReward } from '../systems/ChestRewardSystem';
 import {
+  trackCampfireUsed,
+  trackDungeonCompleted,
+  trackFloorCleared,
+  trackHighestReachedFloor,
+  trackRelicCollected,
+  trackTrapTriggered,
+} from '../systems/QuestSystem';
+import {
   clearResumePoint,
   flushSaveNow,
   markDungeonResumePoint,
@@ -63,7 +71,8 @@ import {
   getActiveCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
   type CheckpointFlintType,
-  type CampfireStateSnapshot,} from '../systems/CampfireCheckpointSystem';
+  type CampfireStateSnapshot,
+} from '../systems/CampfireCheckpointSystem';
 
 
 type FlintType = 'none' | 'dim' | 'black' | 'ruby';
@@ -282,6 +291,7 @@ export class DungeonScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     const floor = gameState.floorRun.currentFloor || 1;
+    trackHighestReachedFloor(floor);
     const theme = getCryptDepthTheme(floor);
 
     this.add.rectangle(width / 2, height / 2, width, height, DUNGEON_DARK.black, 1).setDepth(0);
@@ -322,49 +332,6 @@ export class DungeonScene extends Phaser.Scene {
         0.18
       ).setOrigin(0, 0).setDepth(1);
     }
-  }
-
-  private createNextFloorInfo(y: number, nextFloor: number, x = this.scale.width / 2) {
-    const stats = getPlayerStats(player);
-    const requirement = getFloorRequirement(nextFloor);
-
-    const isDangerous =
-      player.level < requirement.level ||
-      stats.attack < requirement.attack ||
-      stats.defense < requirement.defense ||
-      stats.maxHp < requirement.hp;
-
-    this.add.text(x, y - 70, `Следующий этаж: ${nextFloor}`, {
-      fontFamily: UI.font.title,
-      fontSize: '23px',
-      color: isDangerous ? UI.colors.red : UI.colors.green,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
-
-    const lines = [
-      `Уровень: ${requirement.level} / ${player.level}`,
-      `Атака: ${requirement.attack} / ${stats.attack}`,
-      `Защита: ${requirement.defense} / ${stats.defense}`,
-      `HP: ${requirement.hp} / ${stats.maxHp}`,
-    ];
-
-    lines.forEach((line, index) => {
-      this.add.text(x, y - 30 + index * 25, line, {
-        fontFamily: UI.font.body,
-        fontSize: '17px',
-        color: UI.colors.textMuted,
-        align: 'center',
-      }).setOrigin(0.5);
-    });
-
-    this.add.text(x, y + 88, isDangerous ? 'Опасно' : 'Можно продолжать', {
-      fontFamily: UI.font.body,
-      fontSize: '18px',
-      color: isDangerous ? UI.colors.red : UI.colors.green,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5);
   }
 
   private createFloorProgress() {
@@ -783,6 +750,7 @@ export class DungeonScene extends Phaser.Scene {
 
     const room = getCurrentRoom();
     const floor = gameState.floorRun.currentFloor || 1;
+    trackHighestReachedFloor(floor);
     const theme = getCryptDepthTheme(floor);
 
     if (!room) {
@@ -1188,17 +1156,11 @@ export class DungeonScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(8);
   }
 
+
   private createCampfireButtons() {
     const layout = this.getLayout();
     const campfireState = this.getCampfireState();
-    const stats = getPlayerStats(player);
-
-    const hpIsFull = player.hp >= stats.maxHp;
-    const energyIsFull = player.energy >= stats.maxEnergy;
-    const potionsAreFull = player.potions >= this.maxPotionCount;
-
-    const needsCampfire = !hpIsFull || !energyIsFull || !potionsAreFull;
-    const canUseCampfire = campfireState.remainingCampfireUses > 0 && needsCampfire;
+    const canUseCampfire = campfireState.remainingCampfireUses > 0;
 
     this.createActionDock(layout);
 
@@ -1208,12 +1170,10 @@ export class DungeonScene extends Phaser.Scene {
       width: Math.min(layout.contentWidth, 560),
       height: layout.primaryButtonHeight,
       icon: '♨',
-      title: canUseCampfire ? 'Разжечь костёр' : 'Костёр не нужен',
+      title: canUseCampfire ? 'Разжечь костёр' : 'Огниво погасло',
       subtitle: canUseCampfire
-        ? `Полное HP/энергия • зелья до ${this.maxPotionCount}`
-        : campfireState.remainingCampfireUses <= 0
-          ? 'Нет зарядов выбранного огнива'
-          : `HP и зелья уже полные: ${player.potions}/${this.maxPotionCount}`,
+        ? `Полное HP/энергия • зелья до ${this.maxPotionCount} • чекпоинт`
+        : 'Нет зарядов выбранного огнива',
       accentColor: canUseCampfire ? 0xf0a040 : UI.colors.goldDark,
       danger: false,
       large: true,
@@ -1267,6 +1227,7 @@ export class DungeonScene extends Phaser.Scene {
     };
   }
 
+
   private handleCampfireUse() {
     const room = getCurrentRoom();
 
@@ -1292,8 +1253,8 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    // Даже если герой уже полностью здоров, костёр всё равно можно активировать как чекпоинт.
-    // Это важно для тактики: игрок может сохранить точку возврата, не теряя возможность продолжить забег.
+    // Костёр можно активировать даже при полном HP/энергии/зельях:
+    // тогда он работает как тактический чекпоинт.
     campfireState.remainingCampfireUses = Math.max(0, campfireState.remainingCampfireUses - 1);
     campfireState.usedCampfireFloors = Array.from(new Set([
       ...campfireState.usedCampfireFloors,
@@ -1305,6 +1266,7 @@ export class DungeonScene extends Phaser.Scene {
     player.potions = this.maxPotionCount;
 
     markCurrentRoomCompleted();
+    trackCampfireUsed();
     goToNextRoom();
 
     const checkpoint = createCampfireBattleCheckpoint({
@@ -1822,40 +1784,6 @@ private exitToTownKeepingCampfireCheckpoint() {
   );
 }
 
-  private createFloorJournal(y: number, x = this.scale.width / 2) {
-    const run = gameState.floorRun;
-
-    this.add.text(x, y - 70, 'Журнал этажа', {
-      fontFamily: UI.font.title,
-      fontSize: '23px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
-
-    const lines = [
-      `Монстры: ${run.monstersDefeated}`,
-      `Сундуки: ${run.chestsOpened}`,
-      `Ловушки: ${run.trapsTriggered}`,
-      `Золото: +${run.goldEarned}`,
-      `Опыт: +${run.expEarned}`,
-      createFloorMaterialsShortText(),
-    ];
-
-    lines.forEach((line, index) => {
-      this.add.text(x, y - 30 + index * 25, line, {
-        fontFamily: UI.font.body,
-        fontSize: '17px',
-        color: line.includes('Золото')
-          ? UI.colors.goldText
-          : line.includes('Опыт')
-            ? UI.colors.green
-            : UI.colors.textMuted,
-        align: 'center',
-      }).setOrigin(0.5);
-    });
-  }
-
   private triggerTrap() {
     const room = getCurrentRoom();
 
@@ -1864,6 +1792,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     }
 
     const result = triggerTrapResult();
+    trackTrapTriggered();
 
     if (player.hp <= 0) {
       this.showMessage(
@@ -1904,6 +1833,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     );
   }
 
+
   private showFloorCompleted() {
     const floor = gameState.floorRun.currentFloor;
     const nextFloor = getNextFloorAfterCurrent();
@@ -1922,6 +1852,12 @@ private exitToTownKeepingCampfireCheckpoint() {
     if (!gameState.floorRun.rewardClaimed) {
       const reward = giveFloorReward(floor);
       rewardText = reward.fullText;
+      trackFloorCleared(floor);
+
+      if (isTierBossFloor(floor)) {
+        trackDungeonCompleted();
+      }
+
       gameState.floorRun.rewardClaimed = true;
     } else {
       rewardText = `Награда за этаж ${floor} уже получена.`;
@@ -1934,95 +1870,158 @@ private exitToTownKeepingCampfireCheckpoint() {
       return;
     }
 
-    const { width, height } = this.scale;
-
-    // Затемнение старой сцены
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.62)
-      .setDepth(100);
-
-    // Основная карточка результата
-    this.createResultPanel({
-      x: width / 2,
-      y: 610,
-      width: 640,
-      height: 760,
-      radius: 34,
-      fill: 0x0b0807,
-      stroke: 0x75d184,
-      depth: 101,
-    });
-
-    // Верхнее зелёное свечение
-    this.add.circle(width / 2, 245, 145, 0x1c6b3a, 0.16).setDepth(102);
-    this.add.circle(width / 2, 245, 78, 0x75d184, 0.1).setDepth(102);
-
-    this.add.text(width / 2, 220, 'ЭТАЖ ЗАЧИЩЕН', {
-      fontFamily: UI.font.title,
-      fontSize: '42px',
-      color: UI.colors.green,
-      stroke: '#000000',
-      strokeThickness: 7,
-    }).setOrigin(0.5).setDepth(103);
-
-    this.add.text(width / 2, 272, `Этаж ${floor} полностью пройден`, {
-      fontFamily: UI.font.body,
-      fontSize: '21px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(103);
-
-    // Главный reward-блок
-    const materialsText = createFloorMaterialsText();
-
-    this.createPremiumRewardBox(
-      width / 2,
-      420,
-      `${rewardText}\n${materialsText}`
-    );
-
-    // Две компактные инфо-колонки
-    this.createCompactFloorJournal(645, width / 2 - 165);
-    this.createCompactNextFloorInfo(645, nextFloor, width / 2 + 165);
-
-    // Кнопки
-    this.createRoundedActionButton({
-      x: width / 2,
-      y: 855,
-      width: 460,
-      height: 58,
-      text: 'Продолжить ниже',
-      variant: 'green',
-      depth: 120,
-      onClick: () => {
+    this.showFloorResultScreen({
+      title: 'ЭТАЖ ЗАЧИЩЕН',
+      subtitle: `Этаж ${floor} полностью пройден`,
+      accent: 0x75d184,
+      rewardText: `${rewardText}\n${createFloorMaterialsText()}`,
+      nextFloor,
+      primaryText: 'Продолжить ниже',
+      primaryAction: () => {
         startFloorRun(nextFloor);
         clearRoomRegenerationBlock();
         void saveGameAsync();
         this.scene.restart();
       },
-    });
-
-    this.createRoundedActionButton({
-      x: width / 2,
-      y: 925,
-      width: 460,
-      height: 58,
-      text: 'Вернуться в город',
-      variant: 'brown',
-      depth: 120,
-      onClick: () => {
+      secondaryAction: () => {
         this.showExitToTownConfirm();
       },
     });
   }
 
+
+  private getRunLootSummary() {
+    type RunWithItems = typeof gameState.floorRun & {
+      itemsEarned?: number;
+    };
+
+    const run = gameState.floorRun as RunWithItems;
+    const gold = Math.max(0, Math.floor(run.goldEarned ?? 0));
+    const itemCount = Math.max(0, Math.floor(run.itemsEarned ?? 0));
+    const materialEntries = Object.entries(run.materialsEarned ?? {})
+      .map(([id, amount]) => ({
+        id: id as MaterialId,
+        amount: Math.max(0, Math.floor(Number(amount) || 0)),
+      }))
+      .filter(material => material.amount > 0)
+      .sort((left, right) => right.amount - left.amount);
+
+    const materialCount = materialEntries.reduce((sum, material) => sum + material.amount, 0);
+    const hasLoot = gold > 0 || itemCount > 0 || materialCount > 0;
+
+    const lines: string[] = [];
+
+    if (gold > 0) {
+      lines.push(`Золото: +${gold}`);
+    }
+
+    if (itemCount > 0) {
+      lines.push(`Предметы: ${itemCount} шт.`);
+    }
+
+    if (materialCount > 0) {
+      lines.push(`Материалы: ${materialCount} шт.`);
+    }
+
+    const materialDetails = materialEntries
+      .slice(0, 4)
+      .map(material => `+${material.amount} ${getMaterialName(material.id)}`)
+      .join('\n');
+
+    const hiddenMaterialsCount = Math.max(0, materialEntries.length - 4);
+    const hiddenMaterialsText = hiddenMaterialsCount > 0
+      ? `\nи ещё ${hiddenMaterialsCount} вида материалов`
+      : '';
+
+    return {
+      hasLoot,
+      lines,
+      materialDetails: `${materialDetails}${hiddenMaterialsText}`.trim(),
+    };
+  }
+
+  private createExitLootCard(config: {
+    centerX: number;
+    top: number;
+    width: number;
+    loot: ReturnType<DungeonScene['getRunLootSummary']>;
+    depth: number;
+  }) {
+    const cardHeight = config.loot.materialDetails ? 136 : 104;
+    const left = config.centerX - config.width / 2;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x0d0b09, 0.96);
+    bg.fillRoundedRect(left, config.top, config.width, cardHeight, 20);
+    bg.lineStyle(2, UI.colors.goldDark, 0.68);
+    bg.strokeRoundedRect(left, config.top, config.width, cardHeight, 20);
+    bg.setDepth(config.depth);
+
+    const title = this.add.text(config.centerX, config.top + 25, 'ДОБЫЧА ЗАБЕГА', {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 34,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(config.depth + 1);
+
+    const lootLine = this.add.text(config.centerX, config.top + 58, config.loot.lines.join('  •  '), {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: UI.colors.text,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 34,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(config.depth + 1);
+
+    const objects: Phaser.GameObjects.GameObject[] = [bg, title, lootLine];
+
+    if (config.loot.materialDetails) {
+      const materialsText = this.add.text(config.centerX, config.top + 101, config.loot.materialDetails, {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: UI.colors.textMuted,
+        align: 'center',
+        lineSpacing: 2,
+        wordWrap: {
+          width: config.width - 42,
+          useAdvancedWrap: true,
+        },
+        maxLines: 3,
+      }).setOrigin(0.5).setDepth(config.depth + 1);
+
+      objects.push(materialsText);
+    }
+
+    return {
+      height: cardHeight,
+      objects,
+    };
+  }
+
+
   private showExitToTownConfirm() {
     const { width, height } = this.scale;
     const layout = this.getLayout();
+    const loot = this.getRunLootSummary();
 
     const modalObjects: Phaser.GameObjects.GameObject[] = [];
     const modalWidth = Math.min(width - layout.safeX * 2, 600);
-    const modalHeight = Math.min(height - layout.safeTop - layout.safeBottom - 80, 306);
+    const modalHeight = Math.min(
+      height - layout.safeTop - layout.safeBottom - 74,
+      loot.hasLoot ? 454 : 312
+    );
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -2032,13 +2031,13 @@ private exitToTownKeepingCampfireCheckpoint() {
       width,
       height,
       0x000000,
-      0.76
+      0.78
     )
       .setDepth(200)
       .setInteractive();
 
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.38);
+    shadow.fillStyle(0x000000, 0.42);
     shadow.fillRoundedRect(
       centerX - modalWidth / 2,
       centerY - modalHeight / 2 + 8,
@@ -2049,7 +2048,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     shadow.setDepth(201);
 
     const panel = this.add.graphics();
-    panel.fillStyle(0x14100d, 0.98);
+    panel.fillStyle(0x14100d, 0.985);
     panel.fillRoundedRect(
       centerX - modalWidth / 2,
       centerY - modalHeight / 2,
@@ -2065,6 +2064,14 @@ private exitToTownKeepingCampfireCheckpoint() {
       modalHeight,
       30
     );
+    panel.lineStyle(1, 0x6b5a3c, 0.34);
+    panel.strokeRoundedRect(
+      centerX - modalWidth / 2 + 10,
+      centerY - modalHeight / 2 + 10,
+      modalWidth - 20,
+      modalHeight - 20,
+      22
+    );
     panel.setDepth(202);
 
     const glow = this.add.circle(centerX, centerY - modalHeight / 2 + 62, 90, 0xf0a040, 0.07)
@@ -2079,13 +2086,15 @@ private exitToTownKeepingCampfireCheckpoint() {
       align: 'center',
       wordWrap: {
         width: modalWidth - 60,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(204);
 
+    const mainTextY = centerY - modalHeight / 2 + (loot.hasLoot ? 102 : 138);
     const text = this.add.text(
       centerX,
-      centerY - 12,
+      mainTextY,
       'Ты покинешь подземелье и вернёшься в город.\nТекущий забег будет завершён.',
       {
         fontFamily: UI.font.body,
@@ -2100,6 +2109,20 @@ private exitToTownKeepingCampfireCheckpoint() {
         maxLines: 4,
       }
     ).setOrigin(0.5).setDepth(204);
+
+    modalObjects.push(overlay, shadow, panel, glow, title, text);
+
+    if (loot.hasLoot) {
+      const lootCard = this.createExitLootCard({
+        centerX,
+        top: centerY - modalHeight / 2 + 156,
+        width: modalWidth - 58,
+        loot,
+        depth: 204,
+      });
+
+      modalObjects.push(...lootCard.objects);
+    }
 
     const closeModal = () => {
       modalObjects.forEach(object => {
@@ -2145,12 +2168,6 @@ private exitToTownKeepingCampfireCheckpoint() {
     });
 
     modalObjects.push(
-      overlay,
-      shadow,
-      panel,
-      glow,
-      title,
-      text,
       cancelButton.shadow,
       cancelButton.bg,
       cancelButton.label,
@@ -2160,18 +2177,216 @@ private exitToTownKeepingCampfireCheckpoint() {
     );
   }
 
-  private createResultPanel(config: {
+
+  private showFloorResultScreen(config: {
+    title: string;
+    subtitle: string;
+    accent: number;
+    rewardText: string;
+    nextFloor: number;
+    primaryText: string;
+    primaryAction: () => void;
+    secondaryAction: () => void;
+    relic?: {
+      name: string;
+      description: string;
+      bonus: string;
+    };
+  }) {
+    const layout = this.getLayout();
+    const { width, height } = this.scale;
+    const centerX = width / 2;
+
+    const overlayDepth = 180;
+    const safeX = layout.safeX;
+    const top = layout.safeTop + 10;
+    const bottom = height - layout.safeBottom - 10;
+    const panelWidth = Math.min(width - safeX * 2, 650);
+    const headerHeight = layout.veryCompact ? 118 : 136;
+    const footerHeight = layout.veryCompact ? 144 : 158;
+    const panelHeight = bottom - top;
+    const panelY = top + panelHeight / 2;
+
+    this.add.rectangle(centerX, height / 2, width, height, 0x000000, 0.82)
+      .setDepth(overlayDepth)
+      .setInteractive();
+
+    const backGlow = this.add.circle(centerX, top + 118, panelWidth * 0.42, config.accent, 0.055)
+      .setDepth(overlayDepth + 1);
+
+    this.tweens.add({
+      targets: backGlow,
+      alpha: { from: 0.03, to: 0.09 },
+      scale: { from: 0.96, to: 1.04 },
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.createResultStonePanel({
+      x: centerX,
+      y: panelY,
+      width: panelWidth,
+      height: panelHeight,
+      radius: 34,
+      stroke: config.accent,
+      depth: overlayDepth + 2,
+    });
+
+    this.add.text(centerX, top + 34, '✦', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '20px' : '24px',
+      color: '#d6bf82',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(overlayDepth + 5);
+
+    this.add.text(centerX, top + (layout.veryCompact ? 63 : 70), config.title, {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '29px' : '34px',
+      color: this.toHexColor(config.accent),
+      stroke: '#000000',
+      strokeThickness: 7,
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 46,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(overlayDepth + 5);
+
+    this.add.text(centerX, top + (layout.veryCompact ? 99 : 112), config.subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '16px' : '18px',
+      color: UI.colors.text,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 54,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(overlayDepth + 5);
+
+    this.add.rectangle(centerX, top + headerHeight - 10, panelWidth - 54, 1, config.accent, 0.28)
+      .setDepth(overlayDepth + 5);
+
+    const scrollTop = top + headerHeight;
+    const scrollBottom = bottom - footerHeight;
+    const scrollHeight = Math.max(120, scrollBottom - scrollTop);
+    const scrollMask = this.add.graphics().setVisible(false);
+    scrollMask.fillStyle(0xffffff);
+    scrollMask.fillRect(
+      centerX - panelWidth / 2 + 18,
+      scrollTop,
+      panelWidth - 36,
+      scrollHeight
+    );
+
+    const geometryMask = scrollMask.createGeometryMask();
+    const content = this.add.container(0, scrollTop)
+      .setDepth(overlayDepth + 6)
+      .setMask(geometryMask);
+
+    let y = 0;
+    y = this.addResultRewardCard(content, centerX, y, panelWidth - 54, config.rewardText, config.accent);
+
+    if (config.relic) {
+      y += layout.veryCompact ? 10 : 14;
+      y = this.addResultRelicCard(content, centerX, y, panelWidth - 54, config.relic);
+    }
+
+    y += layout.veryCompact ? 10 : 14;
+    y = this.addResultJournalAndNextFloor(content, centerX, y, panelWidth - 54, config.nextFloor);
+
+    y += 24;
+
+    const maxScroll = Math.max(0, y - scrollHeight + 12);
+    let scrollY = 0;
+    let dragStartY = 0;
+    let dragStartScrollY = 0;
+
+    const applyScroll = () => {
+      scrollY = Phaser.Math.Clamp(scrollY, -maxScroll, 0);
+      content.y = scrollTop + scrollY;
+    };
+
+    const scrollHit = this.add.rectangle(centerX, scrollTop + scrollHeight / 2, panelWidth - 34, scrollHeight, 0xffffff, 0.001)
+      .setDepth(overlayDepth + 20)
+      .setInteractive({ useHandCursor: false });
+
+    scrollHit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      dragStartY = pointer.y;
+      dragStartScrollY = scrollY;
+    });
+
+    scrollHit.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.isDown || maxScroll <= 0) {
+        return;
+      }
+
+      scrollY = dragStartScrollY + (pointer.y - dragStartY);
+      applyScroll();
+    });
+
+    scrollHit.on('wheel', (_pointer: Phaser.Input.Pointer, _dx: number, dy: number) => {
+      if (maxScroll <= 0) {
+        return;
+      }
+
+      scrollY -= dy * 0.55;
+      applyScroll();
+    });
+
+    if (maxScroll > 0) {
+      this.add.text(centerX, scrollBottom + 10, 'Потяни список, чтобы посмотреть все награды', {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '12px' : '13px',
+        color: '#7f765f',
+        align: 'center',
+      }).setOrigin(0.5).setDepth(overlayDepth + 8);
+    }
+
+    const buttonWidth = Math.min(panelWidth - 88, 470);
+    const primaryY = bottom - (layout.veryCompact ? 92 : 102);
+    const secondaryY = bottom - (layout.veryCompact ? 32 : 36);
+
+    this.createRoundedActionButton({
+      x: centerX,
+      y: primaryY,
+      width: buttonWidth,
+      height: layout.veryCompact ? 54 : 58,
+      text: config.primaryText,
+      variant: 'green',
+      depth: overlayDepth + 30,
+      onClick: config.primaryAction,
+    });
+
+    this.createRoundedActionButton({
+      x: centerX,
+      y: secondaryY,
+      width: buttonWidth,
+      height: layout.veryCompact ? 50 : 54,
+      text: 'Вернуться в город',
+      variant: 'brown',
+      depth: overlayDepth + 30,
+      onClick: config.secondaryAction,
+    });
+  }
+
+  private createResultStonePanel(config: {
     x: number;
     y: number;
     width: number;
     height: number;
     radius: number;
-    fill: number;
     stroke: number;
     depth: number;
   }) {
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.42);
+    shadow.fillStyle(0x000000, 0.5);
     shadow.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2 + 10,
@@ -2182,7 +2397,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     shadow.setDepth(config.depth);
 
     const panel = this.add.graphics();
-    panel.fillStyle(config.fill, 0.98);
+    panel.fillGradientStyle(0x0d0b09, 0x0d0b09, 0x050505, 0x050505, 0.99, 0.99, 0.99, 0.99);
     panel.fillRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -2190,8 +2405,7 @@ private exitToTownKeepingCampfireCheckpoint() {
       config.height,
       config.radius
     );
-
-    panel.lineStyle(3, config.stroke, 0.86);
+    panel.lineStyle(3, config.stroke, 0.76);
     panel.strokeRoundedRect(
       config.x - config.width / 2,
       config.y - config.height / 2,
@@ -2199,77 +2413,278 @@ private exitToTownKeepingCampfireCheckpoint() {
       config.height,
       config.radius
     );
-
+    panel.lineStyle(1, 0x6b5a3c, 0.28);
+    panel.strokeRoundedRect(
+      config.x - config.width / 2 + 10,
+      config.y - config.height / 2 + 10,
+      config.width - 20,
+      config.height - 20,
+      Math.max(12, config.radius - 9)
+    );
     panel.setDepth(config.depth + 1);
-
-    return {
-      shadow,
-      panel,
-    };
   }
 
-  private createPremiumRewardBox(x: number, y: number, rewardText: string) {
+  private addResultRewardCard(
+    container: Phaser.GameObjects.Container,
+    centerX: number,
+    y: number,
+    width: number,
+    rewardText: string,
+    accent: number
+  ) {
     const lines = rewardText
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0);
+      .filter(Boolean);
 
-    // Тень
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.34);
-    shadow.fillRoundedRect(x - 285, y - 108 + 7, 570, 216, 28);
-    shadow.setDepth(103);
+    const normalizedLines = lines.length > 0 ? lines : ['Награда уже получена'];
+    const contentWidth = width - 42;
+    const titleHeight = 44;
+    const lineGap = 30;
+    const cardHeight = Phaser.Math.Clamp(titleHeight + normalizedLines.length * lineGap + 30, 132, 284);
+    const top = y;
 
-    // Карточка наград
-    const panel = this.add.graphics();
-    panel.fillStyle(0x1a120c, 0.98);
-    panel.fillRoundedRect(x - 285, y - 108, 570, 216, 28);
-    panel.lineStyle(3, UI.colors.gold, 0.95);
-    panel.strokeRoundedRect(x - 285, y - 108, 570, 216, 28);
-    panel.setDepth(104);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x18110d, 0.97);
+    bg.fillRoundedRect(centerX - width / 2, top, width, cardHeight, 24);
+    bg.lineStyle(2, UI.colors.gold, 0.72);
+    bg.strokeRoundedRect(centerX - width / 2, top, width, cardHeight, 24);
+    container.add(bg);
 
-    // Верхнее золотое свечение
-    this.add.circle(x, y - 62, 120, 0xf0d58a, 0.055).setDepth(105);
-
-    this.add.text(x, y - 78, 'ПОЛУЧЕННЫЕ НАГРАДЫ', {
+    const title = this.add.text(centerX, top + 28, 'ПОЛУЧЕННЫЕ НАГРАДЫ', {
       fontFamily: UI.font.title,
-      fontSize: '27px',
+      fontSize: '20px',
       color: UI.colors.goldText,
       stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(106);
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: { width: contentWidth },
+      maxLines: 1,
+    }).setOrigin(0.5);
+    container.add(title);
 
-    this.add.rectangle(x, y - 44, 390, 2, UI.colors.gold, 0.28)
-      .setDepth(106);
+    const line = this.add.rectangle(centerX, top + 54, width - 70, 1, accent, 0.24);
+    container.add(line);
 
-    const rewardLines = lines.length > 0 ? lines : ['Награда уже получена'];
+    normalizedLines.forEach((text, index) => {
+      const lineY = top + 78 + index * lineGap;
+      const color = this.getRewardLineColor(text);
+      const icon = this.getRewardLineIcon(text);
 
-    const startY = y - 10;
-    const lineGap = 34;
-
-    rewardLines.slice(0, 4).forEach((line, index) => {
-      const color = this.getRewardLineColor(line);
-      const icon = this.getRewardLineIcon(line);
-
-      this.add.text(x - 210, startY + index * lineGap, icon, {
+      const iconText = this.add.text(centerX - width / 2 + 34, lineY, icon, {
         fontFamily: UI.font.body,
-        fontSize: '22px',
+        fontSize: '17px',
         color,
         stroke: '#000000',
         strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(106);
+      }).setOrigin(0.5);
 
-      this.add.text(x - 175, startY + index * lineGap, line, {
+      const rewardLine = this.add.text(centerX - width / 2 + 62, lineY, text, {
         fontFamily: UI.font.body,
-        fontSize: '22px',
+        fontSize: '17px',
         color,
         stroke: '#000000',
         strokeThickness: 3,
         wordWrap: {
-          width: 430,
+          width: width - 96,
+          useAdvancedWrap: true,
         },
-      }).setOrigin(0, 0.5).setDepth(106);
+        maxLines: 2,
+      }).setOrigin(0, 0.5);
+
+      container.add([iconText, rewardLine]);
     });
+
+    return top + cardHeight;
+  }
+
+  private addResultRelicCard(
+    container: Phaser.GameObjects.Container,
+    centerX: number,
+    y: number,
+    width: number,
+    relic: {
+      name: string;
+      description: string;
+      bonus: string;
+    }
+  ) {
+    const cardHeight = 166;
+    const top = y;
+
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0x171018, 0x171018, 0x0d0912, 0x0d0912, 0.98, 0.98, 0.98, 0.98);
+    bg.fillRoundedRect(centerX - width / 2, top, width, cardHeight, 24);
+    bg.lineStyle(2, 0x8f6bd8, 0.78);
+    bg.strokeRoundedRect(centerX - width / 2, top, width, cardHeight, 24);
+    container.add(bg);
+
+    const title = this.add.text(centerX, top + 28, 'РЕЛИКВИЯ ЯРУСА', {
+      fontFamily: UI.font.title,
+      fontSize: '18px',
+      color: '#c8a0ff',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: { width: width - 44 },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const name = this.add.text(centerX, top + 61, relic.name, {
+      fontFamily: UI.font.title,
+      fontSize: '19px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: width - 44,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const description = this.add.text(centerX, top + 98, relic.description, {
+      fontFamily: UI.font.body,
+      fontSize: '14px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: width - 54,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+      lineSpacing: 3,
+    }).setOrigin(0.5);
+
+    const bonus = this.add.text(centerX, top + 139, `Бонус: ${relic.bonus}`, {
+      fontFamily: UI.font.body,
+      fontSize: '15px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: width - 54,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    container.add([title, name, description, bonus]);
+
+    return top + cardHeight;
+  }
+
+  private addResultJournalAndNextFloor(
+    container: Phaser.GameObjects.Container,
+    centerX: number,
+    y: number,
+    width: number,
+    nextFloor: number
+  ) {
+    const stats = getPlayerStats(player);
+    const requirement = getFloorRequirement(nextFloor);
+    const nextTier = getCurrentTierByFloor(nextFloor);
+    const isDangerous = player.level < requirement.level;
+    const gap = 12;
+    const cardWidth = (width - gap) / 2;
+    const cardHeight = 176;
+    const leftX = centerX - width / 2 + cardWidth / 2;
+    const rightX = centerX + width / 2 - cardWidth / 2;
+
+    this.addResultInfoCard(container, {
+      x: leftX,
+      y,
+      width: cardWidth,
+      height: cardHeight,
+      title: 'ЖУРНАЛ',
+      titleColor: UI.colors.goldText,
+      lines: [
+        `Монстры: ${gameState.floorRun.monstersDefeated}`,
+        `Сундуки: ${gameState.floorRun.chestsOpened}`,
+        `Ловушки: ${gameState.floorRun.trapsTriggered}`,
+        `Золото: +${gameState.floorRun.goldEarned}`,
+        `Опыт: +${gameState.floorRun.expEarned}`,
+        `Материалы: ${createFloorMaterialsShortText()}`,
+      ],
+    });
+
+    this.addResultInfoCard(container, {
+      x: rightX,
+      y,
+      width: cardWidth,
+      height: cardHeight,
+      title: `ЭТАЖ ${nextFloor}`,
+      titleColor: isDangerous ? UI.colors.red : UI.colors.green,
+      lines: [
+        `Ярус: ${nextTier}`,
+        `Уровень: ${player.level} / ${requirement.level}`,
+        `Атака: ${stats.attack} / ${requirement.attack}`,
+        `Защита: ${stats.defense} / ${requirement.defense}`,
+        `HP: ${player.hp} / ${stats.maxHp}`,
+        isDangerous ? 'Опасно' : 'Можно идти',
+      ],
+      dangerLastLine: isDangerous,
+    });
+
+    return y + cardHeight;
+  }
+
+  private addResultInfoCard(
+    container: Phaser.GameObjects.Container,
+    config: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      title: string;
+      titleColor: string | number;
+      lines: string[];
+      dangerLastLine?: boolean;
+    }
+  ) {
+    const bg = this.add.graphics();
+    bg.fillStyle(0x0d0c0b, 0.94);
+    bg.fillRoundedRect(config.x - config.width / 2, config.y, config.width, config.height, 20);
+    bg.lineStyle(1, 0x6b5a3c, 0.48);
+    bg.strokeRoundedRect(config.x - config.width / 2, config.y, config.width, config.height, 20);
+    container.add(bg);
+
+    const title = this.add.text(config.x, config.y + 24, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '16px',
+      color: typeof config.titleColor === 'number' ? this.toHexColor(config.titleColor) : config.titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 18,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+    container.add(title);
+
+    config.lines.forEach((line, index) => {
+      const isLast = index === config.lines.length - 1;
+      const text = this.add.text(config.x, config.y + 53 + index * 19, line, {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: config.dangerLastLine && isLast ? UI.colors.red : UI.colors.textMuted,
+        align: 'center',
+        wordWrap: {
+          width: config.width - 20,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5);
+      container.add(text);
+    });
+  }
+
+  private toHexColor(color: number) {
+    return `#${color.toString(16).padStart(6, '0')}`;
   }
 
   private getRewardLineIcon(line: string) {
@@ -2303,95 +2718,6 @@ private exitToTownKeepingCampfireCheckpoint() {
    }
 
    return '•';
-  }
-
-  private createCompactFloorJournal(y: number, x = this.scale.width / 2) {
-    const run = gameState.floorRun;
-
-    this.add.text(x, y - 72, 'Журнал', {
-      fontFamily: UI.font.title,
-      fontSize: '23px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(104);
-
-    const lines = [
-      `Монстры: ${run.monstersDefeated}`,
-      `Сундуки: ${run.chestsOpened}`,
-      `Ловушки: ${run.trapsTriggered}`,
-      `Золото: +${run.goldEarned}`,
-      `Опыт: +${run.expEarned}`,
-      createFloorMaterialsShortText(),
-    ];
-
-    lines.forEach((line, index) => {
-      const color = line.includes('Золото')
-        ? UI.colors.goldText
-        : line.includes('Опыт')
-          ? UI.colors.green
-          : line.includes('Материалы')
-            ? '#70a6ff'
-            : UI.colors.textMuted;
-
-      this.add.text(x, y - 32 + index * 25, line, {
-        fontFamily: UI.font.body,
-        fontSize: '17px',
-        color,
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(104);
-    });
-  }
-
-  private createCompactNextFloorInfo(
-    y: number,
-    nextFloor: number,
-    x = this.scale.width / 2
-  ) {
-    const stats = getPlayerStats(player);
-    const requirement = getFloorRequirement(nextFloor);
-
-    const isDangerous =
-      player.level < requirement.level ||
-      stats.attack < requirement.attack ||
-      stats.defense < requirement.defense ||
-      stats.maxHp < requirement.hp;
-
-    this.add.text(x, y - 72, `Этаж ${nextFloor}`, {
-      fontFamily: UI.font.title,
-      fontSize: '23px',
-      color: isDangerous ? UI.colors.red : UI.colors.green,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(104);
-
-    const lines = [
-      `Уровень: ${requirement.level} / ${player.level}`,
-      `Атака: ${requirement.attack} / ${stats.attack}`,
-      `Защита: ${requirement.defense} / ${stats.defense}`,
-      `HP: ${requirement.hp} / ${stats.maxHp}`,
-    ];
-
-    lines.forEach((line, index) => {
-      this.add.text(x, y - 32 + index * 25, line, {
-        fontFamily: UI.font.body,
-        fontSize: '17px',
-        color: UI.colors.textMuted,
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(104);
-    });
-
-    this.add.text(x, y + 82, isDangerous ? 'Опасно' : 'Можно идти', {
-      fontFamily: UI.font.body,
-      fontSize: '18px',
-      color: isDangerous ? UI.colors.red : UI.colors.green,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(104);
   }
 
   private showTierGateCompleted() {
@@ -2456,6 +2782,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     });
   }
 
+
   private showTierCompleted(rewardText: string) {
     const floor = gameState.floorRun.currentFloor;
     const tier = getCurrentTierByFloor(floor);
@@ -2463,86 +2790,35 @@ private exitToTownKeepingCampfireCheckpoint() {
 
     const relic = giveRelicForTier(tier);
 
-    let relicText = '';
-
     if (relic) {
-      relicText =
-        `\n\nПолучена реликвия: ${relic.name}\n` +
-        `${relic.description}\n` +
-        `Бонус: ${createRelicBonusText(relic)}`;
+      trackRelicCollected();
     }
 
     void saveGameAsync();
 
-    const { width } = this.scale;
-
-    this.add.rectangle(width / 2, 580, 640, 670, 0x0d0d0d, 0.96)
-      .setStrokeStyle(3, 0xf0d58a);
-
-    this.add.text(width / 2, 250, `Ярус ${tier} пройден`, {
-      fontFamily: 'Arial',
-      fontSize: '42px',
-      color: '#f0d58a',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5);
-
-    this.add.text(
-      width / 2,
-      335,
-      `Ты победил финального босса ${tier}-го яруса.\nТеперь можно вернуться в город или продолжить спуск.`,
-      {
-        fontFamily: 'Arial',
-        fontSize: '21px',
-        color: '#d8c7a3',
-        align: 'center',
-        wordWrap: {
-          width: 560,
-        },
-        lineSpacing: 7,
-      }
-    ).setOrigin(0.5);
-
-    this.add.text(width / 2, 480, rewardText + relicText, {
-      fontFamily: 'Arial',
-      fontSize: '18px',
-      color: '#d8c7a3',
-      align: 'center',
-      wordWrap: {
-        width: 560,
-      },
-      lineSpacing: 5,
-    }).setOrigin(0.5);
-
-    this.createFloorJournal(600);
-
-    this.createNextFloorInfo(740, nextFloor);
-
-    this.createRoundedActionButton({
-      x: width / 2,
-      y: 910,
-      width: 450,
-      height: 56,
-      text: 'Продолжить на новый ярус',
-      variant: 'green',
-      onClick: () => {
+    this.showFloorResultScreen({
+      title: `ЯРУС ${tier} ПРОЙДЕН`,
+      subtitle: `Финальный босс ${tier}-го яруса повержен`,
+      accent: UI.colors.gold,
+      rewardText: `${rewardText}\n${createFloorMaterialsText()}`,
+      relic: relic
+        ? {
+            name: relic.name,
+            description: relic.description,
+            bonus: createRelicBonusText(relic),
+          }
+        : undefined,
+      nextFloor,
+      primaryText: 'Продолжить на новый ярус',
+      primaryAction: () => {
         startFloorRun(nextFloor);
         clearRoomRegenerationBlock();
-      
+
         void saveGameAsync();
-      
+
         this.scene.restart();
       },
-    });
-
-    this.createRoundedActionButton({
-      x: width / 2,
-      y: 975,
-      width: 450,
-      height: 56,
-      text: 'Вернуться в город',
-      variant: 'brown',
-      onClick: () => {
+      secondaryAction: () => {
         this.exitToTownKeepingCampfireCheckpoint();
       },
     });

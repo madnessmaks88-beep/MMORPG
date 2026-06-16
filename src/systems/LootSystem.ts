@@ -9,6 +9,7 @@ import { addItemToInventory } from './InventorySystem';
 import { addMaterialsPack } from './MaterialSystem';
 import { getItemById, items, type ItemRarity } from '../data/items';
 import { trackFloorMaterials } from './FloorMaterialLogSystem';
+import { trackItemObtainedByRarity, trackMaterialsCollected } from './QuestSystem';
 import { gameState } from '../data/gameState';
 
 export type LootResult = {
@@ -54,6 +55,18 @@ function addRandomMaterial(
 
 function getCurrentFloor() {
   return gameState.floorRun.currentFloor || 1;
+}
+
+function addRunItemsEarned(amount: number) {
+  if (amount <= 0 || !gameState.floorRun.active) {
+    return;
+  }
+
+  const run = gameState.floorRun as typeof gameState.floorRun & {
+    itemsEarned?: number;
+  };
+
+  run.itemsEarned = (run.itemsEarned ?? 0) + amount;
 }
 
 function isBossLootRoom() {
@@ -213,10 +226,16 @@ export function rollEnemyLoot(enemy: EnemyData): LootResult {
 
   addMaterialsPack(materials);
   trackFloorMaterials(materials);
+  trackMaterialsCollected(materials.reduce((sum, material) => sum + material.amount, 0));
 
   itemIds.forEach(itemId => {
     addItemToInventory(player, itemId);
+
+    const item = getItemById(itemId);
+    trackItemObtainedByRarity(item?.rarity);
   });
+
+  addRunItemsEarned(itemIds.length);
 
   const materialText = materials
     .map(material => `+${material.amount} ${getMaterialName(material.id)}`)

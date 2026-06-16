@@ -1,5 +1,5 @@
 import { gameState } from '../data/gameState';
-import { quests, DAILY_QUEST_RESET_MS, WEEKLY_QUEST_RESET_MS } from '../data/quests';
+import { quests } from '../data/quests';
 import type { QuestData, QuestGroup, QuestType } from '../data/quests';
 import { player } from '../data/player';
 import { items, type ItemData, type ItemRarity } from '../data/items';
@@ -31,6 +31,7 @@ type QuestProgressRuntime = typeof gameState.questProgress & {
 
   claimedAtByQuestId?: Record<string, number>;
   progressBaselineByQuestId?: Record<string, number>;
+  timedQuestPeriodKeys?: Partial<Record<'daily' | 'weekly', string>>;
 };
 
 type QuestRewardPlayer = typeof player & {
@@ -68,24 +69,140 @@ function getRuntimeProgress() {
 
   progress.claimedAtByQuestId ??= {};
   progress.progressBaselineByQuestId ??= {};
+  progress.timedQuestPeriodKeys ??= {};
 
   return progress;
+}
+
+
+function isRareOrBetter(rarity?: ItemRarity) {
+  return (
+    rarity === 'rare' ||
+    rarity === 'epic' ||
+    rarity === 'legendary' ||
+    rarity === 'mythic'
+  );
+}
+
+function getTotalMaterialsInInventory() {
+  return Object.values(player.materials ?? {})
+    .reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0);
+}
+
+function getCurrentRareItemCount() {
+  return player.inventory.reduce((sum, inventoryItem) => {
+    const item = items.find(baseItem => baseItem.id === inventoryItem.itemId);
+
+    return sum + (isRareOrBetter(item?.rarity) ? 1 : 0);
+  }, 0);
+}
+
+function getTotalWeaponUpgradeLevels() {
+  return player.inventory.reduce((sum, inventoryItem) => {
+    const item = items.find(baseItem => baseItem.id === inventoryItem.itemId);
+
+    if (item?.slot !== 'weapon') {
+      return sum;
+    }
+
+    return sum + Math.max(0, inventoryItem.upgradeLevel ?? 0);
+  }, 0);
+}
+
+export function syncDerivedQuestProgress() {
+  const progress = getRuntimeProgress();
+
+  progress.highestReachedFloor = Math.max(
+    progress.highestReachedFloor ?? 0,
+    gameState.highestClearedFloor ?? 0,
+    gameState.floorRun?.currentFloor ?? 0
+  );
+
+  progress.relicsCollected = Math.max(
+    progress.relicsCollected ?? 0,
+    player.relicIds?.length ?? 0
+  );
+
+  progress.materialsCollected = Math.max(
+    progress.materialsCollected ?? 0,
+    getTotalMaterialsInInventory()
+  );
+
+  progress.rareItemsObtained = Math.max(
+    progress.rareItemsObtained ?? 0,
+    getCurrentRareItemCount()
+  );
+
+  progress.weaponUpgrades = Math.max(
+    progress.weaponUpgrades ?? 0,
+    getTotalWeaponUpgradeLevels()
+  );
 }
 
 function getQuestById(questId: string) {
   return quests.find(quest => quest.id === questId);
 }
 
-function getQuestCooldownMs(group: QuestGroup) {
-  if (group === 'daily') return DAILY_QUEST_RESET_MS;
-  if (group === 'weekly') return WEEKLY_QUEST_RESET_MS;
-  return Number.POSITIVE_INFINITY;
+const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+
+type TimedQuestGroup = 'daily' | 'weekly';
+
+function isTimedQuestGroup(group: QuestGroup): group is TimedQuestGroup {
+  return group === 'daily' || group === 'weekly';
 }
 
-function getQuestClaimedAt(questId: string) {
-  const progress = getRuntimeProgress();
+function getMskDate(timestamp = Date.now()) {
+  return new Date(timestamp + MSK_OFFSET_MS);
+}
 
-  return progress.claimedAtByQuestId?.[questId] ?? 0;
+function getDailyQuestPeriodStartMs(timestamp = Date.now()) {
+  const mskDate = getMskDate(timestamp);
+  const year = mskDate.getUTCFullYear();
+  const month = mskDate.getUTCMonth();
+  const date = mskDate.getUTCDate();
+
+  let startMs = Date.UTC(year, month, date, 12, 0, 0, 0) - MSK_OFFSET_MS;
+
+  if (timestamp < startMs) {
+    startMs -= DAY_MS;
+  }
+
+  return startMs;
+}
+
+function getWeeklyQuestPeriodStartMs(timestamp = Date.now()) {
+  const mskDate = getMskDate(timestamp);
+  const year = mskDate.getUTCFullYear();
+  const month = mskDate.getUTCMonth();
+  const date = mskDate.getUTCDate();
+  const day = mskDate.getUTCDay();
+  const daysSinceMonday = (day + 6) % 7;
+
+  let startMs = Date.UTC(year, month, date - daysSinceMonday, 12, 0, 0, 0) - MSK_OFFSET_MS;
+
+  if (timestamp < startMs) {
+    startMs -= WEEK_MS;
+  }
+
+  return startMs;
+}
+
+function getQuestPeriodStartMs(group: TimedQuestGroup, timestamp = Date.now()) {
+  return group === 'daily'
+    ? getDailyQuestPeriodStartMs(timestamp)
+    : getWeeklyQuestPeriodStartMs(timestamp);
+}
+
+function getNextQuestResetMs(group: TimedQuestGroup, timestamp = Date.now()) {
+  const periodStartMs = getQuestPeriodStartMs(group, timestamp);
+
+  return periodStartMs + (group === 'daily' ? DAY_MS : WEEK_MS);
+}
+
+function getQuestPeriodKey(group: TimedQuestGroup, timestamp = Date.now()) {
+  return `${group}:${getQuestPeriodStartMs(group, timestamp)}`;
 }
 
 function getQuestBaseline(questId: string) {
@@ -104,11 +221,40 @@ function removeClaimedMarker(questId: string) {
   }
 }
 
+function resetTimedQuestGroupForNewPeriod(group: TimedQuestGroup, periodKey: string) {
+  const progress = getRuntimeProgress();
+
+  quests
+    .filter(quest => quest.group === group)
+    .forEach(quest => {
+      progress.claimedQuestIds = progress.claimedQuestIds.filter(id => id !== quest.id);
+
+      if (progress.claimedAtByQuestId) {
+        delete progress.claimedAtByQuestId[quest.id];
+      }
+
+      progress.progressBaselineByQuestId ??= {};
+      progress.progressBaselineByQuestId[quest.id] = getRawQuestProgressValue(quest);
+    });
+
+  progress.timedQuestPeriodKeys ??= {};
+  progress.timedQuestPeriodKeys[group] = periodKey;
+}
+
 function refreshTimedQuestState() {
   const progress = getRuntimeProgress();
-  const now = Date.now();
 
-  Object.entries(progress.claimedAtByQuestId ?? {}).forEach(([questId, claimedAt]) => {
+  syncDerivedQuestProgress();
+
+  (['daily', 'weekly'] as TimedQuestGroup[]).forEach(group => {
+    const periodKey = getQuestPeriodKey(group);
+
+    if (progress.timedQuestPeriodKeys?.[group] !== periodKey) {
+      resetTimedQuestGroupForNewPeriod(group, periodKey);
+    }
+  });
+
+  Object.keys(progress.claimedAtByQuestId ?? {}).forEach(questId => {
     const quest = getQuestById(questId);
 
     if (!quest) {
@@ -120,9 +266,7 @@ function refreshTimedQuestState() {
       return;
     }
 
-    const cooldownMs = getQuestCooldownMs(quest.group);
-
-    if (now - claimedAt >= cooldownMs) {
+    if (!isTimedQuestGroup(quest.group)) {
       removeClaimedMarker(questId);
     }
   });
@@ -233,6 +377,7 @@ export function trackCampfireUsed() {
   const progress = getRuntimeProgress();
 
   progress.campfiresUsed = (progress.campfiresUsed ?? 0) + 1;
+  progress.roomsCompleted = (progress.roomsCompleted ?? 0) + 1;
 }
 
 export function trackDungeonCompleted() {
@@ -263,6 +408,14 @@ export function trackRareItemObtained(amount = 1) {
   const progress = getRuntimeProgress();
 
   progress.rareItemsObtained = (progress.rareItemsObtained ?? 0) + Math.max(0, Math.floor(amount));
+}
+
+export function trackItemObtainedByRarity(rarity?: ItemRarity) {
+  if (!isRareOrBetter(rarity)) {
+    return;
+  }
+
+  trackRareItemObtained(1);
 }
 
 export function trackRelicCollected() {
@@ -341,20 +494,29 @@ export function getQuestStatusRank(quest: QuestData) {
 }
 
 export function getQuestCooldownText(quest: QuestData) {
-  const claimedAt = getQuestClaimedAt(quest.id);
-
-  if (!claimedAt || quest.group === 'special') {
+  if (!isTimedQuestGroup(quest.group)) {
     return '';
   }
 
-  const cooldownMs = getQuestCooldownMs(quest.group);
-  const timeLeft = claimedAt + cooldownMs - Date.now();
+  const timeLeft = getNextQuestResetMs(quest.group) - Date.now();
 
   if (timeLeft <= 0) {
     return 'Скоро обновится';
   }
 
   return formatDuration(timeLeft);
+}
+
+export function getQuestGroupResetText(group: QuestGroup) {
+  if (group === 'daily') {
+    return `Обновление каждый день в 12:00 МСК • через ${formatDuration(getNextQuestResetMs('daily') - Date.now())}`;
+  }
+
+  if (group === 'weekly') {
+    return `Обновление по понедельникам в 12:00 МСК • через ${formatDuration(getNextQuestResetMs('weekly') - Date.now())}`;
+  }
+
+  return 'Особые задания не обновляются автоматически';
 }
 
 export function getQuestRewardText(quest: QuestData) {
@@ -500,6 +662,7 @@ function markQuestClaimed(quest: QuestData) {
 
   progress.claimedAtByQuestId ??= {};
   progress.progressBaselineByQuestId ??= {};
+  progress.timedQuestPeriodKeys ??= {};
 
   progress.claimedAtByQuestId[quest.id] = Date.now();
   progress.progressBaselineByQuestId[quest.id] = getRawQuestProgressValue(quest);
