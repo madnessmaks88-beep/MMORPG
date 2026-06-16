@@ -496,6 +496,10 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
 }
 
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export type RestoreVitalsResult = {
   hpBefore: number;
   hpAfter: number;
@@ -519,8 +523,8 @@ export function restorePlayerVitalsToMaximum(
   const hpMax = Math.max(1, Math.floor(stats.maxHp));
   const energyMax = Math.max(1, Math.floor(stats.maxEnergy));
 
-  const hpBefore = Phaser.Math.Clamp(Math.floor(targetPlayer.hp ?? 0), 0, hpMax);
-  const energyBefore = Phaser.Math.Clamp(Math.floor(targetPlayer.energy ?? 0), 0, energyMax);
+  const hpBefore = clampNumber(Math.floor(targetPlayer.hp ?? 0), 0, hpMax);
+  const energyBefore = clampNumber(Math.floor(targetPlayer.energy ?? 0), 0, energyMax);
   const potionsBefore = Math.max(0, Math.floor(targetPlayer.potions ?? 0));
   const potionsAfter = Math.max(potionsBefore, maxPotionCount);
 

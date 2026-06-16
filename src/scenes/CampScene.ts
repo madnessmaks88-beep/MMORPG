@@ -4,7 +4,7 @@ import { player } from '../data/player';
 import { gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
-import { getPlayerStats } from '../systems/InventorySystem';
+import { getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
 import { loadGameAsync, saveGameAsync, startNewGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
@@ -1398,8 +1398,7 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
-    player.hp = stats.maxHp;
-    player.energy = stats.maxEnergy;
+    restorePlayerVitalsToMaximum(player, 6);
     player.potions = maxPotions;
 
     localStorage.setItem(

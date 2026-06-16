@@ -26,6 +26,7 @@ import { addExperience, createLevelUpText, type LevelUpResult } from '../systems
 import {
   getEquippedWeapon,
   getPlayerStats,
+  restorePlayerVitalsToMaximum,
 } from '../systems/InventorySystem';
 import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
 import { rollEnemyLoot } from '../systems/LootSystem';
@@ -3988,11 +3989,7 @@ ${effect.duration} х.`,
       text: 'Очнуться в лагере',
       accentColor: UI.colors.goldDark,
       onClick: () => {
-        const freshStats = getPlayerStats(player);
-
-        player.hp = freshStats.maxHp;
-        player.energy = freshStats.maxEnergy;
-        player.potions = 6;
+        restorePlayerVitalsToMaximum(player, 6);
 
         // Костёр не удаляем: если время чекпоинта ещё не вышло,
         // игрок должен видеть его в выборе подземелья и иметь возможность вернуться позже.
