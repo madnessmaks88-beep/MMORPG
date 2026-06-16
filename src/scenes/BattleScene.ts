@@ -36,7 +36,6 @@ import { getCryptDepthTheme } from '../systems/CryptThemeSystem';
 import { createScaledEnemy } from '../systems/EnemyScalingSystem';
 import { getRaceById } from '../data/races';
 import {
-  clearCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
   getActiveCampfireBattleCheckpoint,
   restoreCampfireBattleCheckpoint,
@@ -1333,9 +1332,8 @@ private handleDemonSkill() {
 
     this.isBusy = true;
 
-    restoreEnergy(player, 1);
-
-    const playerActionText = 'Ты занял защитную стойку.\nЭнергия восстановлена на 1.';
+    const restoredNow = restoreEnergy(player, 1);
+    const playerActionText = `Ты занял защитную стойку.\n${this.createEnergyRestoreText(restoredNow)}`;
 
     this.logText.setText(playerActionText);
     this.updateTexts();
@@ -1343,6 +1341,12 @@ private handleDemonSkill() {
     this.time.delayedCall(450, () => {
       this.enemyTurn(playerActionText, true);
     });
+  }
+
+  private createEnergyRestoreText(amount: number) {
+    return amount > 0
+      ? `Энергия восстановлена на ${amount}.`
+      : 'Энергия уже полная.';
   }
 
   private getBattleStats(): BattleStats {
@@ -3629,8 +3633,11 @@ ${effect.duration} х.`,
     let treeVictoryText = '';
 
     if (this.hasTreeLevel('energy', 2)) {
-      restoreEnergy(player, 1);
-      treeVictoryText += '\nВторое дыхание: восстановлена 1 энергия.';
+      const restoredBySecondWind = restoreEnergy(player, 1);
+
+      treeVictoryText += restoredBySecondWind > 0
+        ? `\nВторое дыхание: восстановлена ${restoredBySecondWind} энергия.`
+        : '\nВторое дыхание: энергия уже полная.';
     }
 
     const combinedLootText = [loot.text, goblinExtraLootText]
@@ -3851,7 +3858,8 @@ ${effect.duration} х.`,
         player.hp = freshStats.maxHp;
         player.energy = freshStats.maxEnergy;
 
-        clearCampfireBattleCheckpoint();
+        // Костёр не удаляем: если время чекпоинта ещё не вышло,
+        // игрок должен видеть его в выборе подземелья и иметь возможность вернуться позже.
         resetFloorRun();
         clearResumePoint('checkpoint-town');
 
@@ -4071,13 +4079,13 @@ ${effect.duration} х.`,
           '#70a6ff'
         );
 
-        restoreEnergy(player, 1);
+        const restoredAfterDodge = restoreEnergy(player, 1);
         const treeDodgeText = this.handleTreeDodgeEffects();
 
         const passiveText = this.checkHumanPassive();
 
         this.logText.setText(
-          `${playerActionText}\n\nТы уклонился от атаки врага.\nЭнергия восстановлена на 1.${treeDodgeText}${passiveText}`
+          `${playerActionText}\n\nТы уклонился от атаки врага.\n${this.createEnergyRestoreText(restoredAfterDodge)}${treeDodgeText}${passiveText}`
         );
 
         this.updateTexts();
@@ -4182,7 +4190,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
       this.animateHit(this.playerCard);
       this.shakeBattle();
 
-      restoreEnergy(player, 1);
+      const restoredAfterEnemyTurn = restoreEnergy(player, 1);
+      const energyRestoreText = this.createEnergyRestoreText(restoredAfterEnemyTurn);
 
       const passiveText = this.checkHumanPassive();
 
@@ -4207,8 +4216,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\nЭнергия восстановлена на 1.${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\n${energyRestoreText}${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\n${energyRestoreText}${passiveText}`
       );
 
       this.updateTexts();

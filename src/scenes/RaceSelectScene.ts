@@ -904,9 +904,9 @@ export class RaceSelectScene extends Phaser.Scene {
 
   private selectRacePreview(race: RaceData) {
     this.selectedRace = race;
-    this.targetScrollY = 0;
-    this.currentScrollY = 0;
 
+    // Не сбрасываем scroll в 0: иначе при выборе расы экран резко улетает наверх.
+    // После пересборки списка createScrollableContent сам зажмёт позицию в допустимые границы.
     this.children.removeAll();
 
     createSceneBackground(this);
@@ -924,9 +924,9 @@ export class RaceSelectScene extends Phaser.Scene {
   ) {
     const gridWidth = layout.contentWidth - 42;
     const chipGap = layout.veryCompact ? 8 : 10;
-    const chipWidth = (gridWidth - chipGap * 2) / 3 - 10;
+    const chipWidth = (gridWidth - chipGap * 2) / 3;
     const chipHeight = layout.veryCompact ? 52 : 58;
-    const startX = layout.centerX - gridWidth / 2 + chipWidth / 2 + 20;
+    const startX = layout.centerX - gridWidth / 2 + chipWidth / 2;
 
     const stats = [
       { label: 'HP', value: `${race.hp * 10}`, icon: '♥', color: 0xff6b6b },

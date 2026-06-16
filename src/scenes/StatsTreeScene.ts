@@ -577,11 +577,13 @@ export class StatsTreeScene extends Phaser.Scene {
       return layout.compact ? 214 : 226;
     }
 
+    // Карточки стали выше, чтобы блок описания следующего узла
+    // не перекрывался большой кнопкой “Изучить узел”.
     if (branch.maxLevel > 10) {
-      return layout.compact ? 392 : 420;
+      return layout.compact ? 470 : 500;
     }
 
-    return layout.compact ? 354 : 378;
+    return layout.compact ? 430 : 460;
   }
 
   private createIntroPanel(layout: FreeTreeLayout, topY: number) {
@@ -770,7 +772,7 @@ export class StatsTreeScene extends Phaser.Scene {
       canUpgrade,
     });
 
-    const buttonY = top + height - (layout.compact ? 36 : 38);
+    const buttonY = top + height - (layout.compact ? 42 : 44);
     const buttonWidth = Math.min(width - 56, 460);
 
     this.createTreeButton({

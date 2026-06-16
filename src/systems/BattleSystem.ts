@@ -28,7 +28,12 @@ export function isCriticalHit(chance: number): boolean {
 }
 
 export function restoreEnergy(player: PlayerData, amount = 1) {
-  player.energy = Math.min(player.maxEnergy, player.energy + amount);
+  const stats = getPlayerStats(player);
+  const before = player.energy;
+
+  player.energy = Math.min(stats.maxEnergy, player.energy + amount);
+
+  return Math.max(0, player.energy - before);
 }
 
 export function playerAttack(player: PlayerData, enemy: EnemyData): PlayerActionResult {
