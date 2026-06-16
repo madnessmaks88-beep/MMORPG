@@ -4,7 +4,15 @@ import Phaser from 'phaser';
 import { player } from '../data/player';
 import type { EnemyData, EnemyDebuffId } from '../data/enemies';
 import { getEnemyById } from '../data/enemies';
-import { saveGameAsync } from '../systems/SaveSystem';
+import {
+  clearResumePoint,
+  flushSaveNow,
+  markBattleResumePoint,
+  markDungeonResumePoint,
+  requestAutoSave,
+  saveGameAsync,
+  type BattleResumeState,
+} from '../systems/SaveSystem';
 import { trackEnemyKilled, trackGoldEarned } from '../systems/QuestSystem';
 import {
   restoreEnergy,
@@ -204,7 +212,12 @@ export class BattleScene extends Phaser.Scene {
     super('BattleScene');
   }
 
-  init(data?: { enemyId?: string; returnToDungeon?: boolean }) {
+  init(data?: {
+    enemyId?: string;
+    returnToDungeon?: boolean;
+    resumeBattle?: boolean;
+    battleSnapshot?: BattleResumeState;
+  }) {
   this.returnToDungeon = data?.returnToDungeon ?? false;
   this.isBattleEnded = false;
   this.isBusy = false;
@@ -274,6 +287,14 @@ export class BattleScene extends Phaser.Scene {
   const floor = gameState.floorRun.currentFloor || 1;
 
   this.enemy = createScaledEnemy(enemyTemplate, floor, room?.type);
+
+  if (data?.resumeBattle && data.battleSnapshot?.enemyId === enemyId) {
+    this.enemy.hp = Phaser.Math.Clamp(
+      Math.floor(data.battleSnapshot.enemyHp),
+      1,
+      this.enemy.maxHp
+    );
+  }
 }
 
   create() {
@@ -319,6 +340,26 @@ export class BattleScene extends Phaser.Scene {
     this.applyStartOfBattleTreeEffects();
     this.updateTexts();
     this.updateStatusText();
+    this.rememberBattleResumePoint('battle-create');
+    void flushSaveNow('battle-create');
+  }
+
+  private rememberBattleResumePoint(_reason = 'battle') {
+    if (!this.enemy || this.isBattleEnded || player.hp <= 0 || this.enemy.hp <= 0) {
+      return;
+    }
+
+    const room = getCurrentRoom();
+
+    markBattleResumePoint({
+      enemyId: this.enemy.id,
+      enemyHp: this.enemy.hp,
+      enemyMaxHp: this.enemy.maxHp,
+      returnToDungeon: this.returnToDungeon,
+      floor: gameState.floorRun.currentFloor || 1,
+      roomIndex: gameState.floorRun.currentRoomIndex || 0,
+      roomId: room?.id,
+    });
   }
 
   private getBattleLayout(): BattleLayout {
@@ -3636,6 +3677,14 @@ ${effect.duration} х.`,
       this.demonHpSpentByHellfire = 0;
     }
 
+    if (this.returnToDungeon) {
+      markCurrentRoomCompleted();
+      goToNextRoom();
+      markDungeonResumePoint('battle-victory');
+    } else {
+      clearResumePoint('battle-victory-camp');
+    }
+
     void saveGameAsync();
 
     this.logText.setText(
@@ -3655,11 +3704,6 @@ ${effect.duration} х.`,
 
     this.time.delayedCall(2200, () => {
       if (this.returnToDungeon) {
-        markCurrentRoomCompleted();
-        goToNextRoom();
-
-        void saveGameAsync();
-
         this.scene.start('DungeonScene');
         return;
       }
@@ -3687,6 +3731,7 @@ ${effect.duration} х.`,
         player.energy = freshStats.maxEnergy;
 
         resetFloorRun();
+        clearResumePoint('battle-death');
 
         void saveGameAsync();
 
@@ -3785,6 +3830,7 @@ ${effect.duration} х.`,
           return;
         }
 
+        markDungeonResumePoint('checkpoint-restore');
         void saveGameAsync();
 
         this.scene.start('DungeonScene');
@@ -3807,6 +3853,7 @@ ${effect.duration} х.`,
 
         clearCampfireBattleCheckpoint();
         resetFloorRun();
+        clearResumePoint('checkpoint-town');
 
         void saveGameAsync();
 
@@ -4222,9 +4269,13 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
       this.playerDebuffText.setText('');
       this.playerDebuffText.setVisible(false);
     }
-
     this.renderPlayerEffectChips();
     this.renderEnemyEffectChips();
     this.updateStatusText();
+
+    if (!this.isBattleEnded && player.hp > 0 && this.enemy.hp > 0) {
+      this.rememberBattleResumePoint('battle-update');
+      requestAutoSave('battle-update');
+    }
   }
 }

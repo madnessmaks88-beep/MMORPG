@@ -5,7 +5,7 @@ import { gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
 import { getPlayerStats } from '../systems/InventorySystem';
-import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
+import { loadGameAsync, saveGameAsync, startNewGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
@@ -1611,11 +1611,13 @@ export class CampScene extends Phaser.Scene {
     );
   }
 
-  private startNewGame() {
+  private async startNewGame() {
     this.resetGameStateInMemory();
     clearCampfireBattleCheckpoint();
     this.clearLocalProgress();
     this.resetPlayerInMemory();
+
+    await startNewGameAsync();
 
     CampScene.startupPrepared = true;
     CampScene.startupPromise = undefined;
@@ -1640,13 +1642,17 @@ export class CampScene extends Phaser.Scene {
   private clearLocalProgress() {
     const saveKeys = [
       'below_ashes_save_v3',
+      'below_ashes_save_v3_local_backup',
+      'below_ashes_save_v3_last_good',
       'below_ashes_save_v2',
       'below_ashes_save_v1',
       'catacombs_save_v3',
       'catacombs_save_v2',
       'catacombs_save_v1',
+      'catacombs_shop_assortment_v3',
       'catacombs_shop_assortment_v2',
       'catacombs_shop_assortment_v1',
+      'below_ashes_campfire_battle_checkpoint_v1',
       'campfire_battle_checkpoint_v1',
       'campfire_checkpoint_v1',
       'quest_state_v1',
@@ -1674,7 +1680,7 @@ export class CampScene extends Phaser.Scene {
       maxHp: 100,
       energy: 3,
       maxEnergy: 3,
-      potions: 3,
+      potions: 6,
       attack: 1,
       defense: 0,
       agility: 1,

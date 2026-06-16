@@ -50,7 +50,12 @@ import {
 import { giveFloorReward } from '../systems/FloorRewardSystem';
 
 import { claimChestReward } from '../systems/ChestRewardSystem';
-import { saveGameAsync } from '../systems/SaveSystem';
+import {
+  clearResumePoint,
+  flushSaveNow,
+  markDungeonResumePoint,
+  saveGameAsync,
+} from '../systems/SaveSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 import {
   clearCampfireBattleCheckpoint,
@@ -138,6 +143,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.ensureCampfireState();
     this.injectCampfireRoomIfNeeded();
+    markDungeonResumePoint('enter-dungeon');
 
     createSceneBackground(this);
     this.createDungeonBackdrop();
@@ -1395,6 +1401,9 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       danger: config.type === 'elite',
       large: true,
       onClick: () => {
+        markDungeonResumePoint('before-battle');
+        void flushSaveNow('before-battle');
+
         this.scene.start('BattleScene', {
           enemyId: config.enemyId,
           returnToDungeon: true,
@@ -1460,6 +1469,9 @@ HP: ${hpBefore}/${stats.maxHp} → ${player.hp}/${stats.maxHp}
       danger: true,
       large: true,
       onClick: () => {
+        markDungeonResumePoint('before-battle');
+        void flushSaveNow('before-battle');
+
         this.scene.start('BattleScene', {
           enemyId: config.enemyId,
           returnToDungeon: true,
@@ -1716,6 +1728,7 @@ private exitToTownKeepingCampfireCheckpoint() {
     this.resetCampfireState();
   }
 
+  clearResumePoint('exit-to-town');
   void saveGameAsync();
 
   this.scene.start('CampScene');
@@ -1858,6 +1871,7 @@ private exitToTownKeepingCampfireCheckpoint() {
           resetFloorRun();
           clearRoomRegenerationBlock();
           this.resetCampfireState();
+          clearResumePoint('trap-death');
 
           void saveGameAsync();
 
