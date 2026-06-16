@@ -63,7 +63,7 @@ import {
   getActiveCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
   type CheckpointFlintType,
-} from '../systems/CampfireCheckpointSystem';
+  type CampfireStateSnapshot,} from '../systems/CampfireCheckpointSystem';
 
 
 type FlintType = 'none' | 'dim' | 'black' | 'ruby';
@@ -1253,6 +1253,20 @@ export class DungeonScene extends Phaser.Scene {
     });
   }
 
+
+  private createCampfireStateSnapshot(): CampfireStateSnapshot {
+    const state = this.getCampfireState();
+
+    return {
+      tier: state.tier,
+      selectedFlint: state.selectedFlint,
+      remainingCampfireUses: state.remainingCampfireUses,
+      campfireFloors: [...state.campfireFloors],
+      usedCampfireFloors: [...state.usedCampfireFloors],
+      selectionDone: state.selectionDone,
+    };
+  }
+
   private handleCampfireUse() {
     const room = getCurrentRoom();
 
@@ -1267,10 +1281,6 @@ export class DungeonScene extends Phaser.Scene {
     const energyBefore = player.energy;
     const potionsBefore = player.potions ?? 0;
 
-    const hpIsFull = player.hp >= stats.maxHp;
-    const energyIsFull = player.energy >= stats.maxEnergy;
-    const potionsAreFull = player.potions >= this.maxPotionCount;
-
     if (campfireState.remainingCampfireUses <= 0) {
       this.showMessage(
         'Нет огня',
@@ -1282,18 +1292,8 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    if (hpIsFull && energyIsFull && potionsAreFull) {
-      this.showMessage(
-        'Костёр не нужен',
-        `HP, энергия и зелья уже полные: ${player.potions}/${this.maxPotionCount}.
-Заряд огнива не потрачен.`,
-        () => {
-          this.scene.restart();
-        }
-      );
-      return;
-    }
-
+    // Даже если герой уже полностью здоров, костёр всё равно можно активировать как чекпоинт.
+    // Это важно для тактики: игрок может сохранить точку возврата, не теряя возможность продолжить забег.
     campfireState.remainingCampfireUses = Math.max(0, campfireState.remainingCampfireUses - 1);
     campfireState.usedCampfireFloors = Array.from(new Set([
       ...campfireState.usedCampfireFloors,
@@ -1311,6 +1311,7 @@ export class DungeonScene extends Phaser.Scene {
       tier: campfireState.tier,
       floor: gameState.floorRun.currentFloor,
       selectedFlint: (campfireState.selectedFlint ?? 'none') as CheckpointFlintType,
+      campfireStateSnapshot: this.createCampfireStateSnapshot(),
     });
 
     player.hp = stats.maxHp;
@@ -1726,7 +1727,12 @@ private exitToTownKeepingCampfireCheckpoint() {
   resetFloorRun();
 
   if (!checkpoint) {
-    this.resetCampfireState();
+    this.resetCampfireState(true);
+  } else {
+    // Активный костёр остаётся жить после выхода в город.
+    // Не сбрасываем dungeonCampfireState, чтобы при возврате не предлагался выбор огнива заново.
+    const state = this.getCampfireState();
+    state.selectionDone = true;
   }
 
   clearResumePoint('exit-to-town');
@@ -1871,7 +1877,7 @@ private exitToTownKeepingCampfireCheckpoint() {
 
           resetFloorRun();
           clearRoomRegenerationBlock();
-          this.resetCampfireState();
+          this.resetCampfireState(!getActiveCampfireBattleCheckpoint());
           clearResumePoint('trap-death');
 
           void saveGameAsync();
@@ -2114,6 +2120,10 @@ private exitToTownKeepingCampfireCheckpoint() {
       text: 'Отмена',
       onClick: () => {
         closeModal();
+
+        // После отмены заново собираем сцену, чтобы не оставлять невидимые
+        // интерактивные объекты модального окна поверх кнопки выхода.
+        this.scene.restart();
       },
       variant: 'brown',
       depth: 204,
@@ -2707,13 +2717,16 @@ private exitToTownKeepingCampfireCheckpoint() {
     };
   }
 
-  private resetCampfireState() {
+  private resetCampfireState(clearCheckpoint = true) {
     const stateOwner = gameState as typeof gameState & {
       dungeonCampfireState?: CampfireState;
     };
 
     stateOwner.dungeonCampfireState = undefined;
-    clearCampfireBattleCheckpoint();
+
+    if (clearCheckpoint) {
+      clearCampfireBattleCheckpoint();
+    }
   }
 
   private createCampfireFloorsForTier(tier: number) {

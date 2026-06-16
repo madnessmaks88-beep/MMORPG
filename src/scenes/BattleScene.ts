@@ -154,6 +154,7 @@ export class BattleScene extends Phaser.Scene {
   private statusText?: Phaser.GameObjects.Text;
 
   private raceSkillCooldown = 0;
+  private raceSkillCooldownJustApplied = false;
   private potionCooldown = 0;
 
   private taintedHpCost = 0;
@@ -1032,6 +1033,12 @@ private getRaceSkillCooldownTurns() {
   return 3;
 }
 
+
+private setRaceSkillCooldown() {
+  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.raceSkillCooldownJustApplied = true;
+}
+
 private getRaceSkillSubtitle() {
   if (this.raceSkillCooldown > 0) {
     return `КД ${this.raceSkillCooldown}`;
@@ -1098,7 +1105,7 @@ private handleHumanSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
 
   const stats = this.getBattleStats();
   const hpRatio = stats.maxHp > 0 ? player.hp / stats.maxHp : 1;
@@ -1136,7 +1143,7 @@ private handleTaintedSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
 
   const stats = this.getBattleStats();
 
@@ -1171,7 +1178,7 @@ private handleStonebornSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
   this.stoneQuartzSpikesTurns = 2;
 
   const playerActionText =
@@ -1191,7 +1198,7 @@ private handleNightElfSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
   this.nightElfShadowStepTurns = 3;
 
   const playerActionText =
@@ -1211,7 +1218,7 @@ private handleGoblinSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
   this.goblinGreedyMarkTurns = 3;
 
   const playerActionText =
@@ -1232,7 +1239,7 @@ private handleDemonSkill() {
   this.isBusy = true;
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
-  this.raceSkillCooldown = this.getRaceSkillCooldownTurns();
+  this.setRaceSkillCooldown();
 
   const stats = this.getBattleStats();
 
@@ -3973,6 +3980,7 @@ ${effect.duration} х.`,
 
         player.hp = freshStats.maxHp;
         player.energy = freshStats.maxEnergy;
+        player.potions = 6;
 
         // Костёр не удаляем: если время чекпоинта ещё не вышло,
         // игрок должен видеть его в выборе подземелья и иметь возможность вернуться позже.
@@ -4116,9 +4124,25 @@ ${effect.duration} х.`,
     }
 
     const stats = this.getBattleStats();
+    const maxHp = Math.max(1, Math.floor(stats.maxHp));
+    const hpBefore = Phaser.Math.Clamp(Math.floor(player.hp), 0, maxHp);
 
-    if (player.hp >= stats.maxHp) {
+    player.hp = hpBefore;
+
+    if (hpBefore >= maxHp) {
       this.logText.setText('HP уже полное. Зелье не потрачено.');
+      this.updateTexts();
+      return;
+    }
+
+    const rot = this.getPlayerDebuff('rot');
+    const healMultiplier = rot ? Math.max(0, 1 - rot.power / 100) : 1;
+    const plannedHealAmount = Math.max(1, Math.floor(maxHp * 0.35 * healMultiplier));
+    const hpAfter = Math.min(maxHp, hpBefore + plannedHealAmount);
+    const actualHealAmount = Math.max(0, hpAfter - hpBefore);
+
+    if (actualHealAmount <= 0) {
+      this.logText.setText('Зелье не сработало: HP не изменилось. Зелье не потрачено.');
       this.updateTexts();
       return;
     }
@@ -4127,13 +4151,7 @@ ${effect.duration} х.`,
 
     player.potions = Math.max(0, player.potions - 1);
     this.potionCooldown = 2;
-
-    const rot = this.getPlayerDebuff('rot');
-
-    const healMultiplier = rot ? 1 - rot.power / 100 : 1;
-    const healAmount = Math.max(1, Math.floor(stats.maxHp * 0.35 * healMultiplier));
-
-    player.hp = Math.min(stats.maxHp, player.hp + healAmount);
+    player.hp = hpAfter;
 
     const rotText = rot
       ? `
@@ -4141,7 +4159,7 @@ ${effect.duration} х.`,
       : '';
 
     this.logText.setText(
-      `Ты выпил зелье и восстановил ${healAmount} HP.${rotText}
+      `Ты выпил зелье и восстановил ${actualHealAmount} HP.${rotText}
 
 Зелье не тратит ход. Враг не атакует.`
     );
@@ -4149,7 +4167,7 @@ ${effect.duration} х.`,
     this.showFloatingText(
       this.playerCard.x,
       this.playerCard.y - 55,
-      `+${healAmount}`,
+      `+${actualHealAmount}`,
       '#75d184'
     );
 
@@ -4347,6 +4365,11 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
   }
 
   private tickRaceSkillCooldown() {
+    if (this.raceSkillCooldownJustApplied) {
+      this.raceSkillCooldownJustApplied = false;
+      return;
+    }
+
     if (this.raceSkillCooldown > 0) {
       this.raceSkillCooldown -= 1;
     }

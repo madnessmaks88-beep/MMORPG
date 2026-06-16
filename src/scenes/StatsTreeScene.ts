@@ -188,13 +188,13 @@ const BRANCHES: BranchData[] = [
     icon: '▣',
     accentColor: 0x9ca3af,
     maxLevel: 20,
-    normalText: '+1 к защите за каждый обычный этап.',
+    normalText: '+3 к защите за каждый обычный этап.',
     stages: createMilestoneStages({
       maxLevel: 20,
       normalCost: 1,
       specialCost: 2,
       normalTitle: 'Укрепление брони',
-      normalDescription: '+1 к защите.',
+      normalDescription: '+3 к защите.',
       milestones: {
         5: {
           title: 'Толстая броня',

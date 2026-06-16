@@ -18,7 +18,8 @@ import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   formatCheckpointTimeLeft,
-  getActiveCampfireBattleCheckpoint,
+
+  getActiveCampfireBattleCheckpoints,
   restoreCampfireBattleCheckpoint,
   type CampfireBattleCheckpoint,
 } from '../systems/CampfireCheckpointSystem';
@@ -627,12 +628,16 @@ export class DungeonSelectScene extends Phaser.Scene {
     const rowHeight = layout.compact ? 66 : 72;
     let rowY = topY + 78;
 
+    const activeCheckpoints = getActiveCampfireBattleCheckpoints()
+      .filter(checkpoint => checkpoint.tier === tier);
+
     campfireFloors.forEach((floor, index) => {
-      const isActive = Boolean(activeCheckpoint && activeCheckpoint.floor === floor);
+      const checkpointForFloor = activeCheckpoints.find(checkpoint => checkpoint.floor === floor);
+      const isActive = Boolean(checkpointForFloor);
       const isUsed = Boolean(campfireState?.usedCampfireFloors?.includes(floor));
       const title = `${index + 1}-й костёр • этаж ${floor}`;
       const status = isActive
-        ? `Активен • ${formatCheckpointTimeLeft(activeCheckpoint!.expiresAt - Date.now())}`
+        ? `Активен • ${formatCheckpointTimeLeft(checkpointForFloor!.expiresAt - Date.now())}`
         : isUsed
           ? 'Найден, но сейчас не активен'
           : 'Ещё не найден в этом ярусе';
@@ -647,18 +652,18 @@ export class DungeonSelectScene extends Phaser.Scene {
         active: isActive,
         disabledText: isUsed ? 'Погас' : 'Нет',
         onClick: () => {
-          if (!activeCheckpoint || activeCheckpoint.floor !== floor) {
+          if (!checkpointForFloor) {
             return;
           }
 
-          this.restoreCheckpointAndEnter(activeCheckpoint);
+          this.restoreCheckpointAndEnter(checkpointForFloor);
         },
       });
 
-      if (isActive && activeCheckpoint) {
+      if (isActive && checkpointForFloor) {
         this.countdownTexts.push({
           text: rowObjects.statusText,
-          checkpoint: activeCheckpoint,
+          checkpoint: checkpointForFloor,
           prefix: 'Активен • ',
         });
       }
@@ -831,7 +836,7 @@ export class DungeonSelectScene extends Phaser.Scene {
       return;
     }
 
-    const result = restoreCampfireBattleCheckpoint();
+    const result = restoreCampfireBattleCheckpoint(activeCheckpoint.id);
 
     if (!result.success) {
       this.showMessage('Костёр погас', result.message);
@@ -843,13 +848,11 @@ export class DungeonSelectScene extends Phaser.Scene {
   }
 
   private getActiveCheckpointForTier(tier: number) {
-    const checkpoint = getActiveCampfireBattleCheckpoint() ?? undefined;
+    const checkpoints = getActiveCampfireBattleCheckpoints()
+      .filter(checkpoint => checkpoint.tier === tier)
+      .sort((a, b) => b.createdAt - a.createdAt);
 
-    if (!checkpoint || checkpoint.tier !== tier) {
-      return undefined;
-    }
-
-    return checkpoint;
+    return checkpoints[0];
   }
 
   private getCampfireStateForTier(tier: number) {

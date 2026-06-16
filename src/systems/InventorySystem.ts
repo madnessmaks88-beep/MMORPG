@@ -388,8 +388,8 @@ function applyCharacterTreeStatBonuses(player: PlayerData, stats: PlayerStats) {
   // Урон: обычные уровни дают +3 атаки. Особые уровни дают боевые эффекты отдельно.
   stats.attack += countNormalLevels(attackLevel, 20) * 3;
 
-  // Броня: обычные уровни дают +1 защиты. Особые уровни дают боевые эффекты отдельно.
-  stats.defense += countNormalLevels(defenseLevel, 20);
+  // Броня: обычные уровни дают +3 защиты. Особые уровни дают боевые эффекты отдельно.
+  stats.defense += countNormalLevels(defenseLevel, 20) * 3;
 
   // Крит: 1, 3 и 5 уровни дают +1% к шансу критического удара.
   if (critLevel >= 1) stats.critChance += 0.01;
