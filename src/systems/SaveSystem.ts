@@ -49,6 +49,7 @@ const LAST_GOOD_SAVE_KEY = `${SAVE_KEY}_last_good`;
 const ACCOUNT_LOCAL_BACKUP_PREFIX = `${SAVE_KEY}_vk_account_`;
 const ACCOUNT_LAST_GOOD_PREFIX = `${SAVE_KEY}_vk_account_last_good_`;
 const ACCOUNT_ACTIVE_RUN_PREFIX = `${SAVE_KEY}_vk_account_active_run_`;
+const GLOBAL_ACTIVE_RUN_KEY = `${SAVE_KEY}_active_run_emergency`;
 const ACTIVE_RUN_BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const STARTING_PLAYER_STATE: SavePlayerData = {
@@ -423,6 +424,20 @@ function isRawSaveOwnedByCurrentAccount(rawSave: string) {
   return ownerId === currentVKUserId;
 }
 
+function isRawSaveOwnedByCurrentAccountOrLegacy(rawSave: string) {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return false;
+  }
+
+  const ownerId = getSaveOwnerId(rawSave);
+
+  // Старые аварийные снимки могли быть сделаны до того, как vkUserId был добавлен в формат сохранения.
+  // Принимаем их только как emergency-resume, не как обычный локальный профиль.
+  return ownerId === currentVKUserId || ownerId === undefined;
+}
+
 function isCloudSaveAllowedForCurrentAccount(rawSave: string) {
   const currentVKUserId = getCurrentVKUserId();
 
@@ -505,18 +520,23 @@ function isActiveRunBackupFresh(rawSave: string) {
 
 function writeActiveRunBackup(ownedJson: string) {
   const currentVKUserId = getCurrentVKUserId();
-
-  if (!currentVKUserId) {
-    return;
-  }
-
-  const activeRunKey = getAccountActiveRunKey(currentVKUserId);
+  const shouldKeep = hasActiveRunOrResume(ownedJson);
 
   try {
-    if (hasActiveRunOrResume(ownedJson)) {
-      localStorage.setItem(activeRunKey, ownedJson);
+    if (shouldKeep) {
+      localStorage.setItem(GLOBAL_ACTIVE_RUN_KEY, ownedJson);
     } else {
-      localStorage.removeItem(activeRunKey);
+      localStorage.removeItem(GLOBAL_ACTIVE_RUN_KEY);
+    }
+
+    if (currentVKUserId) {
+      const activeRunKey = getAccountActiveRunKey(currentVKUserId);
+
+      if (shouldKeep) {
+        localStorage.setItem(activeRunKey, ownedJson);
+      } else {
+        localStorage.removeItem(activeRunKey);
+      }
     }
   } catch (error) {
     console.warn('Active run backup update failed.', error);
@@ -536,7 +556,6 @@ function writeLocalBackups(json: string) {
     if (currentVKUserId) {
       localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), ownedJson);
       localStorage.setItem(getAccountLastGoodKey(currentVKUserId), ownedJson);
-      writeActiveRunBackup(ownedJson);
       writeActiveRunBackup(ownedJson);
     }
   } catch (error) {
@@ -859,8 +878,21 @@ function getBestLocalSave() {
     return null;
   }
 
-  const rawSaves = [
+  const emergencyRawSaves = [
     localStorage.getItem(getAccountActiveRunKey(currentVKUserId)),
+    localStorage.getItem(GLOBAL_ACTIVE_RUN_KEY),
+  ].filter((raw): raw is string => (
+    typeof raw === 'string' &&
+    isRawSaveOwnedByCurrentAccountOrLegacy(raw) &&
+    hasActiveRunOrResume(raw) &&
+    isActiveRunBackupFresh(raw)
+  ));
+
+  if (emergencyRawSaves.length > 0) {
+    return pickNewestSave(emergencyRawSaves);
+  }
+
+  const rawSaves = [
     localStorage.getItem(getAccountLocalBackupKey(currentVKUserId)),
     localStorage.getItem(getAccountLastGoodKey(currentVKUserId)),
     localStorage.getItem(SAVE_KEY),
@@ -870,12 +902,6 @@ function getBestLocalSave() {
     typeof raw === 'string' &&
     isRawSaveOwnedByCurrentAccount(raw)
   ));
-
-  const activeRunSaves = rawSaves.filter(raw => hasActiveRunOrResume(raw) && isActiveRunBackupFresh(raw));
-
-  if (activeRunSaves.length > 0) {
-    return pickNewestSave(activeRunSaves);
-  }
 
   return pickNewestSave(rawSaves);
 }
@@ -935,6 +961,49 @@ function clone<T>(value: T): T {
   }
 
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+
+export function restoreEmergencyResumeAfterLoad() {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return false;
+  }
+
+  const rawSaves = [
+    localStorage.getItem(getAccountActiveRunKey(currentVKUserId)),
+    localStorage.getItem(GLOBAL_ACTIVE_RUN_KEY),
+  ].filter((raw): raw is string => (
+    typeof raw === 'string' &&
+    isRawSaveOwnedByCurrentAccountOrLegacy(raw) &&
+    hasActiveRunOrResume(raw) &&
+    isActiveRunBackupFresh(raw)
+  ));
+
+  const bestRawSave = pickNewestSave(rawSaves);
+
+  if (!bestRawSave) {
+    return false;
+  }
+
+  const emergencyData = getRawSaveData(bestRawSave);
+
+  if (!hasActiveFloorRunData(emergencyData) && !hasResumeTargetData(emergencyData)) {
+    return false;
+  }
+
+  const loaded = tryApplyRawSave(bestRawSave);
+
+  if (!loaded) {
+    return false;
+  }
+
+  // Сразу закрепляем восстановленный активный спуск в обычном сейве и отправляем в VK Storage.
+  writeLocalBackups(JSON.stringify(createSaveData()));
+  void saveGameAsync();
+
+  return true;
 }
 
 export function getCurrentSaveAccountId() {
@@ -1176,6 +1245,7 @@ function clearLocalResetKeys() {
   const currentVKUserId = getCurrentVKUserId();
   const keys = [
     ...LOCAL_RESET_KEYS,
+    GLOBAL_ACTIVE_RUN_KEY,
     ...(currentVKUserId
       ? [
           getAccountLocalBackupKey(currentVKUserId),

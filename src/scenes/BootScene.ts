@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { getResumeTarget, installAutoSaveGuards, loadGameAsync } from '../systems/SaveSystem';
+import { getResumeTarget, installAutoSaveGuards, loadGameAsync, restoreEmergencyResumeAfterLoad } from '../systems/SaveSystem';
 import {
   getLastVKBridgeError,
   getVKUser,
@@ -58,6 +58,7 @@ export class BootScene extends Phaser.Scene {
         blockLocalFallback: strictVKAccountMode,
       });
 
+      restoreEmergencyResumeAfterLoad();
       installAutoSaveGuards();
     } catch (error) {
       this.showConnectionError(

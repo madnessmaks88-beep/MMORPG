@@ -1437,11 +1437,6 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
-    if (gameState.floorRun.active && gameState.floorRun.rooms.length > 0) {
-      this.scene.start('DungeonScene');
-      return;
-    }
-
     const stats = getPlayerStats(player);
 
     const hpPercent = stats.maxHp > 0
@@ -1552,11 +1547,6 @@ export class CampScene extends Phaser.Scene {
       centerY + 108,
       'Всё равно идти',
       () => {
-        if (gameState.floorRun.active && gameState.floorRun.rooms.length > 0) {
-          this.scene.start('DungeonScene');
-          return;
-        }
-
         this.scene.start('DungeonSelectScene');
       },
       buttonWidth,
