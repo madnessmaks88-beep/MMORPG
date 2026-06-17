@@ -26,6 +26,9 @@ import { addExperience, createLevelUpText, type LevelUpResult } from '../systems
 import {
   getEquippedWeapon,
   getPlayerStats,
+  getRewardExpAmount,
+  getRewardGoldAmount,
+  getRewardMaterialAmount,
   restorePlayerVitalsToMaximum,
 } from '../systems/InventorySystem';
 import { getCurrentRoom, markCurrentRoomCompleted } from '../systems/FloorSystem';
@@ -3937,10 +3940,15 @@ ${daggerTreeCritTexts.join('\n')}`
       return '';
     }
 
-    addMaterialsPack(materials);
-    trackFloorMaterials(materials);
+    const finalMaterials = materials.map(material => ({
+      ...material,
+      amount: getRewardMaterialAmount(player, material.id, material.amount),
+    }));
 
-    return materials
+    addMaterialsPack(finalMaterials);
+    trackFloorMaterials(finalMaterials);
+
+    return finalMaterials
       .map(material => `Гоблинская добыча: +${material.amount} ${getMaterialName(material.id)}`)
       .join('\n');
   }
@@ -4072,7 +4080,7 @@ ${daggerTreeCritTexts.join('\n')}`
       player.raceId === 'goblin'
         ? 1.2 + (goblinMarkedKill ? 0.25 : 0)
         : 1;
-    const gold = Math.floor(baseGold * goldMultiplier);
+    const gold = getRewardGoldAmount(player, Math.floor(baseGold * goldMultiplier));
 
     player.gold += gold;
 
@@ -4092,10 +4100,12 @@ ${daggerTreeCritTexts.join('\n')}`
     trackGoldEarned(gold);
 
     gameState.floorRun.monstersDefeated += 1;
-    gameState.floorRun.goldEarned += gold;
-    gameState.floorRun.expEarned += this.enemy.expReward;
+    const expReward = getRewardExpAmount(player, this.enemy.expReward);
 
-    const expResult = addExperience(player, this.enemy.expReward);
+    gameState.floorRun.goldEarned += gold;
+    gameState.floorRun.expEarned += expReward;
+
+    const expResult = addExperience(player, expReward);
 
     const loot = rollEnemyLoot(this.enemy);
     const goblinExtraLootText = this.rollGoblinExtraMaterials(goblinMarkedKill);
@@ -4168,7 +4178,7 @@ ${daggerTreeCritTexts.join('\n')}`
       `${playerActionText}\n\n` +
       `${this.enemy.name} повержен.\n` +
       `Получено золота: ${gold}\n` +
-      `Получено опыта: ${this.enemy.expReward}` +
+      `Получено опыта: ${expReward}` +
       `${goblinGoldText}` +
       `${treeVictoryText}` +
       `${demonHealText}` +

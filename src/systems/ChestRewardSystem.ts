@@ -6,7 +6,7 @@ import { getMaterialName } from '../data/materials';
 import { gameState, type FloorModifier } from '../data/gameState';
 import { addMaterial } from './MaterialSystem';
 import { trackFloorMaterials } from './FloorMaterialLogSystem';
-import { getPlayerStats } from './InventorySystem';
+import { getPlayerStats, getRewardGoldAmount, getRewardMaterialAmount } from './InventorySystem';
 
 export type ChestRewardResult = {
   gold: number;
@@ -136,7 +136,7 @@ export function claimChestReward(): ChestRewardResult {
 
   const goldMultiplier = getLuckChestGoldMultiplier();
   const luckyChestGold = goldMultiplier > 1;
-  const gold = Math.floor(baseGold * goldMultiplier);
+  const gold = getRewardGoldAmount(player, Math.floor(baseGold * goldMultiplier));
 
   const smallAmount = getSmallMaterialAmount(floor, modifier);
 
@@ -156,6 +156,10 @@ export function claimChestReward(): ChestRewardResult {
       amount: modifier === 'treasure' ? 2 : 1,
     });
   }
+
+  materials.forEach(material => {
+    material.amount = getRewardMaterialAmount(player, material.id, material.amount);
+  });
 
   let damage = 0;
 

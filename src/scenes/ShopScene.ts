@@ -25,6 +25,8 @@ import {
 
 type ShopSectionId = 'weapons' | 'armors' | 'trinkets';
 
+type ShopEquipmentSlot = Exclude<EquipmentSlot, 'ring'>;
+
 type ShopOffer = {
   id: string;
   itemId: string;
@@ -1554,7 +1556,7 @@ export class ShopScene extends Phaser.Scene {
     };
   }
 
-  private generateOffersForSlot(slot: EquipmentSlot, count: number) {
+  private generateOffersForSlot(slot: ShopEquipmentSlot, count: number) {
     const usedIds = new Set<string>();
     const offers: ShopOffer[] = [];
 
@@ -1575,6 +1577,11 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private isItemAvailableInShop(item: ItemData) {
+    // Божественные фарм-кольца — секретные/квестовые предметы, не товар обычной лавки.
+    if (item.rarity === 'divine' || item.slot === 'ring') {
+      return false;
+    }
+
     if (item.bossOnly) {
       return false;
     }
@@ -1586,7 +1593,7 @@ export class ShopScene extends Phaser.Scene {
     return availableFloor >= minFloor && availableFloor <= maxFloor;
   }
 
-  private pickWeightedItem(slot: EquipmentSlot, usedIds: Set<string>) {
+  private pickWeightedItem(slot: ShopEquipmentSlot, usedIds: Set<string>) {
     let pool = items.filter(item => {
       return item.slot === slot && !usedIds.has(item.id) && this.isItemAvailableInShop(item);
     });
@@ -1624,6 +1631,7 @@ export class ShopScene extends Phaser.Scene {
     if (item.rarity === 'epic') return 10;
     if (item.rarity === 'legendary') return 3;
     if (item.rarity === 'mythic') return 1;
+    if (item.rarity === 'divine') return 0;
 
     return 10;
   }
@@ -1648,6 +1656,7 @@ export class ShopScene extends Phaser.Scene {
       epic: 2100,
       legendary: 6200,
       mythic: 12800,
+      divine: 50000,
     }[item.rarity];
 
     const statPrice =
@@ -1666,7 +1675,9 @@ export class ShopScene extends Phaser.Scene {
         ? 1.12
         : item.slot === 'armor'
           ? 1.04
-          : 1.18;
+          : item.slot === 'ring'
+            ? 1.35
+            : 1.18;
 
     const rawPrice = Math.round((rarityBase + statPrice) * slotMultiplier);
 

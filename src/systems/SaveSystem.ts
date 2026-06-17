@@ -313,6 +313,13 @@ function fixMissingPlayerFields() {
   if (!player.inventory) player.inventory = [];
   if (!player.equipment) player.equipment = {};
 
+  if (
+    player.equipment.ring !== undefined &&
+    typeof player.equipment.ring !== 'string'
+  ) {
+    player.equipment.ring = undefined;
+  }
+
   const savePlayer = getSavePlayer();
 
   player.upgradePoints ??= 0;

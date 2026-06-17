@@ -6,7 +6,8 @@ export type ItemRarity =
   | 'rare'
   | 'epic'
   | 'legendary'
-  | 'mythic';
+  | 'mythic'
+  | 'divine';
 
 export type ItemData = {
   id: string;
@@ -34,6 +35,13 @@ export type ItemData = {
   bonusStrength?: number;
   bonusIntelligence?: number;
 
+  // Божественные фарм-бонусы. Значение 0.5 означает +50%.
+  farmBonusGoldMultiplier?: number;
+  farmBonusExpMultiplier?: number;
+  farmBonusCommonMaterialMultiplier?: number;
+  farmBonusRareMaterialMultiplier?: number;
+  farmBonusPowerfulMaterialMultiplier?: number;
+
   weaponType?: WeaponType;
 };
 
@@ -48,6 +56,36 @@ export type WeaponType =
   | 'sword';
 
 export const items: ItemData[] = [
+  // =========================
+  // Божественные кольца фарма
+  // =========================
+  {
+    id: 'divine_gold_god_ring',
+    name: 'Кольцо Бога Золота',
+    description: 'Тяжёлое кольцо с тусклым золотым ликом. Увеличивает всё получаемое золото на 50%.',
+    slot: 'ring',
+    rarity: 'divine',
+    farmBonusGoldMultiplier: 0.5,
+  },
+  {
+    id: 'divine_ascension_god_ring',
+    name: 'Кольцо Бога Возвышения',
+    description: 'Холодное кольцо с тонкой трещиной света. Увеличивает весь получаемый опыт на 50%.',
+    slot: 'ring',
+    rarity: 'divine',
+    farmBonusExpMultiplier: 0.5,
+  },
+  {
+    id: 'divine_creator_god_ring',
+    name: 'Кольцо Бога Создателя',
+    description: 'Кольцо из тёмного металла и пепельных рун. Обычные материалы +50%, редкие +25%, мощные +10%.',
+    slot: 'ring',
+    rarity: 'divine',
+    farmBonusCommonMaterialMultiplier: 0.5,
+    farmBonusRareMaterialMultiplier: 0.25,
+    farmBonusPowerfulMaterialMultiplier: 0.1,
+  },
+
   {
     id: 'rusty_sword',
     name: 'Ржавый меч',
@@ -1053,7 +1091,7 @@ export function getItemById(id: string): ItemData | undefined {
 }
 
 export const LOOT_RARITY_CHANCES: Array<{
-  rarity: Exclude<ItemRarity, 'mythic'>;
+  rarity: Exclude<ItemRarity, 'mythic' | 'divine'>;
   chance: number;
 }> = [
   { rarity: 'common', chance: 0.58 },
@@ -1062,7 +1100,7 @@ export const LOOT_RARITY_CHANCES: Array<{
   { rarity: 'legendary', chance: 0.03 },
 ];
 
-export function rollLootRarity(): Exclude<ItemRarity, 'mythic'> {
+export function rollLootRarity(): Exclude<ItemRarity, 'mythic' | 'divine'> {
   const roll = Math.random();
   let accumulatedChance = 0;
 
@@ -1090,7 +1128,7 @@ export function isItemAvailableOnFloor(item: ItemData, floor = 1) {
 
 export function getRandomLootItem(config?: {
   floor?: number;
-  rarity?: Exclude<ItemRarity, 'mythic'>;
+  rarity?: Exclude<ItemRarity, 'mythic' | 'divine'>;
 }): ItemData {
   const floor = config?.floor ?? 1;
   const rarity = config?.rarity ?? rollLootRarity();

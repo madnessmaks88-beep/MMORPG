@@ -8,6 +8,8 @@ import { addExperience, createLevelUpText } from './LevelSystem';
 import {
   addItemToInventory,
   getRarityText,
+  getRewardExpAmount,
+  getRewardGoldAmount,
   rollItemDrop,
 } from './InventorySystem';
 
@@ -82,16 +84,17 @@ export function giveFloorReward(floor: number): FloorRewardResult {
     itemChance = 1;
   }
 
-  const gold = Phaser.Math.Between(goldMin, goldMax);
+  const gold = getRewardGoldAmount(player, Phaser.Math.Between(goldMin, goldMax));
 
   player.gold += gold;
   trackGoldEarned(gold);
 
 	gameState.floorRun.goldEarned += gold;
 
-  const expResult = addExperience(player, exp);
+  const finalExp = getRewardExpAmount(player, exp);
+  const expResult = addExperience(player, finalExp);
 
-	gameState.floorRun.expEarned += exp;
+	gameState.floorRun.expEarned += finalExp;
 
   let itemText = '';
 
@@ -121,14 +124,14 @@ export function giveFloorReward(floor: number): FloorRewardResult {
   const fullText =
     `Награда за зачистку этажа ${floor}:\n` +
     `Золото: +${gold}\n` +
-    `Опыт: +${exp}` +
+    `Опыт: +${finalExp}` +
     `${itemText}` +
     `${potionText}` +
     `${levelText}`;
 
   return {
     gold,
-    exp,
+    exp: finalExp,
     itemText,
     potionText,
     levelText,

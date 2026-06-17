@@ -3,6 +3,8 @@ import Phaser from 'phaser';
 import type { EquipmentSlot, InventoryItem, PlayerData } from '../data/player';
 import type { ItemData } from '../data/items';
 import { getItemById } from '../data/items';
+import type { MaterialId } from '../data/materials';
+import { getMaterialById } from '../data/materials';
 
 import { getRelicById } from '../data/relics';
 
@@ -138,7 +140,8 @@ export function isItemEquipped(player: PlayerData, instanceId: string): boolean 
   return (
     player.equipment.weapon === instanceId ||
     player.equipment.armor === instanceId ||
-    player.equipment.trinket === instanceId
+    player.equipment.trinket === instanceId ||
+    player.equipment.ring === instanceId
   );
 }
 
@@ -247,6 +250,11 @@ export function getEquippedInventoryItems(player: PlayerData): InventoryItem[] {
     if (item) result.push(item);
   }
 
+  if (player.equipment.ring) {
+    const item = getInventoryItemByInstanceId(player, player.equipment.ring);
+    if (item) result.push(item);
+  }
+
   return result;
 }
 
@@ -280,6 +288,128 @@ export function getEquippedWeapon(player: PlayerData): {
     inventoryItem,
     item,
   };
+}
+
+
+export type FarmRewardBonuses = {
+  goldMultiplier: number;
+  expMultiplier: number;
+  commonMaterialMultiplier: number;
+  rareMaterialMultiplier: number;
+  powerfulMaterialMultiplier: number;
+};
+
+export function getEquippedRing(player: PlayerData): {
+  inventoryItem: InventoryItem;
+  item: ItemData;
+} | undefined {
+  const ringInstanceId = player.equipment.ring;
+
+  if (!ringInstanceId) {
+    return undefined;
+  }
+
+  const inventoryItem = getInventoryItemByInstanceId(player, ringInstanceId);
+
+  if (!inventoryItem) {
+    return undefined;
+  }
+
+  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+  if (!item || item.slot !== 'ring') {
+    return undefined;
+  }
+
+  return {
+    inventoryItem,
+    item,
+  };
+}
+
+export function getFarmRewardBonuses(player: PlayerData): FarmRewardBonuses {
+  const equippedRing = getEquippedRing(player);
+  const ring = equippedRing?.item;
+
+  return {
+    goldMultiplier: ring?.farmBonusGoldMultiplier ?? 0,
+    expMultiplier: ring?.farmBonusExpMultiplier ?? 0,
+    commonMaterialMultiplier: ring?.farmBonusCommonMaterialMultiplier ?? 0,
+    rareMaterialMultiplier: ring?.farmBonusRareMaterialMultiplier ?? 0,
+    powerfulMaterialMultiplier: ring?.farmBonusPowerfulMaterialMultiplier ?? 0,
+  };
+}
+
+function applyFarmMultiplier(baseAmount: number, multiplier: number) {
+  const safeAmount = Math.max(0, Math.floor(baseAmount));
+
+  if (safeAmount <= 0 || multiplier <= 0) {
+    return safeAmount;
+  }
+
+  return Math.max(safeAmount, Math.ceil(safeAmount * (1 + multiplier)));
+}
+
+export function getRewardGoldAmount(player: PlayerData, baseAmount: number) {
+  return applyFarmMultiplier(baseAmount, getFarmRewardBonuses(player).goldMultiplier);
+}
+
+export function getRewardExpAmount(player: PlayerData, baseAmount: number) {
+  return applyFarmMultiplier(baseAmount, getFarmRewardBonuses(player).expMultiplier);
+}
+
+function getMaterialFarmMultiplier(player: PlayerData, materialId: MaterialId) {
+  const material = getMaterialById(materialId);
+  const tier = material?.tier;
+  const bonuses = getFarmRewardBonuses(player);
+
+  if (tier === 'small') {
+    return bonuses.commonMaterialMultiplier;
+  }
+
+  if (tier === 'medium') {
+    return bonuses.rareMaterialMultiplier;
+  }
+
+  if (tier === 'forge_core' || tier === 'crystal') {
+    return bonuses.powerfulMaterialMultiplier;
+  }
+
+  return 0;
+}
+
+export function getRewardMaterialAmount(
+  player: PlayerData,
+  materialId: MaterialId,
+  baseAmount: number
+) {
+  return applyFarmMultiplier(baseAmount, getMaterialFarmMultiplier(player, materialId));
+}
+
+function createFarmBonusText(item: ItemData): string[] {
+  const parts: string[] = [];
+
+  if (item.farmBonusGoldMultiplier) {
+    parts.push(`Золото +${Math.round(item.farmBonusGoldMultiplier * 100)}%`);
+  }
+
+  if (item.farmBonusExpMultiplier) {
+    parts.push(`Опыт +${Math.round(item.farmBonusExpMultiplier * 100)}%`);
+  }
+
+  if (item.farmBonusCommonMaterialMultiplier) {
+    parts.push(`Обычные материалы +${Math.round(item.farmBonusCommonMaterialMultiplier * 100)}%`);
+  }
+
+  if (item.farmBonusRareMaterialMultiplier) {
+    parts.push(`Редкие материалы +${Math.round(item.farmBonusRareMaterialMultiplier * 100)}%`);
+  }
+
+  if (item.farmBonusPowerfulMaterialMultiplier) {
+    parts.push(`Мощные материалы +${Math.round(item.farmBonusPowerfulMaterialMultiplier * 100)}%`);
+  }
+
+  return parts;
 }
 
 export function getItemBonusWithUpgrade(
@@ -568,6 +698,7 @@ export function getRarityText(item: ItemData): string {
   if (item.rarity === 'epic') return 'Эпический';
   if (item.rarity === 'legendary') return 'Легендарный';
   if (item.rarity === 'mythic') return 'Мифический';
+  if (item.rarity === 'divine') return 'Божественный';
 
   return 'Предмет';
 }
@@ -575,11 +706,19 @@ export function getRarityText(item: ItemData): string {
 export function getSlotText(slot: EquipmentSlot): string {
   if (slot === 'weapon') return 'Оружие';
   if (slot === 'armor') return 'Броня';
-  return 'Талисман';
+  if (slot === 'trinket') return 'Талисман';
+  if (slot === 'ring') return 'Кольцо';
+  return 'Слот';
 }
 
 export function createItemStatsText(inventoryItem: InventoryItem): string {
   const parts: string[] = [];
+  const item = getBaseItemFromInventoryItem(inventoryItem);
+
+  if (item) {
+    parts.push(...createFarmBonusText(item));
+  }
+
   const bonuses = getItemBonusWithUpgrade(inventoryItem);
 
   if (bonuses.bonusHp) {
@@ -643,6 +782,10 @@ export function getItemSellPrice(item: ItemData, upgradeLevel = 0): number {
     basePrice = 160;
   }
 
+  if (item.rarity === 'divine') {
+    basePrice = 1200;
+  }
+
   return basePrice + upgradeLevel * Math.floor(basePrice * 0.7);
 }
 
@@ -678,6 +821,13 @@ export function sellItem(
     };
   }
 
+  if (item.rarity === 'divine') {
+    return {
+      success: false,
+      message: 'Божественные кольца нельзя продать.',
+    };
+  }
+
   const price = getItemSellPrice(item, inventoryItem.upgradeLevel);
 
   player.inventory = player.inventory.filter(item => item.instanceId !== instanceId);
@@ -703,6 +853,7 @@ export function getRarityColorHex(item: ItemData): number {
   if (item.rarity === 'epic') return 0xc084fc;
   if (item.rarity === 'legendary') return 0xf0a040;
   if (item.rarity === 'mythic') return 0xb45cff;
+  if (item.rarity === 'divine') return 0xf6e7a6;
 
   return 0xb8aa91;
 }
@@ -713,6 +864,7 @@ export function getRarityStrokeColor(item: ItemData): number {
   if (item.rarity === 'epic') return 0x7c3fb0;
   if (item.rarity === 'legendary') return 0xb77920;
   if (item.rarity === 'mythic') return 0x7e3fba;
+  if (item.rarity === 'divine') return 0xd6b85f;
 
   return 0x6f6658;
 }
@@ -724,6 +876,8 @@ export function getRarityNameWithColor(item: ItemData): string {
 export function getSlotIcon(slot: EquipmentSlot): string {
   if (slot === 'weapon') return '⚔';
   if (slot === 'armor') return '🛡';
+  if (slot === 'trinket') return '◆';
+  if (slot === 'ring') return '◈';
   return '◆';
 }
 

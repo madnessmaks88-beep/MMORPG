@@ -5,7 +5,7 @@ import type { EnemyData } from '../data/enemies';
 import type { MaterialId } from '../data/materials';
 import { getMaterialName } from '../data/materials';
 import { getCurrentRoom } from './FloorSystem';
-import { addItemToInventory, getPlayerStats } from './InventorySystem';
+import { addItemToInventory, getPlayerStats, getRewardMaterialAmount } from './InventorySystem';
 import { addMaterialsPack } from './MaterialSystem';
 import { getItemById, items, type ItemRarity } from '../data/items';
 import { trackFloorMaterials } from './FloorMaterialLogSystem';
@@ -392,7 +392,10 @@ function rollWeapon(enemy: EnemyData) {
 }
 
 export function rollEnemyLoot(enemy: EnemyData): LootResult {
-  const materials = rollMaterials(enemy);
+  const materials = rollMaterials(enemy).map(material => ({
+    ...material,
+    amount: getRewardMaterialAmount(player, material.id, material.amount),
+  }));
   const itemIds = rollWeapon(enemy);
 
   addMaterialsPack(materials);

@@ -2,12 +2,13 @@ import type { RaceId } from './races';
 import type { RelicId } from './relics';
 import type { MaterialId } from './materials';
 
-export type EquipmentSlot = 'weapon' | 'armor' | 'trinket';
+export type EquipmentSlot = 'weapon' | 'armor' | 'trinket' | 'ring';
 
 export type PlayerEquipment = {
   weapon?: string;
   armor?: string;
   trinket?: string;
+  ring?: string;
 };
 
 export type InventoryItem = {

@@ -49,6 +49,9 @@ import {
 import {
   addItemToInventory,
   getPlayerStats,
+  getRewardExpAmount,
+  getRewardGoldAmount,
+  getRewardMaterialAmount,
   restorePlayerVitalsToMaximum,
 } from '../systems/InventorySystem';
 
@@ -1337,7 +1340,6 @@ export class DungeonScene extends Phaser.Scene {
     const layout = this.getLayout();
     const availableRooms = getAvailableNextRooms();
     const floor = gameState.floorRun.currentFloor || 1;
-
 
     const cardTop = layout.roomCardTop;
     const cardHeight = layout.roomCardHeight;
@@ -2716,7 +2718,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private addEventGold(amount: number) {
-    const safeAmount = Math.max(0, Math.floor(amount));
+    const safeAmount = getRewardGoldAmount(player, Math.max(0, Math.floor(amount)));
 
     player.gold += safeAmount;
     gameState.floorRun.goldEarned += safeAmount;
@@ -2726,7 +2728,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private addEventExp(amount: number) {
-    const safeAmount = Math.max(0, Math.floor(amount));
+    const safeAmount = getRewardExpAmount(player, Math.max(0, Math.floor(amount)));
     const result = addExperience(player, safeAmount);
     const levelText = createLevelUpText(result);
 
@@ -2738,7 +2740,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private addEventMaterial(materialId: MaterialId, amount = 1) {
-    const safeAmount = Math.max(1, Math.floor(amount));
+    const safeAmount = getRewardMaterialAmount(player, materialId, Math.max(1, Math.floor(amount)));
 
     addMaterial(materialId, safeAmount);
 

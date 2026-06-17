@@ -29,7 +29,7 @@ import {
   createSceneBackground,
 } from '../ui/theme';
 
-type InventoryCategory = 'all' | 'weapon' | 'armor' | 'trinket' | 'potions' | 'materials';
+type InventoryCategory = 'all' | 'weapon' | 'armor' | 'trinket' | 'ring' | 'potions' | 'materials';
 
 const INVENTORY_DARK = {
   black: 0x030405,
@@ -180,7 +180,7 @@ export class InventoryScene extends Phaser.Scene {
     const statsHeight = veryCompact ? 72 : compact ? 78 : 84;
     const statsY = safeTop + (veryCompact ? 96 : 108);
 
-    const equipmentHeight = veryCompact ? 146 : compact ? 158 : 176;
+    const equipmentHeight = veryCompact ? 194 : compact ? 206 : 224;
     const equipmentY = statsY + statsHeight / 2 + 10 + equipmentHeight / 2;
 
     const tabHeight = veryCompact ? 46 : compact ? 50 : 54;
@@ -445,14 +445,18 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(10);
 
-    const slotGap = layout.compact ? 8 : 10;
-    const slotWidth = (layout.contentWidth - 40 - slotGap * 2) / 3;
-    const y = layout.equipmentY + (layout.compact ? 30 : 34);
-    const startX = layout.centerX - slotWidth - slotGap;
+    const slotGap = layout.compact ? 9 : 12;
+    const slotWidth = (layout.contentWidth - 44 - slotGap) / 2;
+    const startX = layout.centerX - slotWidth / 2 - slotGap / 2;
+    const endX = layout.centerX + slotWidth / 2 + slotGap / 2;
+    const rowGap = layout.compact ? 82 : 88;
+    const firstRowY = layout.equipmentY + (layout.compact ? 24 : 28);
+    const secondRowY = firstRowY + rowGap;
 
-    this.createEquipmentSlotCard('weapon', startX, y, slotWidth);
-    this.createEquipmentSlotCard('armor', layout.centerX, y, slotWidth);
-    this.createEquipmentSlotCard('trinket', startX + (slotWidth + slotGap) * 2, y, slotWidth);
+    this.createEquipmentSlotCard('weapon', startX, firstRowY, slotWidth);
+    this.createEquipmentSlotCard('armor', endX, firstRowY, slotWidth);
+    this.createEquipmentSlotCard('trinket', startX, secondRowY, slotWidth);
+    this.createEquipmentSlotCard('ring', endX, secondRowY, slotWidth);
   }
 
   private createEquipmentSlotCard(slot: EquipmentSlot, x: number, y: number, width: number) {
@@ -471,7 +475,7 @@ export class InventoryScene extends Phaser.Scene {
     const rarityColor = item ? getRarityColorHex(item) : UI.colors.goldDark;
     const rarityStrokeColor = item ? getRarityStrokeColor(item) : UI.colors.goldDark;
 
-    const height = 104;
+    const height = 78;
 
     this.createRoundedPanel({
       x,
@@ -487,11 +491,11 @@ export class InventoryScene extends Phaser.Scene {
       depth: 4,
     });
 
-    this.add.circle(x, y - 29, 22, item ? rarityColor : 0x17100c, item ? 0.88 : 0.7)
+    this.add.circle(x, y - 22, 19, item ? rarityColor : 0x17100c, item ? 0.88 : 0.7)
       .setStrokeStyle(2, item ? rarityStrokeColor : UI.colors.goldDark, 0.65)
       .setDepth(6);
 
-    this.add.text(x, y - 29, getSlotIcon(slot), {
+    this.add.text(x, y - 22, getSlotIcon(slot), {
       fontFamily: UI.font.body,
       fontSize: '18px',
       color: item ? '#ffffff' : UI.colors.textMuted,
@@ -512,9 +516,9 @@ export class InventoryScene extends Phaser.Scene {
       ? `${item.name}${inventoryItem.upgradeLevel > 0 ? ` +${inventoryItem.upgradeLevel}` : ''}`
       : 'Пусто';
 
-    this.add.text(x, y + 31, itemText, {
+    this.add.text(x, y + 24, itemText, {
       fontFamily: UI.font.title,
-      fontSize: item ? '12px' : '14px',
+      fontSize: item ? '11px' : '13px',
       color: item ? UI.colors.goldText : UI.colors.textMuted,
       align: 'center',
       wordWrap: {
@@ -554,11 +558,12 @@ export class InventoryScene extends Phaser.Scene {
       { id: 'weapon', label: 'Оруж.', icon: '⚔' },
       { id: 'armor', label: 'Броня', icon: '🛡' },
       { id: 'trinket', label: 'Амул.', icon: '☥' },
+      { id: 'ring', label: 'Кольц.', icon: '◈' },
       { id: 'potions', label: 'Зелья', icon: '✚' },
       { id: 'materials', label: 'Мат.', icon: '◇' },
     ];
 
-    const gap = 7;
+    const gap = 5;
     const tabWidth = (layout.contentWidth - gap * (tabs.length - 1)) / tabs.length;
     const startX = layout.centerX - layout.contentWidth / 2 + tabWidth / 2;
 
@@ -582,13 +587,13 @@ export class InventoryScene extends Phaser.Scene {
 
       const icon = this.add.text(x, layout.tabsY - 12, tab.icon, {
         fontFamily: UI.font.body,
-        fontSize: '17px',
+        fontSize: layout.contentWidth < 390 ? '14px' : '16px',
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
       }).setOrigin(0.5).setDepth(53);
 
       const label = this.add.text(x, layout.tabsY + 15, tab.label, {
         fontFamily: UI.font.body,
-        fontSize: '11px',
+        fontSize: layout.contentWidth < 390 ? '9px' : '10px',
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
         align: 'center',
         wordWrap: {
@@ -678,7 +683,7 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(10);
 
-    this.add.text(layout.centerX, layout.listPanelTop + 56, 'Редкость сортируется сверху вниз: мифическая → обычная', {
+    this.add.text(layout.centerX, layout.listPanelTop + 56, 'Редкость сортируется сверху вниз: божественная → обычная', {
       fontFamily: UI.font.body,
       fontSize: '11px',
       color: '#716a60',
@@ -769,6 +774,7 @@ export class InventoryScene extends Phaser.Scene {
     if (this.selectedCategory === 'weapon') return 'Оружие';
     if (this.selectedCategory === 'armor') return 'Броня';
     if (this.selectedCategory === 'trinket') return 'Амулеты и талисманы';
+    if (this.selectedCategory === 'ring') return 'Божественные кольца';
 
     return 'Предметы';
   }
@@ -786,7 +792,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private getFilteredInventoryItems() {
-    const itemCategories: InventoryCategory[] = ['weapon', 'armor', 'trinket'];
+    const itemCategories: InventoryCategory[] = ['weapon', 'armor', 'trinket', 'ring'];
 
     if (this.selectedCategory === 'all') {
       return this.sortInventoryItemsByRarity(player.inventory);
@@ -841,6 +847,7 @@ export class InventoryScene extends Phaser.Scene {
     if (rarity === 'epic') return 3;
     if (rarity === 'legendary') return 4;
     if (rarity === 'mythic') return 5;
+    if (rarity === 'divine') return 6;
 
     return 0;
   }
