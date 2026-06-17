@@ -1209,7 +1209,10 @@ export class DungeonScene extends Phaser.Scene {
     const buttonWidth = modalWidth - 44;
     const buttonHeight = height < 940 ? 74 : 82;
     const buttonGap = height < 940 ? 10 : 12;
-    const firstButtonY = top + (height < 940 ? 278 : 306);
+    const choicesCount = event.choices.length;
+    const buttonsTotalHeight = choicesCount * buttonHeight + Math.max(0, choicesCount - 1) * buttonGap;
+    const buttonAreaBottom = top + modalHeight - (height < 760 ? 24 : 50);
+    const firstButtonY = buttonAreaBottom - buttonsTotalHeight + buttonHeight / 2;
 
     const overlay = this.add.rectangle(
       centerX,
@@ -1325,19 +1328,22 @@ export class DungeonScene extends Phaser.Scene {
       });
     });
 
-    const closeY = top + modalHeight - 38;
-    const close = this.add.text(centerX, closeY, 'Нажми вариант выше, чтобы завершить событие', {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: modalWidth - 70,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(104);
+    const lastChoiceBottom = firstButtonY + Math.max(0, event.choices.length - 1) * (buttonHeight + buttonGap) + buttonHeight / 2;
 
-    this.modalObjects.push(close);
+    if (height >= 760 && lastChoiceBottom + 28 < top + modalHeight) {
+      const close = this.add.text(centerX, top + modalHeight - 24, 'Выбор завершит событие и продолжит путь', {
+        fontFamily: UI.font.body,
+        fontSize: '12px',
+        color: UI.colors.textMuted,
+        align: 'center',
+        wordWrap: {
+          width: modalWidth - 70,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(104);
+
+      this.modalObjects.push(close);
+    }
   }
 
   private createEventChoiceButton(config: {
