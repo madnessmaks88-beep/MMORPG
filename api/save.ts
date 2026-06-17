@@ -1,3 +1,9 @@
+/// <reference types="node" />
+
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 import { createClient } from '@supabase/supabase-js';
 
 type SaveData = {
@@ -29,26 +35,14 @@ type SaveData = {
   campfireBattleCheckpoints?: unknown[];
 };
 
-type SaveRow = {
-  vk_user_id: number;
-  save_data: SaveData;
-  save_version: number;
-  progress_score: number;
-  updated_at: string;
-};
-
 const PLAYER_SAVES_TABLE = 'player_saves';
 const SAVE_HISTORY_TABLE = 'player_save_history';
 const HISTORY_LIMIT = 10;
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
+function sendJson(res: any, status: number, data: unknown) {
+  res.status(status).setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('cache-control', 'no-store');
+  res.json(data);
 }
 
 function getSupabaseAdmin() {
@@ -71,7 +65,8 @@ function getSupabaseAdmin() {
 }
 
 function normalizeVkUserId(value: unknown) {
-  const numberValue = Number(value);
+  const raw = Array.isArray(value) ? value[0] : value;
+  const numberValue = Number(raw);
 
   if (!Number.isSafeInteger(numberValue) || numberValue <= 0) {
     return null;
@@ -138,13 +133,19 @@ async function getCurrentSave(vkUserId: number) {
     .from(PLAYER_SAVES_TABLE)
     .select('vk_user_id, save_data, save_version, progress_score, updated_at')
     .eq('vk_user_id', vkUserId)
-    .maybeSingle<SaveRow>();
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  return data as {
+    vk_user_id: number;
+    save_data: SaveData;
+    save_version: number;
+    progress_score: number;
+    updated_at: string;
+  } | null;
 }
 
 async function cleanupOldHistory(vkUserId: number) {
@@ -161,7 +162,7 @@ async function cleanupOldHistory(vkUserId: number) {
     return;
   }
 
-  const ids = data.map(row => row.id);
+  const ids = data.map((row: { id: number }) => row.id);
 
   await supabase
     .from(SAVE_HISTORY_TABLE)
@@ -231,104 +232,114 @@ async function saveCurrent(vkUserId: number, saveData: SaveData, force = false) 
   };
 }
 
-async function handleGet(request: Request) {
-  const url = new URL(request.url);
-  const vkUserId = normalizeVkUserId(url.searchParams.get('vkUserId'));
-
-  if (!vkUserId) {
-    return json({
-      ok: false,
-      error: 'Invalid vkUserId.',
-    }, 400);
+function parseBody(req: any) {
+  if (!req.body) {
+    return null;
   }
 
-  const row = await getCurrentSave(vkUserId);
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return null;
+    }
+  }
 
-  if (!row) {
-    return json({
-      ok: true,
-      hasSave: false,
+  return req.body;
+}
+
+export default async function handler(req: any, res: any) {
+  try {
+    res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
+    res.setHeader('access-control-allow-headers', 'content-type');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+
+    if (req.method === 'GET') {
+      const vkUserId = normalizeVkUserId(req.query?.vkUserId);
+
+      if (!vkUserId) {
+        sendJson(res, 400, {
+          ok: false,
+          error: 'Invalid vkUserId.',
+        });
+        return;
+      }
+
+      const row = await getCurrentSave(vkUserId);
+
+      if (!row) {
+        sendJson(res, 200, {
+          ok: true,
+          hasSave: false,
+        });
+        return;
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        hasSave: true,
+        saveData: row.save_data,
+        saveVersion: row.save_version,
+        progressScore: row.progress_score,
+        updatedAt: row.updated_at,
+      });
+      return;
+    }
+
+    if (req.method === 'POST') {
+      const body = parseBody(req) as {
+        vkUserId?: unknown;
+        saveData?: SaveData;
+        force?: boolean;
+      } | null;
+
+      const vkUserId = normalizeVkUserId(body?.vkUserId);
+
+      if (!vkUserId || !body?.saveData) {
+        sendJson(res, 400, {
+          ok: false,
+          error: 'vkUserId and saveData are required.',
+        });
+        return;
+      }
+
+      const result = await saveCurrent(vkUserId, body.saveData, Boolean(body.force));
+
+      if (!result.accepted) {
+        sendJson(res, result.status, {
+          ok: false,
+          accepted: false,
+          reason: result.reason,
+          existingProgressScore: result.existingProgressScore,
+          incomingProgressScore: result.incomingProgressScore,
+        });
+        return;
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        accepted: true,
+        saveVersion: result.saveVersion,
+        progressScore: result.progressScore,
+      });
+      return;
+    }
+
+    sendJson(res, 405, {
+      ok: false,
+      error: 'Method not allowed.',
+    });
+  } catch (error) {
+    console.error('Save API failed:', error);
+
+    sendJson(res, 500, {
+      ok: false,
+      error: 'Internal save API error.',
+      message: error instanceof Error ? error.message : String(error),
     });
   }
-
-  return json({
-    ok: true,
-    hasSave: true,
-    saveData: row.save_data,
-    saveVersion: row.save_version,
-    progressScore: row.progress_score,
-    updatedAt: row.updated_at,
-  });
 }
-
-async function handlePost(request: Request) {
-  const body = await request.json().catch(() => null) as {
-    vkUserId?: unknown;
-    saveData?: SaveData;
-    force?: boolean;
-  } | null;
-
-  const vkUserId = normalizeVkUserId(body?.vkUserId);
-
-  if (!vkUserId || !body?.saveData) {
-    return json({
-      ok: false,
-      error: 'vkUserId and saveData are required.',
-    }, 400);
-  }
-
-  const result = await saveCurrent(vkUserId, body.saveData, Boolean(body.force));
-
-  if (!result.accepted) {
-    return json({
-      ok: false,
-      accepted: false,
-      reason: result.reason,
-      existingProgressScore: result.existingProgressScore,
-      incomingProgressScore: result.incomingProgressScore,
-    }, result.status);
-  }
-
-  return json({
-    ok: true,
-    accepted: true,
-    saveVersion: result.saveVersion,
-    progressScore: result.progressScore,
-  });
-}
-
-export default {
-  async fetch(request: Request) {
-    try {
-      if (request.method === 'OPTIONS') {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            'access-control-allow-methods': 'GET,POST,OPTIONS',
-            'access-control-allow-headers': 'content-type',
-          },
-        });
-      }
-
-      if (request.method === 'GET') {
-        return handleGet(request);
-      }
-
-      if (request.method === 'POST') {
-        return handlePost(request);
-      }
-
-      return json({
-        ok: false,
-        error: 'Method not allowed.',
-      }, 405);
-    } catch (error) {
-      console.error('Save API failed:', error);
-
-      return json({
-        ok: false,
-        error: 'Internal save API error.',
-      }, 500);
-    }
-  },
-};
