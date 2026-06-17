@@ -31,8 +31,12 @@ export function restoreEnergy(player: PlayerData, amount = 1) {
   const stats = getPlayerStats(player);
   const before = player.energy;
 
+  // player.maxEnergy — базовое значение героя.
+  // Бонусы дерева, предметов и реликвий считаются через getPlayerStats().
   player.energy = Math.min(stats.maxEnergy, player.energy + amount);
 
+  // Возвращаем реальное количество восстановленной энергии,
+  // чтобы BattleScene мог показать правильный текст.
   return Math.max(0, player.energy - before);
 }
 

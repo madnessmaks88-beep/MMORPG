@@ -59,8 +59,55 @@ const miniBossEnemyIds = [
   'black_tomb_guardian',
 ];
 
+const tier2CommonEnemyIds = [
+  'water_skeleton',
+  'drowned_acolyte',
+  'rusted_gravedigger',
+  'black_water_slug',
+  'sarcophagus_drowned',
+  'wet_bonebreaker',
+  'mold_guardian',
+  'whispering_corpse',
+];
+
+const tier2EliteEnemyIds = [
+  'chained_drowned',
+  'rust_crypt_knight',
+  'black_water_priestess',
+  'flooded_halls_executioner',
+  'silt_overseer',
+];
+
+const tier2MiniBossEnemyIds = [
+  'vargrim_rust_chainbearer',
+  'sister_iliana_deep_voice',
+  'kaldor_flooded_halls_executioner',
+  'gnirr_silt_overseer',
+  'black_maw_slime_mother',
+  'eirn_skeleton_pilot',
+  'tramm_grave_diver',
+  'rust_chaplain_order',
+  'olmir_black_sluice_guard',
+  'margosa_drowned_abbess',
+  'bregan_rusted_sarcophagus_knight',
+  'bottom_rift_beast',
+  'hort_chain_collector',
+  'solemn_underwater_tombs_singer',
+];
+
 const tierBossByTier: Record<number, string> = {
   1: 'morvein_sealed_crypt_lord',
+  2: 'arkwell_drowned_keeper',
+};
+
+const tierBossTitleByTier: Record<number, string> = {
+  1: 'Морвеин, Владыка Запечатанного Склепа',
+  2: 'Арквелл, Утопленный Хранитель',
+};
+
+const tierBossDescriptionByTier: Record<number, string> = {
+  1: 'Последняя печать склепа дрожит. За ней ждёт Морвеин.',
+  2: 'Чёрный шлюз открыт. В затопленном зале ждёт Арквелл, хранитель донной бездны.',
 };
 
 export function getFloorRequirement(floor: number): FloorRequirement {
@@ -97,8 +144,13 @@ export function getFloorDescription(floor: number) {
     ].join('\n');
   }
 
+  const tierFlavor =
+    tier === 2
+      ? 'Затопленные усыпальницы. Вода, ржавчина и голоса со дна мешают каждому шагу.'
+      : `Обычный этаж ${tier}-го яруса.`;
+
   return [
-    `Обычный этаж ${tier}-го яруса.`,
+    tierFlavor,
     `Рекомендуемый уровень: ${requirement.level}`,
     `Рекомендуемая атака: ${requirement.attack}`,
     `Рекомендуемая защита: ${requirement.defense}`,
@@ -247,29 +299,39 @@ function createRandomNormalRoom(
   }
 
   const type = rollCombatRoomType(floor, modifier);
+  const tier = getCurrentTierByFloor(floor);
+  const eliteTitle = tier === 2 ? 'Затопленный зал' : 'Опасная комната';
+  const normalTitle = tier === 2 ? 'Мокрый проход' : 'Обычная комната';
+  const eliteDescription = tier === 2
+    ? 'В этой комнате вода темнее обычного. Здесь скрывается усиленный враг затопленных усыпальниц.'
+    : 'В этой комнате скрывается усиленный враг склепа.';
+  const normalDescription = tier === 2
+    ? 'Впереди слышатся капли воды, скрежет ржавых цепей и шаги утопленников.'
+    : 'Впереди слышится шорох костей и влажное дыхание мертвечины.';
 
   return {
     id: `floor_${floor}_${type}_${index}`,
     type,
-    title: type === 'elite' ? 'Опасная комната' : 'Обычная комната',
+    title: type === 'elite' ? eliteTitle : normalTitle,
     description: type === 'elite'
-      ? 'В этой комнате скрывается усиленный враг склепа.'
-      : 'Впереди слышится шорох костей и влажное дыхание мертвечины.',
+      ? eliteDescription
+      : normalDescription,
     enemyId: type === 'elite'
-      ? getRandomEliteEnemyId()
-      : getRandomCommonEnemyId(),
+      ? getRandomEliteEnemyId(floor)
+      : getRandomCommonEnemyId(floor),
     completed: false,
   };
 }
 
 function createFinalRoom(floor: number): FloorRoom {
-  if (isTierBossFloor(floor)) {
+  const tier = getCurrentTierByFloor(floor);
 
+  if (isTierBossFloor(floor)) {
     return {
       id: `floor_${floor}_tier_boss`,
       type: 'tier_boss',
-      title: 'Морвеин, Владыка Запечатанного Склепа',
-      description: 'Последняя печать склепа дрожит. За ней ждёт Морвеин.',
+      title: tierBossTitleByTier[tier] ?? 'Главный босс яруса',
+      description: tierBossDescriptionByTier[tier] ?? 'Финальный зал яруса. Здесь ждёт главный босс.',
       enemyId: pickTierBoss(floor),
       completed: false,
     };
@@ -278,9 +340,11 @@ function createFinalRoom(floor: number): FloorRoom {
   return {
     id: `floor_${floor}_boss`,
     type: 'boss',
-    title: 'Мини-босс этажа',
-    description: 'Последняя комната этажа охраняется сильным противником.',
-    enemyId: getRandomMiniBossEnemyId(),
+    title: tier === 2 ? 'Страж затопленного этажа' : 'Мини-босс этажа',
+    description: tier === 2
+      ? 'Последний зал этажа охраняет сильный враг из чёрной воды.'
+      : 'Последняя комната этажа охраняется сильным противником.',
+    enemyId: getRandomMiniBossEnemyId(floor),
     completed: false,
   };
 }
@@ -341,16 +405,34 @@ function getRandomFrom<T>(items: T[]) {
   return items[Phaser.Math.Between(0, items.length - 1)];
 }
 
-function getRandomCommonEnemyId() {
-  return getRandomFrom(commonEnemyIds);
+function getCommonEnemyIdsForFloor(floor: number) {
+  return getCurrentTierByFloor(floor) >= 2
+    ? tier2CommonEnemyIds
+    : commonEnemyIds;
 }
 
-function getRandomEliteEnemyId() {
-  return getRandomFrom(eliteEnemyIds);
+function getEliteEnemyIdsForFloor(floor: number) {
+  return getCurrentTierByFloor(floor) >= 2
+    ? tier2EliteEnemyIds
+    : eliteEnemyIds;
 }
 
-function getRandomMiniBossEnemyId() {
-  return getRandomFrom(miniBossEnemyIds);
+function getMiniBossEnemyIdsForFloor(floor: number) {
+  return getCurrentTierByFloor(floor) >= 2
+    ? tier2MiniBossEnemyIds
+    : miniBossEnemyIds;
+}
+
+function getRandomCommonEnemyId(floor: number) {
+  return getRandomFrom(getCommonEnemyIdsForFloor(floor));
+}
+
+function getRandomEliteEnemyId(floor: number) {
+  return getRandomFrom(getEliteEnemyIdsForFloor(floor));
+}
+
+function getRandomMiniBossEnemyId(floor: number) {
+  return getRandomFrom(getMiniBossEnemyIdsForFloor(floor));
 }
 
 export function getFloorPreview(floor: number) {

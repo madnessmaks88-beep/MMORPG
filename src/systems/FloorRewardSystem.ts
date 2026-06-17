@@ -96,7 +96,7 @@ export function giveFloorReward(floor: number): FloorRewardResult {
   let itemText = '';
 
   if (rollItemDrop(player, itemChance)) {
-    const item = getRandomLootItem();
+    const item = getRandomLootItem({ floor });
 
     addItemToInventory(player, item.id);
     trackItemObtainedByRarity(item.rarity);

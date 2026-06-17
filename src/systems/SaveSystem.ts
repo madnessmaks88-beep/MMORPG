@@ -21,6 +21,12 @@ import {
   wasLastVKStorageSetFailed,
 } from './VKBridgeSystem';
 
+import {
+  exportCampfireBattleCheckpointsForSave,
+  importCampfireBattleCheckpointsFromSave,
+  type CampfireBattleCheckpoint,
+} from './CampfireCheckpointSystem';
+
 type SavePlayerData = PlayerData & {
   characterTreePoints?: number;
   characterTree?: Partial<Record<string, number>>;
@@ -183,6 +189,10 @@ type SaveData = {
   };
 
   resumeState?: ResumeState;
+
+  // Активные боевые костры. Раньше они жили только в localStorage,
+  // из-за этого костёр на 24 часа мог пропасть после перезахода/загрузки из VK.
+  campfireBattleCheckpoints?: CampfireBattleCheckpoint[];
 };
 
 let lastLoadSource: SaveSource = 'none';
@@ -226,6 +236,7 @@ function createSaveData(): SaveData {
       questProgress: clone(gameState.questProgress),
     },
     resumeState: normalizeResumeState(resumeState),
+    campfireBattleCheckpoints: exportCampfireBattleCheckpointsForSave(),
   };
 }
 
@@ -240,6 +251,10 @@ function applySaveData(saveData: Partial<SaveData>) {
   }
 
   resumeState = normalizeResumeState(saveData.resumeState);
+
+  // Не перезаписываем локальный активный костёр пустотой.
+  // Если в сохранении есть костры, мержим их с localStorage.
+  importCampfireBattleCheckpointsFromSave(saveData.campfireBattleCheckpoints);
 
   fixMissingPlayerFields();
   fixMissingGameStateFields();
@@ -289,9 +304,8 @@ function fixMissingPlayerFields() {
 
   const derivedStats = getPlayerStats(player);
 
-  // Важно: player.maxHp / player.maxEnergy — это базовые значения героя.
-  // Максимумы из дерева характеристик, предметов и реликвий считаются только через getPlayerStats().
-  // Поэтому нельзя обрезать HP/энергию по player.maxHp/player.maxEnergy.
+  // player.maxHp / player.maxEnergy — базовые значения героя.
+  // Бонусы дерева, предметов и реликвий считаются через getPlayerStats().
   player.hp = clamp(player.hp, 1, derivedStats.maxHp);
   player.energy = clamp(player.energy, 0, derivedStats.maxEnergy);
 

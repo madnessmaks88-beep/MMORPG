@@ -159,6 +159,9 @@ export class BattleScene extends Phaser.Scene {
   private potionCooldown = 0;
 
   private taintedHpCost = 0;
+  private taintedCorruptionTurns = 0;
+  private taintedCorruptionDamageBonus = 0;
+  private taintedCorruptionJustApplied = false;
 
   private humanBattleFocusTurns = 0;
   private humanBattleFocusDamageBonus = 0;
@@ -173,11 +176,16 @@ export class BattleScene extends Phaser.Scene {
 
   private demonRageStacks = 0;
   private demonHpSpentByHellfire = 0;
+  private demonHellfireBurnTurns = 0;
+  private demonHellfireBurnDamage = 0;
 
   private raceAttackEffectText = '';
 
   private playerDebuffs: ActivePlayerDebuff[] = [];
   private nextIncomingDamageBonus = 0;
+
+  private tridentDepthMarkTurns = 0;
+  private tridentDepthMarkBonus = 0;
 
   private playerDebuffText?: Phaser.GameObjects.Text;
 
@@ -186,9 +194,7 @@ export class BattleScene extends Phaser.Scene {
 
   private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
 
-  private enemyHoverZone?: Phaser.GameObjects.GameObject;
 
-  private playerHoverZone?: Phaser.GameObjects.GameObject;
 
   private playerHpBarMaxWidth = 520;
   private enemyHpBarMaxWidth = 520;
@@ -228,6 +234,9 @@ export class BattleScene extends Phaser.Scene {
   this.potionCooldown = 0;
 
   this.taintedHpCost = 0;
+  this.taintedCorruptionTurns = 0;
+  this.taintedCorruptionDamageBonus = 0;
+  this.taintedCorruptionJustApplied = false;
 
   this.humanBattleFocusTurns = 0;
   this.humanBattleFocusDamageBonus = 0;
@@ -242,6 +251,8 @@ export class BattleScene extends Phaser.Scene {
 
   this.demonRageStacks = 0;
   this.demonHpSpentByHellfire = 0;
+  this.demonHellfireBurnTurns = 0;
+  this.demonHellfireBurnDamage = 0;
 
   this.raceAttackEffectText = '';
 
@@ -583,7 +594,7 @@ private getEnemyWeaknessDamageMultiplier() {
   }
 
 
-  private getDebuffIcon(id: EnemyDebuffId) {
+  private getDebuffIcon(id: string) {
   if (id === 'bleeding') return '🩸';
   if (id === 'poison') return '☠';
   if (id === 'curse') return '☾';
@@ -596,11 +607,15 @@ private getEnemyWeaknessDamageMultiplier() {
   if (id === 'crit_down') return '◇';
   if (id === 'heal_block') return '✚';
   if (id === 'skill_cost_up') return '▲';
+  if (id === 'goblin_mark') return '◎';
+  if (id === 'tainted_corruption') return '☾';
+  if (id === 'hellfire_burn') return '🔥';
+  if (id === 'black_water_grip') return '≋';
 
   return '•';
 }
 
-private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
+private getDebuffShortDescription(id: string, power: number) {
   if (id === 'bleeding') return `Получает ${power} урона перед действием.`;
   if (id === 'poison') return `Получает ${power} урона перед действием.`;
   if (id === 'curse') return `Атака и защита снижены на ${power}.`;
@@ -612,7 +627,27 @@ private getDebuffShortDescription(id: EnemyDebuffId, power: number) {
   if (id === 'agility_down') return `Ловкость снижена на ${power}.`;
   if (id === 'crit_down') return `Шанс крита снижен на ${power}%.`;
   if (id === 'heal_block') return 'Нельзя использовать зелье.';
-  if (id === 'skill_cost_up') return `Навыки стоят на ${power} энергии больше.`;
+  if (id === 'skill_cost_up') {
+    return power >= 50
+      ? 'Активный навык заблокирован.'
+      : `Навыки стоят на ${power} энергии больше.`;
+  }
+
+  if (id === 'goblin_mark') {
+    return `Враг получает на ${power}% больше урона от гоблина. Если враг умрёт под меткой: +25% золота и шанс доп. материала.`;
+  }
+
+  if (id === 'tainted_corruption') {
+    return `Враг получает на ${power}% больше урона от следующих атак героя.`;
+  }
+
+  if (id === 'hellfire_burn') {
+    return `Перед атакой враг получает ${power} урона кровавым пламенем.`;
+  }
+
+  if (id === 'black_water_grip') {
+    return `Следующая атака героя нанесёт на ${power}% больше урона.`;
+  }
 
   return 'Неизвестный эффект.';
 }
@@ -1167,10 +1202,17 @@ private handleTaintedSkill() {
   this.animatePlayerAttack();
   this.damageEnemy(damage);
 
+  this.taintedCorruptionTurns = Math.max(this.taintedCorruptionTurns, 2);
+  this.taintedCorruptionDamageBonus = Math.max(this.taintedCorruptionDamageBonus, 0.12);
+  this.taintedCorruptionJustApplied = true;
+
+  const corruptionText =
+    '\nСкверна полукровки: враг получает на 12% больше урона от следующих атак.';
+
   const playerActionText =
     lowHp
-      ? `Проклятый рывок!\nСкверна усиливает удар.\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}`
-      : `Проклятый рывок!\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}`;
+      ? `Проклятый рывок!\nСкверна усиливает удар.\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}${corruptionText}`
+      : `Проклятый рывок!\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}${corruptionText}`;
 
   this.afterPlayerAttack(playerActionText);
 }
@@ -1263,10 +1305,19 @@ private handleDemonSkill() {
   this.animatePlayerAttack();
   this.damageEnemy(damage);
 
+  this.demonHellfireBurnTurns = Math.max(this.demonHellfireBurnTurns, 2);
+  this.demonHellfireBurnDamage = Math.max(
+    this.demonHellfireBurnDamage,
+    Math.max(2, Math.floor(stats.attack * 0.3))
+  );
+
+  const burnText =
+    `\nКровавое пламя: враг будет получать ${this.demonHellfireBurnDamage} урона перед своей атакой 2 хода.`;
+
   const playerActionText =
     lowHp
-      ? `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}\nНизкое HP усилило пламя.`
-      : `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}`;
+      ? `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}\nНизкое HP усилило пламя.${burnText}`
+      : `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}${burnText}`;
 
   this.afterPlayerAttack(playerActionText);
 }
@@ -1280,6 +1331,8 @@ private handleDemonSkill() {
     if (weaponType === 'katana') return 'Режущий удар';
     if (weaponType === 'hammer') return 'Удар молотом';
     if (weaponType === 'shield_sword') return 'Осторожная атака';
+    if (weaponType === 'spear') return 'Глубинный выпад';
+    if (weaponType === 'trident') return 'Хватка воды';
 
     return 'Атака';
   }
@@ -1501,6 +1554,29 @@ private handleDemonSkill() {
       : '\nВоровская метка погасла.';
   }
 
+  private tickEnemyRaceEffectsAfterPlayerAttack() {
+    const lines: string[] = [];
+
+    if (this.taintedCorruptionTurns > 0) {
+      if (this.taintedCorruptionJustApplied) {
+        this.taintedCorruptionJustApplied = false;
+      } else {
+        this.taintedCorruptionTurns = Math.max(0, this.taintedCorruptionTurns - 1);
+
+        if (this.taintedCorruptionTurns > 0) {
+          lines.push(`Скверна полукровки: осталось ${this.taintedCorruptionTurns} х.`);
+        } else {
+          this.taintedCorruptionDamageBonus = 0;
+          lines.push('Скверна полукровки рассеялась.');
+        }
+      }
+    }
+
+    return lines.length > 0
+      ? `\n${lines.join('\n')}`
+      : '';
+  }
+
   private tickRaceTurnEffectsAfterEnemyAction() {
     if (this.humanBattleFocusTurns > 0) {
       this.humanBattleFocusTurns = Math.max(0, this.humanBattleFocusTurns - 1);
@@ -1701,6 +1777,16 @@ private handleDemonSkill() {
       this.treeNextHitDamageBonus = 0;
     }
 
+    if (this.taintedCorruptionTurns > 0) {
+      multiplier *= 1 + this.taintedCorruptionDamageBonus;
+    }
+
+    if (this.tridentDepthMarkTurns > 0) {
+      multiplier *= 1 + this.tridentDepthMarkBonus;
+      this.tridentDepthMarkTurns = 0;
+      this.tridentDepthMarkBonus = 0;
+    }
+
     if (config.isSkill && this.treeFullEnergySkillBonusPending) {
       multiplier *= 1.1;
       this.treeFullEnergySkillBonusPending = false;
@@ -1890,6 +1976,12 @@ private getSkillCostPenalty() {
       playerActionText += goblinMarkText;
     }
 
+    const enemyRaceEffectText = this.tickEnemyRaceEffectsAfterPlayerAttack();
+
+    if (enemyRaceEffectText) {
+      playerActionText += enemyRaceEffectText;
+    }
+
     if (options?.skipEnemyTurn) {
       restoreEnergy(player, 1);
 
@@ -1935,6 +2027,35 @@ private getSkillCostPenalty() {
     }
 
     return bleedText;
+  }
+
+  private applyHellfireBeforeEnemyTurn(playerActionText: string): string | undefined {
+    if (this.demonHellfireBurnTurns <= 0 || this.demonHellfireBurnDamage <= 0) {
+      return playerActionText;
+    }
+
+    const burnDamage = this.demonHellfireBurnDamage;
+
+    this.demonHellfireBurnTurns -= 1;
+
+    this.damageEnemy(burnDamage);
+    this.updateTexts();
+
+    const burnText =
+      `${playerActionText}\n\n` +
+      `Кровавое пламя наносит ${burnDamage} урона.` +
+      `${this.demonHellfireBurnTurns > 0 ? `\nКровавое пламя осталось: ${this.demonHellfireBurnTurns} х.` : ''}`;
+
+    if (this.demonHellfireBurnTurns <= 0) {
+      this.demonHellfireBurnDamage = 0;
+    }
+
+    if (this.enemy.hp <= 0) {
+      this.handleVictory(burnText);
+      return undefined;
+    }
+
+    return burnText;
   }
 
   private createBattleBackground(isBoss = false) {
@@ -2295,14 +2416,14 @@ private getSkillCostPenalty() {
         maxLines: 1,
       }).setOrigin(1, 0.5).setAlpha(0.74);
 
-      this.enemyHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
+      const enemyHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
         .setInteractive({ useHandCursor: true });
 
-      this.enemyHoverZone.on('pointerup', () => {
+      enemyHoverZone.on('pointerup', () => {
         this.showEnemyTooltip();
       });
 
-      container.add([hintText, this.enemyHoverZone]);
+      container.add([hintText, enemyHoverZone]);
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
@@ -2362,14 +2483,14 @@ private getSkillCostPenalty() {
         maxLines: 1,
       }).setOrigin(1, 0.5).setAlpha(0.74);
 
-      this.playerHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
+      const playerHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
         .setInteractive({ useHandCursor: true });
 
-      this.playerHoverZone.on('pointerup', () => {
+      playerHoverZone.on('pointerup', () => {
         this.showPlayerTooltip();
       });
 
-      container.add([this.playerDebuffText, this.potionText, statsText, tapHint, this.playerHoverZone]);
+      container.add([this.playerDebuffText, this.potionText, statsText, tapHint, playerHoverZone]);
     }
 
     return container;
@@ -2503,6 +2624,16 @@ private getSkillCostPenalty() {
     ? `${this.getDebuffIcon(debuff.id)} ${debuff.name}\n${this.getDebuffShortDescription(debuff.id, debuff.power)}\nШанс наложения: ${Math.round(debuff.chance * 100)}% • Длительность: ${debuff.duration} х.`
     : 'Враг не накладывает эффект при обычном ударе.';
 
+  const activeEnemyEffects = this.getActiveEnemyEffectsForUi();
+
+  const activeEffectsText = activeEnemyEffects.length > 0
+    ? activeEnemyEffects
+        .map(effect => {
+          return `${this.getDebuffIcon(effect.id)} ${effect.name} — ${effect.duration} х.\n${this.getDebuffShortDescription(effect.id, effect.power)}`;
+        })
+        .join('\n\n')
+    : 'На враге нет активных эффектов.';
+
   const dangerText = this.isBossBattle
     ? 'УРОВЕНЬ УГРОЗЫ: БОСС. Ошибка может стоить забега.'
     : 'УРОВЕНЬ УГРОЗЫ: обычный противник.';
@@ -2513,6 +2644,7 @@ private getSkillCostPenalty() {
     `АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}  •  HP ${this.enemy.hp}/${this.enemy.maxHp}\n\n` +
     `Слабости:\n${weaknessText}\n\n` +
     `Сопротивления:\n${resistanceText}\n\n` +
+    `Активные эффекты на враге:\n${activeEffectsText}\n\n` +
     `Эффект при ударе:\n${debuffText}`;
 
   this.showLargeTooltip(
@@ -2908,7 +3040,7 @@ private createEffectChip(config: {
 }
 
 
-private getDebuffColor(id: EnemyDebuffId) {
+private getDebuffColor(id: string) {
   if (id === 'bleeding') return 0xff6b6b;
   if (id === 'poison') return 0x75d184;
   if (id === 'curse') return 0xc084fc;
@@ -2921,6 +3053,10 @@ private getDebuffColor(id: EnemyDebuffId) {
   if (id === 'crit_down') return 0xc084fc;
   if (id === 'heal_block') return 0xff9f6b;
   if (id === 'skill_cost_up') return 0xf0d58a;
+  if (id === 'goblin_mark') return 0xf0a040;
+  if (id === 'tainted_corruption') return 0xc084fc;
+  if (id === 'hellfire_burn') return 0xff6b35;
+  if (id === 'black_water_grip') return 0x70a6ff;
 
   return UI.colors.gold;
 }
@@ -2963,12 +3099,9 @@ ${debuff.duration} х.`,
 }
 
 
-private renderEnemyEffectChips() {
-  this.enemyEffectObjects.forEach(object => object.destroy());
-  this.enemyEffectObjects = [];
-
+private getActiveEnemyEffectsForUi() {
   const effects: {
-    id: EnemyDebuffId;
+    id: string;
     name: string;
     duration: number;
     power: number;
@@ -2983,15 +3116,62 @@ private renderEnemyEffectChips() {
     });
   }
 
+  if (this.goblinGreedyMarkTurns > 0) {
+    effects.push({
+      id: 'goblin_mark',
+      name: 'Воровская метка',
+      duration: this.goblinGreedyMarkTurns,
+      power: 20,
+    });
+  }
+
+  if (this.taintedCorruptionTurns > 0) {
+    effects.push({
+      id: 'tainted_corruption',
+      name: 'Скверна',
+      duration: this.taintedCorruptionTurns,
+      power: Math.round(this.taintedCorruptionDamageBonus * 100),
+    });
+  }
+
+  if (this.demonHellfireBurnTurns > 0) {
+    effects.push({
+      id: 'hellfire_burn',
+      name: 'Кровавое пламя',
+      duration: this.demonHellfireBurnTurns,
+      power: this.demonHellfireBurnDamage,
+    });
+  }
+
+  if (this.tridentDepthMarkTurns > 0) {
+    effects.push({
+      id: 'black_water_grip',
+      name: 'Хватка воды',
+      duration: this.tridentDepthMarkTurns,
+      power: Math.round(this.tridentDepthMarkBonus * 100),
+    });
+  }
+
+  return effects;
+}
+
+private renderEnemyEffectChips() {
+  this.enemyEffectObjects.forEach(object => object.destroy());
+  this.enemyEffectObjects = [];
+
+  const effects = this.getActiveEnemyEffectsForUi();
+
   if (effects.length === 0) {
     return;
   }
 
   const layout = this.getBattleLayout();
-  const chipWidth = Math.min(160, (layout.contentWidth - 120) / 3);
+  const chipWidth = Math.min(168, (layout.contentWidth - 104) / 3);
   const totalVisible = Math.min(effects.length, 3);
   const totalWidth = totalVisible * chipWidth + Math.max(0, totalVisible - 1) * 8;
   const startX = this.enemyCard.x - totalWidth / 2 + chipWidth / 2;
+
+  // Чипы рисуются прямо на нижней части прямоугольника врага.
   const y = this.enemyCard.y + (this.isBossBattle ? 104 : 88);
 
   effects.slice(0, 3).forEach((effect, index) => {
@@ -3001,7 +3181,7 @@ private renderEnemyEffectChips() {
       x,
       y,
       width: chipWidth,
-      height: 42,
+      height: 44,
       text: `${effect.name}
 ${effect.duration} х.`,
       icon: this.getDebuffIcon(effect.id),
@@ -3013,6 +3193,27 @@ ${effect.duration} х.`,
       targetArray: this.enemyEffectObjects,
     });
   });
+
+  if (effects.length > 3) {
+    const hiddenCount = effects.length - 3;
+    const x = startX + 3 * (chipWidth + 8);
+
+    this.createEffectChip({
+      x,
+      y,
+      width: 54,
+      height: 44,
+      text: `+${hiddenCount}`,
+      icon: '•',
+      color: UI.colors.gold,
+      tooltipTitle: 'Другие эффекты',
+      tooltipDescription: effects
+        .slice(3)
+        .map(effect => `${effect.name}: ${effect.duration} х.`)
+        .join('\n'),
+      targetArray: this.enemyEffectObjects,
+    });
+  }
 }
 
 
@@ -3022,6 +3223,8 @@ ${effect.duration} х.`,
   if (tag === 'katana') return 'катана';
   if (tag === 'hammer') return 'молот';
   if (tag === 'shield_sword') return 'щит-меч';
+  if (tag === 'spear') return 'копьё';
+  if (tag === 'trident') return 'трезубец';
   if (tag === 'sword') return 'меч';
   if (tag === 'bleed') return 'кровотечение';
   if (tag === 'stun') return 'оглушение';
@@ -3071,8 +3274,20 @@ ${effect.duration} х.`,
       statuses.push(`Воровская метка: ${this.goblinGreedyMarkTurns} х.`);
     }
 
+    if (this.taintedCorruptionTurns > 0) {
+      statuses.push(`Скверна: ${this.taintedCorruptionTurns} х.`);
+    }
+
+    if (this.demonHellfireBurnTurns > 0) {
+      statuses.push(`Кровавое пламя: ${this.demonHellfireBurnTurns} х.`);
+    }
+
     if (this.demonRageStacks > 0) {
       statuses.push(`Адская ярость: +${this.demonRageStacks}%`);
+    }
+
+    if (this.tridentDepthMarkTurns > 0) {
+      statuses.push('Хватка чёрной воды');
     }
 
     if (this.playerDebuffs.length > 0) {
@@ -3310,8 +3525,96 @@ ${effect.duration} х.`,
       return;
     }
 
+    if (weaponType === 'spear') {
+      this.handleSpearAttack();
+      return;
+    }
+
+    if (weaponType === 'trident') {
+      this.handleTridentAttack();
+      return;
+    }
+
     this.handleSwordAttack();
   }
+
+
+  private handleSpearAttack() {
+    const stats = this.getBattleStats();
+    const pierceChance = this.enemyBleedTurns > 0 ? 0.30 : 0.20;
+    const pierced = Math.random() < pierceChance;
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1.05,
+      varianceMin: -2,
+      varianceMax: 3,
+      isBasicAttack: true,
+    });
+
+    const pierceBonus = pierced
+      ? Math.max(1, Math.floor(this.enemy.defense * 0.25))
+      : 0;
+
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const critDamage = isCrit
+      ? Math.floor((damage + pierceBonus) * this.getPlayerCritMultiplier(1.55))
+      : damage + pierceBonus;
+
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, critDamage);
+    const weaknessText = this.getEnemyWeaknessText();
+    const pierceText = pierced
+      ? '\nГлубинный выпад пробил часть защиты врага.'
+      : '';
+
+    this.animatePlayerAttack();
+    this.damageEnemy(critDamage);
+
+    const playerActionText = isCrit
+      ? `Критический выпад копьём! Ты наносишь ${critDamage} урона.${pierceText}${weaknessText}${treeCritText}`
+      : `Ты наносишь глубинный выпад копьём: ${critDamage} урона.${pierceText}${weaknessText}`;
+
+    this.afterPlayerAttack(playerActionText);
+  }
+
+  private handleTridentAttack() {
+    const stats = this.getBattleStats();
+    const markChance = this.isBossBattle ? 0.10 : 0.18;
+
+    const damage = this.calculateDamage({
+      baseDamage: stats.attack,
+      multiplier: 1.08,
+      varianceMin: -2,
+      varianceMax: 4,
+      isBasicAttack: true,
+    });
+
+    const isCrit = this.rollPlayerCrit(stats.critChance);
+    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.55)) : damage;
+    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
+    const weaknessText = this.getEnemyWeaknessText();
+
+    const marked = Math.random() < markChance;
+
+    if (marked) {
+      this.tridentDepthMarkTurns = 1;
+      this.tridentDepthMarkBonus = 0.10;
+    }
+
+    const markText = marked
+      ? '\nХватка чёрной воды: следующая атака героя нанесёт на 10% больше урона.'
+      : '';
+
+    this.animatePlayerAttack();
+    this.damageEnemy(finalDamage);
+
+    const playerActionText = isCrit
+      ? `Критический удар трезубцем! Ты наносишь ${finalDamage} урона.${markText}${weaknessText}${treeCritText}`
+      : `Ты пронзаешь врага трезубцем: ${finalDamage} урона.${markText}${weaknessText}`;
+
+    this.afterPlayerAttack(playerActionText);
+  }
+
 
   private handleSwordAttack() {
     const stats = this.getBattleStats();
@@ -3376,6 +3679,8 @@ ${effect.duration} х.`,
   let totalDamage = 0;
   let totalHeal = 0;
   let critCount = 0;
+  let lifestealProcCount = 0;
+  const lifestealHealAmounts: number[] = [];
   const daggerTreeCritTexts: string[] = [];
   let finished = false;
 
@@ -3388,17 +3693,27 @@ ${effect.duration} х.`,
 
     const critText =
       critCount > 0
-        ? `\nКритических ударов: ${critCount}.`
+        ? `
+Критических ударов: ${critCount}.`
         : '';
 
-    const weaknessText = this.getEnemyWeaknessText();
-    const lifestealText = totalHeal > 0
-      ? `\nКинжальная жажда: восстановлено ${totalHeal} HP.`
+    const lifestealText =
+      lifestealProcCount > 0
+        ? `
+Кинжальная жажда сработала ${lifestealProcCount} ${this.getRussianTimesText(lifestealProcCount)}: восстановлено ${totalHeal} HP${lifestealHealAmounts.length > 1 ? ` (${lifestealHealAmounts.join(' + ')})` : ''}.`
+        : '';
+
+    const treeCritText = daggerTreeCritTexts.length > 0
+      ? `
+${daggerTreeCritTexts.join('\n')}`
       : '';
 
+    const weaknessText = this.getEnemyWeaknessText();
+
     const playerActionText =
-      `Кинжалы проводят серию из 3 быстрых ударов.\n` +
-      `Общий урон: ${totalDamage}.${critText}${lifestealText}${weaknessText}`;
+      `Кинжалы проводят серию из 3 быстрых ударов.
+` +
+      `Общий урон: ${totalDamage}.${critText}${lifestealText}${weaknessText}${treeCritText}`;
 
     this.afterPlayerAttack(playerActionText);
   };
@@ -3413,7 +3728,14 @@ ${effect.duration} х.`,
       this.damageEnemy(hit.damage);
 
       totalDamage += hit.damage;
-      totalHeal += this.tryApplyDaggerLifesteal(hit.damage);
+
+      const healedHp = this.tryApplyDaggerLifesteal(hit.damage);
+
+      if (healedHp > 0) {
+        totalHeal += healedHp;
+        lifestealProcCount += 1;
+        lifestealHealAmounts.push(healedHp);
+      }
 
       if (hit.isCrit) {
         critCount += 1;
@@ -3436,6 +3758,22 @@ ${effect.duration} х.`,
     });
   });
 }
+
+  private getRussianTimesText(count: number) {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+
+    if (mod10 === 1 && mod100 !== 11) {
+      return 'раз';
+    }
+
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return 'раза';
+    }
+
+    return 'раз';
+  }
+
 
   private handleAxeAttack() {
    const stats = this.getBattleStats();
@@ -4203,6 +4541,14 @@ ${effect.duration} х.`,
       }
     
       playerActionText = bleedResultText;
+
+      const hellfireResultText = this.applyHellfireBeforeEnemyTurn(playerActionText);
+
+      if (!hellfireResultText) {
+        return;
+      }
+
+      playerActionText = hellfireResultText;
     
       this.animateEnemyAttack();
     
@@ -4333,8 +4679,11 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
       this.animateHit(this.playerCard);
       this.shakeBattle();
 
-      const restoredAfterEnemyTurn = restoreEnergy(player, 1);
-      const energyRestoreText = this.createEnergyRestoreText(restoredAfterEnemyTurn);
+      const energyBlocked = this.hasPlayerDebuff('energy_block');
+      const restoredAfterEnemyTurn = energyBlocked ? 0 : restoreEnergy(player, 1);
+      const energyRestoreText = energyBlocked
+        ? 'Холодная вода мешает восстановить энергию.'
+        : this.createEnergyRestoreText(restoredAfterEnemyTurn);
 
       const passiveText = this.checkHumanPassive();
 

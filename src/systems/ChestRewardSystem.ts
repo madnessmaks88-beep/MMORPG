@@ -6,7 +6,7 @@ import { getMaterialName } from '../data/materials';
 import { gameState, type FloorModifier } from '../data/gameState';
 import { addMaterial } from './MaterialSystem';
 import { trackFloorMaterials } from './FloorMaterialLogSystem';
-import { trackChestOpened, trackGoldEarned, trackMaterialsCollected } from './QuestSystem';
+import { getPlayerStats } from './InventorySystem';
 
 export type ChestRewardResult = {
   gold: number;
@@ -18,26 +18,65 @@ export type ChestRewardResult = {
   text: string;
 };
 
+
+type TreePlayer = typeof player & {
+  characterTree?: Partial<Record<string, number>>;
+};
+
+function getTreeLevel(branchId: string) {
+  return Math.max(0, (player as TreePlayer).characterTree?.[branchId] ?? 0);
+}
+
+function hasTreeLevel(branchId: string, level: number) {
+  return getTreeLevel(branchId) >= level;
+}
+
+
+function getLuckChestGoldMultiplier() {
+  const stats = getPlayerStats(player);
+
+  // Каждый 1% бонуса добычи от удачи даёт половину процента к золоту сундуков.
+  // Фортуна-2 дополнительно даёт +10%.
+  const luckGoldBonus = Math.min(0.15, stats.lootChanceBonus * 0.5);
+  const treeGoldBonus = hasTreeLevel('luck', 2) ? 0.10 : 0;
+
+  return 1 + luckGoldBonus + treeGoldBonus;
+}
+
 function getFloorInsideTier(floor: number) {
   return ((floor - 1) % 25) + 1;
 }
 
-function rollSmallMaterial(): MaterialId {
-  const items: MaterialId[] = [
-    'darkened_bone',
-    'dim_gem',
-    'old_leather',
-  ];
+function rollSmallMaterial(floor: number): MaterialId {
+  const items: MaterialId[] = floor >= 26
+    ? [
+        'silt_bone',
+        'rusted_armor_scale',
+        'drowned_leather',
+      ]
+    : [
+        'darkened_bone',
+        'dim_gem',
+        'old_leather',
+      ];
 
   return Phaser.Utils.Array.GetRandom(items);
 }
 
-function rollMediumMaterial(): MaterialId {
-  const items: MaterialId[] = [
-    'dark_flame_heart',
-    'black_gem',
-    'cursed_seal',
-  ];
+function rollMediumMaterial(floor: number): MaterialId {
+  const items: MaterialId[] = floor >= 26
+    ? [
+        'bottled_black_water',
+        'rusted_chain_link',
+        'mold_gem',
+        'black_slime_heart',
+        'flooded_sarcophagus_shard',
+      ]
+    : [
+        'dark_flame_heart',
+        'black_gem',
+        'cursed_seal',
+      ];
 
   return Phaser.Utils.Array.GetRandom(items);
 }
@@ -93,7 +132,12 @@ export function claimChestReward(): ChestRewardResult {
   const floor = gameState.floorRun.currentFloor || 1;
   const modifier = gameState.floorRun.modifier;
 
-  const gold = getGoldReward(floor, modifier);
+  const baseGold = getGoldReward(floor, modifier);
+
+  const goldMultiplier = getLuckChestGoldMultiplier();
+  const luckyChestGold = goldMultiplier > 1;
+  const gold = Math.floor(baseGold * goldMultiplier);
+
   const smallAmount = getSmallMaterialAmount(floor, modifier);
 
   const materials: {
@@ -102,13 +146,13 @@ export function claimChestReward(): ChestRewardResult {
   }[] = [];
 
   materials.push({
-    id: rollSmallMaterial(),
+    id: rollSmallMaterial(floor),
     amount: smallAmount,
   });
 
   if (Math.random() < getMediumMaterialChance(floor, modifier)) {
     materials.push({
-      id: rollMediumMaterial(),
+      id: rollMediumMaterial(floor),
       amount: modifier === 'treasure' ? 2 : 1,
     });
   }
@@ -116,7 +160,8 @@ export function claimChestReward(): ChestRewardResult {
   let damage = 0;
 
   if (modifier === 'cursed' && Math.random() < 0.35) {
-    damage = Math.max(4, Math.floor(player.maxHp * 0.12));
+    const stats = getPlayerStats(player);
+    damage = Math.max(4, Math.floor(stats.maxHp * 0.12));
     player.hp = Math.max(1, player.hp - damage);
   }
 
@@ -127,9 +172,6 @@ export function claimChestReward(): ChestRewardResult {
   });
 
   trackFloorMaterials(materials);
-  trackChestOpened();
-  trackGoldEarned(gold);
-  trackMaterialsCollected(materials.reduce((sum, material) => sum + material.amount, 0));
 
   gameState.floorRun.chestsOpened += 1;
   gameState.floorRun.goldEarned += gold;
@@ -137,6 +179,10 @@ export function claimChestReward(): ChestRewardResult {
   const materialText = materials
     .map(material => `+${material.amount} ${getMaterialName(material.id)}`)
     .join('\n');
+
+  const luckText = luckyChestGold
+    ? `\nУдача: золото из сундука увеличено на ${Math.round((goldMultiplier - 1) * 100)}%.`
+    : '';
 
   const damageText =
     damage > 0
@@ -151,6 +197,7 @@ export function claimChestReward(): ChestRewardResult {
       `Ты открыл сундук.\n\n` +
       `+${gold} золота\n` +
       `${materialText}` +
+      luckText +
       damageText,
   };
 }

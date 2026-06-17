@@ -143,13 +143,13 @@ export function getWeaponUpgradeCost(inventoryItem: InventoryItem): ForgeUpgrade
     };
   }
 
-  // После прокачки наковальни — задел под кристаллы
+  // Улучшения +6...+10 требуют материалы второго яруса.
   if (nextLevel === 6) {
     return {
       gold: 260,
       materials: {
-        black_gem: 3,
-        cursed_seal: 2,
+        silt_bone: 4,
+        drowned_leather: 2,
       },
     };
   }
@@ -158,45 +158,42 @@ export function getWeaponUpgradeCost(inventoryItem: InventoryItem): ForgeUpgrade
     return {
       gold: 340,
       materials: {
-        dark_flame_heart: 3,
-        black_gem: 3,
-        cursed_seal: 3,
+        rusted_armor_scale: 3,
+        bottled_black_water: 2,
       },
     };
   }
 
   if (nextLevel === 8) {
-      return {
-        gold: 460,
-        materials: {
-          dark_flame_heart: 4,
-          black_gem: 4,
-          cursed_seal: 3,
-        },
-      };
-    }
+    return {
+      gold: 460,
+      materials: {
+        rusted_chain_link: 3,
+        mold_gem: 2,
+      },
+    };
+  }
 
-    if (nextLevel === 9) {
-      return {
-        gold: 620,
-        materials: {
-          dark_flame_heart: 5,
-          black_gem: 5,
-          cursed_seal: 4,
-        },
-      };
-    }
+  if (nextLevel === 9) {
+    return {
+      gold: 620,
+      materials: {
+        flooded_sarcophagus_shard: 2,
+        black_slime_heart: 2,
+        abyssal_bottom_seal: 1,
+      },
+    };
+  }
 
-    if (nextLevel === 10) {
-      return {
-        gold: 850,
-        materials: {
-          black_gem: 7,
-          cursed_seal: 6,
-          black_sarcophagus_shard: 1,
-        },
-      };
-    }
+  if (nextLevel === 10) {
+    return {
+      gold: 850,
+      materials: {
+        abyssal_bottom_seal: 2,
+        drowned_guardian_eye: 1,
+      },
+    };
+  }
 
   return undefined;
 }

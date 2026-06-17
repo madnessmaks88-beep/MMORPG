@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { player, type EquipmentSlot } from '../data/player';
+import { gameState } from '../data/gameState';
 import { items, type ItemData } from '../data/items';
 
 import { createBottomNav } from '../ui/createBottomNav';
@@ -1538,7 +1539,8 @@ export class ShopScene extends Phaser.Scene {
     }
 
     return allOffers.every(offer => {
-      return Boolean(items.find(item => item.id === offer.itemId));
+      const item = items.find(item => item.id === offer.itemId);
+      return Boolean(item && this.isItemAvailableInShop(item));
     });
   }
 
@@ -1572,11 +1574,29 @@ export class ShopScene extends Phaser.Scene {
     return offers;
   }
 
+  private isItemAvailableInShop(item: ItemData) {
+    if (item.bossOnly) {
+      return false;
+    }
+
+    const availableFloor = Math.max(1, gameState.highestClearedFloor + 1);
+    const minFloor = item.minFloor ?? 1;
+    const maxFloor = item.maxFloor ?? Number.MAX_SAFE_INTEGER;
+
+    return availableFloor >= minFloor && availableFloor <= maxFloor;
+  }
+
   private pickWeightedItem(slot: EquipmentSlot, usedIds: Set<string>) {
-    let pool = items.filter(item => item.slot === slot && !usedIds.has(item.id));
+    let pool = items.filter(item => {
+      return item.slot === slot && !usedIds.has(item.id) && this.isItemAvailableInShop(item);
+    });
 
     if (pool.length === 0) {
-      pool = items.filter(item => item.slot === slot);
+      pool = items.filter(item => item.slot === slot && this.isItemAvailableInShop(item));
+    }
+
+    if (pool.length === 0) {
+      pool = items.filter(item => item.slot === slot && !item.bossOnly);
     }
 
     const weighted = pool.map(item => ({

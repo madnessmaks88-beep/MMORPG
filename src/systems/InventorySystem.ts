@@ -91,6 +91,8 @@ export function getWeaponTypeText(weaponType?: string): string {
   if (weaponType === 'katana') return 'Катана';
   if (weaponType === 'hammer') return 'Молот';
   if (weaponType === 'shield_sword') return 'Щит-меч';
+  if (weaponType === 'spear') return 'Копьё';
+  if (weaponType === 'trident') return 'Трезубец';
   if (weaponType === 'sword') return 'Меч';
 
   return 'Оружие';
@@ -115,6 +117,14 @@ export function getWeaponTypeDescription(weaponType?: string): string {
 
   if (weaponType === 'shield_sword') {
     return 'Обычная атака слабее, но считается осторожной.';
+  }
+
+  if (weaponType === 'spear') {
+    return 'Обычная атака имеет 20% шанс пробить часть защиты врага. Если враг уже ослаблен кровотечением, шанс повышается до 30%.';
+  }
+
+  if (weaponType === 'trident') {
+    return 'Обычная атака имеет 18% шанс наложить Хватку чёрной воды: следующая атака героя нанесёт на 10% больше урона. Против боссов шанс снижен до 10%.';
   }
 
   if (weaponType === 'sword') {
@@ -415,7 +425,8 @@ function getCharacterTreeDerivedBonuses(player: PlayerData): CharacterTreeDerive
     // Чутьё ловушек: +10% к уклонению от ловушек.
     trapDodgeChance: agilityLevel >= 2 ? 0.10 : 0,
 
-    // Редкая добыча: +5% к шансу ценной добычи.
+    // Редкая добыча: +5% к удаче добычи.
+    // В LootSystem этот бонус влияет и на шанс предмета, и на редкость предмета.
     lootChanceBonus: luckLevel >= 6 ? 0.05 : 0,
   };
 }
@@ -487,6 +498,9 @@ export function getPlayerStats(player: PlayerData): PlayerStats {
     0.45,
     stats.agility * 0.012 + treeDerivedBonuses.trapDodgeChance
   );
+  // Каждый 1 пункт удачи даёт +1% к добыче.
+  // Узел Фортуна-6 дополнительно даёт +5%.
+  // Ограничение нужно, чтобы удача не ломала экономику.
   stats.lootChanceBonus = Math.min(
     0.30,
     stats.luck * 0.01 + treeDerivedBonuses.lootChanceBonus

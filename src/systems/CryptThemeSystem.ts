@@ -17,6 +17,66 @@ export type CryptDepthTheme = {
 };
 
 export function getCryptDepthTheme(floor: number): CryptDepthTheme {
+  if (floor >= 46) {
+    return {
+      name: 'Донная бездна',
+
+      background: 0x010203,
+      fog: 0x181126,
+      glow: 0x0b3438,
+
+      panel: 0x030d18,
+      panelWarm: 0x181126,
+
+      stroke: 0x9f7e45,
+      accent: 0x0b3438,
+      danger: 0x7a1f24,
+
+      text: '#d8c088',
+      mutedText: '#7f9aa0',
+    };
+  }
+
+  if (floor >= 36) {
+    return {
+      name: 'Склепы чёрной воды',
+
+      background: 0x030405,
+      fog: 0x0e2a2d,
+      glow: 0x5f7f9d,
+
+      panel: 0x071827,
+      panelWarm: 0x263426,
+
+      stroke: 0x5e3a24,
+      accent: 0x5f7f9d,
+      danger: 0x8d2f2f,
+
+      text: '#d8e6e8',
+      mutedText: '#8aa4a8',
+    };
+  }
+
+  if (floor >= 25) {
+    return {
+      name: 'Затопленные склепы',
+
+      background: 0x050607,
+      fog: 0x1f2e27,
+      glow: 0x101c2a,
+
+      panel: 0x10141a,
+      panelWarm: 0x1f2e27,
+
+      stroke: 0x2a2e31,
+      accent: 0xb89a5e,
+      danger: 0x7a1f24,
+
+      text: '#d9d4c8',
+      mutedText: '#9fa8a3',
+    };
+  }
+
   if (floor >= 21) {
     return {
       name: 'Черная усыпальница',

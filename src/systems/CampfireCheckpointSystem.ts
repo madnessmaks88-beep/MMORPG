@@ -161,6 +161,10 @@ export function clearCampfireBattleCheckpoint() {
   localStorage.removeItem(CAMPFIRE_BATTLE_CHECKPOINTS_KEY);
 }
 
+export function clearExpiredCampfireBattleCheckpoints() {
+  writeCheckpointsToStorage(readCheckpointsFromStorage());
+}
+
 export function formatCheckpointTimeLeft(ms: number) {
   if (!Number.isFinite(ms) || ms >= FOREVER_TIME_LEFT_THRESHOLD_MS) {
     return 'навсегда';
@@ -202,6 +206,41 @@ export function getActiveCampfireBattleCheckpointById(checkpointId: string) {
 export function getActiveCampfireBattleCheckpointByFloor(floor: number) {
   return getActiveCheckpoints().find(checkpoint => checkpoint.floor === floor) ?? null;
 }
+
+export function exportCampfireBattleCheckpointsForSave(): CampfireBattleCheckpoint[] {
+  return cloneData<CampfireBattleCheckpoint[]>(getActiveCheckpoints());
+}
+
+export function importCampfireBattleCheckpointsFromSave(
+  checkpoints?: CampfireBattleCheckpoint[]
+) {
+  if (!Array.isArray(checkpoints)) {
+    return;
+  }
+
+  const now = Date.now();
+  const existing = getActiveCheckpoints();
+  const byId = new Map<string, CampfireBattleCheckpoint>();
+
+  for (const checkpoint of existing) {
+    if (checkpoint.expiresAt > now) {
+      byId.set(checkpoint.id, checkpoint);
+    }
+  }
+
+  for (const checkpoint of checkpoints) {
+    if (!checkpoint || typeof checkpoint.id !== 'string') {
+      continue;
+    }
+
+    if (checkpoint.expiresAt > now) {
+      byId.set(checkpoint.id, checkpoint);
+    }
+  }
+
+  writeCheckpointsToStorage([...byId.values()]);
+}
+
 
 export function createCampfireBattleCheckpoint(
   config: CreateCampfireBattleCheckpointConfig
