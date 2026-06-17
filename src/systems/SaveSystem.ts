@@ -27,6 +27,11 @@ import {
   type CampfireBattleCheckpoint,
 } from './CampfireCheckpointSystem';
 
+import {
+  loadServerSaveAsync,
+  saveServerSaveJsonAsync,
+} from './ServerSaveSystem';
+
 type SavePlayerData = PlayerData & {
   characterTreePoints?: number;
   characterTree?: Partial<Record<string, number>>;
@@ -133,7 +138,7 @@ const LOCAL_RESET_KEYS = [
   'start_gold_500_v1',
 ];
 
-export type SaveSource = 'vk' | 'local' | 'none';
+export type SaveSource = 'server' | 'vk' | 'local' | 'none';
 
 export type LoadGameOptions = {
   preferVK?: boolean;
@@ -597,6 +602,39 @@ async function saveQueuedCloudJson() {
   return lastResult;
 }
 
+
+function hasSafeProgressBackupForCurrentAccount() {
+  const currentVKUserId = getCurrentVKUserId();
+
+  if (!currentVKUserId) {
+    return false;
+  }
+
+  const rawSaves = [
+    localStorage.getItem(getAccountActiveRunKey(currentVKUserId)),
+    localStorage.getItem(getAccountLocalBackupKey(currentVKUserId)),
+    localStorage.getItem(getAccountLastGoodKey(currentVKUserId)),
+    localStorage.getItem(SAVE_KEY),
+    localStorage.getItem(LOCAL_BACKUP_KEY),
+    localStorage.getItem(LAST_GOOD_SAVE_KEY),
+    localStorage.getItem(GLOBAL_ACTIVE_RUN_KEY),
+  ];
+
+  return rawSaves.some(raw => {
+    if (!raw || !isRawSaveOwnedByCurrentAccountOrLegacy(raw)) {
+      return false;
+    }
+
+    const data = getRawSaveData(raw);
+
+    if (!data) {
+      return false;
+    }
+
+    return !isDangerousFreshDefaultPartialSave(data);
+  });
+}
+
 async function saveJsonToCloud(json: string) {
   if (!isVKBridgeReady()) {
     return false;
@@ -624,12 +662,21 @@ async function saveJsonToCloud(json: string) {
 
   saveData.vkUserId = currentVKUserId;
 
+  if (isDangerousFreshDefaultSave(saveData) && hasSafeProgressBackupForCurrentAccount()) {
+    console.warn('Cloud save skipped: refusing to upload a fresh default save while a real progress backup exists.');
+    return false;
+  }
+
   if (cloudSaveWriteBlocked) {
     console.warn('Cloud save skipped: VK save was not loaded safely yet. This prevents progress reset after update.');
     return false;
   }
 
   const ownedJson = JSON.stringify(saveData);
+
+  // Главный серверный сейв: Vercel API + Supabase.
+  // VK Storage остаётся дополнительным backup.
+  const serverSaved = await saveServerSaveJsonAsync(ownedJson);
   const saved = await vkStorageSet(SAVE_KEY, ownedJson);
 
   if (saved) {
@@ -649,10 +696,11 @@ async function saveJsonToCloud(json: string) {
   }
 
   if (wasLastVKStorageSetFailed()) {
-    console.warn('Cloud save failed. Account local backup was kept and will be retried later.');
+    console.warn('VK cloud save failed. Server/local backup was kept and will be retried later.');
   }
 
-  return false;
+  // Если Supabase сохранился, считаем сейв успешным даже при падении VK Storage.
+  return serverSaved;
 }
 
 export async function saveGameAsync() {
@@ -660,6 +708,12 @@ export async function saveGameAsync() {
   fixMissingGameStateFields();
 
   const saveData = createSaveData();
+
+  if (isDangerousFreshDefaultSave(saveData) && hasSafeProgressBackupForCurrentAccount()) {
+    console.warn('Save skipped: refusing to overwrite real progress with a fresh default profile.');
+    return false;
+  }
+
   const json = JSON.stringify(saveData);
 
   // Важно: локальный резерв пишется синхронно сразу.
@@ -688,6 +742,65 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
   }
 
   const localRawSaveAtStart = getBestLocalSave();
+
+  if (preferVK && getCurrentVKUserId()) {
+    const serverResult = await loadServerSaveAsync(getCurrentVKUserId());
+
+    if (serverResult.hasSave && serverResult.saveData) {
+      const rawServerSave = JSON.stringify(serverResult.saveData);
+
+      if (!isCloudSaveAllowedForCurrentAccount(rawServerSave)) {
+        cloudSaveWriteBlocked = true;
+        throw new Error('Server save belongs to another account. Loading is blocked.');
+      }
+
+      const saveChoice = chooseAccountSafeNewestSave(rawServerSave, localRawSaveAtStart);
+      const loaded = tryApplyRawSave(saveChoice.raw);
+
+      if (loaded) {
+        try {
+          localStorage.setItem(SAVE_KEY, saveChoice.raw);
+          localStorage.setItem(LOCAL_BACKUP_KEY, saveChoice.raw);
+          localStorage.setItem(LAST_GOOD_SAVE_KEY, saveChoice.raw);
+
+          const currentVKUserId = getCurrentVKUserId();
+
+          if (currentVKUserId) {
+            localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), saveChoice.raw);
+            localStorage.setItem(getAccountLastGoodKey(currentVKUserId), saveChoice.raw);
+            writeActiveRunBackup(saveChoice.raw);
+          }
+        } catch (error) {
+          console.warn('Local server save mirror update failed.', error);
+        }
+
+        lastLoadSource = 'server';
+        vkSaveLoadedThisSession = true;
+        vkSaveConfirmedEmptyThisSession = false;
+        cloudSaveWriteBlocked = false;
+
+        if (saveChoice.usedLocalBackup || getSaveOwnerId(saveChoice.raw) === undefined) {
+          // Серверный сейв отстал от локального аварийного backup — синхронизируем обратно.
+          void saveGameAsync();
+        }
+
+        return {
+          source: 'server',
+          hasSave: true,
+          cloudFailed: false,
+        };
+      }
+
+      lastLoadHadCloudFailure = true;
+      cloudSaveWriteBlocked = true;
+
+      if (blockLocalFallback) {
+        throw new Error('Server save exists but could not be parsed. Local fallback is blocked to protect progress.');
+      }
+    } else if (serverResult.cloudFailed) {
+      console.warn('Server save unavailable, trying VK Storage backup:', serverResult.reason);
+    }
+  }
 
   if (preferVK && isVKBridgeReady()) {
     const rawVKSave = await vkStorageGet(SAVE_KEY);

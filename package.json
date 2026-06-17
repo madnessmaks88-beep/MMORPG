@@ -13,6 +13,7 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "@vkontakte/vk-bridge": "^3.0.2",
     "phaser": "^4.1.0"
   }
