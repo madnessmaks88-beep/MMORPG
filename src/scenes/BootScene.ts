@@ -1,226 +1,123 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { getResumeTarget, installAutoSaveGuards, loadGameAsync, restoreEmergencyResumeAfterLoad } from '../systems/SaveSystem';
-import {
-  getLastVKBridgeError,
-  getVKUser,
-  initVKBridge,
-  isVKEnvironment,
-} from '../systems/VKBridgeSystem';
-
-const REQUIRE_VK_ACCOUNT = true;
+import { loadGameAsync } from '../systems/SaveSystem';
+import { getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 export class BootScene extends Phaser.Scene {
-  private statusText?: Phaser.GameObjects.Text;
-  private detailText?: Phaser.GameObjects.Text;
-  private retryButtonObjects: Phaser.GameObjects.GameObject[] = [];
-
   constructor() {
     super('BootScene');
   }
 
-  create() {
-    this.createLoadingView();
-    void this.startup();
-  }
-
-  private async startup() {
-    this.clearRetryButton();
-    this.setStatus('Подключение к VK...', 'Проверяем аккаунт и облачное сохранение.');
-
-    const strictVKAccountMode = REQUIRE_VK_ACCOUNT || isVKEnvironment();
-    const vkReady = await initVKBridge();
-
-    if (!vkReady && strictVKAccountMode) {
-      this.showConnectionError(
-        'Не удалось подключиться к аккаунту VK.',
-        'Чтобы на телефоне и ПК был один прогресс, игра запускается только через VK-аккаунт. Открой игру внутри VK Mini Apps, а не прямой Vercel/preview-ссылкой, и нажми “Повторить”.'
-      );
-      return;
-    }
-
-    const vkUser = await getVKUser();
-
-    if (!vkUser && strictVKAccountMode) {
-      this.showConnectionError(
-        'Не удалось получить профиль VK.',
-        'VK ID не получен, поэтому локальный профиль браузера заблокирован. Это защищает от разных аккаунтов на ПК и телефоне.'
-      );
-      return;
-    }
+  async create() {
+    this.createLoadingText();
 
     try {
-      this.setStatus('Загрузка сохранения...', 'Получаем прогресс из VK Storage.');
+      await initVKBridge();
+      await getVKUser();
 
-      await loadGameAsync({
-        preferVK: true,
-        blockLocalFallback: strictVKAccountMode,
-      });
+      const isLocalDev =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
 
-      restoreEmergencyResumeAfterLoad();
-      installAutoSaveGuards();
-    } catch (error) {
-      this.showConnectionError(
-        'Сохранение VK временно недоступно.',
-        'Прогресс не сброшен. Игра не запускает отдельный локальный аккаунт и не создаёт нового героя поверх облачного сохранения. Нажми “Повторить”.',
-        error
+      const loadResult = await loadGameAsync(
+        isLocalDev
+          ? { preferVK: false }
+          : { preferVK: true, blockLocalFallback: true }
       );
+
+      if (loadResult.cloudFailed && !loadResult.hasSave && !isLocalDev) {
+        this.showCloudLoadError();
+        return;
+      }
+
+      this.goNext();
+    } catch (error) {
+      console.warn('Boot loading failed:', error);
+      this.showCloudLoadError();
+    }
+  }
+
+  private createLoadingText() {
+    const { width, height } = this.scale;
+
+    this.add.rectangle(width / 2, height / 2, width, height, 0x050607, 1);
+
+    this.add.text(width / 2, height / 2, 'Загрузка сохранения...', {
+      fontFamily: 'Arial',
+      fontSize: '22px',
+      color: '#d8c088',
+      align: 'center',
+    }).setOrigin(0.5);
+  }
+
+  private goNext() {
+    if (!player.raceId) {
+      this.scene.start('RaceSelectScene');
       return;
     }
 
-    this.setStatus('Вход выполнен', 'Переходим в игру.');
-
-    this.time.delayedCall(180, () => {
-      if (!player.raceId) {
-        this.scene.start('RaceSelectScene');
-        return;
-      }
-
-      const resumeTarget = getResumeTarget();
-
-      if (resumeTarget?.scene === 'BattleScene' && resumeTarget.battle) {
-        this.scene.start('BattleScene', {
-          enemyId: resumeTarget.battle.enemyId,
-          returnToDungeon: resumeTarget.battle.returnToDungeon,
-          resumeBattle: true,
-          battleSnapshot: resumeTarget.battle,
-        });
-        return;
-      }
-
-      if (resumeTarget?.scene === 'DungeonScene') {
-        this.scene.start('DungeonScene');
-        return;
-      }
-
-      this.scene.start('MainMenuScene');
-    });
+    this.scene.start('MainMenuScene');
   }
 
-  private createLoadingView() {
+  private showCloudLoadError() {
     const { width, height } = this.scale;
-    const centerX = width / 2;
-    const centerY = height / 2;
 
-    this.add.rectangle(centerX, centerY, width, height, 0x030304, 1);
-    this.add.circle(centerX, centerY - 96, Math.min(width * 0.22, 130), 0x62518a, 0.09);
-    this.add.circle(centerX, centerY - 96, Math.min(width * 0.13, 80), 0xb89a5e, 0.045);
+    this.children.removeAll();
 
-    this.add.text(centerX, centerY - 132, 'Катакомбы Забвения', {
-      fontFamily: 'serif',
-      fontSize: '30px',
+    this.add.rectangle(width / 2, height / 2, width, height, 0x050607, 1);
+
+    this.add.text(width / 2, height / 2 - 86, 'Не удалось загрузить сохранение', {
+      fontFamily: 'Arial',
+      fontSize: '25px',
       color: '#d8c088',
-      stroke: '#000000',
-      strokeThickness: 5,
       align: 'center',
       wordWrap: {
         width: width - 56,
-        useAdvancedWrap: true,
       },
-      maxLines: 1,
     }).setOrigin(0.5);
 
-    this.statusText = this.add.text(centerX, centerY - 26, 'Загрузка...', {
-      fontFamily: 'serif',
-      fontSize: '22px',
-      color: '#d8c088',
-      stroke: '#000000',
-      strokeThickness: 4,
-      align: 'center',
-      wordWrap: {
-        width: width - 64,
-        useAdvancedWrap: true,
-      },
-      maxLines: 2,
+    this.add.text(
+      width / 2,
+      height / 2 - 20,
+      'VK Storage временно не ответил.\nЧтобы не сбросить прогресс, новая игра не запускается.\nПопробуй загрузить ещё раз.',
+      {
+        fontFamily: 'Arial',
+        fontSize: '17px',
+        color: '#b8aa91',
+        align: 'center',
+        lineSpacing: 6,
+        wordWrap: {
+          width: width - 64,
+        },
+      }
+    ).setOrigin(0.5);
+
+    const buttonY = height / 2 + 98;
+    const button = this.add.rectangle(width / 2, buttonY, Math.min(width - 76, 360), 62, 0x21150f, 1)
+      .setStrokeStyle(2, 0xb89a5e, 0.75)
+      .setInteractive({
+        useHandCursor: true,
+      });
+
+    const label = this.add.text(width / 2, buttonY, 'Загрузить ещё раз', {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#f0d58a',
     }).setOrigin(0.5);
 
-    this.detailText = this.add.text(centerX, centerY + 26, '', {
-      fontFamily: 'serif',
-      fontSize: '15px',
-      color: '#9b9488',
-      align: 'center',
-      lineSpacing: 5,
-      wordWrap: {
-        width: width - 72,
-        useAdvancedWrap: true,
-      },
-      maxLines: 5,
-    }).setOrigin(0.5, 0);
-  }
-
-  private setStatus(title: string, details: string) {
-    this.statusText?.setText(title);
-    this.detailText?.setText(details);
-  }
-
-  private showConnectionError(title: string, details: string, error?: unknown) {
-    const errorText = getLastVKBridgeError();
-    const extra = errorText ? `\n\nТехнически: ${errorText}` : error ? `\n\nТехнически: ${String(error)}` : '';
-
-    this.setStatus(title, `${details}${extra}`);
-    this.createRetryButton();
-  }
-
-  private createRetryButton() {
-    this.clearRetryButton();
-
-    const { width, height } = this.scale;
-    const centerX = width / 2;
-    const y = Math.min(height - 110, height / 2 + 185);
-    const buttonWidth = Math.min(width - 70, 430);
-    const buttonHeight = 56;
-    const radius = 22;
-
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.35);
-    shadow.fillRoundedRect(centerX - buttonWidth / 2, y - buttonHeight / 2 + 5, buttonWidth, buttonHeight, radius);
-
-    const bg = this.add.graphics();
-    const draw = (color: number, alpha: number, strokeAlpha: number) => {
-      bg.clear();
-      bg.fillStyle(color, alpha);
-      bg.fillRoundedRect(centerX - buttonWidth / 2, y - buttonHeight / 2, buttonWidth, buttonHeight, radius);
-      bg.lineStyle(2, 0xb89a5e, strokeAlpha);
-      bg.strokeRoundedRect(centerX - buttonWidth / 2, y - buttonHeight / 2, buttonWidth, buttonHeight, radius);
-    };
-
-    draw(0x21150f, 0.96, 0.82);
-
-    const label = this.add.text(centerX, y, 'Повторить подключение', {
-      fontFamily: 'serif',
-      fontSize: '17px',
-      color: '#d8c088',
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'center',
-      wordWrap: {
-        width: buttonWidth - 28,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5);
-
-    const zone = this.add.zone(centerX, y, buttonWidth, buttonHeight).setInteractive({ useHandCursor: true });
-
-    zone.on('pointerover', () => {
-      draw(0x2c1d14, 1, 1);
+    button.on('pointerover', () => {
+      button.setFillStyle(0x2d1d14, 1);
       label.setColor('#ffffff');
     });
 
-    zone.on('pointerout', () => {
-      draw(0x21150f, 0.96, 0.82);
-      label.setColor('#d8c088');
+    button.on('pointerout', () => {
+      button.setFillStyle(0x21150f, 1);
+      label.setColor('#f0d58a');
     });
 
-    zone.on('pointerup', () => {
-      void this.startup();
+    button.on('pointerdown', () => {
+      this.scene.restart();
     });
-
-    this.retryButtonObjects.push(shadow, bg, label, zone);
-  }
-
-  private clearRetryButton() {
-    this.retryButtonObjects.forEach(object => object.destroy());
-    this.retryButtonObjects = [];
   }
 }

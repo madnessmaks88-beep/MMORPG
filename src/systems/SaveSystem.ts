@@ -624,8 +624,8 @@ async function saveJsonToCloud(json: string) {
 
   saveData.vkUserId = currentVKUserId;
 
-  if (cloudSaveWriteBlocked && isDangerousFreshDefaultSave(saveData)) {
-    console.warn('Cloud save skipped: refusing to upload a fresh default save after VK storage read failure.');
+  if (cloudSaveWriteBlocked) {
+    console.warn('Cloud save skipped: VK save was not loaded safely yet. This prevents progress reset after update.');
     return false;
   }
 
@@ -794,6 +794,42 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
 }
 
 
+
+function getSaveProgressScore(saveData?: Partial<SaveData> | null) {
+  if (!saveData?.player || !saveData.gameState) {
+    return 0;
+  }
+
+  const level = saveData.player.level ?? 1;
+  const exp = saveData.player.exp ?? 0;
+  const gold = saveData.player.gold ?? 0;
+  const highestFloor = saveData.gameState.highestClearedFloor ?? 0;
+  const highestTier = saveData.gameState.highestClearedTier ?? 0;
+  const inventoryCount = saveData.player.inventory?.length ?? 0;
+  const relicCount = saveData.player.relicIds?.length ?? 0;
+  const materialKinds = Object.keys(saveData.player.materials ?? {}).length;
+
+  return (
+    highestTier * 1_000_000 +
+    highestFloor * 20_000 +
+    level * 5_000 +
+    relicCount * 4_000 +
+    inventoryCount * 300 +
+    materialKinds * 200 +
+    Math.min(exp, 4_999) +
+    Math.min(gold, 9_999) * 0.05
+  );
+}
+
+function isCloudProgressClearlyAhead(localSave?: Partial<SaveData> | null, cloudSave?: Partial<SaveData> | null) {
+  const localScore = getSaveProgressScore(localSave);
+  const cloudScore = getSaveProgressScore(cloudSave);
+
+  // Если облако явно дальше локального нового/пустого профиля,
+  // не выбираем локальный файл только потому, что он новее по времени.
+  return cloudScore > localScore + 5_000;
+}
+
 function chooseAccountSafeNewestSave(rawVKSave: string, localRawSave: string | null) {
   const vkInfo = getRawSaveInfo(rawVKSave);
   const localInfo = localRawSave ? getRawSaveInfo(localRawSave) : null;
@@ -803,6 +839,13 @@ function chooseAccountSafeNewestSave(rawVKSave: string, localRawSave: string | n
     localInfo &&
     isLocalBackupSafeForCurrentAccount(localInfo.data, vkInfo?.data)
   ) {
+    if (isCloudProgressClearlyAhead(localInfo.data, vkInfo?.data)) {
+      return {
+        raw: rawVKSave,
+        usedLocalBackup: false,
+      };
+    }
+
     const localHasActiveRun = hasActiveFloorRunData(localInfo.data) || hasResumeTargetData(localInfo.data);
     const vkHasActiveRun = hasActiveFloorRunData(vkInfo?.data) || hasResumeTargetData(vkInfo?.data);
 
