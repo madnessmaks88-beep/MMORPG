@@ -18,12 +18,15 @@ import {
 } from '../systems/FloorMaterialLogSystem';
 
 import {
+  chooseNextFloorRoom,
   completeCurrentFloor,
+  getAvailableNextRooms,
   getCurrentRoom,
   getFloorDescription,
   getFloorRequirement,
   getFloorModifierName,
   getNextFloorAfterCurrent,
+  isAwaitingRoomChoice,
   isCurrentFloorCompleted,
   markCurrentRoomCompleted,
   startFloorRun,
@@ -677,21 +680,21 @@ export class DungeonScene extends Phaser.Scene {
     const layout = this.getLayout();
 
     const rooms = gameState.floorRun.rooms;
-    const currentIndex = gameState.floorRun.currentRoomIndex;
     const currentRoom = getCurrentRoom();
+    const availableRooms = getAvailableNextRooms();
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
 
-    const roomType = String(currentRoom?.type ?? 'monster');
-    const routeHeight = layout.veryCompact ? 86 : 102;
-    const y = layout.routeY + (layout.veryCompact ? 0 : 2);
-    const panelWidth = layout.contentWidth;
-    const nodeRadius = layout.veryCompact ? 30 : 36;
-    const accent = this.getRoomStrokeColor(roomType);
-    const roomCount = Math.max(1, rooms.length);
-    const roomNumber = Phaser.Math.Clamp(currentIndex + 1, 1, roomCount);
+    const mapHeight = layout.veryCompact ? 164 : layout.compact ? 186 : 214;
+    const top = layout.routeY - mapHeight / 2;
+    const width = layout.contentWidth;
+    const left = layout.centerX - width / 2 + 34;
+    const right = layout.centerX + width / 2 - 34;
+    const nodeRadius = layout.veryCompact ? 18 : 22;
+    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
+    const layerCount = maxLayer + 1;
 
-    this.add.text(layout.centerX, y - routeHeight / 2 - (layout.veryCompact ? 17 : 22), 'Путь скрыт тьмой', {
+    this.add.text(layout.centerX, top - 22, 'Карта развилки', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '17px' : '20px',
       color: UI.colors.text,
@@ -699,201 +702,254 @@ export class DungeonScene extends Phaser.Scene {
       strokeThickness: 4,
       align: 'center',
       wordWrap: {
-        width: panelWidth - 50,
-        useAdvancedWrap: true,
+        width: width - 44,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(8);
 
-    const routePanel = this.createRoundedPanel({
+    const mapPanel = this.createRoundedPanel({
       x: layout.centerX,
-      y,
-      width: panelWidth,
-      height: routeHeight,
+      y: layout.routeY,
+      width,
+      height: mapHeight,
       radius: 28,
-      color: 0x08070a,
-      alpha: 0.82,
+      color: 0x07070a,
+      alpha: 0.84,
       strokeColor: theme.stroke,
       strokeAlpha: 0.28,
       strokeWidth: 2,
       depth: 2,
     });
 
-    routePanel.shadow.setAlpha(0);
-    routePanel.panel.setAlpha(0);
+    mapPanel.shadow.setAlpha(0);
+    mapPanel.panel.setAlpha(0);
 
     this.tweens.add({
-      targets: [routePanel.shadow, routePanel.panel],
+      targets: [mapPanel.shadow, mapPanel.panel],
       alpha: 1,
       duration: 280,
       ease: 'Sine.easeOut',
     });
 
-    const lineWidth = panelWidth - 106;
-    const line = this.add.rectangle(layout.centerX, y + 1, lineWidth, 3, accent, 0.22)
-      .setDepth(4)
-      .setAlpha(0);
+    this.createBranchMapMist(layout.centerX, layout.routeY, width, mapHeight, theme.fog);
 
-    this.tweens.add({
-      targets: line,
-      alpha: 0.72,
-      duration: 360,
-      ease: 'Sine.easeOut',
+    const layerX = (layer: number) => {
+      if (layerCount <= 1) {
+        return layout.centerX;
+      }
+
+      return Phaser.Math.Linear(left, right, layer / (layerCount - 1));
+    };
+
+    const layerRooms = new Map<number, typeof rooms>();
+
+    rooms.forEach(room => {
+      const layer = room.branchLayer ?? 0;
+      const list = layerRooms.get(layer) ?? [];
+
+      list.push(room);
+      layerRooms.set(layer, list);
     });
 
-    const leftText = this.add.text(layout.centerX - panelWidth / 2 + 30, y - 18, `Комната ${roomNumber}/${roomCount}`, {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '12px' : '13px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'left',
-      wordWrap: {
-        width: Math.max(92, panelWidth * 0.28),
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(7).setAlpha(0);
+    rooms.forEach(room => {
+      const fromX = layerX(room.branchLayer ?? 0);
+      const fromY = this.getBranchNodeY(top, mapHeight, room, layerRooms);
+      const isCompleted = Boolean(room.completed);
 
-    const leftSub = this.add.text(layout.centerX - panelWidth / 2 + 30, y + 18, currentIndex <= 0 ? 'Первый шаг' : 'Прошлое поглощено', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '11px',
-      color: UI.colors.textMuted,
-      align: 'left',
-      wordWrap: {
-        width: Math.max(104, panelWidth * 0.31),
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(7).setAlpha(0);
+      (room.nextRoomIds ?? []).forEach(nextRoomId => {
+        const nextRoom = rooms.find(candidate => candidate.id === nextRoomId);
 
-    const rightText = this.add.text(layout.centerX + panelWidth / 2 - 30, y, 'Впереди\nнеизвестность', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '11px',
-      color: '#6f6a62',
-      align: 'right',
-      lineSpacing: 2,
-      wordWrap: {
-        width: Math.max(104, panelWidth * 0.27),
-        useAdvancedWrap: true,
-      },
-      maxLines: 2,
-    }).setOrigin(1, 0.5).setDepth(7).setAlpha(0);
+        if (!nextRoom) {
+          return;
+        }
 
-    this.tweens.add({
-      targets: [leftText, leftSub, rightText],
-      alpha: 1,
-      duration: 320,
-      delay: 120,
-      ease: 'Sine.easeOut',
+        const toX = layerX(nextRoom.branchLayer ?? 0);
+        const toY = this.getBranchNodeY(top, mapHeight, nextRoom, layerRooms);
+        const isAvailable = availableRooms.some(candidate => candidate.id === nextRoom.id);
+        const isPathCompleted = isCompleted && (nextRoom.completed || isAvailable || currentRoom?.id === nextRoom.id);
+
+        this.drawBranchConnection(
+          fromX,
+          fromY,
+          toX,
+          toY,
+          isPathCompleted ? UI.colors.gold : 0x3a302a,
+          isPathCompleted ? 0.62 : 0.24,
+          isAvailable
+        );
+      });
     });
 
-    this.createRouteMist(layout.centerX, y, panelWidth, routeHeight, theme.fog);
+    rooms.forEach((room, index) => {
+      const x = layerX(room.branchLayer ?? 0);
+      const y = this.getBranchNodeY(top, mapHeight, room, layerRooms);
+      const isCurrent = currentRoom?.id === room.id && !isAwaitingRoomChoice();
+      const isAvailable = availableRooms.some(candidate => candidate.id === room.id);
+      const isCompleted = Boolean(room.completed);
+      const isQuestion = Boolean(room.question && !room.discovered);
+      const isLocked = !isCurrent && !isAvailable && !isCompleted;
+      const stroke = isCurrent
+        ? UI.colors.gold
+        : isAvailable
+          ? 0x9b7cff
+          : isCompleted
+            ? 0x75d184
+            : 0x4a3b31;
+      const fill = isCurrent
+        ? 0x2a1b10
+        : isAvailable
+          ? 0x1c1326
+          : isCompleted
+            ? 0x0f1e14
+            : 0x0d0d10;
+      const icon = isQuestion ? '?' : this.getRoomIcon(String(room.type));
+      const textColor = isQuestion
+        ? '#c0a5ff'
+        : isLocked
+          ? '#5d5852'
+          : isCompleted
+            ? '#75d184'
+            : this.getRoomTextColor(String(room.type));
 
-    const glow = this.add.circle(layout.centerX, y, nodeRadius + 18, accent, 0.06)
-      .setDepth(4)
-      .setAlpha(0)
-      .setScale(0.65);
+      const delay = 90 + index * 35;
 
-    const shadow = this.add.circle(layout.centerX, y + 5, nodeRadius + 8, 0x000000, 0.42)
-      .setDepth(5)
-      .setAlpha(0)
-      .setScale(0.7);
+      const glow = this.add.circle(x, y, nodeRadius + 12, stroke, isCurrent || isAvailable ? 0.14 : 0.035)
+        .setDepth(5)
+        .setAlpha(0)
+        .setScale(0.65);
 
-    const outer = this.add.circle(layout.centerX, y, nodeRadius + 4, 0x111016, 1)
-      .setStrokeStyle(3, accent, 0.82)
-      .setDepth(6)
-      .setAlpha(0)
-      .setScale(0.74);
+      const node = this.add.circle(x, y + 3, nodeRadius + 3, 0x000000, 0.32)
+        .setDepth(5)
+        .setAlpha(0)
+        .setScale(0.7);
 
-    const inner = this.add.circle(layout.centerX, y, nodeRadius - 5, 0x1b120d, 1)
-      .setStrokeStyle(1, 0x000000, 0.55)
-      .setDepth(7)
-      .setAlpha(0)
-      .setScale(0.74);
+      const circle = this.add.circle(x, y, isCurrent || isAvailable ? nodeRadius + 2 : nodeRadius, fill, isLocked ? 0.68 : 1)
+        .setStrokeStyle(isCurrent || isAvailable ? 3 : 2, stroke, isLocked ? 0.38 : 0.84)
+        .setDepth(6)
+        .setAlpha(0)
+        .setScale(0.7);
 
-    const icon = this.add.text(layout.centerX, y - 1, this.getRoomIcon(roomType), {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '25px' : '30px',
-      color: this.getRoomTextColor(roomType),
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(8).setAlpha(0).setScale(0.74);
+      const label = this.add.text(x, y, icon, {
+        fontFamily: UI.font.body,
+        fontSize: isCurrent || isAvailable ? (layout.veryCompact ? '18px' : '21px') : (layout.veryCompact ? '15px' : '18px'),
+        color: textColor,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(7).setAlpha(0).setScale(0.7);
 
-    this.tweens.add({
-      targets: [glow, shadow, outer, inner, icon],
-      alpha: 1,
-      scale: 1,
-      duration: 420,
-      delay: 130,
-      ease: 'Back.easeOut',
+      this.tweens.add({
+        targets: [glow, node, circle, label],
+        alpha: 1,
+        scale: 1,
+        duration: 320,
+        delay,
+        ease: 'Back.easeOut',
+      });
+
+      if (isCurrent || isAvailable) {
+        this.tweens.add({
+          targets: glow,
+          alpha: {
+            from: 0.08,
+            to: 0.22,
+          },
+          scale: {
+            from: 0.96,
+            to: 1.18,
+          },
+          duration: 1350,
+          yoyo: true,
+          repeat: -1,
+          delay: delay + 260,
+          ease: 'Sine.easeInOut',
+        });
+      }
     });
-
-    this.tweens.add({
-      targets: glow,
-      alpha: {
-        from: 0.08,
-        to: 0.2,
-      },
-      scale: {
-        from: 0.98,
-        to: 1.16,
-      },
-      duration: 1600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-      delay: 520,
-    });
-
-    this.tweens.add({
-      targets: outer,
-      scale: {
-        from: 1,
-        to: 1.045,
-      },
-      duration: 1200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-      delay: 500,
-    });
-
-    this.add.text(layout.centerX, y + routeHeight / 2 + (layout.veryCompact ? 14 : 18), 'Следующая комната проявится только после шага вперёд', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '12px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: panelWidth - 48,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(7).setAlpha(0.78);
   }
 
-  private createRouteMist(
+  private getBranchNodeY(
+    top: number,
+    mapHeight: number,
+    room: { branchLayer?: number; branchColumn?: number },
+    layerRooms: Map<number, Array<{ branchColumn?: number }>>
+  ) {
+    const layer = room.branchLayer ?? 0;
+    const roomsInLayer = layerRooms.get(layer) ?? [];
+    const count = Math.max(1, roomsInLayer.length);
+    const column = room.branchColumn ?? 0;
+    const mapTop = top + 38;
+    const mapBottom = top + mapHeight - 34;
+
+    if (count <= 1) {
+      return (mapTop + mapBottom) / 2;
+    }
+
+    return Phaser.Math.Linear(mapTop, mapBottom, column / (count - 1));
+  }
+
+  private drawBranchConnection(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    color: number,
+    alpha: number,
+    animated: boolean
+  ) {
+    const graphics = this.add.graphics().setDepth(4).setAlpha(0);
+    const midX = (fromX + toX) / 2;
+
+    graphics.lineStyle(animated ? 3 : 2, color, alpha);
+    graphics.lineBetween(fromX, fromY, midX, fromY);
+    graphics.lineBetween(midX, fromY, midX, toY);
+    graphics.lineBetween(midX, toY, toX, toY);
+
+    this.tweens.add({
+      targets: graphics,
+      alpha: 1,
+      duration: animated ? 380 : 260,
+      ease: 'Sine.easeOut',
+    });
+
+    if (animated) {
+      this.tweens.add({
+        targets: graphics,
+        alpha: {
+          from: 0.55,
+          to: 1,
+        },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+  }
+
+  private createBranchMapMist(
     centerX: number,
     centerY: number,
     width: number,
     height: number,
     color: number
   ) {
-    const mistCount = this.getLayout().veryCompact ? 9 : 13;
+    const mistCount = this.getLayout().veryCompact ? 10 : 15;
 
     for (let i = 0; i < mistCount; i += 1) {
-      const x = centerX - width / 2 + Phaser.Math.Between(28, Math.max(32, width - 28));
-      const y = centerY - height / 2 + Phaser.Math.Between(12, Math.max(16, height - 12));
-      const radius = Phaser.Math.Between(10, 24);
-      const alpha = 0.025 + (i % 4) * 0.012;
-
-      const fog = this.add.circle(x, y, radius, color, alpha)
+      const x = centerX - width / 2 + Phaser.Math.Between(24, Math.max(28, width - 24));
+      const y = centerY - height / 2 + Phaser.Math.Between(18, Math.max(24, height - 18));
+      const fog = this.add.circle(x, y, Phaser.Math.Between(8, 22), color, 0.025)
         .setDepth(3)
         .setAlpha(0);
 
       this.tweens.add({
         targets: fog,
-        alpha,
-        x: x + Phaser.Math.Between(-16, 16),
-        duration: Phaser.Math.Between(1800, 2800),
+        alpha: {
+          from: 0.01,
+          to: 0.065,
+        },
+        x: x + Phaser.Math.Between(-14, 14),
+        duration: Phaser.Math.Between(1700, 2900),
         yoyo: true,
         repeat: -1,
         delay: i * 90,
@@ -907,6 +963,11 @@ export class DungeonScene extends Phaser.Scene {
 
     if (isCurrentFloorCompleted()) {
       this.showFloorCompleted();
+      return;
+    }
+
+    if (isAwaitingRoomChoice()) {
+      this.createRoomChoicePanel();
       return;
     }
 
@@ -924,179 +985,120 @@ export class DungeonScene extends Phaser.Scene {
     const isBossRoom = roomType === 'boss' || roomType === 'tier_boss';
     const isCampfireRoom = roomType === 'campfire';
     const isEventRoom = roomType === 'event';
+    const isQuestion = Boolean(room.question && !room.discovered);
 
     const cardTop = layout.roomCardTop;
     const cardHeight = layout.roomCardHeight;
     const cardY = cardTop + cardHeight / 2;
     const cardWidth = layout.contentWidth;
-    const accent = this.getRoomStrokeColor(roomType);
+    const accent = isQuestion ? 0x9b7cff : this.getRoomStrokeColor(roomType);
 
-    const panelColor = isBossRoom
-      ? 0x160908
-      : isCampfireRoom
-        ? 0x1a0f08
-        : isEventRoom
-          ? 0x110d18
-          : theme.panel;
-
-    const card = this.createRoundedPanel({
+    this.createRoundedPanel({
       x: layout.centerX,
       y: cardY,
       width: cardWidth,
       height: cardHeight,
-      radius: layout.compact ? 30 : 36,
-      color: panelColor,
-      alpha: 0.955,
+      radius: layout.compact ? 28 : 34,
+      color: isBossRoom
+        ? 0x160908
+        : isCampfireRoom
+          ? 0x1a0f08
+          : isEventRoom || isQuestion
+            ? 0x110d18
+            : theme.panel,
+      alpha: 0.95,
       strokeColor: accent,
-      strokeAlpha: isBossRoom || isCampfireRoom || isEventRoom ? 0.86 : 0.54,
-      strokeWidth: isBossRoom || isEventRoom ? 3 : 2,
+      strokeAlpha: isBossRoom || isCampfireRoom || isEventRoom || isQuestion ? 0.82 : 0.52,
+      strokeWidth: isBossRoom || isCampfireRoom || isEventRoom || isQuestion ? 3 : 2,
       depth: 2,
     });
 
-    card.shadow.setAlpha(0).setY(card.shadow.y + 12);
-    card.panel.setAlpha(0).setY(card.panel.y + 12);
+    this.createCurrentRoomAtmosphere(cardTop, cardHeight, accent, isBossRoom || isQuestion);
 
-    this.tweens.add({
-      targets: [card.shadow, card.panel],
-      alpha: 1,
-      y: '-=12',
-      duration: 340,
-      ease: 'Cubic.easeOut',
-    });
+    const iconColor = isQuestion ? '#d8c6ff' : this.getRoomTextColor(roomType);
+    const iconY = cardTop + (layout.veryCompact ? 44 : 56);
 
-    this.createRoomCardAtmosphere(cardTop, cardHeight, accent, isBossRoom || isEventRoom);
-
-    const ordinal = `${gameState.floorRun.currentRoomIndex + 1}/${gameState.floorRun.rooms.length}`;
-    const stripY = cardTop + (layout.veryCompact ? 28 : 34);
-
-    const strip = this.add.rectangle(
-      layout.centerX,
-      stripY,
-      Math.min(cardWidth - 84, 330),
-      layout.veryCompact ? 30 : 34,
-      0x050505,
-      0.46
-    ).setDepth(6).setAlpha(0);
-
-    strip.setStrokeStyle(1, accent, 0.38);
-
-    const stripText = this.add.text(layout.centerX, stripY, `Комната ${ordinal}  •  ${this.getRoomRouteName(roomType)}`, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '11px' : '12px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: cardWidth - 120,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(7).setAlpha(0);
-
-    this.tweens.add({
-      targets: [strip, stripText],
-      alpha: 1,
-      duration: 260,
-      delay: 120,
-      ease: 'Sine.easeOut',
-    });
-
-    const iconColor = this.getRoomTextColor(roomType);
-    const iconY = cardTop + (layout.veryCompact ? 78 : 98);
-
-    const iconGlow = this.add.circle(layout.centerX, iconY, layout.veryCompact ? 48 : 60, accent, isCampfireRoom ? 0.13 : 0.09)
+    const glow = this.add.circle(layout.centerX, iconY, layout.veryCompact ? 45 : 56, accent, isCampfireRoom ? 0.16 : 0.11)
       .setDepth(5)
       .setAlpha(0)
       .setScale(0.72);
 
-    const iconPlate = this.add.circle(layout.centerX, iconY, layout.veryCompact ? 33 : 42, 0x1a120d, 1)
-      .setStrokeStyle(2, accent, 0.78)
+    const plate = this.add.circle(layout.centerX, iconY, layout.veryCompact ? 31 : 38, 0x20150f, 1)
+      .setStrokeStyle(2, accent, 0.76)
       .setDepth(6)
       .setAlpha(0)
       .setScale(0.72);
 
-    const icon = this.add.text(layout.centerX, iconY, this.getRoomIcon(roomType), {
+    const icon = this.add.text(layout.centerX, iconY, isQuestion ? '?' : this.getRoomIcon(roomType), {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '28px' : isCampfireRoom ? '39px' : '34px',
+      fontSize: layout.veryCompact ? '27px' : isCampfireRoom ? '36px' : '32px',
       color: iconColor,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(7).setAlpha(0).setScale(0.72);
 
     this.tweens.add({
-      targets: [iconGlow, iconPlate, icon],
+      targets: [glow, plate, icon],
       alpha: 1,
       scale: 1,
       duration: 380,
-      delay: 160,
+      delay: 130,
       ease: 'Back.easeOut',
     });
 
     this.tweens.add({
-      targets: iconGlow,
+      targets: glow,
       alpha: {
-        from: 0.06,
-        to: isBossRoom ? 0.22 : 0.16,
+        from: 0.08,
+        to: isQuestion ? 0.24 : 0.18,
       },
       scale: {
-        from: 0.95,
+        from: 0.96,
         to: 1.14,
       },
       duration: 1500,
       yoyo: true,
       repeat: -1,
-      delay: 620,
+      delay: 520,
       ease: 'Sine.easeInOut',
     });
 
-    const roomTitle = this.getRoomTitleForCard(roomType, room);
-    const titleY = cardTop + (layout.veryCompact ? 128 : 158);
+    const roomTitle = isQuestion
+      ? 'Комната под вопросом'
+      : this.getRoomTitleForBranchCard(roomType, room);
+
+    const titleY = cardTop + (layout.veryCompact ? 94 : 122);
 
     const title = this.add.text(layout.centerX, titleY, roomTitle, {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '23px' : isBossRoom ? '31px' : '29px',
-      color: isBossRoom ? UI.colors.red : isCampfireRoom ? UI.colors.goldText : isEventRoom ? '#d8c6ff' : theme.text,
+      fontSize: layout.veryCompact ? '24px' : isBossRoom ? '32px' : '30px',
+      color: isBossRoom ? UI.colors.red : isCampfireRoom ? UI.colors.goldText : isQuestion ? '#d8c6ff' : theme.text,
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: cardWidth - 68,
+        width: cardWidth - 70,
         useAdvancedWrap: true,
       },
       maxLines: 2,
-      lineSpacing: -2,
     }).setOrigin(0.5).setDepth(7).setAlpha(0).setY(titleY + 8);
 
     this.tweens.add({
       targets: title,
       alpha: 1,
       y: titleY,
-      duration: 340,
-      delay: 230,
+      duration: 320,
+      delay: 210,
       ease: 'Cubic.easeOut',
     });
 
-    const dividerY = titleY + (layout.veryCompact ? 42 : 54);
+    const description = isQuestion
+      ? 'За этим проходом скрывается неизвестная комната. Она может оказаться боем, событием, сундуком или ловушкой. Выбор уже сделан — теперь остаётся войти.'
+      : this.getRoomDescriptionForBranchCard(roomType, room);
 
-    const divider = this.add.rectangle(
-      layout.centerX,
-      dividerY,
-      Math.min(cardWidth - 110, 420),
-      2,
-      accent,
-      0.24
-    ).setDepth(6).setAlpha(0);
+    const descriptionY = cardTop + (layout.veryCompact ? 150 : 182);
 
-    this.tweens.add({
-      targets: divider,
-      alpha: 1,
-      duration: 300,
-      delay: 300,
-      ease: 'Sine.easeOut',
-    });
-
-    const roomDescription = this.getRoomDescriptionForCard(roomType, room);
-    const descriptionY = dividerY + (layout.veryCompact ? 18 : 24);
-
-    const description = this.add.text(layout.centerX, descriptionY, roomDescription, {
+    this.add.text(layout.centerX, descriptionY, description, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '13px' : '15px',
       color: UI.colors.text,
@@ -1105,28 +1107,26 @@ export class DungeonScene extends Phaser.Scene {
         width: cardWidth - 78,
         useAdvancedWrap: true,
       },
-      lineSpacing: 4,
+      lineSpacing: 5,
       maxLines: layout.veryCompact ? 4 : 5,
-    }).setOrigin(0.5, 0).setDepth(7).setAlpha(0).setY(descriptionY + 8);
+    }).setOrigin(0.5, 0).setDepth(7).setAlpha(0);
 
     this.tweens.add({
-      targets: description,
+      targets: this.children.getAll().slice(-1),
       alpha: 1,
-      y: descriptionY,
-      duration: 320,
-      delay: 350,
-      ease: 'Cubic.easeOut',
+      duration: 280,
+      delay: 280,
+      ease: 'Sine.easeOut',
     });
 
-    const infoY = cardTop + (layout.veryCompact ? 255 : 318);
     this.createRoomInfoBox(
       layout.centerX,
-      infoY,
-      this.getRoomInfo(roomType),
+      cardTop + (layout.veryCompact ? 252 : 316),
+      isQuestion ? 'Неизвестная комната: исход откроется только после входа.' : this.getRoomInfo(roomType),
       this.getModifierWarning()
     );
 
-    const detailsY = infoY + (layout.veryCompact ? 74 : 92);
+    const detailsY = cardTop + (layout.veryCompact ? 330 : 414);
     const actionAreaTop = layout.mainButtonY - layout.primaryButtonHeight / 2 - 12;
 
     if (isBossRoom && detailsY + 42 < actionAreaTop) {
@@ -1140,7 +1140,26 @@ export class DungeonScene extends Phaser.Scene {
     this.createRoomButton(roomType, room.enemyId);
   }
 
-  private createRoomCardAtmosphere(
+  private getRoomTitleForBranchCard(roomType: string, room: NonNullable<ReturnType<typeof getCurrentRoom>>) {
+    if (roomType === 'monster') return 'Обычная комната';
+    if (roomType === 'elite') return 'Опасная комната';
+    if (roomType === 'boss') return 'Комната босса';
+    if (roomType === 'tier_boss') return 'Финальный босс';
+    if (roomType === 'campfire') return 'Забытый костёр';
+    if (roomType === 'event') return getDungeonEventById(room.eventId)?.shortTitle ?? 'Событие катакомб';
+
+    return room.title;
+  }
+
+  private getRoomDescriptionForBranchCard(roomType: string, room: NonNullable<ReturnType<typeof getCurrentRoom>>) {
+    if (roomType === 'event') {
+      return getDungeonEventById(room.eventId)?.description ?? room.description;
+    }
+
+    return room.description;
+  }
+
+  private createCurrentRoomAtmosphere(
     cardTop: number,
     cardHeight: number,
     accent: number,
@@ -1150,39 +1169,14 @@ export class DungeonScene extends Phaser.Scene {
     const width = layout.contentWidth;
     const left = layout.centerX - width / 2;
     const right = layout.centerX + width / 2;
-    const top = cardTop;
-    const bottom = cardTop + cardHeight;
 
-    for (let i = 0; i < 8; i += 1) {
-      const x = i % 2 === 0
-        ? left + Phaser.Math.Between(20, 74)
-        : right - Phaser.Math.Between(20, 74);
-
-      const y = top + Phaser.Math.Between(28, Math.max(34, cardHeight - 28));
-      const runeHeight = Phaser.Math.Between(18, 38);
-
-      const rune = this.add.rectangle(x, y, 2, runeHeight, accent, dangerous ? 0.18 : 0.1)
-        .setDepth(4)
-        .setAlpha(0);
-
-      this.tweens.add({
-        targets: rune,
-        alpha: dangerous ? 0.32 : 0.18,
-        duration: Phaser.Math.Between(900, 1400),
-        yoyo: true,
-        repeat: -1,
-        delay: i * 110,
-        ease: 'Sine.easeInOut',
-      });
-    }
-
-    for (let i = 0; i < 18; i += 1) {
+    for (let i = 0; i < 12; i += 1) {
       const particle = this.add.circle(
-        Phaser.Math.Between(Math.ceil(left + 30), Math.floor(right - 30)),
-        Phaser.Math.Between(Math.ceil(top + 30), Math.floor(bottom - 30)),
+        Phaser.Math.Between(Math.ceil(left + 28), Math.floor(right - 28)),
+        Phaser.Math.Between(Math.ceil(cardTop + 28), Math.floor(cardTop + cardHeight - 28)),
         Phaser.Math.Between(1, 2),
-        i % 5 === 0 ? accent : DUNGEON_DARK.ash,
-        0.03
+        i % 4 === 0 ? accent : DUNGEON_DARK.ash,
+        0.035
       ).setDepth(4).setAlpha(0);
 
       this.tweens.add({
@@ -1191,73 +1185,143 @@ export class DungeonScene extends Phaser.Scene {
           from: 0.01,
           to: dangerous ? 0.08 : 0.055,
         },
-        y: particle.y - Phaser.Math.Between(8, 22),
-        duration: Phaser.Math.Between(1500, 2600),
+        y: particle.y - Phaser.Math.Between(8, 24),
+        duration: Phaser.Math.Between(1600, 2800),
         yoyo: true,
         repeat: -1,
-        delay: i * 80,
+        delay: i * 90,
         ease: 'Sine.easeInOut',
       });
     }
   }
 
-  private getRoomTitleForCard(roomType: string, room: NonNullable<ReturnType<typeof getCurrentRoom>>) {
-    if (roomType === 'monster') {
-      return 'Обычная комната';
-    }
+  private createRoomChoicePanel() {
+    const layout = this.getLayout();
+    const availableRooms = getAvailableNextRooms();
+    const floor = gameState.floorRun.currentFloor || 1;
 
-    if (roomType === 'elite') {
-      return 'Опасная комната';
-    }
+    const cardTop = layout.roomCardTop;
+    const cardHeight = layout.roomCardHeight;
+    const cardY = cardTop + cardHeight / 2;
+    const cardWidth = layout.contentWidth;
 
-    if (roomType === 'boss') {
-      return 'Комната босса';
-    }
+    this.createRoundedPanel({
+      x: layout.centerX,
+      y: cardY,
+      width: cardWidth,
+      height: cardHeight,
+      radius: layout.compact ? 28 : 34,
+      color: 0x0a080d,
+      alpha: 0.96,
+      strokeColor: 0x9b7cff,
+      strokeAlpha: 0.7,
+      strokeWidth: 3,
+      depth: 2,
+    });
 
-    if (roomType === 'tier_boss') {
-      return 'Финальный босс';
-    }
+    this.createCurrentRoomAtmosphere(cardTop, cardHeight, 0x9b7cff, true);
 
-    if (roomType === 'campfire') {
-      return 'Забытый костёр';
-    }
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 42 : 56), 'Выбор пути', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '28px' : '34px',
+      color: '#d8c6ff',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: cardWidth - 60,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(7);
 
-    if (roomType === 'event') {
-      return getDungeonEventById(room.eventId)?.shortTitle ?? 'Событие катакомб';
-    }
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 88 : 112), 'Прошлая комната осталась позади. Ветки расходятся, но каждая в итоге ведёт к боссу этажа. Выбери следующую комнату.', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '13px' : '15px',
+      color: UI.colors.text,
+      align: 'center',
+      wordWrap: {
+        width: cardWidth - 70,
+        useAdvancedWrap: true,
+      },
+      lineSpacing: 5,
+      maxLines: 4,
+    }).setOrigin(0.5, 0).setDepth(7);
 
-    return room.title;
+    const startY = cardTop + (layout.veryCompact ? 190 : 230);
+    const buttonHeight = layout.veryCompact ? 70 : 78;
+    const gap = layout.veryCompact ? 10 : 12;
+    const maxButtons = Math.min(availableRooms.length, 3);
+
+    availableRooms.slice(0, maxButtons).forEach((room, index) => {
+      const y = startY + index * (buttonHeight + gap);
+      const isQuestion = Boolean(room.question && !room.discovered);
+      const roomType = String(room.type);
+      const title = isQuestion
+        ? 'Комната под вопросом'
+        : this.getRoomTitleForBranchCard(roomType, room);
+      const subtitle = isQuestion
+        ? 'Скрывает сражение, событие, сундук или ловушку.'
+        : this.getRoomInfo(roomType);
+      const accent = isQuestion ? 0x9b7cff : this.getRoomStrokeColor(roomType);
+      const icon = isQuestion ? '?' : this.getRoomIcon(roomType);
+
+      this.createRoomActionButton({
+        x: layout.centerX,
+        y,
+        width: Math.min(cardWidth - 44, 560),
+        height: buttonHeight,
+        icon,
+        title,
+        subtitle,
+        accentColor: accent,
+        danger: roomType === 'trap' || isQuestion,
+        large: false,
+        onClick: () => {
+          this.chooseBranchRoom(room.id);
+        },
+      });
+    });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.exitButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.secondaryButtonHeight,
+      icon: '⌂',
+      title: 'Выйти в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
+      },
+    });
+
+    this.add.text(layout.centerX, cardTop + cardHeight - 24, `Этаж ${floor} • ${getFloorModifierName(gameState.floorRun.modifier)} • ${availableRooms.length} пути`, {
+      fontFamily: UI.font.body,
+      fontSize: '11px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: cardWidth - 60,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(7);
   }
 
-  private getRoomDescriptionForCard(roomType: string, room: NonNullable<ReturnType<typeof getCurrentRoom>>) {
-    if (roomType === 'event') {
-      return getDungeonEventById(room.eventId)?.description ?? room.description;
+  private chooseBranchRoom(roomId: string) {
+    if (!chooseNextFloorRoom(roomId)) {
+      return;
     }
 
-    return room.description;
-  }
+    markDungeonResumePoint('choose-branch-room');
+    void saveGameAsync();
 
-  private getRoomRouteName(roomType: string) {
-    switch (roomType) {
-      case 'monster':
-        return 'бой';
-      case 'elite':
-        return 'элита';
-      case 'chest':
-        return 'добыча';
-      case 'trap':
-        return 'опасность';
-      case 'event':
-        return 'встреча';
-      case 'campfire':
-        return 'костёр';
-      case 'boss':
-        return 'босс';
-      case 'tier_boss':
-        return 'владыка яруса';
-      default:
-        return 'комната';
-    }
+    this.cameras.main.fadeOut(180, 0, 0, 0);
+
+    this.time.delayedCall(190, () => {
+      this.scene.restart();
+    });
   }
 
   private createRoomInfoBox(
@@ -4440,6 +4504,10 @@ private exitToTownKeepingCampfireCheckpoint() {
       enemyId?: string;
       completed: boolean;
     }>;
+
+    if (rooms.some(room => (room as { branchLayer?: number }).branchLayer !== undefined)) {
+      return;
+    }
 
     if (rooms.some(room => room.type === 'campfire')) {
       return;

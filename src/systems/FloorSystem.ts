@@ -170,6 +170,9 @@ export function startFloorRun(floor: number) {
   gameState.floorRun.currentRoomIndex = 0;
   gameState.floorRun.modifier = modifier;
   gameState.floorRun.rooms = generateFloorRooms(floor, modifier);
+  gameState.floorRun.currentRoomId = gameState.floorRun.rooms[0]?.id;
+  gameState.floorRun.awaitingRoomChoice = false;
+  gameState.floorRun.availableRoomIds = [];
   gameState.floorRun.rewardClaimed = false;
 
   gameState.floorRun.runType = 'tier';
@@ -185,42 +188,190 @@ export function startFloorRun(floor: number) {
 }
 
 export function generateFloorRooms(floor: number, modifier = getFloorModifier(floor)): FloorRoom[] {
-  const roomCount = getRoomCountByFloor(floor);
+  if (modifier === 'tier_boss') {
+    return [
+      {
+        id: `floor_${floor}_tier_boss`,
+        type: 'tier_boss',
+        title: 'Финальный зал яруса',
+        description: 'Остался только главный босс. Все пути сходятся здесь.',
+        enemyId: pickTierBoss(floor),
+        branchLayer: 0,
+        branchColumn: 0,
+        nextRoomIds: [],
+        previousRoomIds: [],
+        discovered: true,
+        question: false,
+        completed: false,
+      },
+    ];
+  }
+
+  return generateBranchingFloorRooms(floor, modifier);
+}
+
+function generateBranchingFloorRooms(floor: number, modifier: FloorModifier): FloorRoom[] {
+  const floorInsideTier = ((floor - 1) % 25) + 1;
+  const branchLayout = floorInsideTier <= 5
+    ? [1, 2, 2, 1]
+    : floorInsideTier <= 15
+      ? [1, 2, 3, 2, 1]
+      : [1, 3, 2, 3, 2, 1];
+
   const rooms: FloorRoom[] = [];
-
-  for (let index = 0; index < roomCount - 1; index += 1) {
-    rooms.push(createRandomNormalRoom(floor, index, modifier));
-  }
-
+  const layers: FloorRoom[][] = [];
   const storyEventId = getStoryEncounterEventIdForFloor(floor);
+  const storyLayer = storyEventId
+    ? Phaser.Math.Clamp(Phaser.Math.Between(1, branchLayout.length - 2), 1, Math.max(1, branchLayout.length - 2))
+    : -1;
+  const storyColumn = storyEventId
+    ? Phaser.Math.Between(0, branchLayout[storyLayer] - 1)
+    : -1;
 
-  if (storyEventId && rooms.length > 0) {
-    const replaceIndex = Phaser.Math.Clamp(
-      Phaser.Math.Between(1, Math.max(1, rooms.length - 1)),
-      0,
-      rooms.length - 1
-    );
+  for (let layer = 0; layer < branchLayout.length; layer += 1) {
+    const layerRooms: FloorRoom[] = [];
 
-    rooms[replaceIndex] = createEventRoom(floor, replaceIndex, storyEventId);
+    for (let column = 0; column < branchLayout[layer]; column += 1) {
+      const isStart = layer === 0;
+      const isLastLayerBeforeBoss = layer === branchLayout.length - 1;
+      const forcedStoryEvent = layer === storyLayer && column === storyColumn
+        ? storyEventId
+        : undefined;
+      const question =
+        !isStart &&
+        !isLastLayerBeforeBoss &&
+        !forcedStoryEvent &&
+        Math.random() < getQuestionRoomChance(floor, modifier);
+
+      const room = isLastLayerBeforeBoss
+        ? createFinalRoom(floor)
+        : createBranchRoom(floor, layer, column, modifier, question, forcedStoryEvent);
+
+      room.id = isLastLayerBeforeBoss
+        ? `floor_${floor}_boss_final`
+        : `floor_${floor}_branch_${layer}_${column}_${room.type}`;
+      room.branchLayer = layer;
+      room.branchColumn = column;
+      room.nextRoomIds = [];
+      room.previousRoomIds = [];
+      room.discovered = isStart || Boolean(forcedStoryEvent) || !question;
+      room.question = question;
+
+      layerRooms.push(room);
+      rooms.push(room);
+    }
+
+    layers.push(layerRooms);
   }
 
-  rooms.push(createFinalRoom(floor));
+  connectBranchLayers(layers);
 
   return rooms;
 }
 
-function getRoomCountByFloor(floor: number) {
-  const floorInsideTier = ((floor - 1) % 25) + 1;
+function getQuestionRoomChance(floor: number, modifier: FloorModifier) {
+  if (modifier === 'cursed') return 0.36;
+  if (modifier === 'traps') return 0.32;
+  if (modifier === 'treasure') return 0.24;
+  if (floor >= 16) return 0.34;
 
-  if (floorInsideTier <= 5) {
-    return 5;
+  return 0.28;
+}
+
+function connectBranchLayers(layers: FloorRoom[][]) {
+  for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex += 1) {
+    const currentLayer = layers[layerIndex];
+    const nextLayer = layers[layerIndex + 1];
+
+    nextLayer.forEach(nextRoom => {
+      nextRoom.previousRoomIds = [];
+    });
+
+    currentLayer.forEach((room, index) => {
+      const nextIds = new Set<string>();
+
+      if (nextLayer.length === 1) {
+        nextIds.add(nextLayer[0].id);
+      } else {
+        const directIndex = Phaser.Math.Clamp(
+          Math.round((index / Math.max(1, currentLayer.length - 1)) * (nextLayer.length - 1)),
+          0,
+          nextLayer.length - 1
+        );
+
+        nextIds.add(nextLayer[directIndex].id);
+
+        if (Math.random() < 0.72) {
+          const sideIndex = Phaser.Math.Clamp(
+            directIndex + (Math.random() < 0.5 ? -1 : 1),
+            0,
+            nextLayer.length - 1
+          );
+
+          nextIds.add(nextLayer[sideIndex].id);
+        }
+
+        if (currentLayer.length === 1 && nextLayer.length > 1) {
+          nextLayer.forEach(nextRoom => nextIds.add(nextRoom.id));
+        }
+      }
+
+      room.nextRoomIds = Array.from(nextIds);
+
+      room.nextRoomIds.forEach(nextRoomId => {
+        const nextRoom = nextLayer.find(candidate => candidate.id === nextRoomId);
+
+        if (!nextRoom) {
+          return;
+        }
+
+        nextRoom.previousRoomIds = Array.from(new Set([
+          ...(nextRoom.previousRoomIds ?? []),
+          room.id,
+        ]));
+      });
+    });
+
+    nextLayer.forEach((nextRoom, index) => {
+      if (nextRoom.previousRoomIds?.length) {
+        return;
+      }
+
+      const fallbackRoom = currentLayer[
+        Phaser.Math.Clamp(index, 0, currentLayer.length - 1)
+      ];
+
+      fallbackRoom.nextRoomIds = Array.from(new Set([
+        ...(fallbackRoom.nextRoomIds ?? []),
+        nextRoom.id,
+      ]));
+
+      nextRoom.previousRoomIds = [fallbackRoom.id];
+    });
+  }
+}
+
+function createBranchRoom(
+  floor: number,
+  layer: number,
+  column: number,
+  modifier: FloorModifier,
+  question: boolean,
+  forcedEventId?: string
+): FloorRoom {
+  if (forcedEventId) {
+    return createEventRoom(floor, layer * 10 + column, forcedEventId);
   }
 
-  if (floorInsideTier <= 15) {
-    return 6;
+  const room = createRandomNormalRoom(floor, layer * 10 + column, modifier);
+
+  if (question) {
+    room.title = 'Неизвестная комната';
+    room.description =
+      'Дверной проём затянут пепельной мглой. За ним может быть сражение, событие, сундук или ловушка.';
   }
 
-  return 7;
+  return room;
 }
 
 function getEliteChanceByFloor(floor: number) {
@@ -390,7 +541,42 @@ function createFinalRoom(floor: number): FloorRoom {
 }
 
 export function getCurrentRoom(): FloorRoom | undefined {
+  if (gameState.floorRun.currentRoomId) {
+    const room = gameState.floorRun.rooms.find(candidate => candidate.id === gameState.floorRun.currentRoomId);
+
+    if (room) {
+      return room;
+    }
+  }
+
   return gameState.floorRun.rooms[gameState.floorRun.currentRoomIndex];
+}
+
+export function getAvailableNextRooms(): FloorRoom[] {
+  return gameState.floorRun.availableRoomIds
+    .map(roomId => gameState.floorRun.rooms.find(room => room.id === roomId))
+    .filter((room): room is FloorRoom => Boolean(room));
+}
+
+export function chooseNextFloorRoom(roomId: string) {
+  const roomIndex = gameState.floorRun.rooms.findIndex(room => room.id === roomId);
+
+  if (roomIndex < 0 || !gameState.floorRun.availableRoomIds.includes(roomId)) {
+    return false;
+  }
+
+  const room = gameState.floorRun.rooms[roomIndex];
+
+  room.discovered = true;
+  room.question = false;
+
+  gameState.floorRun.currentRoomId = room.id;
+  gameState.floorRun.currentRoomIndex = roomIndex;
+  gameState.floorRun.awaitingRoomChoice = false;
+  gameState.floorRun.availableRoomIds = [];
+  gameState.currentRoomIndex = roomIndex;
+
+  return true;
 }
 
 export function markCurrentRoomCompleted() {
@@ -401,10 +587,26 @@ export function markCurrentRoomCompleted() {
   }
 
   room.completed = true;
+  room.discovered = true;
+  room.question = false;
+}
+
+export function isAwaitingRoomChoice() {
+  return Boolean(gameState.floorRun.awaitingRoomChoice && gameState.floorRun.availableRoomIds.length > 0);
 }
 
 export function isCurrentFloorCompleted() {
-  return gameState.floorRun.currentRoomIndex >= gameState.floorRun.rooms.length;
+  if (isAwaitingRoomChoice()) {
+    return false;
+  }
+
+  const currentRoom = getCurrentRoom();
+
+  if (currentRoom?.nextRoomIds?.length) {
+    return false;
+  }
+
+  return gameState.floorRun.currentRoomIndex >= gameState.floorRun.rooms.length || Boolean(currentRoom?.completed);
 }
 
 export function completeCurrentFloor() {
@@ -627,6 +829,9 @@ export function startTierGateBoss(targetTier: number) {
     },
   ];
 
+  gameState.floorRun.currentRoomId = gameState.floorRun.rooms[0]?.id;
+  gameState.floorRun.awaitingRoomChoice = false;
+  gameState.floorRun.availableRoomIds = [];
   gameState.floorRun.rewardClaimed = true;
 
   gameState.floorRun.monstersDefeated = 0;

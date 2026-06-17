@@ -31,6 +31,14 @@ export type FloorRoom = {
   description: string;
   enemyId?: string;
   eventId?: string;
+
+  branchLayer?: number;
+  branchColumn?: number;
+  nextRoomIds?: string[];
+  previousRoomIds?: string[];
+  question?: boolean;
+  discovered?: boolean;
+
   completed: boolean;
 };
 
@@ -39,6 +47,9 @@ export type FloorRun = {
   currentFloor: number;
   currentRoomIndex: number;
   rooms: FloorRoom[];
+  currentRoomId?: string;
+  awaitingRoomChoice: boolean;
+  availableRoomIds: string[];
   rewardClaimed: boolean;
   modifier: FloorModifier;
 
@@ -60,6 +71,9 @@ export function createEmptyFloorRun(): FloorRun {
     currentFloor: 1,
     currentRoomIndex: 0,
     rooms: [],
+    currentRoomId: undefined,
+    awaitingRoomChoice: false,
+    availableRoomIds: [],
     rewardClaimed: false,
     modifier: 'normal',
 
@@ -115,7 +129,43 @@ export function isTierBossFloor(floor: number) {
 }
 
 export function goToNextRoom() {
+  const rooms = gameState.floorRun.rooms;
+  const currentRoom =
+    rooms.find(room => room.id === gameState.floorRun.currentRoomId) ??
+    rooms[gameState.floorRun.currentRoomIndex];
+
+  if (currentRoom?.nextRoomIds?.length) {
+    const availableRoomIds = currentRoom.nextRoomIds.filter(roomId => {
+      const room = rooms.find(candidate => candidate.id === roomId);
+
+      return Boolean(room && !room.completed);
+    });
+
+    if (availableRoomIds.length > 1) {
+      gameState.floorRun.availableRoomIds = availableRoomIds;
+      gameState.floorRun.awaitingRoomChoice = true;
+      return;
+    }
+
+    if (availableRoomIds.length === 1) {
+      const nextRoomId = availableRoomIds[0];
+      const nextIndex = rooms.findIndex(room => room.id === nextRoomId);
+
+      gameState.floorRun.currentRoomId = nextRoomId;
+      gameState.floorRun.currentRoomIndex = nextIndex >= 0
+        ? nextIndex
+        : gameState.floorRun.currentRoomIndex + 1;
+      gameState.floorRun.availableRoomIds = [];
+      gameState.floorRun.awaitingRoomChoice = false;
+      gameState.currentRoomIndex = gameState.floorRun.currentRoomIndex;
+      return;
+    }
+  }
+
   gameState.floorRun.currentRoomIndex += 1;
+  gameState.floorRun.currentRoomId = rooms[gameState.floorRun.currentRoomIndex]?.id;
+  gameState.floorRun.availableRoomIds = [];
+  gameState.floorRun.awaitingRoomChoice = false;
   gameState.currentRoomIndex = gameState.floorRun.currentRoomIndex;
 }
 
