@@ -205,35 +205,36 @@ export class DungeonScene extends Phaser.Scene {
     const compact = height < 1120;
     const veryCompact = height < 940;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 34);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 34);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 28, 46);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 14, 30);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 26, 44);
     const contentWidth = Math.min(width - safeX * 2, 640);
 
-    const primaryButtonHeight = veryCompact ? 64 : 72;
-    const secondaryButtonHeight = veryCompact ? 54 : 58;
+    const primaryButtonHeight = veryCompact ? 58 : 68;
+    const secondaryButtonHeight = veryCompact ? 50 : 56;
 
-    // Нижняя зона теперь предназначена только для кнопки выхода в город.
-    // Все действия текущей комнаты находятся выше — внутри основной карточки комнаты.
     const exitButtonY = height - safeBottom - secondaryButtonHeight / 2;
     const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - 18;
 
-    const headerY = safeTop + (compact ? 44 : 50);
-    const floorInfoY = headerY + (compact ? 82 : 92);
-    const routeY = floorInfoY + (veryCompact ? 86 : compact ? 98 : 112);
-    const roomCardTop = routeY + (veryCompact ? 50 : 62);
+    const headerHeight = veryCompact ? 76 : compact ? 86 : 96;
+    const floorPanelHeight = veryCompact ? 60 : compact ? 70 : 78;
+    const mapHeight = veryCompact ? 118 : compact ? 138 : 162;
 
-    const minRoomCardHeight = veryCompact ? 390 : compact ? 450 : 500;
-    const maxRoomCardHeight = veryCompact ? 430 : compact ? 540 : 620;
+    const headerY = safeTop + headerHeight / 2;
+    const floorInfoY = headerY + headerHeight / 2 + 10 + floorPanelHeight / 2;
+    const routeY = floorInfoY + floorPanelHeight / 2 + 12 + mapHeight / 2;
+    const roomCardTop = routeY + mapHeight / 2 + 14;
+
+    const maxRoomCardHeight = veryCompact ? 430 : compact ? 510 : 600;
     const availableRoomCardHeight = actionDockTop - roomCardTop - 16;
     const roomCardHeight = Phaser.Math.Clamp(
       availableRoomCardHeight,
-      minRoomCardHeight,
+      veryCompact ? 330 : compact ? 390 : 450,
       maxRoomCardHeight
     );
 
     const roomCardBottom = roomCardTop + roomCardHeight;
-    const actionGap = veryCompact ? 10 : 12;
-    const actionBottomPadding = veryCompact ? 18 : 24;
+    const actionGap = veryCompact ? 8 : 12;
+    const actionBottomPadding = veryCompact ? 16 : 22;
 
     const prepareButtonY = roomCardBottom - actionBottomPadding - secondaryButtonHeight / 2;
     const mainButtonY = prepareButtonY - secondaryButtonHeight / 2 - actionGap - primaryButtonHeight / 2;
@@ -270,7 +271,7 @@ export class DungeonScene extends Phaser.Scene {
     const theme = getCryptDepthTheme(floor);
     const stats = getPlayerStats(player);
 
-    const headerHeight = layout.compact ? 86 : 96;
+    const headerHeight = layout.veryCompact ? 76 : layout.compact ? 86 : 96;
     const headerTop = layout.headerY - headerHeight / 2;
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -437,7 +438,7 @@ export class DungeonScene extends Phaser.Scene {
     const currentRoom = getCurrentRoom();
     const currentLayer = currentRoom?.branchLayer ?? 0;
     const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
-    const panelHeight = layout.veryCompact ? 82 : layout.compact ? 90 : 100;
+    const panelHeight = layout.veryCompact ? 60 : layout.compact ? 70 : 78;
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -467,9 +468,9 @@ export class DungeonScene extends Phaser.Scene {
       ? 'Выбери один из открывшихся проходов. Остальные ветви останутся в тени.'
       : getFloorDescription(floor);
 
-    this.add.text(layout.centerX, layout.floorInfoY - (layout.veryCompact ? 22 : 26), descriptionText, {
+    this.add.text(layout.centerX, layout.floorInfoY - (layout.veryCompact ? 15 : 18), descriptionText, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
+      fontSize: layout.veryCompact ? '10px' : layout.compact ? '11px' : '12px',
       color: theme.mutedText,
       align: 'center',
       wordWrap: {
@@ -481,7 +482,7 @@ export class DungeonScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(7);
 
     const barWidth = layout.contentWidth - 88;
-    const barY = layout.floorInfoY + (layout.veryCompact ? 18 : 22);
+    const barY = layout.floorInfoY + (layout.veryCompact ? 15 : 18);
     const progress = Phaser.Math.Clamp(completedRooms / totalRooms, 0, 1);
 
     this.add.rectangle(layout.centerX, barY, barWidth, 8, 0x050507, 0.72)
@@ -810,18 +811,18 @@ export class DungeonScene extends Phaser.Scene {
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
 
-    const mapHeight = layout.veryCompact ? 164 : layout.compact ? 186 : 214;
+    const mapHeight = layout.veryCompact ? 118 : layout.compact ? 138 : 162;
     const top = layout.routeY - mapHeight / 2;
     const width = layout.contentWidth;
-    const left = layout.centerX - width / 2 + 34;
-    const right = layout.centerX + width / 2 - 34;
-    const nodeRadius = layout.veryCompact ? 18 : 22;
+    const left = layout.centerX - width / 2 + 42;
+    const right = layout.centerX + width / 2 - 42;
+    const nodeRadius = layout.veryCompact ? 14 : 17;
     const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
     const layerCount = maxLayer + 1;
 
-    this.add.text(layout.centerX, top - 22, 'Карта разломов', {
+    this.add.text(layout.centerX, top + 16, 'Карта разломов', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '17px' : '20px',
+      fontSize: layout.veryCompact ? '14px' : '17px',
       color: UI.colors.text,
       stroke: '#000000',
       strokeThickness: 4,
@@ -968,7 +969,7 @@ export class DungeonScene extends Phaser.Scene {
 
       const label = this.add.text(x, y, icon, {
         fontFamily: UI.font.body,
-        fontSize: isCurrent || isAvailable ? (layout.veryCompact ? '18px' : '21px') : (layout.veryCompact ? '15px' : '18px'),
+        fontSize: isCurrent || isAvailable ? (layout.veryCompact ? '15px' : '18px') : (layout.veryCompact ? '13px' : '16px'),
         color: textColor,
         stroke: '#000000',
         strokeThickness: 2,
@@ -1153,7 +1154,7 @@ export class DungeonScene extends Phaser.Scene {
     this.createCurrentRoomAtmosphere(cardTop, cardHeight, accent, isBossRoom || isQuestion);
 
     const iconColor = isQuestion ? '#d8c6ff' : this.getRoomTextColor(roomType);
-    const iconY = cardTop + (layout.veryCompact ? 44 : 56);
+    const iconY = cardTop + (layout.veryCompact ? 40 : 52);
 
     const glow = this.add.circle(layout.centerX, iconY, layout.veryCompact ? 45 : 56, accent, isCampfireRoom ? 0.16 : 0.11)
       .setDepth(5)
@@ -1204,7 +1205,7 @@ export class DungeonScene extends Phaser.Scene {
       ? 'Неизвестный проход'
       : this.getRoomTitleForBranchCard(roomType, room);
 
-    const titleY = cardTop + (layout.veryCompact ? 94 : 122);
+    const titleY = cardTop + (layout.veryCompact ? 88 : 116);
 
     const title = this.add.text(layout.centerX, titleY, roomTitle, {
       fontFamily: UI.font.title,
@@ -1233,7 +1234,7 @@ export class DungeonScene extends Phaser.Scene {
       ? 'Дверной проём затянут пепельной мглой. Внутри может ждать сражение, случайная встреча, ловушка или забытая добыча.'
       : this.getRoomDescriptionForBranchCard(roomType, room);
 
-    const descriptionY = cardTop + (layout.veryCompact ? 150 : 182);
+    const descriptionY = cardTop + (layout.veryCompact ? 140 : 174);
 
     this.add.text(layout.centerX, descriptionY, description, {
       fontFamily: UI.font.body,
@@ -1258,12 +1259,12 @@ export class DungeonScene extends Phaser.Scene {
 
     this.createRoomInfoBox(
       layout.centerX,
-      cardTop + (layout.veryCompact ? 252 : 316),
+      cardTop + (layout.veryCompact ? 238 : 300),
       isQuestion ? 'Неизвестный проход: исход откроется только после входа.' : this.getRoomInfo(roomType),
       this.getModifierWarning()
     );
 
-    const detailsY = cardTop + (layout.veryCompact ? 330 : 414);
+    const detailsY = cardTop + (layout.veryCompact ? 308 : 392);
     const actionAreaTop = layout.mainButtonY - layout.primaryButtonHeight / 2 - 12;
 
     if (isBossRoom && detailsY + 42 < actionAreaTop) {
