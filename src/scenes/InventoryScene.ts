@@ -180,10 +180,10 @@ export class InventoryScene extends Phaser.Scene {
     const statsHeight = veryCompact ? 72 : compact ? 78 : 84;
     const statsY = safeTop + (veryCompact ? 96 : 108);
 
-    const equipmentHeight = veryCompact ? 194 : compact ? 206 : 224;
+    const equipmentHeight = veryCompact ? 202 : compact ? 214 : 226;
     const equipmentY = statsY + statsHeight / 2 + 10 + equipmentHeight / 2;
 
-    const tabHeight = veryCompact ? 46 : compact ? 50 : 54;
+    const tabHeight = veryCompact ? 64 : compact ? 68 : 72;
     const tabsY = equipmentY + equipmentHeight / 2 + 12 + tabHeight / 2;
 
     const listPanelTop = tabsY + tabHeight / 2 + 12;
@@ -191,7 +191,7 @@ export class InventoryScene extends Phaser.Scene {
     const listPanelHeight = Math.max(300, listPanelBottom - listPanelTop);
 
     const listTop = listPanelTop + (compact ? 62 : 68);
-    const listBottom = listPanelBottom - 72;
+    const listBottom = listPanelBottom - (veryCompact ? 92 : 104);
     const listHeight = Math.max(150, listBottom - listTop);
 
     return {
@@ -225,7 +225,7 @@ export class InventoryScene extends Phaser.Scene {
       listBottom,
       listHeight,
 
-      actionButtonY: listPanelBottom - 35,
+      actionButtonY: listPanelBottom - (veryCompact ? 32 : 38),
     };
   }
 
@@ -449,8 +449,8 @@ export class InventoryScene extends Phaser.Scene {
     const slotWidth = (layout.contentWidth - 44 - slotGap) / 2;
     const startX = layout.centerX - slotWidth / 2 - slotGap / 2;
     const endX = layout.centerX + slotWidth / 2 + slotGap / 2;
-    const rowGap = layout.compact ? 82 : 88;
-    const firstRowY = layout.equipmentY + (layout.compact ? 24 : 28);
+    const rowGap = layout.compact ? 58 : 62;
+    const firstRowY = layout.equipmentY + (layout.compact ? 12 : 16);
     const secondRowY = firstRowY + rowGap;
 
     this.createEquipmentSlotCard('weapon', startX, firstRowY, slotWidth);
@@ -475,7 +475,7 @@ export class InventoryScene extends Phaser.Scene {
     const rarityColor = item ? getRarityColorHex(item) : UI.colors.goldDark;
     const rarityStrokeColor = item ? getRarityStrokeColor(item) : UI.colors.goldDark;
 
-    const height = 78;
+    const height = this.scale.height < 1120 ? 52 : 56;
 
     this.createRoundedPanel({
       x,
@@ -491,17 +491,17 @@ export class InventoryScene extends Phaser.Scene {
       depth: 4,
     });
 
-    this.add.circle(x, y - 22, 19, item ? rarityColor : 0x17100c, item ? 0.88 : 0.7)
+    this.add.circle(x, y - 15, 16, item ? rarityColor : 0x17100c, item ? 0.88 : 0.7)
       .setStrokeStyle(2, item ? rarityStrokeColor : UI.colors.goldDark, 0.65)
       .setDepth(6);
 
-    this.add.text(x, y - 22, getSlotIcon(slot), {
+    this.add.text(x, y - 15, getSlotIcon(slot), {
       fontFamily: UI.font.body,
-      fontSize: '18px',
+      fontSize: '15px',
       color: item ? '#ffffff' : UI.colors.textMuted,
     }).setOrigin(0.5).setDepth(7);
 
-    this.add.text(x, y + 3, slotName, {
+    this.add.text(x, y + 7, slotName, {
       fontFamily: UI.font.body,
       fontSize: '12px',
       color: UI.colors.textMuted,
@@ -516,7 +516,7 @@ export class InventoryScene extends Phaser.Scene {
       ? `${item.name}${inventoryItem.upgradeLevel > 0 ? ` +${inventoryItem.upgradeLevel}` : ''}`
       : 'Пусто';
 
-    this.add.text(x, y + 24, itemText, {
+    this.add.text(x, y + 22, itemText, {
       fontFamily: UI.font.title,
       fontSize: item ? '11px' : '13px',
       color: item ? UI.colors.goldText : UI.colors.textMuted,
@@ -556,27 +556,34 @@ export class InventoryScene extends Phaser.Scene {
     }[] = [
       { id: 'all', label: 'Все', icon: '▦' },
       { id: 'weapon', label: 'Оруж.', icon: '⚔' },
-      { id: 'armor', label: 'Броня', icon: '🛡' },
+      { id: 'armor', label: 'Броня', icon: '▣' },
       { id: 'trinket', label: 'Амул.', icon: '☥' },
-      { id: 'ring', label: 'Кольц.', icon: '◈' },
+      { id: 'ring', label: 'Кольца', icon: '◈' },
       { id: 'potions', label: 'Зелья', icon: '✚' },
       { id: 'materials', label: 'Мат.', icon: '◇' },
     ];
 
-    const gap = 5;
-    const tabWidth = (layout.contentWidth - gap * (tabs.length - 1)) / tabs.length;
+    const columns = 4;
+    const gapX = 6;
+    const gapY = 6;
+    const tabButtonHeight = layout.compact ? 28 : 31;
+    const tabWidth = (layout.contentWidth - gapX * (columns - 1)) / columns;
     const startX = layout.centerX - layout.contentWidth / 2 + tabWidth / 2;
+    const startY = layout.tabsY - (tabButtonHeight + gapY) / 2;
 
     tabs.forEach((tab, index) => {
-      const x = startX + index * (tabWidth + gap);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = startX + column * (tabWidth + gapX);
+      const y = startY + row * (tabButtonHeight + gapY);
       const isActive = this.selectedCategory === tab.id;
 
       const tabBg = this.createRoundedButtonBg({
         x,
-        y: layout.tabsY,
+        y,
         width: tabWidth,
-        height: layout.tabHeight,
-        radius: 17,
+        height: tabButtonHeight,
+        radius: 12,
         color: isActive ? 0x2b1d13 : 0x12100d,
         alpha: isActive ? 0.98 : 0.78,
         strokeColor: isActive ? UI.colors.gold : UI.colors.goldDark,
@@ -585,22 +592,22 @@ export class InventoryScene extends Phaser.Scene {
         depth: 50,
       });
 
-      const icon = this.add.text(x, layout.tabsY - 12, tab.icon, {
+      const icon = this.add.text(x - tabWidth * 0.26, y, tab.icon, {
         fontFamily: UI.font.body,
-        fontSize: layout.contentWidth < 390 ? '14px' : '16px',
+        fontSize: layout.contentWidth < 390 ? '10px' : '12px',
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
       }).setOrigin(0.5).setDepth(53);
 
-      const label = this.add.text(x, layout.tabsY + 15, tab.label, {
+      const label = this.add.text(x - tabWidth * 0.08, y, tab.label, {
         fontFamily: UI.font.body,
-        fontSize: layout.contentWidth < 390 ? '9px' : '10px',
+        fontSize: layout.contentWidth < 390 ? '8px' : '9px',
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
-        align: 'center',
+        align: 'left',
         wordWrap: {
-          width: tabWidth - 8,
+          width: tabWidth * 0.68,
         },
         maxLines: 1,
-      }).setOrigin(0.5).setDepth(53);
+      }).setOrigin(0, 0.5).setDepth(53);
 
       tabBg.zone.on('pointerover', () => {
         if (isActive) {
@@ -628,10 +635,7 @@ export class InventoryScene extends Phaser.Scene {
         this.selectedCategory = tab.id;
         this.inventoryScrollY = 0;
         this.inventoryTargetScrollY = 0;
-
         this.scene.restart({
-          selectedCategory: this.selectedCategory,
-          inventoryScrollY: 0,
           returnScene: this.returnScene,
         });
       });
@@ -1467,15 +1471,15 @@ export class InventoryScene extends Phaser.Scene {
     const button = this.createUiButton({
       x: layout.centerX,
       y: layout.actionButtonY,
-      width: Math.min(layout.contentWidth - 90, 470),
-      height: 44,
+      width: Math.min(layout.contentWidth - 92, 420),
+      height: layout.compact ? 38 : 42,
       text: 'Сдать обычный хлам',
       accentColor: UI.colors.redHex,
       danger: true,
       onClick: () => {
         this.showMassSellConfirm();
       },
-      depth: 32,
+      depth: 80,
     });
 
     // Кнопка не внутри списка, поэтому добавлять в inventoryContainer не нужно.
