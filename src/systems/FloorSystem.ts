@@ -374,72 +374,59 @@ function createBranchRoom(
   return room;
 }
 
-function getEliteChanceByFloor(floor: number) {
-  const floorInsideTier = ((floor - 1) % 25) + 1;
 
-  if (floorInsideTier <= 5) return 0.08;
-  if (floorInsideTier <= 10) return 0.14;
-  if (floorInsideTier <= 15) return 0.22;
-  if (floorInsideTier <= 20) return 0.32;
-  if (floorInsideTier <= 24) return 0.45;
-
-  return 0.5;
-}
-
-function rollNormalRoomKind(
-  modifier: FloorModifier
-): 'combat' | 'chest' | 'trap' | 'event' {
+function rollNormalRoomKind(modifier: FloorModifier): 'combat' | 'chest' | 'trap' | 'event' {
   const roll = Math.random();
 
   if (modifier === 'treasure') {
-    if (roll < 0.60) return 'combat';
-    if (roll < 0.82) return 'chest';
-    if (roll < 0.92) return 'event';
-    return 'trap';
+    if (roll < 0.22) return 'chest';
+    if (roll < 0.32) return 'event';
+    if (roll < 0.40) return 'trap';
+
+    return 'combat';
   }
 
   if (modifier === 'traps') {
-    if (roll < 0.68) return 'combat';
-    if (roll < 0.74) return 'chest';
-    if (roll < 0.82) return 'event';
-    return 'trap';
+    if (roll < 0.18) return 'trap';
+    if (roll < 0.26) return 'event';
+    if (roll < 0.32) return 'chest';
+
+    return 'combat';
   }
 
   if (modifier === 'cursed') {
-    if (roll < 0.74) return 'combat';
-    if (roll < 0.80) return 'chest';
-    if (roll < 0.90) return 'event';
-    return 'trap';
+    if (roll < 0.10) return 'trap';
+    if (roll < 0.20) return 'event';
+    if (roll < 0.26) return 'chest';
+
+    return 'combat';
   }
 
   if (modifier === 'elite') {
-    if (roll < 0.80) return 'combat';
-    if (roll < 0.87) return 'chest';
-    if (roll < 0.94) return 'event';
-    return 'trap';
+    if (roll < 0.07) return 'chest';
+    if (roll < 0.14) return 'event';
+    if (roll < 0.20) return 'trap';
+
+    return 'combat';
   }
 
-  if (roll < 0.74) return 'combat';
-  if (roll < 0.82) return 'chest';
-  if (roll < 0.92) return 'event';
+  if (roll < 0.08) return 'chest';
+  if (roll < 0.18) return 'event';
+  if (roll < 0.26) return 'trap';
 
-  return 'trap';
+  return 'combat';
 }
 
 function rollCombatRoomType(floor: number, modifier: FloorModifier): 'monster' | 'elite' {
-  let eliteChance = getEliteChanceByFloor(floor);
+  const eliteChance = modifier === 'elite'
+    ? 0.32
+    : floor >= 16
+      ? 0.2
+      : floor >= 8
+        ? 0.16
+        : 0.1;
 
-  if (modifier === 'elite') {
-    eliteChance += 0.2;
-  }
-
-  if (modifier === 'cursed') {
-    eliteChance += 0.12;
-  }
-
-  return Math.random() < Math.min(eliteChance, 0.75)
-    ? 'elite'
-    : 'monster';
+  return Math.random() < eliteChance ? 'elite' : 'monster';
 }
 
 function createRandomNormalRoom(

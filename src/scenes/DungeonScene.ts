@@ -268,25 +268,38 @@ export class DungeonScene extends Phaser.Scene {
     const tier = getCurrentTierByFloor(floor);
     const modifierName = getFloorModifierName(gameState.floorRun.modifier);
     const theme = getCryptDepthTheme(floor);
+    const stats = getPlayerStats(player);
 
-    this.createRoundedPanel({
+    const headerHeight = layout.compact ? 86 : 96;
+    const headerTop = layout.headerY - headerHeight / 2;
+    const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.headerY,
       width: layout.contentWidth,
-      height: layout.compact ? 78 : 88,
-      radius: 28,
-      color: DUNGEON_DARK.graphite,
-      alpha: 0.94,
+      height: headerHeight,
+      radius: 30,
+      color: 0x08090d,
+      alpha: 0.96,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.56,
+      strokeAlpha: 0.62,
       strokeWidth: 2,
       depth: 2,
     });
 
-    this.add.circle(layout.centerX, layout.headerY - 4, layout.contentWidth * 0.35, theme.glow, 0.035)
+    panel.shadow.setAlpha(0);
+    panel.panel.setAlpha(0);
+
+    this.tweens.add({
+      targets: [panel.shadow, panel.panel],
+      alpha: 1,
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+
+    this.add.circle(layout.centerX, layout.headerY - 10, layout.contentWidth * 0.38, theme.glow, 0.045)
       .setDepth(3);
 
-    this.add.text(layout.centerX, layout.headerY - (layout.compact ? 15 : 18), `Ярус ${tier}  •  Этаж ${floor}  •  Ур. ${player.level}`, {
+    this.add.text(layout.centerX, headerTop + 20, `Ярус ${tier} • Этаж ${floor}`, {
       fontFamily: UI.font.title,
       fontSize: layout.compact ? '22px' : '26px',
       color: UI.colors.goldText,
@@ -294,23 +307,75 @@ export class DungeonScene extends Phaser.Scene {
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 44,
+        width: layout.contentWidth - 46,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(6);
+    }).setOrigin(0.5).setDepth(7);
 
-    this.add.text(layout.centerX, layout.headerY + (layout.compact ? 18 : 22), `${theme.name}  •  ${modifierName}  •  HP ${player.hp}`, {
+    this.add.text(layout.centerX, headerTop + (layout.compact ? 45 : 50), `${theme.name} • ${modifierName}`, {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '13px' : '15px',
+      fontSize: layout.compact ? '12px' : '13px',
       color: theme.mutedText,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 56,
+        width: layout.contentWidth - 58,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(6);
+    }).setOrigin(0.5).setDepth(7);
+
+    const pillY = headerTop + headerHeight - 18;
+    const pillWidth = Math.min((layout.contentWidth - 54) / 3, 174);
+    const startX = layout.centerX - pillWidth - 8;
+
+    const hpColor = player.hp <= Math.max(1, Math.floor(stats.maxHp * 0.3))
+      ? DUNGEON_DARK.blood
+      : DUNGEON_DARK.green;
+
+    const pills = [
+      {
+        x: startX,
+        label: `HP ${player.hp}/${stats.maxHp}`,
+        color: hpColor,
+      },
+      {
+        x: layout.centerX,
+        label: `ЭН ${player.energy}/${stats.maxEnergy}`,
+        color: DUNGEON_DARK.cold,
+      },
+      {
+        x: layout.centerX + pillWidth + 8,
+        label: `ЗЕЛЬЯ ${player.potions}/${this.maxPotionCount}`,
+        color: DUNGEON_DARK.gold,
+      },
+    ];
+
+    pills.forEach((pill, index) => {
+      const bg = this.add.rectangle(pill.x, pillY, pillWidth, 24, 0x050507, 0.72)
+        .setStrokeStyle(1, pill.color, 0.46)
+        .setDepth(6)
+        .setAlpha(0);
+
+      const text = this.add.text(pill.x, pillY, pill.label, {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '10px' : '11px',
+        color: '#d8d2c4',
+        align: 'center',
+        wordWrap: {
+          width: pillWidth - 10,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(7).setAlpha(0);
+
+      this.tweens.add({
+        targets: [bg, text],
+        alpha: 1,
+        duration: 240,
+        delay: 80 + index * 55,
+        ease: 'Sine.easeOut',
+      });
+    });
   }
 
   private createDungeonBackdrop() {
@@ -365,26 +430,46 @@ export class DungeonScene extends Phaser.Scene {
     const layout = this.getLayout();
     const floor = gameState.floorRun.currentFloor;
     const theme = getCryptDepthTheme(floor);
+    const rooms = gameState.floorRun.rooms;
+    const completedRooms = rooms.filter(room => room.completed).length;
+    const totalRooms = Math.max(1, rooms.length);
+    const availableChoices = getAvailableNextRooms().length;
+    const currentRoom = getCurrentRoom();
+    const currentLayer = currentRoom?.branchLayer ?? 0;
+    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
+    const panelHeight = layout.veryCompact ? 82 : layout.compact ? 90 : 100;
 
-    const panelHeight = layout.veryCompact ? 78 : layout.compact ? 86 : 96;
-
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.floorInfoY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 24,
-      color: theme.panel,
-      alpha: 0.88,
+      radius: 26,
+      color: 0x0b0d12,
+      alpha: 0.9,
       strokeColor: theme.stroke,
       strokeAlpha: 0.42,
       strokeWidth: 2,
       depth: 2,
     });
 
-    this.add.text(layout.centerX, layout.floorInfoY, getFloorDescription(floor), {
+    panel.panel.setAlpha(0);
+    panel.shadow.setAlpha(0);
+
+    this.tweens.add({
+      targets: [panel.panel, panel.shadow],
+      alpha: 1,
+      duration: 250,
+      ease: 'Sine.easeOut',
+    });
+
+    const descriptionText = isAwaitingRoomChoice()
+      ? 'Выбери один из открывшихся проходов. Остальные ветви останутся в тени.'
+      : getFloorDescription(floor);
+
+    this.add.text(layout.centerX, layout.floorInfoY - (layout.veryCompact ? 22 : 26), descriptionText, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '12px' : layout.compact ? '13px' : '14px',
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
       color: theme.mutedText,
       align: 'center',
       wordWrap: {
@@ -392,8 +477,48 @@ export class DungeonScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       lineSpacing: 2,
-      maxLines: layout.veryCompact ? 4 : 5,
-    }).setOrigin(0.5).setDepth(6);
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(7);
+
+    const barWidth = layout.contentWidth - 88;
+    const barY = layout.floorInfoY + (layout.veryCompact ? 18 : 22);
+    const progress = Phaser.Math.Clamp(completedRooms / totalRooms, 0, 1);
+
+    this.add.rectangle(layout.centerX, barY, barWidth, 8, 0x050507, 0.72)
+      .setStrokeStyle(1, 0x33291d, 0.7)
+      .setDepth(6);
+
+    const fillWidth = Math.max(4, barWidth * progress);
+    const fill = this.add.rectangle(
+      layout.centerX - barWidth / 2 + fillWidth / 2,
+      barY,
+      fillWidth,
+      8,
+      UI.colors.goldDark,
+      0.82
+    ).setDepth(7).setAlpha(0);
+
+    this.tweens.add({
+      targets: fill,
+      alpha: 1,
+      duration: 280,
+      ease: 'Sine.easeOut',
+    });
+
+    const metaText = isAwaitingRoomChoice()
+      ? `Доступно путей: ${availableChoices}`
+      : `Глубина ветви: ${currentLayer + 1}/${maxLayer + 1}`;
+
+    this.add.text(layout.centerX, barY + 18, `${completedRooms}/${totalRooms} комнат • ${metaText}`, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '10px' : '11px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 70,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(7);
   }
 
   private getRewardLineColor(line: string) {
@@ -694,7 +819,7 @@ export class DungeonScene extends Phaser.Scene {
     const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
     const layerCount = maxLayer + 1;
 
-    this.add.text(layout.centerX, top - 22, 'Карта развилки', {
+    this.add.text(layout.centerX, top - 22, 'Карта разломов', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '17px' : '20px',
       color: UI.colors.text,
@@ -779,6 +904,18 @@ export class DungeonScene extends Phaser.Scene {
         );
       });
     });
+
+
+    this.add.text(layout.centerX, top + mapHeight - 14, '◆ доступно  •  ✓ пройдено  •  ? неизвестно  •  ♛ босс', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '9px' : '10px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: width - 44,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
 
     rooms.forEach((room, index) => {
       const x = layerX(room.branchLayer ?? 0);
@@ -1064,7 +1201,7 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     const roomTitle = isQuestion
-      ? 'Комната под вопросом'
+      ? 'Неизвестный проход'
       : this.getRoomTitleForBranchCard(roomType, room);
 
     const titleY = cardTop + (layout.veryCompact ? 94 : 122);
@@ -1093,7 +1230,7 @@ export class DungeonScene extends Phaser.Scene {
     });
 
     const description = isQuestion
-      ? 'За этим проходом скрывается неизвестная комната. Она может оказаться боем, событием, сундуком или ловушкой. Выбор уже сделан — теперь остаётся войти.'
+      ? 'Дверной проём затянут пепельной мглой. Внутри может ждать сражение, случайная встреча, ловушка или забытая добыча.'
       : this.getRoomDescriptionForBranchCard(roomType, room);
 
     const descriptionY = cardTop + (layout.veryCompact ? 150 : 182);
@@ -1122,7 +1259,7 @@ export class DungeonScene extends Phaser.Scene {
     this.createRoomInfoBox(
       layout.centerX,
       cardTop + (layout.veryCompact ? 252 : 316),
-      isQuestion ? 'Неизвестная комната: исход откроется только после входа.' : this.getRoomInfo(roomType),
+      isQuestion ? 'Неизвестный проход: исход откроется только после входа.' : this.getRoomInfo(roomType),
       this.getModifierWarning()
     );
 
@@ -1221,7 +1358,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.createCurrentRoomAtmosphere(cardTop, cardHeight, 0x9b7cff, true);
 
-    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 42 : 56), 'Выбор пути', {
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 42 : 56), 'Выбери следующий проход', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '28px' : '34px',
       color: '#d8c6ff',
@@ -1234,7 +1371,7 @@ export class DungeonScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(7);
 
-    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 88 : 112), 'Прошлая комната осталась позади. Ветки расходятся, но каждая в итоге ведёт к боссу этажа. Выбери следующую комнату.', {
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 88 : 112), 'Плиты за спиной опускаются в пепел. Перед тобой несколько проходов: один ведёт к крови, другой к добыче, третий может скрывать знак вопроса.', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '13px' : '15px',
       color: UI.colors.text,
@@ -1257,10 +1394,10 @@ export class DungeonScene extends Phaser.Scene {
       const isQuestion = Boolean(room.question && !room.discovered);
       const roomType = String(room.type);
       const title = isQuestion
-        ? 'Комната под вопросом'
+        ? 'Неизвестный проход'
         : this.getRoomTitleForBranchCard(roomType, room);
       const subtitle = isQuestion
-        ? 'Скрывает сражение, событие, сундук или ловушку.'
+        ? 'Внутри может быть бой, событие, сундук или ловушка.'
         : this.getRoomInfo(roomType);
       const accent = isQuestion ? 0x9b7cff : this.getRoomStrokeColor(roomType);
       const icon = isQuestion ? '?' : this.getRoomIcon(roomType);
