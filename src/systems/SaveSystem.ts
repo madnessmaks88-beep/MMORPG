@@ -36,6 +36,8 @@ type SavePlayerData = PlayerData & {
   characterTreePoints?: number;
   characterTree?: Partial<Record<string, number>>;
   shopRefreshCoupons?: number;
+  avatarId?: string;
+  unlockedAvatarIds?: string[];
 };
 
 function getSavePlayer() {
@@ -51,6 +53,15 @@ function normalizePlayerSave() {
   savePlayer.characterTreePoints ??= 0;
   savePlayer.characterTree ??= {};
   savePlayer.shopRefreshCoupons ??= 0;
+  savePlayer.unlockedAvatarIds ??= [];
+
+  if (
+    savePlayer.avatarId !== undefined &&
+    typeof savePlayer.avatarId !== 'string'
+  ) {
+    savePlayer.avatarId = undefined;
+  }
+
   player.upgradePoints ??= 0;
   player.totalUpgradePointsEarned ??= 0;
 }
@@ -108,6 +119,9 @@ const STARTING_PLAYER_STATE: SavePlayerData = {
   anvilLevel: 1,
 
   crystalsUnlocked: false,
+
+  avatarId: undefined,
+  unlockedAvatarIds: [],
 };
 
 const LOCAL_RESET_KEYS = [
@@ -306,6 +320,14 @@ function fixMissingPlayerFields() {
   savePlayer.characterTreePoints ??= 0;
   savePlayer.characterTree ??= {};
   savePlayer.shopRefreshCoupons ??= 0;
+  savePlayer.unlockedAvatarIds ??= [];
+
+  if (
+    savePlayer.avatarId !== undefined &&
+    typeof savePlayer.avatarId !== 'string'
+  ) {
+    savePlayer.avatarId = undefined;
+  }
 
   const derivedStats = getPlayerStats(player);
 

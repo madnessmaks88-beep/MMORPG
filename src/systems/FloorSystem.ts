@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { getRandomDungeonEventId } from './DungeonEventSystem';
+import { getStoryEncounterEventIdForFloor } from './StoryEncounterSystem';
 
 import {
   gameState,
@@ -191,6 +192,18 @@ export function generateFloorRooms(floor: number, modifier = getFloorModifier(fl
     rooms.push(createRandomNormalRoom(floor, index, modifier));
   }
 
+  const storyEventId = getStoryEncounterEventIdForFloor(floor);
+
+  if (storyEventId && rooms.length > 0) {
+    const replaceIndex = Phaser.Math.Clamp(
+      Phaser.Math.Between(1, Math.max(1, rooms.length - 1)),
+      0,
+      rooms.length - 1
+    );
+
+    rooms[replaceIndex] = createEventRoom(floor, replaceIndex, storyEventId);
+  }
+
   rooms.push(createFinalRoom(floor));
 
   return rooms;
@@ -228,36 +241,36 @@ function rollNormalRoomKind(
   const roll = Math.random();
 
   if (modifier === 'treasure') {
-    if (roll < 0.47) return 'combat';
-    if (roll < 0.75) return 'chest';
-    if (roll < 0.9) return 'event';
-    return 'trap';
-  }
-
-  if (modifier === 'traps') {
-    if (roll < 0.55) return 'combat';
-    if (roll < 0.64) return 'chest';
-    if (roll < 0.76) return 'event';
-    return 'trap';
-  }
-
-  if (modifier === 'cursed') {
-    if (roll < 0.65) return 'combat';
-    if (roll < 0.75) return 'chest';
-    if (roll < 0.88) return 'event';
-    return 'trap';
-  }
-
-  if (modifier === 'elite') {
-    if (roll < 0.72) return 'combat';
-    if (roll < 0.83) return 'chest';
+    if (roll < 0.60) return 'combat';
+    if (roll < 0.82) return 'chest';
     if (roll < 0.92) return 'event';
     return 'trap';
   }
 
-  if (roll < 0.61) return 'combat';
-  if (roll < 0.77) return 'chest';
-  if (roll < 0.9) return 'event';
+  if (modifier === 'traps') {
+    if (roll < 0.68) return 'combat';
+    if (roll < 0.74) return 'chest';
+    if (roll < 0.82) return 'event';
+    return 'trap';
+  }
+
+  if (modifier === 'cursed') {
+    if (roll < 0.74) return 'combat';
+    if (roll < 0.80) return 'chest';
+    if (roll < 0.90) return 'event';
+    return 'trap';
+  }
+
+  if (modifier === 'elite') {
+    if (roll < 0.80) return 'combat';
+    if (roll < 0.87) return 'chest';
+    if (roll < 0.94) return 'event';
+    return 'trap';
+  }
+
+  if (roll < 0.74) return 'combat';
+  if (roll < 0.82) return 'chest';
+  if (roll < 0.92) return 'event';
 
   return 'trap';
 }
@@ -334,8 +347,8 @@ function createRandomNormalRoom(
   };
 }
 
-function createEventRoom(floor: number, index: number): FloorRoom {
-  const eventId = getRandomDungeonEventId(floor);
+function createEventRoom(floor: number, index: number, forcedEventId?: string): FloorRoom {
+  const eventId = forcedEventId ?? getRandomDungeonEventId(floor);
   const tier = getCurrentTierByFloor(floor);
 
   return {

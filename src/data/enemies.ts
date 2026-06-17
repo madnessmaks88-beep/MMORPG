@@ -1285,6 +1285,26 @@ export const enemies: EnemyData[] = [
     },
   },
 
+  {
+    id: 'idris_broken_knight',
+    name: 'Идрис, сломленный рыцарь',
+    hp: 168,
+    maxHp: 168,
+    attack: 24,
+    defense: 10,
+    expReward: 110,
+    goldReward: 95,
+    weaknesses: ['hammer', 'stun', 'bleed'],
+    resistances: ['shield_sword', 'curse'],
+    debuffOnHit: {
+      id: 'armor_break',
+      name: 'Рыцарский надлом',
+      chance: 0.24,
+      duration: 2,
+      power: 2,
+    },
+  },
+
 ];
 
 export function getEnemyById(id: string): EnemyData | undefined {

@@ -44,6 +44,7 @@ import {
 } from '../ui/theme';
 
 import {
+  addItemToInventory,
   getPlayerStats,
   restorePlayerVitalsToMaximum,
 } from '../systems/InventorySystem';
@@ -76,6 +77,18 @@ import {
 } from '../systems/DungeonEventSystem';
 import { addExperience, createLevelUpText } from '../systems/LevelSystem';
 import { addMaterial } from '../systems/MaterialSystem';
+import {
+  abandonIdris,
+  acceptIdrisQuest,
+  consumeLifeLake,
+  hasIdrisLifeFlask,
+  ignoreIdrisQuest,
+  markIdrisCorpseFound,
+  refuseIdrisQuest,
+  restoreIdrisWithFlask,
+  takeIdrisAmuletForDaughter,
+  takeLifeFlaskForIdris,
+} from '../systems/StoryEncounterSystem';
 import {
   clearCampfireBattleCheckpoint,
   createCampfireBattleCheckpoint,
@@ -1811,6 +1824,244 @@ export class DungeonScene extends Phaser.Scene {
       case 'lottery_leave': {
         title = 'Кости не брошены';
         text = 'Ты оставил кубики лежать на плите. Они тихо повернулись сами.';
+        break;
+      }
+
+      case 'idris_accept': {
+        acceptIdrisQuest(floor);
+
+        title = 'Просьба Идриса';
+        text = [
+          'Рыцарь долго молчал, будто вспоминал, как звучит человеческий голос.',
+          '',
+          '«Меня зовут Идрис. Всё, что осталось от моего дома, — жена, которая больше не верит в богов, и дочь, которая дышит так тихо, будто уже слушает подземелье».',
+          '',
+          'Он протянул маленький пустой флакон. Стекло было покрыто трещинами, но внутри теплился слабый золотой свет.',
+          '',
+          '«Найди Озеро Жизни. Не пей из него всё. Одной капли хватит, чтобы вернуть ей утро».',
+          '',
+          this.addEventExp(Math.ceil(baseExp * 0.8)),
+        ].join('\n');
+        break;
+      }
+
+      case 'idris_refuse_fight': {
+        refuseIdrisQuest(floor);
+
+        const room = getCurrentRoom();
+
+        if (room) {
+          room.enemyId = 'idris_broken_knight';
+        }
+
+        this.clearModalObjects();
+
+        markDungeonResumePoint('before-idris-battle');
+        void saveGameAsync();
+
+        this.showMessage(
+          'Меч Идриса поднят',
+          [
+            'Ты отказался. Огонёк рядом с рыцарем дрогнул и почти погас.',
+            '',
+            '«Тогда ты такой же, как остальные. Ещё один, кто пришёл брать, а не спасать».',
+            '',
+            'Идрис встал тяжело, с хрипом, но клинок в его руках не дрожал.',
+          ].join('\n'),
+          () => {
+            this.scene.start('BattleScene', {
+              enemyId: 'idris_broken_knight',
+              returnToDungeon: true,
+            });
+          }
+        );
+        return;
+      }
+
+      case 'idris_ignore': {
+        ignoreIdrisQuest(floor);
+
+        title = 'Огонёк остался позади';
+        text = [
+          'Ты прошёл мимо, не задавая вопросов.',
+          'Идрис не стал останавливать тебя.',
+          '',
+          'Только когда коридор скрыл его из виду, за спиной прозвучало:',
+          '«Значит, даже надежда здесь ходит мимо».',
+        ].join('\n');
+        break;
+      }
+
+      case 'life_lake_fill_flask': {
+        takeLifeFlaskForIdris(floor);
+
+        const hpBefore = player.hp;
+        player.hp = stats.maxHp;
+        const restored = player.hp - hpBefore;
+
+        title = 'Флакон наполнен';
+        text = [
+          'Ты опустил флакон в светящуюся воду. Озеро не дрогнуло, но внутри стекла вспыхнула живая искра.',
+          '',
+          'Вода коснулась пальцев, и боль в теле стала тише.',
+          restored > 0 ? `+${restored} HP` : 'HP уже было полным.',
+          '',
+          'Теперь нужно найти Идриса и передать ему флакон.',
+        ].join('\n');
+        break;
+      }
+
+      case 'life_lake_drink': {
+        consumeLifeLake(floor);
+
+        const hpBefore = player.hp;
+        player.hp = stats.maxHp;
+        const restored = player.hp - hpBefore;
+
+        title = 'Озеро потускнело';
+        text = [
+          'Ты выпил воду сам. На миг катакомбы стали почти тёплыми.',
+          restored > 0 ? `+${restored} HP` : 'HP уже было полным.',
+          '',
+          'Но когда ты поднял флакон Идриса, в нём больше не было света.',
+          'Где-то глубже погас чужой шанс на спасение.',
+        ].join('\n');
+        break;
+      }
+
+      case 'life_lake_leave': {
+        title = 'Озеро осталось нетронутым';
+        text = [
+          'Ты не коснулся воды.',
+          'Она ещё долго светилась за спиной, будто ждала не тебя.',
+        ].join('\n');
+        break;
+      }
+
+      case 'cursed_lake_touch': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.18));
+
+        title = 'Вода взяла плату';
+        text = [
+          'Проклятая вода обвила руку холодом. На коже проступили тёмные жилы, но в голове вспыхнуло знание чужой смерти.',
+          `-${damage} HP`,
+          this.addEventExp(Math.ceil(baseExp * 1.2)),
+          this.addEventMaterial('dim_gem', 1),
+        ].join('\n');
+        break;
+      }
+
+      case 'cursed_lake_purify': {
+        title = 'Монета ушла на дно';
+
+        if (player.gold < 120) {
+          text = 'Вода не принимает пустой звон. Нужно 120 золота.';
+        } else {
+          player.gold -= 120;
+          text = [
+            '-120 золота',
+            'На дне вспыхнул тусклый камень.',
+            this.addEventMaterial('dim_gem', 2),
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'cursed_lake_leave': {
+        title = 'Ты обошёл воду';
+        text = 'Иногда самое мудрое решение — не проверять, насколько глубока тьма.';
+        break;
+      }
+
+      case 'idris_wounded_restore': {
+        title = 'Флакон жизни открыт';
+
+        if (!hasIdrisLifeFlask()) {
+          text = [
+            'Ты хотел помочь, но флакон пуст.',
+            'Идрис понял всё по твоему молчанию.',
+            '',
+            '«Значит, она останется там, где я её оставил…»',
+          ].join('\n');
+        } else {
+          restoreIdrisWithFlask(floor);
+
+          text = [
+            'Ты влил воду в треснувшие губы Идриса. Рыцарь выгнулся от боли, будто жизнь возвращалась в него через железо.',
+            '',
+            '«Спасибо… Если я дойду до глубины, я найду то, что сможет спасти её навсегда».',
+            '',
+            'Он поднялся, пошатнулся и ушёл дальше, туда, где стены уже не возвращают эхо.',
+            '',
+            this.addEventExp(Math.ceil(baseExp * 1.4)),
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'idris_wounded_take_amulet': {
+        takeIdrisAmuletForDaughter(floor);
+
+        title = 'Последняя просьба';
+        text = [
+          'Идрис вложил в твою ладонь маленький амулет с потускневшим портретом.',
+          '',
+          '«Если вернёшься… отдай это её матери. Скажи дочери, что я не умер в грязи. Скажи, что я ушёл в дальние глубины искать рассвет».',
+          '',
+          'В городе теперь можно завершить просьбу Идриса.',
+        ].join('\n');
+        break;
+      }
+
+      case 'idris_wounded_leave': {
+        abandonIdris(floor);
+
+        title = 'Ты оставил его';
+        text = [
+          'Ты ушёл, не забрав ни флакон, ни амулет.',
+          'За спиной Идрис попытался что-то сказать, но катакомбы проглотили слова раньше, чем ты их услышал.',
+        ].join('\n');
+        break;
+      }
+
+      case 'idris_corpse_take_oath': {
+        markIdrisCorpseFound(floor);
+
+        title = 'Клятва Идриса';
+        text = [
+          'Ты вытащил меч из камня. Рукоять была холодной, но не мёртвой.',
+          'На внутренней стороне доспеха была выцарапана строка: «Не дай ей забыть свет».',
+          '',
+          this.addEventExp(Math.ceil(baseExp * 1.6)),
+          'Получено: Клинок последнего огонька',
+          'Получено: Доспех Идриса',
+        ].join('\n');
+
+        addItemToInventory(player, 'idris_last_light_blade');
+        addItemToInventory(player, 'idris_oath_armor');
+        break;
+      }
+
+      case 'idris_corpse_pray': {
+        markIdrisCorpseFound(floor);
+
+        title = 'Молитва без богов';
+        text = [
+          'Ты склонил голову перед рыцарем, которого глубина всё-таки забрала.',
+          'Катакомбы ответили тишиной, но тишина была похожа на уважение.',
+          '',
+          this.addEventExp(Math.ceil(baseExp * 2.1)),
+        ].join('\n');
+        break;
+      }
+
+      case 'idris_corpse_leave': {
+        markIdrisCorpseFound(floor);
+
+        title = 'Мёртвые остаются в глубине';
+        text = 'Ты не тронул тело Идриса. Его меч остался стоять в камне, как маленький памятник упрямству.';
         break;
       }
 

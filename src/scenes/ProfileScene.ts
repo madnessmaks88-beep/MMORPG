@@ -7,6 +7,7 @@ import { getRelicById } from '../data/relics';
 
 import { getPlayerStats } from '../systems/InventorySystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
+import { getUnlockedSecretAvatars } from '../systems/AvatarSystem';
 
 import { createBottomNav } from '../ui/createBottomNav';
 
@@ -209,6 +210,7 @@ export class ProfileScene extends Phaser.Scene {
     cursorY = this.createStatsPanel(layout, cursorY + 14);
     cursorY = this.createRaceAbilitiesPanel(layout, cursorY + 14);
     cursorY = this.createProgressPanel(layout, cursorY + 14);
+    cursorY = this.createSecretAvatarsPanel(layout, cursorY + 14);
     cursorY = this.createRelicsPanel(layout, cursorY + 14);
 
     const contentHeight = cursorY - layout.contentTop + 28;
@@ -543,6 +545,66 @@ export class ProfileScene extends Phaser.Scene {
         maxLines: 1,
       }).setOrigin(0.5).setDepth(8)
     );
+
+    return topY + height;
+  }
+
+
+  private createSecretAvatarsPanel(layout: ProfileLayout, topY: number) {
+    const container = this.requireContentContainer();
+    const avatars = getUnlockedSecretAvatars();
+
+    const empty = avatars.length === 0;
+    const visibleAvatars = avatars.slice(0, 3);
+    const height = empty ? 184 : 86 + visibleAvatars.length * 70 + 20;
+    const y = topY + height / 2;
+
+    this.createStonePanel({
+      parent: container,
+      x: layout.centerX,
+      y,
+      width: layout.contentWidth,
+      height,
+      radius: 28,
+      fill: PROFILE.stone,
+      alpha: 0.94,
+      stroke: PROFILE.violet,
+      strokeAlpha: 0.48,
+      depth: 2,
+    });
+
+    this.createSectionTitle(container, layout.centerX, topY + 34, 'Секретные аватарки', 'память о встреченных судьбах', layout.contentWidth - 56);
+
+    if (empty) {
+      this.addTo(
+        container,
+        this.add.text(layout.centerX, topY + 110, 'Пока не открыто. Некоторые персонажи катакомб оставляют после себя не только добычу.', {
+          fontFamily: UI.font.body,
+          fontSize: '15px',
+          color: '#8f8a80',
+          align: 'center',
+          wordWrap: {
+            width: layout.contentWidth - 76,
+            useAdvancedWrap: true,
+          },
+          maxLines: 3,
+          lineSpacing: 5,
+        }).setOrigin(0.5).setDepth(8)
+      );
+
+      return topY + height;
+    }
+
+    visibleAvatars.forEach((avatar, index) => {
+      this.createRelicCard(
+        container,
+        layout.centerX,
+        topY + 86 + index * 70,
+        layout.contentWidth - 60,
+        `${avatar.icon} ${avatar.name}`,
+        avatar.title
+      );
+    });
 
     return topY + height;
   }

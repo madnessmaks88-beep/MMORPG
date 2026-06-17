@@ -4,12 +4,17 @@ import { player } from '../data/player';
 import { gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
-import { getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
+import { addItemToInventory, getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
 import { loadGameAsync, saveGameAsync, startNewGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
+import {
+  canCompleteIdrisDaughterQuest,
+  completeIdrisDaughterQuest,
+  getIdrisDaughterQuestPreviewText,
+} from '../systems/StoryEncounterSystem';
 
 import {
   getActiveCampfireBattleCheckpoint,
@@ -634,7 +639,29 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += tileHeight / 2 + gap + 8;
+    currentY += tileHeight / 2 + gap;
+
+    if (canCompleteIdrisDaughterQuest()) {
+      currentY += wideHeight / 2;
+
+      this.createWideActionButton({
+        x: layout.centerX,
+        y: currentY,
+        width: innerWidth,
+        height: wideHeight,
+        icon: '♞',
+        title: 'Дом Идриса',
+        description: 'Передать амулет семье рыцаря и завершить тайную просьбу.',
+        accentColor: 0xb89a5e,
+        onClick: () => {
+          this.showIdrisDaughterQuest();
+        },
+      });
+
+      currentY += wideHeight / 2 + gap;
+    }
+
+    currentY += 8;
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Подготовка');
     currentY += 24 + wideHeight / 2;
@@ -1378,7 +1405,6 @@ export class CampScene extends Phaser.Scene {
 
     const maxPotions = 6;
     const hpIsFull = player.hp >= stats.maxHp;
-    const energyIsFull = player.energy >= stats.maxEnergy;
     const potionsAreFull = player.potions >= maxPotions;
 
     const cooldownLeft = this.getCampfireCooldownLeft();
@@ -1391,15 +1417,16 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
-    if (hpIsFull && energyIsFull && potionsAreFull) {
+    if (hpIsFull && potionsAreFull) {
       this.showMessage(
         'Костёр не нужен',
-        `HP, энергия и зелья уже полные.\nHP: ${player.hp}/${stats.maxHp}\nЭнергия: ${player.energy}/${stats.maxEnergy}\nЗелья: ${player.potions}/${maxPotions}.`
+        `HP уже полное, а зелий максимум: ${player.potions}/${maxPotions}.`
       );
       return;
     }
 
-    const restored = restorePlayerVitalsToMaximum(player, maxPotions);
+    restorePlayerVitalsToMaximum(player, 6);
+    player.potions = maxPotions;
 
     localStorage.setItem(
       this.CAMPFIRE_LAST_USE_KEY,
@@ -1410,7 +1437,7 @@ export class CampScene extends Phaser.Scene {
 
     this.showMessage(
       'Отдых у костра',
-      `Пламя восстановило силы героя.\nHP: ${restored.hpBefore}/${restored.hpMax} → ${restored.hpAfter}/${restored.hpMax} (+${restored.hpRestored})\nЭнергия: ${restored.energyBefore}/${restored.energyMax} → ${restored.energyAfter}/${restored.energyMax} (+${restored.energyRestored})\nЗелья: ${restored.potionsBefore}/${maxPotions} → ${restored.potionsAfter}/${maxPotions}\n\nКостёр снова будет доступен через 30 минут.`
+      `HP полностью восстановлено.\nЗелья восстановлены до ${maxPotions}.\n\nКостёр снова будет доступен через 30 минут.`
     );
   }
 
@@ -1448,6 +1475,44 @@ export class CampScene extends Phaser.Scene {
     }
 
     this.scene.start('DungeonSelectScene');
+  }
+
+
+  private showIdrisDaughterQuest() {
+    this.showConfirmMessage(
+      'Дом Идриса',
+      `${getIdrisDaughterQuestPreviewText()}\n\nПередать амулет и завершить просьбу?`,
+      () => {
+        const result = completeIdrisDaughterQuest();
+
+        if (!result.completed) {
+          this.showMessage('Просьба недоступна', 'Амулет Идриса уже передан или просьба больше не может быть завершена.');
+          return;
+        }
+
+        player.gold += 650;
+        addItemToInventory(player, 'idris_last_amulet');
+        addItemToInventory(player, 'idris_oath_armor');
+
+        void saveGameAsync();
+
+        this.showMessage(
+          'Дочь Идриса спасена',
+          [
+            'Ты сказал, что Идрис ушёл в дальние глубины искать свет, которого здесь давно нет.',
+            'Мать молчала, но не стала спрашивать правду.',
+            '',
+            'Девочка сжала амулет, и на мгновение в комнате стало теплее.',
+            '',
+            '+650 золота',
+            'Получено: Амулет последнего огонька',
+            'Получено: Доспех Идриса',
+            'Открыта секретная аватарка: Идрис',
+          ].join('\n')
+        );
+      },
+      'Передать'
+    );
   }
 
   private showLowHpWarning() {

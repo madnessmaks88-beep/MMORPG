@@ -1010,6 +1010,42 @@ export const items: ItemData[] = [
     bonusDefense: 5,
   },
 
+  {
+    id: 'idris_last_amulet',
+    name: 'Амулет последнего огонька',
+    description: 'Амулет семьи Идриса. Внутри почти погасший свет, который всё ещё держится за жизнь.',
+    slot: 'trinket',
+    rarity: 'legendary',
+    bossOnly: true,
+    bonusHp: 18,
+    bonusDefense: 3,
+    bonusEnergy: 1,
+    bonusLuck: 3,
+  },
+  {
+    id: 'idris_oath_armor',
+    name: 'Доспех Идриса',
+    description: 'Потемневшие рыцарские латы, пережившие больше молитв, чем битв. Защищают не тело, а обещание.',
+    slot: 'armor',
+    rarity: 'legendary',
+    bossOnly: true,
+    bonusHp: 30,
+    bonusDefense: 8,
+    bonusStrength: 2,
+  },
+  {
+    id: 'idris_last_light_blade',
+    name: 'Клинок последнего огонька',
+    description: 'Меч Идриса, найденный в глубинах. Лезвие холодное, но у самой гарды теплится слабый свет.',
+    slot: 'weapon',
+    rarity: 'legendary',
+    bossOnly: true,
+    weaponType: 'shield_sword',
+    bonusAttack: 18,
+    bonusDefense: 4,
+    bonusCritChance: 0.04,
+  },
+
 ];
 
 export function getItemById(id: string): ItemData | undefined {

@@ -72,6 +72,9 @@ export type PlayerData = {
   anvilLevel: number;
 
   crystalsUnlocked: boolean;
+
+  avatarId?: string;
+  unlockedAvatarIds: string[];
 };
 
 export const player: PlayerData = {
@@ -118,4 +121,7 @@ export const player: PlayerData = {
   anvilLevel: 1,
 
   crystalsUnlocked: false,
+
+  avatarId: undefined,
+  unlockedAvatarIds: [],
 };

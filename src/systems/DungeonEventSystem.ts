@@ -4,7 +4,12 @@ export type DungeonEventId =
   | 'grave_trader'
   | 'sacrificial_chains'
   | 'morvein_mirror'
-  | 'bone_lottery';
+  | 'bone_lottery'
+  | 'idris_first_meeting'
+  | 'life_lake'
+  | 'cursed_lake'
+  | 'idris_wounded'
+  | 'idris_corpse';
 
 export type DungeonEventChoiceId =
   | 'altar_drink'
@@ -24,7 +29,22 @@ export type DungeonEventChoiceId =
   | 'mirror_touch'
   | 'lottery_throw'
   | 'lottery_load'
-  | 'lottery_leave';
+  | 'lottery_leave'
+  | 'idris_accept'
+  | 'idris_refuse_fight'
+  | 'idris_ignore'
+  | 'life_lake_fill_flask'
+  | 'life_lake_drink'
+  | 'life_lake_leave'
+  | 'cursed_lake_touch'
+  | 'cursed_lake_purify'
+  | 'cursed_lake_leave'
+  | 'idris_wounded_restore'
+  | 'idris_wounded_take_amulet'
+  | 'idris_wounded_leave'
+  | 'idris_corpse_take_oath'
+  | 'idris_corpse_pray'
+  | 'idris_corpse_leave';
 
 export type DungeonEventChoice = {
   id: DungeonEventChoiceId;
@@ -231,6 +251,156 @@ export const DUNGEON_EVENTS: DungeonEventData[] = [
       },
     ],
   },
+  {
+    id: 'idris_first_meeting',
+    title: 'Идрис у последнего огонька',
+    shortTitle: 'Одинокий рыцарь',
+    description:
+      'Вдалеке дрожит слабый огонёк. У стены сидит облочённый рыцарь в потемневших доспехах. Он поднимает ладонь, не хватаясь за меч, и просит выслушать его.',
+    icon: '♞',
+    accent: 0xb89a5e,
+    choices: [
+      {
+        id: 'idris_accept',
+        title: 'Выслушать Идриса',
+        subtitle: 'Принять просьбу найти Озеро Жизни и наполнить флакон.',
+        icon: '✦',
+      },
+      {
+        id: 'idris_refuse_fight',
+        title: 'Отказать и обнажить оружие',
+        subtitle: 'Идрис решит, что ты хочешь забрать его последнюю надежду.',
+        icon: '⚔',
+        danger: true,
+      },
+      {
+        id: 'idris_ignore',
+        title: 'Уйти молча',
+        subtitle: 'Не принимать чужую боль на себя.',
+        icon: '➤',
+      },
+    ],
+  },
+  {
+    id: 'life_lake',
+    title: 'Озеро Жизни',
+    shortTitle: 'Озеро Жизни',
+    description:
+      'Под каменными арками светится тихая вода. Она не отражает потолок — только лица тех, кто ещё может быть спасён.',
+    icon: '♒',
+    accent: 0x7fa8c9,
+    choices: [
+      {
+        id: 'life_lake_fill_flask',
+        title: 'Наполнить флакон Идриса',
+        subtitle: 'Сохранить воду для больной дочери рыцаря. Герой тоже восстановит HP.',
+        icon: '♒',
+      },
+      {
+        id: 'life_lake_drink',
+        title: 'Испить самому',
+        subtitle: 'Полностью восстановить HP, но просьба Идриса будет сорвана.',
+        icon: '♥',
+        danger: true,
+      },
+      {
+        id: 'life_lake_leave',
+        title: 'Не трогать воду',
+        subtitle: 'Оставить озеро нетронутым и идти дальше.',
+        icon: '➤',
+      },
+    ],
+  },
+  {
+    id: 'cursed_lake',
+    title: 'Проклятое озеро',
+    shortTitle: 'Проклятая вода',
+    description:
+      'В низине стоит чёрная вода. Она похожа на Озеро Жизни, но от неё пахнет железом, сырой землёй и чужим страхом.',
+    icon: '♒',
+    accent: 0x6b4a8c,
+    choices: [
+      {
+        id: 'cursed_lake_touch',
+        title: 'Коснуться воды',
+        subtitle: 'Получить опыт и материал, но потерять HP.',
+        icon: '☾',
+        danger: true,
+      },
+      {
+        id: 'cursed_lake_purify',
+        title: 'Бросить монету в глубину',
+        subtitle: 'Потратить золото и попытаться вытащить самоцвет.',
+        icon: '¤',
+      },
+      {
+        id: 'cursed_lake_leave',
+        title: 'Обойти стороной',
+        subtitle: 'Не доверять воде, которая не отражает свет.',
+        icon: '➤',
+      },
+    ],
+  },
+  {
+    id: 'idris_wounded',
+    title: 'Раненый Идрис',
+    shortTitle: 'Идрис при смерти',
+    description:
+      'После боя в боковом зале лежит Идрис. Доспехи пробиты, огонёк рядом почти погас. Он узнаёт тебя и с трудом вытягивает руку.',
+    icon: '♞',
+    accent: 0x8f2f2f,
+    choices: [
+      {
+        id: 'idris_wounded_restore',
+        title: 'Использовать флакон жизни',
+        subtitle: 'Попытаться спасти Идриса. Позже его путь может закончиться глубже.',
+        icon: '♒',
+      },
+      {
+        id: 'idris_wounded_take_amulet',
+        title: 'Взять амулет для дочери',
+        subtitle: 'Оставить рыцаря и выполнить его последнюю просьбу в городе.',
+        icon: '◇',
+        danger: true,
+      },
+      {
+        id: 'idris_wounded_leave',
+        title: 'Оставить его',
+        subtitle: 'Не вмешиваться. Иногда милосердие тяжелее меча.',
+        icon: '➤',
+        danger: true,
+      },
+    ],
+  },
+  {
+    id: 'idris_corpse',
+    title: 'Последний след Идриса',
+    shortTitle: 'Труп рыцаря',
+    description:
+      'В глубине катакомб ты находишь знакомый шлем. Идрис дошёл дальше, чем должен был. Его меч вбит в камень, а рядом лежит обломок детской ленты.',
+    icon: '♞',
+    accent: 0x5f5a50,
+    choices: [
+      {
+        id: 'idris_corpse_take_oath',
+        title: 'Принять его клятву',
+        subtitle: 'Забрать оружие и броню как память о последнем пути рыцаря.',
+        icon: '✦',
+      },
+      {
+        id: 'idris_corpse_pray',
+        title: 'Склонить голову',
+        subtitle: 'Получить опыт и оставить снаряжение нетронутым.',
+        icon: '☥',
+      },
+      {
+        id: 'idris_corpse_leave',
+        title: 'Уйти',
+        subtitle: 'Не тревожить мёртвого.',
+        icon: '➤',
+      },
+    ],
+  },
 ];
 
 const dungeonEventById = DUNGEON_EVENTS.reduce((acc, event) => {
@@ -249,19 +419,59 @@ export function getDungeonEventChoiceById(
   return dungeonEventById[eventId]?.choices.find(choice => choice.id === choiceId);
 }
 
-export function getRandomDungeonEventId(floor: number): DungeonEventId {
-  const earlyEvents: DungeonEventId[] = [
-    'sarcophagus_prisoner',
-    'sacrificial_chains',
-    'bone_lottery',
-    'morvein_mirror',
+type WeightedDungeonEvent = {
+  id: DungeonEventId;
+  weight: number;
+};
+
+function weightedEventRoll(pool: WeightedDungeonEvent[]): DungeonEventId {
+  const totalWeight = pool.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  for (const item of pool) {
+    roll -= item.weight;
+
+    if (roll <= 0) {
+      return item.id;
+    }
+  }
+
+  return pool[pool.length - 1]?.id ?? 'bone_lottery';
+}
+
+export function getDungeonEventWeightsForFloor(floor: number): WeightedDungeonEvent[] {
+  if (floor <= 3) {
+    return [
+      { id: 'sarcophagus_prisoner', weight: 34 },
+      { id: 'sacrificial_chains', weight: 26 },
+      { id: 'bone_lottery', weight: 26 },
+      { id: 'morvein_mirror', weight: 14 },
+    ];
+  }
+
+  if (floor <= 14) {
+    return [
+      { id: 'sarcophagus_prisoner', weight: 22 },
+      { id: 'sacrificial_chains', weight: 19 },
+      { id: 'bone_lottery', weight: 18 },
+      { id: 'morvein_mirror', weight: 13 },
+      { id: 'black_water_altar', weight: 10 },
+      { id: 'grave_trader', weight: 9 },
+      { id: 'cursed_lake', weight: 9 },
+    ];
+  }
+
+  return [
+    { id: 'sarcophagus_prisoner', weight: 17 },
+    { id: 'sacrificial_chains', weight: 16 },
+    { id: 'bone_lottery', weight: 15 },
+    { id: 'morvein_mirror', weight: 16 },
+    { id: 'black_water_altar', weight: 15 },
+    { id: 'grave_trader', weight: 11 },
+    { id: 'cursed_lake', weight: 10 },
   ];
+}
 
-  const allEvents = DUNGEON_EVENTS.map(event => event.id);
-
-  const pool = floor <= 3
-    ? earlyEvents
-    : allEvents;
-
-  return pool[Math.floor(Math.random() * pool.length)];
+export function getRandomDungeonEventId(floor: number): DungeonEventId {
+  return weightedEventRoll(getDungeonEventWeightsForFloor(floor));
 }
