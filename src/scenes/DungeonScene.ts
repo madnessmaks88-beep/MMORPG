@@ -1337,6 +1337,7 @@ export class DungeonScene extends Phaser.Scene {
     const availableRooms = getAvailableNextRooms();
     const floor = gameState.floorRun.currentFloor || 1;
 
+
     const cardTop = layout.roomCardTop;
     const cardHeight = layout.roomCardHeight;
     const cardY = cardTop + cardHeight / 2;
@@ -1469,35 +1470,106 @@ export class DungeonScene extends Phaser.Scene {
   ) {
     const layout = this.getLayout();
     const text = `${info}${modifierWarning}`;
-    const boxWidth = Math.min(layout.contentWidth - 58, 540);
-    const boxHeight = layout.veryCompact ? 64 : 78;
+    const boxWidth = Math.min(layout.contentWidth - 54, 540);
+    const boxHeight = layout.veryCompact ? 66 : 82;
+    const accent = modifierWarning ? DUNGEON_DARK.blood : UI.colors.goldDark;
 
-    this.createRoundedPanel({
+    const shadow = this.add.graphics().setDepth(5).setAlpha(0);
+    shadow.fillStyle(0x000000, 0.38);
+    shadow.fillRoundedRect(
+      x - boxWidth / 2,
+      y - boxHeight / 2 + 7,
+      boxWidth,
+      boxHeight,
+      22
+    );
+
+    const bg = this.add.graphics().setDepth(6).setAlpha(0);
+    bg.fillStyle(0x08070a, 0.94);
+    bg.fillRoundedRect(
+      x - boxWidth / 2,
+      y - boxHeight / 2,
+      boxWidth,
+      boxHeight,
+      22
+    );
+    bg.lineStyle(2, accent, modifierWarning ? 0.54 : 0.38);
+    bg.strokeRoundedRect(
+      x - boxWidth / 2,
+      y - boxHeight / 2,
+      boxWidth,
+      boxHeight,
+      22
+    );
+
+    const inner = this.add.graphics().setDepth(7).setAlpha(0);
+    inner.fillStyle(0x14100d, 0.42);
+    inner.fillRoundedRect(
+      x - boxWidth / 2 + 8,
+      y - boxHeight / 2 + 8,
+      boxWidth - 16,
+      boxHeight - 16,
+      16
+    );
+
+    const topLine = this.add.rectangle(
       x,
-      y,
-      width: boxWidth,
-      height: boxHeight,
-      radius: 20,
-      color: DUNGEON_DARK.brown,
-      alpha: 0.88,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.3,
-      strokeWidth: 1,
-      depth: 5,
-    });
+      y - boxHeight / 2 + 10,
+      boxWidth - 54,
+      1,
+      accent,
+      modifierWarning ? 0.42 : 0.25
+    ).setDepth(8).setAlpha(0);
 
-    this.add.text(x, y, text, {
+    const runeLeft = this.add.text(x - boxWidth / 2 + 25, y, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '15px' : '17px',
+      color: modifierWarning ? UI.colors.red : UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(9).setAlpha(0);
+
+    const runeRight = this.add.text(x + boxWidth / 2 - 25, y, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '15px' : '17px',
+      color: modifierWarning ? UI.colors.red : UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(9).setAlpha(0);
+
+    const label = this.add.text(x, y, text, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '11px' : '13px',
-      color: UI.colors.textMuted,
+      color: modifierWarning ? '#e0b6aa' : '#c8bda5',
       align: 'center',
       wordWrap: {
-        width: boxWidth - 46,
+        width: boxWidth - 86,
         useAdvancedWrap: true,
       },
-      lineSpacing: 3,
+      lineSpacing: 4,
       maxLines: layout.veryCompact ? 3 : 4,
-    }).setOrigin(0.5).setDepth(8);
+    }).setOrigin(0.5).setDepth(9).setAlpha(0);
+
+    this.tweens.add({
+      targets: [shadow, bg, inner, topLine, runeLeft, runeRight, label],
+      alpha: 1,
+      duration: 260,
+      delay: 120,
+      ease: 'Sine.easeOut',
+    });
+
+    this.tweens.add({
+      targets: [runeLeft, runeRight],
+      alpha: {
+        from: 0.45,
+        to: 0.95,
+      },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      delay: 420,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   private createBossRequirementInfo(y: number) {
@@ -1601,43 +1673,43 @@ export class DungeonScene extends Phaser.Scene {
     if (type === 'monster') {
       buttonText = 'Идти в бой';
       icon = '☠';
-      description = 'Обычное сражение. Победи врага, чтобы пройти дальше.';
+      description = 'В проходе слышен шорох костей. Победи врага, чтобы пройти дальше.';
     }
 
     if (type === 'elite') {
       buttonText = 'Идти в бой';
       icon = '◆';
-      description = 'Элитный враг. Опаснее обычного, но награда выше.';
+      description = 'Тяжёлые шаги приближаются из тьмы. Награда выше, риск серьёзнее.';
     }
 
     if (type === 'boss') {
       buttonText = 'Идти к боссу';
       icon = '♛';
-      description = 'Финальная битва этажа. Проверь HP, энергию и зелья.';
+      description = 'За плитами ждёт хозяин этажа. Проверь HP, энергию и зелья.';
     }
 
     if (type === 'tier_boss') {
       buttonText = 'Идти в финальный бой';
       icon = '♚';
-      description = 'Битва за завершение яруса и переход глубже.';
+      description = 'Последняя печать яруса трещит. Победа откроет путь глубже.';
     }
 
     if (type === 'chest') {
       buttonText = 'Идти к сундуку';
       icon = '✦';
-      description = 'Золото и материалы для кузницы.';
+      description = 'Сундук покрыт пеплом. Внутри золото, материалы или забытый клинок.';
     }
 
     if (type === 'trap') {
       buttonText = 'Идти осторожно';
       icon = '!';
-      description = 'Ловкость может помочь избежать урона.';
+      description = 'Каменные плиты слишком тихие. Ловкость может спасти от урона.';
     }
 
     if (type === 'event') {
       buttonText = 'Идти к событию';
       icon = '◈';
-      description = 'Выбери исход. Риск может дать награду или оставить шрам.';
+      description = 'Случайная встреча в темноте. Выбор может дать награду или шрам.';
     }
 
     if (type === 'campfire') {
@@ -2928,23 +3000,74 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
   private createActionDock(layout = this.getLayout()) {
     const dockHeight = layout.height - layout.actionDockTop;
 
-    this.add.rectangle(
-      layout.centerX,
-      layout.actionDockTop + dockHeight / 2,
+    const bg = this.add.graphics().setDepth(18);
+    bg.fillStyle(0x020203, 0.88);
+    bg.fillRect(
+      0,
+      layout.actionDockTop,
       layout.width,
-      dockHeight,
-      0x020202,
-      0.78
-    ).setDepth(18);
+      dockHeight
+    );
+
+    bg.fillStyle(0x0b0705, 0.72);
+    bg.fillRoundedRect(
+      layout.centerX - layout.contentWidth / 2,
+      layout.actionDockTop + 8,
+      layout.contentWidth,
+      dockHeight - 12,
+      28
+    );
+
+    bg.lineStyle(1, UI.colors.goldDark, 0.34);
+    bg.strokeRoundedRect(
+      layout.centerX - layout.contentWidth / 2,
+      layout.actionDockTop + 8,
+      layout.contentWidth,
+      dockHeight - 12,
+      28
+    );
 
     this.add.rectangle(
       layout.centerX,
-      layout.actionDockTop + 1,
-      layout.contentWidth,
+      layout.actionDockTop + 2,
+      layout.contentWidth - 30,
       1,
       UI.colors.goldDark,
-      0.28
+      0.34
     ).setDepth(19);
+
+    this.add.rectangle(
+      layout.centerX,
+      layout.actionDockTop + 6,
+      layout.contentWidth * 0.52,
+      1,
+      0x5e4631,
+      0.18
+    ).setDepth(19);
+
+    for (let i = 0; i < 8; i += 1) {
+      const ash = this.add.circle(
+        Phaser.Math.Between(24, Math.max(26, layout.width - 24)),
+        Phaser.Math.Between(Math.ceil(layout.actionDockTop + 12), Math.floor(layout.height - 18)),
+        Phaser.Math.Between(1, 2),
+        DUNGEON_DARK.ash,
+        0.035
+      ).setDepth(19);
+
+      this.tweens.add({
+        targets: ash,
+        alpha: {
+          from: 0.015,
+          to: 0.07,
+        },
+        y: ash.y - Phaser.Math.Between(5, 16),
+        duration: Phaser.Math.Between(1500, 2600),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 90,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private createNormalBattleButtons(config: {
@@ -3099,84 +3222,84 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     const danger = config.danger ?? false;
     const large = config.large ?? false;
 
-    const bgColor = danger ? 0x241010 : 0x17100c;
-    const hoverColor = danger ? 0x321515 : 0x21150f;
-    const textColor = danger ? UI.colors.red : UI.colors.goldText;
-    const hoverTextColor = danger ? '#ff9a9a' : UI.colors.text;
+    const radius = large ? 26 : 22;
+    const bgColor = danger ? 0x1b0808 : 0x09090d;
+    const innerColor = danger ? 0x2a1010 : 0x16100c;
+    const hoverColor = danger ? 0x301111 : 0x20140e;
+    const textColor = danger ? '#ff8d7f' : UI.colors.goldText;
+    const hoverTextColor = danger ? '#ffd0c8' : '#f1e2b7';
+    const subtitleColor = danger ? '#d6a49b' : '#aaa08d';
 
-    const radius = large ? 24 : 20;
-    const titleSize = large ? '22px' : '18px';
-    const subtitleSize = large ? '14px' : '12px';
-    const iconX = config.x - config.width / 2 + (large ? 48 : 42);
-    const textX = config.x - config.width / 2 + (large ? 88 : 78);
-    const textWidth = config.width - (large ? 112 : 104);
+    const iconRadius = large ? 28 : 23;
+    const iconX = config.x - config.width / 2 + (large ? 50 : 42);
+    const textX = config.x - config.width / 2 + (large ? 94 : 80);
+    const textWidth = config.width - (large ? 122 : 104);
+    const titleOffset = large ? -15 : -12;
+    const subtitleOffset = large ? 18 : 15;
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.36);
-    shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 5,
-      config.width,
-      config.height,
-      radius
-    );
-    shadow.setDepth(20);
+    const shadow = this.add.graphics().setDepth(20).setAlpha(0);
+    const bg = this.add.graphics().setDepth(21).setAlpha(0);
+    const inner = this.add.graphics().setDepth(22).setAlpha(0);
 
-    const bg = this.add.graphics();
-    bg.fillStyle(bgColor, 0.96);
-    bg.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
-      radius
-    );
-    bg.lineStyle(large ? 3 : 2, config.accentColor, danger ? 0.9 : large ? 0.82 : 0.62);
-    bg.strokeRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2,
-      config.width,
-      config.height,
-      radius
-    );
-    bg.setDepth(21);
+    const topLine = this.add.rectangle(
+      config.x + 18,
+      config.y - config.height / 2 + 10,
+      config.width - 88,
+      1,
+      config.accentColor,
+      danger ? 0.3 : 0.2
+    ).setDepth(23).setAlpha(0);
 
-    const iconCircle = this.add.circle(iconX, config.y, large ? 26 : 22, config.accentColor, danger ? 0.18 : 0.14)
-      .setStrokeStyle(1, config.accentColor, 0.58)
-      .setDepth(22);
+    const sideGlow = this.add.rectangle(
+      config.x - config.width / 2 + 7,
+      config.y,
+      3,
+      config.height - 20,
+      config.accentColor,
+      danger ? 0.42 : 0.3
+    ).setDepth(23).setAlpha(0);
+
+    const iconBack = this.add.circle(iconX, config.y, iconRadius, config.accentColor, danger ? 0.16 : 0.12)
+      .setStrokeStyle(2, config.accentColor, danger ? 0.72 : 0.58)
+      .setDepth(24)
+      .setAlpha(0);
+
+    const iconCore = this.add.circle(iconX, config.y, Math.max(12, iconRadius - 8), 0x050506, 0.8)
+      .setDepth(25)
+      .setAlpha(0);
 
     const iconText = this.add.text(iconX, config.y, config.icon, {
       fontFamily: UI.font.body,
       fontSize: large ? '23px' : '19px',
       color: textColor,
       stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(23);
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(26).setAlpha(0);
 
-    const titleText = this.add.text(textX, config.y - (large ? 14 : 11), config.title, {
+    const titleText = this.add.text(textX, config.y + titleOffset, config.title, {
       fontFamily: UI.font.title,
-      fontSize: titleSize,
+      fontSize: large ? '21px' : '17px',
       color: textColor,
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 4,
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(23);
+    }).setOrigin(0, 0.5).setDepth(26).setAlpha(0);
 
-    const subtitleText = this.add.text(textX, config.y + (large ? 18 : 16), config.subtitle, {
+    const subtitleText = this.add.text(textX, config.y + subtitleOffset, config.subtitle, {
       fontFamily: UI.font.body,
-      fontSize: subtitleSize,
-      color: UI.colors.textMuted,
+      fontSize: large ? '13px' : '11px',
+      color: subtitleColor,
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
       },
       maxLines: large ? 2 : 1,
-      lineSpacing: 2,
-    }).setOrigin(0, 0.5).setDepth(23);
+      lineSpacing: 3,
+    }).setOrigin(0, 0.5).setDepth(26).setAlpha(0);
 
     const redrawButton = (
       fillColor: number,
@@ -3185,34 +3308,107 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       titleColor: string,
       offsetY = 0
     ) => {
-      bg.clear();
+      shadow.clear();
+      shadow.fillStyle(0x000000, 0.44);
+      shadow.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2 + 7 + offsetY,
+        config.width,
+        config.height,
+        radius
+      );
 
+      bg.clear();
       bg.fillStyle(fillColor, fillAlpha);
       bg.fillRoundedRect(
         config.x - config.width / 2,
-        config.y - config.height / 2,
+        config.y - config.height / 2 + offsetY,
         config.width,
         config.height,
         radius
       );
-
-      bg.lineStyle(large ? 3 : 2, config.accentColor, strokeAlpha);
+      bg.lineStyle(2, config.accentColor, strokeAlpha);
       bg.strokeRoundedRect(
         config.x - config.width / 2,
-        config.y - config.height / 2,
+        config.y - config.height / 2 + offsetY,
         config.width,
         config.height,
         radius
       );
 
-      iconCircle.setY(config.y + offsetY);
+      inner.clear();
+      inner.fillStyle(innerColor, danger ? 0.36 : 0.28);
+      inner.fillRoundedRect(
+        config.x - config.width / 2 + 8,
+        config.y - config.height / 2 + 8 + offsetY,
+        config.width - 16,
+        config.height - 16,
+        Math.max(12, radius - 8)
+      );
+      inner.lineStyle(1, 0x000000, 0.35);
+      inner.strokeRoundedRect(
+        config.x - config.width / 2 + 8,
+        config.y - config.height / 2 + 8 + offsetY,
+        config.width - 16,
+        config.height - 16,
+        Math.max(12, radius - 8)
+      );
+
+      iconBack.setY(config.y + offsetY);
+      iconCore.setY(config.y + offsetY);
       iconText.setY(config.y + offsetY);
-      titleText.setY(config.y - (large ? 14 : 11) + offsetY);
-      subtitleText.setY(config.y + (large ? 18 : 16) + offsetY);
+      titleText.setY(config.y + titleOffset + offsetY);
+      subtitleText.setY(config.y + subtitleOffset + offsetY);
+      topLine.setY(config.y - config.height / 2 + 10 + offsetY);
+      sideGlow.setY(config.y + offsetY);
 
       titleText.setColor(titleColor);
       iconText.setColor(titleColor);
     };
+
+    redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
+
+    const animatedTargets = [
+      shadow,
+      bg,
+      inner,
+      topLine,
+      sideGlow,
+      iconBack,
+      iconCore,
+      iconText,
+      titleText,
+      subtitleText,
+    ];
+
+    animatedTargets.forEach(target => {
+      target.setY(target.y + 8);
+    });
+
+    this.tweens.add({
+      targets: animatedTargets,
+      alpha: 1,
+      y: '-=8',
+      duration: 260,
+      ease: 'Cubic.easeOut',
+    });
+
+    this.tweens.add({
+      targets: iconBack,
+      alpha: {
+        from: 0.55,
+        to: danger ? 0.92 : 0.76,
+      },
+      scale: {
+        from: 1,
+        to: 1.07,
+      },
+      duration: 1150,
+      yoyo: true,
+      repeat: -1,
+      delay: 380,
+      ease: 'Sine.easeInOut',
+    });
 
     let isPressed = false;
     let isLocked = false;
@@ -3230,7 +3426,9 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     bg.on('pointerover', () => {
       if (isPressed || isLocked) return;
 
-      redrawButton(hoverColor, 1, 0.96, hoverTextColor);
+      redrawButton(hoverColor, 1, danger ? 0.95 : 0.82, hoverTextColor);
+      sideGlow.setAlpha(danger ? 0.8 : 0.58);
+      topLine.setAlpha(danger ? 0.52 : 0.34);
     });
 
     bg.on('pointerout', () => {
@@ -3238,15 +3436,16 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
       if (isLocked) return;
 
-      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
+      sideGlow.setAlpha(danger ? 0.42 : 0.3);
+      topLine.setAlpha(danger ? 0.3 : 0.2);
     });
 
     bg.on('pointerdown', () => {
       if (isLocked) return;
 
       isPressed = true;
-
-      redrawButton(hoverColor, 0.92, 0.98, hoverTextColor, 1);
+      redrawButton(hoverColor, 0.94, danger ? 1 : 0.88, hoverTextColor, 2);
     });
 
     bg.on('pointerup', () => {
@@ -3255,10 +3454,19 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       isPressed = false;
       isLocked = true;
 
-      redrawButton(hoverColor, 1, 0.98, hoverTextColor);
+      redrawButton(hoverColor, 1, danger ? 1 : 0.94, hoverTextColor);
 
-      this.time.delayedCall(40, () => {
-        redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+      this.tweens.add({
+        targets: [bg, inner, iconBack, iconCore, iconText, titleText, subtitleText],
+        scaleX: 0.985,
+        scaleY: 0.985,
+        duration: 45,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+      });
+
+      this.time.delayedCall(70, () => {
+        redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
         config.onClick();
       });
     });
@@ -3268,7 +3476,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
       if (isLocked) return;
 
-      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
     });
 
     bg.on('pointercancel', () => {
@@ -3276,13 +3484,14 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
       if (isLocked) return;
 
-      redrawButton(bgColor, 0.96, danger ? 0.9 : large ? 0.82 : 0.62, textColor);
+      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
     });
 
     return {
       shadow,
       bg,
-      iconCircle,
+      iconBack,
+      iconCore,
       iconText,
       titleText,
       subtitleText,
