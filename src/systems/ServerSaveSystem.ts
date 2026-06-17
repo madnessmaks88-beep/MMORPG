@@ -12,6 +12,68 @@ function getVKUserId() {
   return getCachedVKUser()?.id;
 }
 
+function normalizeLaunchParams(rawSearch: string) {
+  const value = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch;
+  const params = new URLSearchParams(value);
+
+  if (!params.get('sign') || !params.get('vk_user_id')) {
+    return '';
+  }
+
+  const signedParams = new URLSearchParams();
+  const pairs: Array<[string, string]> = [];
+
+  params.forEach((paramValue, key) => {
+    if (key === 'sign' || key.startsWith('vk_')) {
+      pairs.push([key, paramValue]);
+    }
+  });
+
+  pairs.forEach(([key, paramValue]) => {
+    signedParams.append(key, paramValue);
+  });
+
+  return signedParams.toString();
+}
+
+function getVKLaunchParams() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  const fromSearch = normalizeLaunchParams(window.location.search);
+
+  if (fromSearch) {
+    return fromSearch;
+  }
+
+  // На случай, если когда-нибудь роутер перенесёт параметры в hash.
+  const hash = window.location.hash || '';
+  const hashQueryIndex = hash.indexOf('?');
+
+  if (hashQueryIndex >= 0) {
+    const fromHash = normalizeLaunchParams(hash.slice(hashQueryIndex));
+
+    if (fromHash) {
+      return fromHash;
+    }
+  }
+
+  return '';
+}
+
+function createVKAuthHeaders(): Record<string, string> | null {
+  const launchParams = getVKLaunchParams();
+
+  if (!launchParams) {
+    return null;
+  }
+
+  return {
+    'x-vk-launch-params': launchParams,
+  };
+}
+
 export async function loadServerSaveAsync(vkUserId = getVKUserId()): Promise<ServerSaveLoadResult> {
   if (!vkUserId) {
     return {
@@ -21,12 +83,23 @@ export async function loadServerSaveAsync(vkUserId = getVKUserId()): Promise<Ser
     };
   }
 
+  const authHeaders = createVKAuthHeaders();
+
+  if (!authHeaders) {
+    return {
+      hasSave: false,
+      cloudFailed: true,
+      reason: 'Signed VK launch params are missing.',
+    };
+  }
+
   try {
     const response = await fetch(`/api/save?vkUserId=${encodeURIComponent(String(vkUserId))}`, {
       method: 'GET',
       cache: 'no-store',
       headers: {
         accept: 'application/json',
+        ...authHeaders,
       },
     });
 
@@ -72,6 +145,13 @@ export async function saveServerSaveJsonAsync(
     return false;
   }
 
+  const authHeaders = createVKAuthHeaders();
+
+  if (!authHeaders) {
+    console.warn('Server save skipped: signed VK launch params are missing.');
+    return false;
+  }
+
   try {
     const saveData = JSON.parse(json) as Record<string, unknown>;
 
@@ -80,10 +160,12 @@ export async function saveServerSaveJsonAsync(
       headers: {
         'content-type': 'application/json',
         accept: 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify({
         vkUserId,
         saveData,
+        vkLaunchParams: getVKLaunchParams(),
       }),
     });
 

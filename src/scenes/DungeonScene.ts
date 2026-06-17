@@ -55,6 +55,7 @@ import {
   trackCampfireUsed,
   trackDungeonCompleted,
   trackFloorCleared,
+  trackGoldEarned,
   trackHighestReachedFloor,
   trackRelicCollected,
   trackTrapTriggered,
@@ -66,6 +67,15 @@ import {
   saveGameAsync,
 } from '../systems/SaveSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
+import {
+  getDungeonEventById,
+  getDungeonEventChoiceById,
+  type DungeonEventChoice,
+  type DungeonEventChoiceId,
+  type DungeonEventId,
+} from '../systems/DungeonEventSystem';
+import { addExperience, createLevelUpText } from '../systems/LevelSystem';
+import { addMaterial } from '../systems/MaterialSystem';
 import {
   clearCampfireBattleCheckpoint,
   createCampfireBattleCheckpoint,
@@ -815,7 +825,9 @@ export class DungeonScene extends Phaser.Scene {
               ? 'Финальный босс'
               : roomType === 'campfire'
                 ? 'Забытый костёр'
-                : room.title;
+                : roomType === 'event'
+                  ? getDungeonEventById(room.eventId)?.shortTitle ?? 'Событие катакомб'
+                  : room.title;
 
     this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 94 : 122), roomTitle, {
       fontFamily: UI.font.title,
@@ -832,7 +844,11 @@ export class DungeonScene extends Phaser.Scene {
       lineSpacing: -2,
     }).setOrigin(0.5).setDepth(7);
 
-    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 150 : 182), room.description, {
+    const roomDescription = roomType === 'event'
+      ? getDungeonEventById(room.eventId)?.description ?? room.description
+      : room.description;
+
+    this.add.text(layout.centerX, cardTop + (layout.veryCompact ? 150 : 182), roomDescription, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '14px' : '16px',
       color: UI.colors.text,
@@ -979,6 +995,8 @@ export class DungeonScene extends Phaser.Scene {
         return UI.colors.red;
       case 'campfire':
         return UI.colors.goldText;
+      case 'event':
+        return '#c0a5ff';
       case 'elite':
         return '#c9a4ff';
       case 'boss':
@@ -1038,8 +1056,19 @@ export class DungeonScene extends Phaser.Scene {
       description = 'Ловкость может помочь избежать урона.';
     }
 
+    if (type === 'event') {
+      buttonText = 'Изучить событие';
+      icon = '◈';
+      description = 'Выбери исход. Риск может дать награду или оставить шрам.';
+    }
+
     if (type === 'campfire') {
       this.createCampfireButtons();
+      return;
+    }
+
+    if (type === 'event') {
+      this.createEventButtons();
       return;
     }
 
@@ -1107,6 +1136,767 @@ export class DungeonScene extends Phaser.Scene {
       },
     });
   }
+
+
+  private createEventButtons() {
+    const room = getCurrentRoom();
+    const event = getDungeonEventById(room?.eventId);
+
+    if (!room || !event) {
+      return;
+    }
+
+    const layout = this.getLayout();
+
+    this.createActionDock(layout);
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.mainButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.primaryButtonHeight,
+      icon: event.icon,
+      title: 'Изучить событие',
+      subtitle: 'Открыть выбор и решить, стоит ли рисковать.',
+      accentColor: event.accent,
+      danger: false,
+      large: true,
+      onClick: () => {
+        this.showDungeonEventModal(event.id);
+      },
+    });
+
+    this.createRoomActionButton({
+      x: layout.centerX,
+      y: layout.exitButtonY,
+      width: Math.min(layout.contentWidth, 560),
+      height: layout.secondaryButtonHeight,
+      icon: '⌂',
+      title: 'Выйти в город',
+      subtitle: this.getTownExitSubtitle(),
+      accentColor: UI.colors.goldDark,
+      danger: !getActiveCampfireBattleCheckpoint(),
+      onClick: () => {
+        this.showExitToTownConfirm();
+      },
+    });
+  }
+
+  private clearModalObjects() {
+    this.modalObjects.forEach(object => {
+      object.destroy();
+    });
+
+    this.modalObjects = [];
+  }
+
+  private showDungeonEventModal(eventId: DungeonEventId) {
+    const event = getDungeonEventById(eventId);
+
+    if (!event) {
+      return;
+    }
+
+    const { width, height } = this.scale;
+
+    this.clearModalObjects();
+
+    const modalWidth = Math.min(width - 34, 640);
+    const modalHeight = Math.min(height - 72, 660);
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const top = centerY - modalHeight / 2;
+    const buttonWidth = modalWidth - 44;
+    const buttonHeight = height < 940 ? 74 : 82;
+    const buttonGap = height < 940 ? 10 : 12;
+    const firstButtonY = top + (height < 940 ? 278 : 306);
+
+    const overlay = this.add.rectangle(
+      centerX,
+      centerY,
+      width,
+      height,
+      0x000000,
+      0.76
+    ).setDepth(100).setInteractive();
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.42);
+    shadow.fillRoundedRect(
+      centerX - modalWidth / 2,
+      top + 8,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    shadow.setDepth(101);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x111016, 0.985);
+    panel.fillRoundedRect(
+      centerX - modalWidth / 2,
+      top,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    panel.lineStyle(3, event.accent, 0.78);
+    panel.strokeRoundedRect(
+      centerX - modalWidth / 2,
+      top,
+      modalWidth,
+      modalHeight,
+      28
+    );
+    panel.setDepth(102);
+
+    const iconCircle = this.add.circle(centerX, top + 58, 35, event.accent, 0.16)
+      .setStrokeStyle(2, event.accent, 0.72)
+      .setDepth(103);
+
+    const icon = this.add.text(centerX, top + 58, event.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '31px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(104);
+
+    const title = this.add.text(centerX, top + 112, event.title, {
+      fontFamily: UI.font.title,
+      fontSize: height < 940 ? '23px' : '27px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: modalWidth - 54,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0.5).setDepth(104);
+
+    const divider = this.add.rectangle(
+      centerX,
+      top + 154,
+      modalWidth - 80,
+      2,
+      event.accent,
+      0.22
+    ).setDepth(104);
+
+    const description = this.add.text(centerX, top + 176, event.description, {
+      fontFamily: UI.font.body,
+      fontSize: height < 940 ? '15px' : '17px',
+      color: UI.colors.text,
+      align: 'center',
+      lineSpacing: 5,
+      wordWrap: {
+        width: modalWidth - 66,
+        useAdvancedWrap: true,
+      },
+      maxLines: height < 940 ? 4 : 5,
+    }).setOrigin(0.5, 0).setDepth(104);
+
+    this.modalObjects.push(
+      overlay,
+      shadow,
+      panel,
+      iconCircle,
+      icon,
+      title,
+      divider,
+      description
+    );
+
+    event.choices.forEach((choice, index) => {
+      const y = firstButtonY + index * (buttonHeight + buttonGap);
+
+      this.createEventChoiceButton({
+        x: centerX,
+        y,
+        width: buttonWidth,
+        height: buttonHeight,
+        eventAccent: event.accent,
+        choice,
+        onClick: () => {
+          this.resolveDungeonEventChoice(event.id, choice.id);
+        },
+      });
+    });
+
+    const closeY = top + modalHeight - 38;
+    const close = this.add.text(centerX, closeY, 'Нажми вариант выше, чтобы завершить событие', {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: UI.colors.textMuted,
+      align: 'center',
+      wordWrap: {
+        width: modalWidth - 70,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(104);
+
+    this.modalObjects.push(close);
+  }
+
+  private createEventChoiceButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    eventAccent: number;
+    choice: DungeonEventChoice;
+    onClick: () => void;
+  }) {
+    const danger = config.choice.danger ?? false;
+    const radius = 20;
+    const bgColor = danger ? 0x221011 : 0x17100c;
+    const hoverColor = danger ? 0x331719 : 0x24180f;
+    const strokeColor = danger ? 0x8d2f2f : config.eventAccent;
+    const titleColor = danger ? '#ff9a9a' : UI.colors.goldText;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.34);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 5,
+      config.width,
+      config.height,
+      radius
+    );
+    shadow.setDepth(104);
+
+    const bg = this.add.graphics();
+    const drawBg = (fill: number, alpha: number, strokeAlpha: number) => {
+      bg.clear();
+      bg.fillStyle(fill, alpha);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      bg.lineStyle(2, strokeColor, strokeAlpha);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+    };
+
+    drawBg(bgColor, 0.96, danger ? 0.82 : 0.62);
+    bg.setDepth(105);
+
+    const iconX = config.x - config.width / 2 + 42;
+    const textX = config.x - config.width / 2 + 78;
+    const textWidth = config.width - 100;
+
+    const iconCircle = this.add.circle(iconX, config.y, 22, strokeColor, danger ? 0.18 : 0.14)
+      .setStrokeStyle(1, strokeColor, 0.58)
+      .setDepth(106);
+
+    const icon = this.add.text(iconX, config.y, config.choice.icon, {
+      fontFamily: UI.font.body,
+      fontSize: '19px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(107);
+
+    const title = this.add.text(textX, config.y - 15, config.choice.title, {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(107);
+
+    const subtitle = this.add.text(textX, config.y + 16, config.choice.subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: UI.colors.textMuted,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      lineSpacing: 2,
+      maxLines: 2,
+    }).setOrigin(0, 0.5).setDepth(107);
+
+    let pressed = false;
+    let locked = false;
+
+    bg.setInteractive(
+      new Phaser.Geom.Rectangle(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height
+      ),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    bg.on('pointerover', () => {
+      if (pressed || locked) return;
+      drawBg(hoverColor, 1, 0.96);
+      title.setColor('#ffffff');
+      icon.setColor('#ffffff');
+    });
+
+    bg.on('pointerout', () => {
+      pressed = false;
+      if (locked) return;
+      drawBg(bgColor, 0.96, danger ? 0.82 : 0.62);
+      title.setColor(titleColor);
+      icon.setColor(titleColor);
+    });
+
+    bg.on('pointerdown', () => {
+      if (locked) return;
+      pressed = true;
+      drawBg(hoverColor, 0.92, 1);
+      title.setY(config.y - 14);
+      subtitle.setY(config.y + 17);
+      iconCircle.setY(config.y + 1);
+      icon.setY(config.y + 1);
+    });
+
+    bg.on('pointerup', () => {
+      if (!pressed || locked) return;
+      pressed = false;
+      locked = true;
+
+      this.time.delayedCall(40, () => {
+        config.onClick();
+      });
+    });
+
+    bg.on('pointerupoutside', () => {
+      pressed = false;
+      if (locked) return;
+      drawBg(bgColor, 0.96, danger ? 0.82 : 0.62);
+      title.setY(config.y - 15);
+      subtitle.setY(config.y + 16);
+      iconCircle.setY(config.y);
+      icon.setY(config.y);
+      title.setColor(titleColor);
+      icon.setColor(titleColor);
+    });
+
+    this.modalObjects.push(
+      shadow,
+      bg,
+      iconCircle,
+      icon,
+      title,
+      subtitle
+    );
+  }
+
+  private resolveDungeonEventChoice(eventId: DungeonEventId, choiceId: DungeonEventChoiceId) {
+    const room = getCurrentRoom();
+
+    if (!room || room.completed) {
+      return;
+    }
+
+    const event = getDungeonEventById(eventId);
+    const choice = getDungeonEventChoiceById(eventId, choiceId);
+
+    if (!event || !choice) {
+      return;
+    }
+
+    this.clearModalObjects();
+
+    const floor = gameState.floorRun.currentFloor || 1;
+    const stats = getPlayerStats(player);
+    const baseGold = 65 + floor * 14;
+    const baseExp = 25 + floor * 6;
+
+    let title = event.shortTitle;
+    let text = '';
+
+    switch (choiceId) {
+      case 'altar_drink': {
+        const damage = this.applyEventDamage(Math.ceil(Math.max(1, player.hp) * 0.2));
+        const energyBefore = player.energy;
+        player.energy = Math.min(stats.maxEnergy, player.energy + 2);
+        const restored = player.energy - energyBefore;
+
+        title = 'Вода вошла в кровь';
+        text = [
+          `Чёрная вода обожгла горло холодом.`,
+          `-${damage} HP`,
+          restored > 0 ? `+${restored} энергии` : 'Энергия уже полна.',
+        ].join('\n');
+        break;
+      }
+
+      case 'altar_weapon': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.12));
+        const expText = this.addEventExp(Math.ceil(baseExp * 0.8));
+
+        title = 'Оружие почернело';
+        text = [
+          `Кромка оружия впитала мёртвую воду.`,
+          `-${damage} HP`,
+          expText,
+        ].join('\n');
+        break;
+      }
+
+      case 'altar_break': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.15));
+        const materialId: MaterialId = floor >= 18 ? 'black_gem' : 'dark_flame_heart';
+
+        title = 'Алтарь расколот';
+        text = [
+          `Каменная чаша треснула, и внутри открылся тёмный сгусток.`,
+          `-${damage} HP`,
+          this.addEventMaterial(materialId, 1),
+        ].join('\n');
+        break;
+      }
+
+      case 'prisoner_open': {
+        const roll = Math.random();
+
+        title = 'Крышка сдвинулась';
+
+        if (roll < 0.58 + Math.min(0.2, stats.luck * 0.01)) {
+          text = [
+            'Внутри лежали только сухие кости и мешочек с погребальной платой.',
+            this.addEventGold(baseGold + Phaser.Math.Between(20, 80)),
+            this.addEventMaterial('darkened_bone', 1),
+          ].join('\n');
+        } else {
+          const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.18));
+
+          text = [
+            'Из саркофага вылетела костяная рука и рассекла кожу.',
+            `-${damage} HP`,
+            this.addEventExp(Math.ceil(baseExp * 0.6)),
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'prisoner_demand': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.08));
+
+        title = 'Плата получена';
+        text = [
+          'Голос внутри замолчал. Между плитами появилась старая монета.',
+          this.addEventGold(Math.ceil(baseGold * 1.35)),
+          `-${damage} HP от холодного проклятия`,
+        ].join('\n');
+        break;
+      }
+
+      case 'prisoner_leave': {
+        title = 'Голос остался позади';
+        text = 'Ты не стал открывать саркофаг. Стук продолжался ещё несколько шагов.';
+        break;
+      }
+
+      case 'trader_buy': {
+        title = 'Тёмный свёрток куплен';
+
+        if (player.gold < 350) {
+          text = 'Торговец молча смотрит на пустой кошель. Не хватает золота.';
+        } else {
+          player.gold -= 350;
+
+          const materialId: MaterialId = Math.random() < 0.5 ? 'cursed_seal' : 'dark_flame_heart';
+
+          text = [
+            '-350 золота',
+            this.addEventMaterial(materialId, 1),
+            'Могильный торговец спрятал монеты под маской.',
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'trader_potion': {
+        title = 'Обмен совершён';
+
+        if (player.potions <= 0) {
+          text = 'У тебя нет зелий. Торговец больше не смотрит в твою сторону.';
+        } else {
+          player.potions -= 1;
+
+          text = [
+            '-1 зелье',
+            this.addEventGold(Math.ceil(baseGold * 0.9)),
+            this.addEventMaterial('old_leather', 1),
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'trader_leave': {
+        title = 'Сделки не было';
+        text = 'Ты прошёл мимо. Торговец тихо пересчитал чужие зубы.';
+        break;
+      }
+
+      case 'chains_break': {
+        const successChance = Phaser.Math.Clamp(0.35 + stats.strength * 0.018, 0.35, 0.78);
+        const success = Math.random() < successChance;
+
+        title = success ? 'Цепи разорваны' : 'Цепи не поддались';
+
+        if (success) {
+          text = [
+            'Старое железо лопнуло, и с потолка посыпалась пыль.',
+            this.addEventExp(baseExp),
+            this.addEventMaterial('darkened_bone', 1),
+          ].join('\n');
+        } else {
+          const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.14));
+
+          text = [
+            'Цепь дёрнулась назад и ударила в грудь.',
+            `-${damage} HP`,
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'chains_search': {
+        const roll = Math.random();
+
+        title = 'Останки осмотрены';
+
+        if (roll < 0.65 + Math.min(0.18, stats.luck * 0.008)) {
+          text = [
+            'Среди обломков брони нашлась полезная добыча.',
+            this.addEventGold(Math.ceil(baseGold * 0.75)),
+            this.addEventMaterial('old_leather', 1),
+          ].join('\n');
+        } else {
+          const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.12));
+
+          text = [
+            'Ты задел спрятанный крюк, и цепи резко натянулись.',
+            `-${damage} HP`,
+          ].join('\n');
+        }
+
+        break;
+      }
+
+      case 'chains_take': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.1));
+
+        title = 'Цепь снята';
+        text = [
+          'Ржавая цепь обожгла ладонь, но её можно использовать в кузнице.',
+          `-${damage} HP`,
+          this.addEventMaterial('cursed_seal', 1),
+        ].join('\n');
+        break;
+      }
+
+      case 'mirror_look': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.12));
+
+        title = 'Зеркало показало смерть';
+        text = [
+          'Ты увидел удар, которого ещё не было. Боль пришла раньше времени.',
+          `-${damage} HP`,
+          this.addEventExp(Math.ceil(baseExp * 1.15)),
+        ].join('\n');
+        break;
+      }
+
+      case 'mirror_break': {
+        const roll = Math.random();
+
+        title = 'Осколки упали на пол';
+
+        if (roll < 0.34) {
+          const energyBefore = player.energy;
+          player.energy = Math.min(stats.maxEnergy, player.energy + 1);
+          text = `В осколках вспыхнул холодный свет.\n+${player.energy - energyBefore} энергии`;
+        } else if (roll < 0.68) {
+          text = [
+            'За зеркалом лежал тайник Морвеина.',
+            this.addEventGold(Math.ceil(baseGold * 1.1)),
+          ].join('\n');
+        } else {
+          const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.16));
+          text = `Один осколок сам вошёл под кожу.\n-${damage} HP`;
+        }
+
+        break;
+      }
+
+      case 'mirror_touch': {
+        const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.25));
+
+        title = 'Отражение коснулось тебя';
+        text = [
+          `-${damage} HP`,
+          this.addEventExp(Math.ceil(baseExp * 1.75)),
+        ].join('\n');
+        break;
+      }
+
+      case 'lottery_throw':
+      case 'lottery_load': {
+        const paid = choiceId === 'lottery_load';
+        let bonus = Math.floor(stats.luck / 5);
+
+        if (paid) {
+          if (player.gold >= 100) {
+            player.gold -= 100;
+            bonus += 2;
+          } else {
+            title = 'Не хватает золота';
+            text = 'Кости не принимают пустые обещания. Нужно 100 золота.';
+            break;
+          }
+        }
+
+        const roll = Phaser.Math.Clamp(Phaser.Math.Between(1, 6) + bonus, 1, 6);
+
+        title = `Выпало: ${roll}`;
+
+        if (roll <= 2) {
+          const damage = this.applyEventDamage(Math.ceil(stats.maxHp * 0.16));
+          text = `${paid ? '-100 золота\n' : ''}Кости треснули и выпустили костяную пыль.\n-${damage} HP`;
+        } else if (roll <= 4) {
+          text = [
+            paid ? '-100 золота' : '',
+            this.addEventGold(Math.ceil(baseGold * (roll === 4 ? 1.25 : 0.85))),
+          ].filter(Boolean).join('\n');
+        } else if (roll === 5) {
+          text = [
+            paid ? '-100 золота' : '',
+            this.addEventMaterial(Math.random() < 0.5 ? 'dim_gem' : 'darkened_bone', 2),
+          ].filter(Boolean).join('\n');
+        } else {
+          text = [
+            paid ? '-100 золота' : '',
+            this.addEventGold(Math.ceil(baseGold * 1.5)),
+            this.addEventMaterial('dark_flame_heart', 1),
+          ].filter(Boolean).join('\n');
+        }
+
+        break;
+      }
+
+      case 'lottery_leave': {
+        title = 'Кости не брошены';
+        text = 'Ты оставил кубики лежать на плите. Они тихо повернулись сами.';
+        break;
+      }
+
+      default:
+        text = 'Событие завершено.';
+    }
+
+    if (player.hp <= 0) {
+      this.handleDungeonEventDeath(title, text);
+      return;
+    }
+
+    this.finishDungeonEvent(title, text);
+  }
+
+  private addEventGold(amount: number) {
+    const safeAmount = Math.max(0, Math.floor(amount));
+
+    player.gold += safeAmount;
+    gameState.floorRun.goldEarned += safeAmount;
+    trackGoldEarned(safeAmount);
+
+    return `+${safeAmount} золота`;
+  }
+
+  private addEventExp(amount: number) {
+    const safeAmount = Math.max(0, Math.floor(amount));
+    const result = addExperience(player, safeAmount);
+    const levelText = createLevelUpText(result);
+
+    gameState.floorRun.expEarned += safeAmount;
+
+    return levelText
+      ? `+${safeAmount} опыта\n\n${levelText}`
+      : `+${safeAmount} опыта`;
+  }
+
+  private addEventMaterial(materialId: MaterialId, amount = 1) {
+    const safeAmount = Math.max(1, Math.floor(amount));
+
+    addMaterial(materialId, safeAmount);
+
+    gameState.floorRun.materialsEarned[materialId] =
+      (gameState.floorRun.materialsEarned[materialId] ?? 0) + safeAmount;
+
+    return `+${safeAmount} ${getMaterialName(materialId)}`;
+  }
+
+  private applyEventDamage(amount: number) {
+    const damage = Math.max(1, Math.floor(amount));
+
+    player.hp = Math.max(0, player.hp - damage);
+
+    return damage;
+  }
+
+  private finishDungeonEvent(title: string, text: string) {
+    const regenerationText = this.completeRoomAndApplyRegeneration();
+
+    void saveGameAsync();
+
+    this.showMessage(
+      title,
+      `${text}${regenerationText}`,
+      () => {
+        this.scene.restart();
+      }
+    );
+  }
+
+  private handleDungeonEventDeath(title: string, text: string) {
+    this.showMessage(
+      'Ты погиб',
+      `${title}\n\n${text}\n\nСобытие оказалось смертельным.\nТы очнулся в лагере.`,
+      () => {
+        const freshStats = getPlayerStats(player);
+
+        player.hp = freshStats.maxHp;
+        player.energy = freshStats.maxEnergy;
+
+        resetFloorRun();
+        clearRoomRegenerationBlock();
+        this.resetCampfireState(!getActiveCampfireBattleCheckpoint());
+        clearResumePoint('event-death');
+
+        void saveGameAsync();
+
+        this.scene.start('CampScene');
+      }
+    );
+  }
+
 
   private createCampfireStatusBox(y: number) {
     const layout = this.getLayout();
@@ -3494,6 +4284,8 @@ private exitToTownKeepingCampfireCheckpoint() {
         return '!';
       case 'campfire':
         return '♨';
+      case 'event':
+        return '◈';
       case 'boss':
         return '♛';
       case 'tier_boss':
@@ -3523,6 +4315,10 @@ private exitToTownKeepingCampfireCheckpoint() {
 
     if (type === 'campfire') {
       return `Костёр может восстановить запас зелий до ${this.maxPotionCount}. Для активации нужен заряд выбранного огнива.`;
+    }
+
+    if (type === 'event') {
+      return 'Комната выбора. Можно рискнуть ради золота, опыта или материалов — либо уйти без последствий.';
     }
 
     if (type === 'boss') {
@@ -3570,6 +4366,8 @@ private exitToTownKeepingCampfireCheckpoint() {
         return 0xff6b6b;
       case 'campfire':
         return 0xf0a040;
+      case 'event':
+        return 0x9b7cff;
       case 'elite':
         return 0xb07cff;
       case 'boss':

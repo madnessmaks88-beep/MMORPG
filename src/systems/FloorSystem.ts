@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+import { getRandomDungeonEventId } from './DungeonEventSystem';
+
 import {
   gameState,
   getCurrentTierByFloor,
@@ -222,35 +224,40 @@ function getEliteChanceByFloor(floor: number) {
 
 function rollNormalRoomKind(
   modifier: FloorModifier
-): 'combat' | 'chest' | 'trap' {
+): 'combat' | 'chest' | 'trap' | 'event' {
   const roll = Math.random();
 
   if (modifier === 'treasure') {
-    if (roll < 0.52) return 'combat';
-    if (roll < 0.86) return 'chest';
+    if (roll < 0.47) return 'combat';
+    if (roll < 0.75) return 'chest';
+    if (roll < 0.9) return 'event';
     return 'trap';
   }
 
   if (modifier === 'traps') {
-    if (roll < 0.58) return 'combat';
-    if (roll < 0.68) return 'chest';
+    if (roll < 0.55) return 'combat';
+    if (roll < 0.64) return 'chest';
+    if (roll < 0.76) return 'event';
     return 'trap';
   }
 
   if (modifier === 'cursed') {
-    if (roll < 0.72) return 'combat';
-    if (roll < 0.82) return 'chest';
+    if (roll < 0.65) return 'combat';
+    if (roll < 0.75) return 'chest';
+    if (roll < 0.88) return 'event';
     return 'trap';
   }
 
   if (modifier === 'elite') {
-    if (roll < 0.78) return 'combat';
-    if (roll < 0.9) return 'chest';
+    if (roll < 0.72) return 'combat';
+    if (roll < 0.83) return 'chest';
+    if (roll < 0.92) return 'event';
     return 'trap';
   }
 
-  if (roll < 0.68) return 'combat';
-  if (roll < 0.84) return 'chest';
+  if (roll < 0.61) return 'combat';
+  if (roll < 0.77) return 'chest';
+  if (roll < 0.9) return 'event';
 
   return 'trap';
 }
@@ -298,6 +305,10 @@ function createRandomNormalRoom(
     };
   }
 
+  if (kind === 'event') {
+    return createEventRoom(floor, index);
+  }
+
   const type = rollCombatRoomType(floor, modifier);
   const tier = getCurrentTierByFloor(floor);
   const eliteTitle = tier === 2 ? 'Затопленный зал' : 'Опасная комната';
@@ -319,6 +330,22 @@ function createRandomNormalRoom(
     enemyId: type === 'elite'
       ? getRandomEliteEnemyId(floor)
       : getRandomCommonEnemyId(floor),
+    completed: false,
+  };
+}
+
+function createEventRoom(floor: number, index: number): FloorRoom {
+  const eventId = getRandomDungeonEventId(floor);
+  const tier = getCurrentTierByFloor(floor);
+
+  return {
+    id: `floor_${floor}_event_${eventId}_${index}`,
+    type: 'event',
+    title: tier >= 2 ? 'Событие чёрной воды' : 'Событие катакомб',
+    description: tier >= 2
+      ? 'В затопленном проходе скрывается странное место. Здесь лучше думать, прежде чем касаться древностей.'
+      : 'За поворотом находится необычная комната. Здесь можно рискнуть ради награды или пройти дальше.',
+    eventId,
     completed: false,
   };
 }
@@ -440,7 +467,7 @@ export function getFloorPreview(floor: number) {
   const isTierBoss = isTierBossFloor(floor);
 
   let monsters = '3–4';
-  let special = 'сундук, ловушка или элита';
+  let special = 'сундук, событие, ловушка или элита';
   let danger = 'Средняя опасность';
 
   if (modifier === 'elite') {
@@ -451,13 +478,13 @@ export function getFloorPreview(floor: number) {
 
   if (modifier === 'traps') {
     monsters = '3–4';
-    special = 'две ловушки';
+    special = 'ловушки и опасные события';
     danger = 'Опасно для низкой ловкости';
   }
 
   if (modifier === 'treasure') {
     monsters = '2–3';
-    special = 'две комнаты с добычей';
+    special = 'сундуки и события с наградами';
     danger = 'Ниже среднего';
   }
 

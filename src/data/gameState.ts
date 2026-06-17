@@ -11,8 +11,10 @@ export type FloorRoomType =
   | 'elite'
   | 'chest'
   | 'trap'
+  | 'event'
   | 'boss'
-  | 'tier_boss';
+  | 'tier_boss'
+  | 'campfire';
 
 export type FloorModifier =
   | 'normal'
@@ -28,6 +30,7 @@ export type FloorRoom = {
   title: string;
   description: string;
   enemyId?: string;
+  eventId?: string;
   completed: boolean;
 };
 

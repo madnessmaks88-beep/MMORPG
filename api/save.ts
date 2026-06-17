@@ -1,8 +1,11 @@
 /// <reference types="node" />
 
+// Vercel API выполняется на сервере Node.js.
 declare const process: {
   env: Record<string, string | undefined>;
 };
+
+import { createHmac, timingSafeEqual } from 'crypto';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -33,6 +36,16 @@ type SaveData = {
     updatedAt?: number;
   };
   campfireBattleCheckpoints?: unknown[];
+};
+
+type AuthResult = {
+  ok: true;
+  vkUserId: number;
+  source: 'vk-sign' | 'dev-token';
+} | {
+  ok: false;
+  status: number;
+  error: string;
 };
 
 const PLAYER_SAVES_TABLE = 'player_saves';
@@ -73,6 +86,216 @@ function normalizeVkUserId(value: unknown) {
   }
 
   return numberValue;
+}
+
+function parseBody(req: any) {
+  if (!req.body) {
+    return null;
+  }
+
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return null;
+    }
+  }
+
+  return req.body;
+}
+
+function extractLaunchParams(rawValue: unknown) {
+  const raw = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return '';
+  }
+
+  const value = raw.trim();
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      return new URL(value).search.slice(1);
+    } catch {
+      return value;
+    }
+  }
+
+  return value.startsWith('?') ? value.slice(1) : value;
+}
+
+function base64Url(buffer: Buffer) {
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function safeEqualStrings(a: string, b: string) {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+
+  if (aBuffer.length !== bBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(aBuffer, bBuffer);
+}
+
+function verifyVKLaunchParams(launchParams: string, appSecret: string) {
+  const params = new URLSearchParams(extractLaunchParams(launchParams));
+  const sign = params.get('sign');
+
+  if (!sign) {
+    return {
+      ok: false as const,
+      error: 'Missing VK sign.',
+    };
+  }
+
+  const vkUserId = normalizeVkUserId(params.get('vk_user_id'));
+
+  if (!vkUserId) {
+    return {
+      ok: false as const,
+      error: 'Missing or invalid vk_user_id in VK launch params.',
+    };
+  }
+
+  const signParams = new URLSearchParams();
+
+  Array.from(params.keys())
+    .filter(key => key.startsWith('vk_'))
+    .sort()
+    .forEach(key => {
+      const value = params.get(key);
+
+      if (value !== null) {
+        signParams.append(key, value);
+      }
+    });
+
+  const queryForSign = signParams.toString();
+  const expectedSign = base64Url(
+    createHmac('sha256', appSecret)
+      .update(queryForSign)
+      .digest()
+  );
+
+  if (!safeEqualStrings(expectedSign, sign)) {
+    return {
+      ok: false as const,
+      error: 'Invalid VK launch params signature.',
+    };
+  }
+
+  const maxAgeSecondsRaw = Number(process.env.VK_LAUNCH_PARAMS_MAX_AGE_SECONDS || 0);
+
+  if (Number.isFinite(maxAgeSecondsRaw) && maxAgeSecondsRaw > 0) {
+    const vkTs = Number(params.get('vk_ts') || 0);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    if (!Number.isFinite(vkTs) || vkTs <= 0 || Math.abs(nowSeconds - vkTs) > maxAgeSecondsRaw) {
+      return {
+        ok: false as const,
+        error: 'VK launch params are expired.',
+      };
+    }
+  }
+
+  return {
+    ok: true as const,
+    vkUserId,
+  };
+}
+
+function getHeader(req: any, name: string) {
+  const value = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getLaunchParamsFromRequest(req: any, body: any) {
+  return (
+    extractLaunchParams(getHeader(req, 'x-vk-launch-params')) ||
+    extractLaunchParams(req.query?.vkLaunchParams) ||
+    extractLaunchParams(body?.vkLaunchParams)
+  );
+}
+
+function authenticateRequest(req: any, body: any): AuthResult {
+  const devToken = process.env.SAVE_DEV_TOKEN;
+  const requestDevToken = getHeader(req, 'x-save-dev-token');
+
+  // Необязательный режим только для ручного тестирования.
+  // Если SAVE_DEV_TOKEN не задан в Vercel, этот путь не работает.
+  if (devToken && requestDevToken && safeEqualStrings(String(requestDevToken), devToken)) {
+    const devVkUserId = normalizeVkUserId(req.query?.vkUserId ?? body?.vkUserId);
+
+    if (!devVkUserId) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'Invalid vkUserId for dev-token request.',
+      };
+    }
+
+    return {
+      ok: true,
+      vkUserId: devVkUserId,
+      source: 'dev-token',
+    };
+  }
+
+  const appSecret =
+    process.env.VK_APP_SECRET ||
+    process.env.VK_CLIENT_SECRET ||
+    process.env.VK_APP_SECURE_KEY;
+
+  if (!appSecret) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'Missing VK_APP_SECRET/VK_CLIENT_SECRET/VK_APP_SECURE_KEY.',
+    };
+  }
+
+  const launchParams = getLaunchParamsFromRequest(req, body);
+
+  if (!launchParams) {
+    return {
+      ok: false,
+      status: 401,
+      error: 'Missing signed VK launch params.',
+    };
+  }
+
+  const verified = verifyVKLaunchParams(launchParams, appSecret);
+
+  if (!verified.ok) {
+    return {
+      ok: false,
+      status: 403,
+      error: verified.error,
+    };
+  }
+
+  const requestedVkUserId = normalizeVkUserId(req.query?.vkUserId ?? body?.vkUserId);
+
+  if (requestedVkUserId && requestedVkUserId !== verified.vkUserId) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'vkUserId mismatch. Request user id does not match signed VK launch params.',
+    };
+  }
+
+  return {
+    ok: true,
+    vkUserId: verified.vkUserId,
+    source: 'vk-sign',
+  };
 }
 
 function computeProgressScore(saveData?: SaveData | null) {
@@ -174,6 +397,8 @@ async function saveCurrent(vkUserId: number, saveData: SaveData, force = false) 
   const supabase = getSupabaseAdmin();
   const existing = await getCurrentSave(vkUserId);
 
+  // Никогда не доверяем vkUserId из тела запроса.
+  // Всегда ставим vkUserId, который подтверждён подписью VK.
   saveData.vkUserId = vkUserId;
   saveData.savedAt = Date.now();
 
@@ -232,44 +457,29 @@ async function saveCurrent(vkUserId: number, saveData: SaveData, force = false) 
   };
 }
 
-function parseBody(req: any) {
-  if (!req.body) {
-    return null;
-  }
-
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return null;
-    }
-  }
-
-  return req.body;
-}
-
 export default async function handler(req: any, res: any) {
   try {
     res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
-    res.setHeader('access-control-allow-headers', 'content-type');
+    res.setHeader('access-control-allow-headers', 'content-type,x-vk-launch-params,x-save-dev-token');
 
     if (req.method === 'OPTIONS') {
       res.status(204).end();
       return;
     }
 
+    const body = req.method === 'POST' ? parseBody(req) : null;
+    const auth = authenticateRequest(req, body);
+
+    if (!auth.ok) {
+      sendJson(res, auth.status, {
+        ok: false,
+        error: auth.error,
+      });
+      return;
+    }
+
     if (req.method === 'GET') {
-      const vkUserId = normalizeVkUserId(req.query?.vkUserId);
-
-      if (!vkUserId) {
-        sendJson(res, 400, {
-          ok: false,
-          error: 'Invalid vkUserId.',
-        });
-        return;
-      }
-
-      const row = await getCurrentSave(vkUserId);
+      const row = await getCurrentSave(auth.vkUserId);
 
       if (!row) {
         sendJson(res, 200, {
@@ -291,23 +501,15 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST') {
-      const body = parseBody(req) as {
-        vkUserId?: unknown;
-        saveData?: SaveData;
-        force?: boolean;
-      } | null;
-
-      const vkUserId = normalizeVkUserId(body?.vkUserId);
-
-      if (!vkUserId || !body?.saveData) {
+      if (!body?.saveData) {
         sendJson(res, 400, {
           ok: false,
-          error: 'vkUserId and saveData are required.',
+          error: 'saveData is required.',
         });
         return;
       }
 
-      const result = await saveCurrent(vkUserId, body.saveData, Boolean(body.force));
+      const result = await saveCurrent(auth.vkUserId, body.saveData, Boolean(body.force));
 
       if (!result.accepted) {
         sendJson(res, result.status, {
