@@ -397,22 +397,24 @@ export class BattleScene extends Phaser.Scene {
     const compact = height < 1120;
     const veryCompact = height < 940;
 
-    const actionPanelHeight = veryCompact ? 214 : compact ? 238 : 294;
+    const actionPanelHeight = veryCompact ? 236 : compact ? 258 : 304;
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
-    const attackButtonY = actionPanelY - actionPanelHeight / 2 + (veryCompact ? 42 : compact ? 47 : 54);
-    const firstRowY = attackButtonY + (veryCompact ? 58 : compact ? 66 : 84);
-    const secondRowY = firstRowY + (veryCompact ? 58 : compact ? 66 : 86);
 
-    const logHeight = veryCompact ? 118 : compact ? 146 : 206;
-    const logY = actionPanelY - actionPanelHeight / 2 - logHeight / 2 - (veryCompact ? 10 : 16);
+    const actionTop = actionPanelY - actionPanelHeight / 2;
+    const attackButtonY = actionTop + (veryCompact ? 68 : compact ? 76 : 86);
+    const firstRowY = attackButtonY + (veryCompact ? 64 : compact ? 72 : 84);
+    const secondRowY = firstRowY + (veryCompact ? 56 : compact ? 64 : 74);
 
-    const playerY = logY - logHeight / 2 - (veryCompact ? 76 : compact ? 92 : 124);
+    const logHeight = veryCompact ? 108 : compact ? 132 : 190;
+    const logY = actionTop - logHeight / 2 - (veryCompact ? 10 : 14);
+
+    const playerY = logY - logHeight / 2 - (veryCompact ? 70 : compact ? 86 : 116);
     const enemyY = safeTop + (this.isBossBattle
       ? veryCompact ? 182 : compact ? 202 : 246
       : veryCompact ? 164 : compact ? 180 : 206);
 
-    const mainButtonWidth = Math.min(contentWidth - 64, 560);
-    const sideButtonWidth = Math.min((mainButtonWidth - 14) / 2, 272);
+    const mainButtonWidth = Math.min(contentWidth - 54, 560);
+    const sideButtonWidth = Math.min((mainButtonWidth - 12) / 2, 274);
 
     return {
       width,
@@ -439,12 +441,12 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private getCurrentWeaponType() {
-  const equippedWeapon = getEquippedWeapon(player);
+    const equippedWeapon = getEquippedWeapon(player);
 
-  return equippedWeapon?.item.weaponType ?? 'sword';
-}
+    return equippedWeapon?.item.weaponType ?? 'sword';
+  }
 
-private getEnemyWeaknessDamageMultiplier() {
+  private getEnemyWeaknessDamageMultiplier() {
   const weaponType = this.getCurrentWeaponType();
 
   let multiplier = 1;
@@ -773,7 +775,10 @@ private getDebuffShortDescription(id: string, power: number) {
 
     const layout = this.getBattleLayout();
     const canUseRaceSkill = !this.isRaceSkillDisabled();
-    const canUsePower = !this.isBusy && !this.isBattleEnded && player.energy >= this.powerAttackEnergyCost + this.getSkillCostPenalty();
+    const canUsePower =
+      !this.isBusy &&
+      !this.isBattleEnded &&
+      player.energy >= this.powerAttackEnergyCost + this.getSkillCostPenalty();
     const canUsePotion = !this.isPotionDisabled() && player.hp < this.getBattleStats().maxHp;
 
     const panelObjects = this.createRoundedPanel({
@@ -783,45 +788,47 @@ private getDebuffShortDescription(id: string, power: number) {
       height: layout.actionPanelHeight,
       radius: layout.veryCompact ? 24 : 32,
       color: 0x070606,
-      alpha: 0.94,
+      alpha: 0.96,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.46,
+      strokeAlpha: 0.5,
       depth: 18,
     });
 
     const topY = layout.actionPanelY - layout.actionPanelHeight / 2;
     const panelLeft = layout.centerX - layout.contentWidth / 2;
     const panelRight = layout.centerX + layout.contentWidth / 2;
+    const titleY = topY + (layout.veryCompact ? 24 : 28);
 
-    const innerGlow = this.add.graphics().setDepth(19);
-    innerGlow.fillStyle(0xd8b56d, 0.045);
-    innerGlow.fillRoundedRect(
-      panelLeft + 10,
-      topY + 10,
-      layout.contentWidth - 20,
-      layout.actionPanelHeight - 20,
+    const innerPlate = this.add.graphics().setDepth(19);
+    innerPlate.fillStyle(0x0d0907, 0.86);
+    innerPlate.fillRoundedRect(
+      panelLeft + 12,
+      topY + 12,
+      layout.contentWidth - 24,
+      layout.actionPanelHeight - 24,
+      layout.veryCompact ? 20 : 26
+    );
+    innerPlate.lineStyle(1, UI.colors.goldDark, 0.22);
+    innerPlate.strokeRoundedRect(
+      panelLeft + 12,
+      topY + 12,
+      layout.contentWidth - 24,
+      layout.actionPanelHeight - 24,
       layout.veryCompact ? 20 : 26
     );
 
-    const redLine = this.add.rectangle(
+    const titleBack = this.add.rectangle(
       layout.centerX,
-      topY + 7,
-      layout.contentWidth - 48,
-      1,
-      0x8e3a2a,
-      0.22
-    ).setDepth(20);
+      titleY,
+      Math.min(layout.contentWidth - 180, 210),
+      layout.veryCompact ? 26 : 30,
+      0x050505,
+      0.76
+    )
+      .setStrokeStyle(1, UI.colors.goldDark, 0.32)
+      .setDepth(20);
 
-    const goldLine = this.add.rectangle(
-      layout.centerX,
-      topY + 12,
-      layout.contentWidth * 0.42,
-      1,
-      UI.colors.goldDark,
-      0.28
-    ).setDepth(20);
-
-    const actionTitle = this.add.text(layout.centerX, topY + (layout.veryCompact ? 18 : 22), 'Боевые действия', {
+    const actionTitle = this.add.text(layout.centerX, titleY, 'Боевые действия', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '13px' : '16px',
       color: UI.colors.goldText,
@@ -829,54 +836,80 @@ private getDebuffShortDescription(id: string, power: number) {
       strokeThickness: 3,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 70,
+        width: layout.contentWidth - 170,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(22);
 
-    const energyHint = this.add.text(panelRight - 24, topY + (layout.veryCompact ? 18 : 22), `⚡ ${player.energy}`, {
+    const energyPillWidth = 74;
+    const energyPill = this.add.graphics().setDepth(21);
+    energyPill.fillStyle(0x07111d, 0.88);
+    energyPill.fillRoundedRect(
+      panelRight - energyPillWidth - 22,
+      titleY - 14,
+      energyPillWidth,
+      28,
+      14
+    );
+    energyPill.lineStyle(1, 0x70a6ff, 0.42);
+    energyPill.strokeRoundedRect(
+      panelRight - energyPillWidth - 22,
+      titleY - 14,
+      energyPillWidth,
+      28,
+      14
+    );
+
+    const energyHint = this.add.text(panelRight - 22 - energyPillWidth / 2, titleY, `⚡ ${player.energy}`, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '11px' : '13px',
-      color: '#9fc8ff',
+      color: '#b9d8ff',
       stroke: '#000000',
       strokeThickness: 2,
-      align: 'right',
+      align: 'center',
       wordWrap: {
-        width: 70,
+        width: energyPillWidth - 12,
       },
       maxLines: 1,
-    }).setOrigin(1, 0.5).setDepth(22);
+    }).setOrigin(0.5).setDepth(22);
+
+    const leftRune = this.add.text(panelLeft + 34, titleY, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '13px' : '16px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5).setAlpha(0.16).setDepth(22);
+
+    const rightRune = this.add.text(panelRight - 34, titleY, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '13px' : '16px',
+      color: UI.colors.goldText,
+    }).setOrigin(0.5).setAlpha(0.16).setDepth(22);
+
+    const dividerTop = this.add.rectangle(
+      layout.centerX,
+      titleY + (layout.veryCompact ? 22 : 25),
+      layout.contentWidth - 54,
+      1,
+      UI.colors.goldDark,
+      0.2
+    ).setDepth(21);
 
     this.actionButtons.push(
       panelObjects.shadow,
       panelObjects.panel,
-      innerGlow,
-      redLine,
-      goldLine,
+      innerPlate,
+      titleBack,
+      energyPill,
       actionTitle,
-      energyHint
+      energyHint,
+      leftRune,
+      rightRune,
+      dividerTop
     );
 
-    for (let i = 0; i < 5; i += 1) {
-      const rune = this.add.text(
-        panelLeft + 28 + i * ((layout.contentWidth - 56) / 4),
-        topY + layout.actionPanelHeight - (layout.veryCompact ? 18 : 22),
-        i % 2 === 0 ? '◇' : '✦',
-        {
-          fontFamily: UI.font.body,
-          fontSize: layout.veryCompact ? '11px' : '13px',
-          color: '#ffffff',
-        }
-      ).setOrigin(0.5).setDepth(20).setAlpha(0.07);
-
-      this.actionButtons.push(rune);
-    }
-
-    const primaryHeight = layout.veryCompact ? 54 : layout.compact ? 62 : 72;
-    const gridButtonHeight = layout.veryCompact ? 48 : layout.compact ? 56 : 66;
+    const primaryHeight = layout.veryCompact ? 52 : layout.compact ? 60 : 70;
+    const gridButtonHeight = layout.veryCompact ? 46 : layout.compact ? 54 : 64;
     const gap = layout.veryCompact ? 8 : 10;
-    const gridTop = layout.firstRowY;
-    const gridBottom = layout.secondRowY;
     const sideWidth = Math.min((layout.mainButtonWidth - gap) / 2, layout.sideButtonWidth);
 
     this.actionButtons.push(
@@ -897,7 +930,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.actionButtons.push(
       ...this.createBattleActionButton({
         x: layout.centerX - sideWidth / 2 - gap / 2,
-        y: gridTop,
+        y: layout.firstRowY,
         width: sideWidth,
         height: gridButtonHeight,
         icon: '✦',
@@ -913,7 +946,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.actionButtons.push(
       ...this.createBattleActionButton({
         x: layout.centerX + sideWidth / 2 + gap / 2,
-        y: gridTop,
+        y: layout.firstRowY,
         width: sideWidth,
         height: gridButtonHeight,
         icon: '🛡',
@@ -928,7 +961,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.actionButtons.push(
       ...this.createBattleActionButton({
         x: layout.centerX - sideWidth / 2 - gap / 2,
-        y: gridBottom,
+        y: layout.secondRowY,
         width: sideWidth,
         height: gridButtonHeight,
         icon: '◆',
@@ -944,7 +977,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.actionButtons.push(
       ...this.createBattleActionButton({
         x: layout.centerX + sideWidth / 2 + gap / 2,
-        y: gridBottom,
+        y: layout.secondRowY,
         width: sideWidth,
         height: gridButtonHeight,
         icon: '✚',
@@ -1013,49 +1046,49 @@ private getDebuffShortDescription(id: string, power: number) {
   const disabled = config.disabled ?? false;
   const variant = config.variant ?? 'primary';
   const isPrimary = variant === 'primary';
-  const compactButton = config.height <= 56;
+  const compactButton = config.height <= 54;
 
-  const radius = isPrimary ? Math.min(28, config.height / 2) : Math.min(20, config.height / 2);
+  const radius = isPrimary ? Math.min(26, config.height / 2) : Math.min(17, config.height / 2);
   const left = config.x - config.width / 2;
   const top = config.y - config.height / 2;
 
   const baseColor =
     variant === 'defense'
-      ? 0x08111d
+      ? 0x07101d
       : variant === 'magic'
-        ? 0x130a1d
+        ? 0x13091d
         : variant === 'heal'
           ? 0x07150d
           : variant === 'heavy'
-            ? 0x1b0d06
-            : 0x14100a;
+            ? 0x1a0c05
+            : 0x151009;
 
   const hoverColor =
     variant === 'defense'
-      ? 0x0d1b2c
+      ? 0x0d1d31
       : variant === 'magic'
-        ? 0x211030
+        ? 0x241236
         : variant === 'heal'
-          ? 0x0c2415
+          ? 0x0d2817
           : variant === 'heavy'
-            ? 0x2a1309
-            : 0x24170c;
+            ? 0x2c1408
+            : 0x26180c;
 
   const pressedColor =
     variant === 'defense'
       ? 0x10263b
       : variant === 'magic'
-        ? 0x2f1644
+        ? 0x32184a
         : variant === 'heal'
           ? 0x12351d
           : variant === 'heavy'
-            ? 0x3a1a0b
-            : 0x33200f;
+            ? 0x3a1b0b
+            : 0x38210f;
 
-  const disabledColor = 0x0a0a0b;
+  const disabledColor = 0x09090a;
   const textColor = disabled ? '#5a5650' : isPrimary ? UI.colors.goldText : UI.colors.text;
   const subtitleColor = disabled ? '#403d38' : UI.colors.textMuted;
-  const strokeAlpha = disabled ? 0.2 : isPrimary ? 0.86 : 0.62;
+  const strokeAlpha = disabled ? 0.2 : isPrimary ? 0.88 : 0.62;
 
   const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -1065,19 +1098,10 @@ private getDebuffShortDescription(id: string, power: number) {
   const topShine = this.add.rectangle(
     config.x,
     top + 8,
-    config.width - (isPrimary ? 58 : 34),
+    config.width - (isPrimary ? 72 : 38),
     1,
     config.accentColor,
-    disabled ? 0.08 : isPrimary ? 0.36 : 0.22
-  ).setDepth(24);
-
-  const sideMark = this.add.rectangle(
-    left + 7,
-    config.y,
-    isPrimary ? 4 : 3,
-    config.height - 18,
-    config.accentColor,
-    disabled ? 0.12 : isPrimary ? 0.54 : 0.36
+    disabled ? 0.08 : isPrimary ? 0.3 : 0.18
   ).setDepth(24);
 
   const drawButton = (
@@ -1087,11 +1111,11 @@ private getDebuffShortDescription(id: string, power: number) {
     offsetY = 0
   ) => {
     shadow.clear();
-    shadow.fillStyle(0x000000, disabled ? 0.22 : 0.42);
-    shadow.fillRoundedRect(left, top + 6 + offsetY, config.width, config.height, radius);
+    shadow.fillStyle(0x000000, disabled ? 0.22 : 0.38);
+    shadow.fillRoundedRect(left, top + 5 + offsetY, config.width, config.height, radius);
 
     glow.clear();
-    glow.fillStyle(config.accentColor, disabled ? 0.015 : isPrimary ? 0.09 : 0.055);
+    glow.fillStyle(config.accentColor, disabled ? 0.012 : isPrimary ? 0.075 : 0.042);
     glow.fillRoundedRect(left + 5, top + 5 + offsetY, config.width - 10, config.height - 10, Math.max(10, radius - 5));
 
     bg.clear();
@@ -1100,26 +1124,26 @@ private getDebuffShortDescription(id: string, power: number) {
     bg.lineStyle(isPrimary ? 2 : 1.5, config.accentColor, borderAlpha);
     bg.strokeRoundedRect(left, top + offsetY, config.width, config.height, radius);
 
-    bg.fillStyle(0x000000, 0.22);
+    bg.fillStyle(0x000000, 0.2);
     bg.fillRoundedRect(left + 7, top + 7 + offsetY, config.width - 14, config.height - 14, Math.max(10, radius - 7));
 
-    bg.fillStyle(config.accentColor, disabled ? 0.035 : isPrimary ? 0.13 : 0.095);
+    bg.fillStyle(config.accentColor, disabled ? 0.035 : isPrimary ? 0.12 : 0.085);
     bg.fillRoundedRect(
       left + 9,
       top + 9 + offsetY,
-      isPrimary ? 58 : 42,
+      isPrimary ? 56 : 40,
       config.height - 18,
       Math.max(10, radius - 9)
     );
 
     topShine.setY(top + 8 + offsetY);
-    sideMark.setY(config.y + offsetY);
   };
 
   drawButton(disabled ? disabledColor : baseColor, disabled ? 0.72 : 0.98, strokeAlpha);
 
-  const iconX = left + (isPrimary ? 38 : 28);
-  const iconRadius = isPrimary ? (compactButton ? 20 : 24) : compactButton ? 15 : 18;
+  const iconX = left + (isPrimary ? 36 : 27);
+  const iconRadius = isPrimary ? (compactButton ? 19 : 23) : compactButton ? 14 : 17;
+
   const iconBg = this.add.circle(
     iconX,
     config.y,
@@ -1127,22 +1151,22 @@ private getDebuffShortDescription(id: string, power: number) {
     config.accentColor,
     disabled ? 0.08 : isPrimary ? 0.18 : 0.14
   )
-    .setStrokeStyle(1, config.accentColor, disabled ? 0.24 : 0.58)
+    .setStrokeStyle(1, config.accentColor, disabled ? 0.24 : 0.56)
     .setDepth(25);
 
   const icon = this.add.text(iconX, config.y, config.icon, {
     fontFamily: UI.font.body,
-    fontSize: isPrimary ? (compactButton ? '18px' : '21px') : compactButton ? '13px' : '16px',
+    fontSize: isPrimary ? (compactButton ? '18px' : '21px') : compactButton ? '13px' : '15px',
     color: disabled ? '#55524d' : UI.colors.goldText,
     stroke: '#000000',
     strokeThickness: 3,
     align: 'center',
   }).setOrigin(0.5).setDepth(26);
 
-  const textX = left + (isPrimary ? 78 : 54);
-  const textWidth = config.width - (isPrimary ? 94 : 64);
+  const textX = left + (isPrimary ? 74 : 52);
+  const textWidth = config.width - (isPrimary ? 96 : 62);
 
-  const title = this.add.text(textX, config.y - (isPrimary ? compactButton ? 10 : 13 : compactButton ? 8 : 10), config.title, {
+  const title = this.add.text(textX, config.y - (isPrimary ? compactButton ? 9 : 12 : compactButton ? 7 : 9), config.title, {
     fontFamily: UI.font.title,
     fontSize: isPrimary
       ? compactButton ? '17px' : '20px'
@@ -1159,7 +1183,7 @@ private getDebuffShortDescription(id: string, power: number) {
     maxLines: 1,
   }).setOrigin(0, 0.5).setDepth(26);
 
-  const subtitle = this.add.text(textX, config.y + (isPrimary ? compactButton ? 12 : 16 : compactButton ? 10 : 13), config.subtitle, {
+  const subtitle = this.add.text(textX, config.y + (isPrimary ? compactButton ? 12 : 15 : compactButton ? 10 : 12), config.subtitle, {
     fontFamily: UI.font.body,
     fontSize: isPrimary
       ? compactButton ? '11px' : '12px'
@@ -1174,17 +1198,11 @@ private getDebuffShortDescription(id: string, power: number) {
     maxLines: 1,
   }).setOrigin(0, 0.5).setDepth(26);
 
-  const rune = this.add.text(config.x + config.width / 2 - (isPrimary ? 28 : 18), config.y, isPrimary ? '◇' : '·', {
-    fontFamily: UI.font.body,
-    fontSize: isPrimary ? '18px' : '15px',
-    color: '#ffffff',
-  }).setOrigin(0.5).setDepth(26).setAlpha(disabled ? 0.08 : 0.16);
-
   const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
 
-  objects.push(shadow, glow, bg, topShine, sideMark, iconBg, icon, title, subtitle, rune, zone);
+  objects.push(shadow, glow, bg, topShine, iconBg, icon, title, subtitle, zone);
 
-  const alphaTargets = [shadow, glow, bg, topShine, sideMark, iconBg, icon, title, subtitle, rune];
+  const alphaTargets = [shadow, glow, bg, topShine, iconBg, icon, title, subtitle];
 
   alphaTargets.forEach(object => {
     object.setAlpha(0);
@@ -1195,24 +1213,11 @@ private getDebuffShortDescription(id: string, power: number) {
     targets: alphaTargets,
     alpha: disabled ? 0.72 : 1,
     y: '-=5',
-    duration: 200,
+    duration: 190,
     ease: 'Sine.easeOut',
   });
 
   if (!disabled) {
-    this.tweens.add({
-      targets: rune,
-      alpha: {
-        from: isPrimary ? 0.14 : 0.1,
-        to: isPrimary ? 0.34 : 0.22,
-      },
-      duration: 1250,
-      yoyo: true,
-      repeat: -1,
-      delay: isPrimary ? 180 : 0,
-      ease: 'Sine.easeInOut',
-    });
-
     let isPressed = false;
     let isLocked = false;
 
@@ -1250,7 +1255,7 @@ private getDebuffShortDescription(id: string, power: number) {
       drawButton(pressedColor, 0.96, 1, 2);
 
       this.tweens.add({
-        targets: [iconBg, icon, title, subtitle, rune],
+        targets: [iconBg, icon, title, subtitle],
         scaleX: 0.97,
         scaleY: 0.97,
         duration: 70,
@@ -1269,7 +1274,7 @@ private getDebuffShortDescription(id: string, power: number) {
       drawButton(hoverColor, 1, 1);
 
       this.tweens.add({
-        targets: [iconBg, icon, title, subtitle, rune],
+        targets: [iconBg, icon, title, subtitle],
         scaleX: 1,
         scaleY: 1,
         duration: 90,
@@ -1306,7 +1311,6 @@ private getDebuffShortDescription(id: string, power: number) {
 
   return objects;
 }
-
 private getRaceSkillEnergyCost() {
   if (player.raceId === 'human') return 3;
   if (player.raceId === 'tainted_halfblood') return 2;
@@ -1585,7 +1589,6 @@ private handleDemonSkill() {
 
   this.afterPlayerAttack(playerActionText);
 }
-
   private handlePowerAttack() {
     if (this.isBattleEnded || this.isBusy) {
       return;
