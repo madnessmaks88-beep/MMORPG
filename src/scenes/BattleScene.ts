@@ -155,7 +155,7 @@ export class BattleScene extends Phaser.Scene {
 
   private battleLogLines: BattleLogEntry[] = [];
   private battleLogContainer?: Phaser.GameObjects.Container;
-  private battleLogMask?: any;
+  private battleLogMask?: Phaser.Display.Masks.GeometryMask;
   private battleLogMaskGraphics?: Phaser.GameObjects.Graphics;
   private battleLogScrollZone?: Phaser.GameObjects.Zone;
   private battleLogScrollTrack?: Phaser.GameObjects.Rectangle;
@@ -420,10 +420,13 @@ export class BattleScene extends Phaser.Scene {
     this.animateBattleEntries();
 
     this.createBattleLogPanel();
+    this.clearBattleLog();
+
     this.appendBattleLog(
-      `Начало боя: ${player.name} против ${this.enemy.name}.`,
-      isBoss ? 'danger' : 'system'
+      `Бой начался: ${player.name} против ${this.enemy.name}.`,
+      'system'
     );
+
     this.createActionButtons();
 
     this.applyStartOfBattleTreeEffects();
@@ -1173,6 +1176,15 @@ private getDebuffShortDescription(id: string, power: number) {
       }
     ).setOrigin(0, 0).setDepth(12).setAlpha(0);
 
+    // Важно: маску ставим не только на контейнер, но и на каждую строку.
+    // В Phaser 3 маска контейнера не всегда клипует дочерние Text-объекты
+    // одинаково стабильно на всех рендерах, из-за чего текст может вылезать
+    // поверх карточек бойцов. Индивидуальная GeometryMask гарантирует,
+    // что строка видна только внутри внутреннего окна летописи.
+    if (this.battleLogMask) {
+      line.setMask(this.battleLogMask);
+    }
+
     this.battleLogContainer.add(line);
     this.battleLogLineObjects.push(line);
 
@@ -1219,6 +1231,11 @@ private getDebuffShortDescription(id: string, power: number) {
       }
 
       line.setX(this.battleLogViewportLeft + 4);
+
+      if (this.battleLogMask && line.mask !== this.battleLogMask) {
+        line.setMask(this.battleLogMask);
+      }
+
       cursorY += Math.ceil(line.height) + gap;
     });
 
@@ -1244,6 +1261,32 @@ private getDebuffShortDescription(id: string, power: number) {
 
   private scrollBattleLog(delta: number) {
     this.scrollBattleLogTo(this.battleLogScrollY + delta);
+  }
+
+  private clearBattleLog() {
+    this.battleLogLines = [];
+
+    this.battleLogLineObjects.forEach(object => {
+      object.destroy();
+    });
+
+    this.battleLogLineObjects = [];
+
+    this.battleLogScrollTween?.stop();
+    this.battleLogScrollTween = undefined;
+
+    this.battleLogScrollY = 0;
+    this.battleLogTargetScrollY = 0;
+    this.battleLogMaxScroll = 0;
+    this.battleLogContentHeight = 0;
+
+    this.hideBattleLogNewMessageIndicator();
+    this.updateBattleLogScrollThumb();
+    this.updateBattleLogEdgeFades();
+
+    if (this.logText) {
+      this.logText.setText('');
+    }
   }
 
   private isBattleLogAtBottom() {
