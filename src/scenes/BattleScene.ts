@@ -142,6 +142,9 @@ export class BattleScene extends Phaser.Scene {
   private enemyHpBar!: Phaser.GameObjects.Rectangle;
   private energyBar!: Phaser.GameObjects.Rectangle;
 
+  private playerHpPreviewBar?: Phaser.GameObjects.Rectangle;
+  private enemyHpPreviewBar?: Phaser.GameObjects.Rectangle;
+
   private returnToDungeon = false;
   private isBattleEnded = false;
   private isBusy = false;
@@ -185,6 +188,7 @@ export class BattleScene extends Phaser.Scene {
   private raceAttackEffectText = '';
 
   private playerDebuffs: ActivePlayerDebuff[] = [];
+  private playerStunTurns = 0;
   private nextIncomingDamageBonus = 0;
 
   private tridentDepthMarkTurns = 0;
@@ -264,6 +268,7 @@ export class BattleScene extends Phaser.Scene {
   this.shieldSwordGuardActive = false;
 
   this.playerDebuffs = [];
+  this.playerStunTurns = 0;
   this.nextIncomingDamageBonus = 0;
 
 
@@ -614,6 +619,7 @@ private getEnemyWeaknessDamageMultiplier() {
   if (id === 'tainted_corruption') return '☾';
   if (id === 'hellfire_burn') return '🔥';
   if (id === 'black_water_grip') return '≋';
+  if (id === 'player_stun') return '✦';
 
   return '•';
 }
@@ -650,6 +656,10 @@ private getDebuffShortDescription(id: string, power: number) {
 
   if (id === 'black_water_grip') {
     return `Следующая атака героя нанесёт на ${power}% больше урона.`;
+  }
+
+  if (id === 'player_stun') {
+    return 'Герой пропустит следующее действие.';
   }
 
   return 'Неизвестный эффект.';
@@ -1104,6 +1114,10 @@ private handleRaceSkill() {
     return;
   }
 
+    if (this.consumePlayerStunBeforeAction()) {
+      return;
+    }
+
   if (this.isRaceSkillDisabled()) {
     return;
   }
@@ -1349,6 +1363,10 @@ private handleDemonSkill() {
       return;
     }
 
+    if (this.consumePlayerStunBeforeAction()) {
+      return;
+    }
+
     const cost = this.powerAttackEnergyCost + this.getSkillCostPenalty();
 
     if (player.energy < cost) {
@@ -1391,6 +1409,10 @@ private handleDemonSkill() {
     }
 
     if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
+    if (this.consumePlayerStunBeforeAction()) {
       return;
     }
 
@@ -1879,6 +1901,167 @@ private tickPlayerDebuffs() {
     .filter(debuff => debuff.duration > 0);
 }
 
+
+  private getPlayerIncomingEffectDamage() {
+    let totalDamage = 0;
+
+    this.playerDebuffs.forEach(debuff => {
+      if (debuff.id === 'bleeding' || debuff.id === 'poison') {
+        const damage = this.hasTreeLevel('hp', 15)
+          ? Math.max(1, Math.floor(debuff.power * 0.75))
+          : debuff.power;
+
+        totalDamage += damage;
+      }
+    });
+
+    return Math.max(0, totalDamage);
+  }
+
+  private getPlayerIncomingEffectColor() {
+    if (this.playerDebuffs.some(debuff => debuff.id === 'poison')) {
+      return 0x75d184;
+    }
+
+    if (this.playerDebuffs.some(debuff => debuff.id === 'bleeding')) {
+      return 0xff6b6b;
+    }
+
+    return 0xc084fc;
+  }
+
+  private getEnemyIncomingEffectDamage() {
+    const bleedDamage = this.enemyBleedTurns > 0 ? Math.max(0, this.enemyBleedDamage) : 0;
+    const burnDamage = this.demonHellfireBurnTurns > 0 ? Math.max(0, this.demonHellfireBurnDamage) : 0;
+
+    return bleedDamage + burnDamage;
+  }
+
+  private getEnemyIncomingEffectColor() {
+    if (this.demonHellfireBurnTurns > 0 && this.demonHellfireBurnDamage > 0) {
+      return 0xff6b35;
+    }
+
+    if (this.enemyBleedTurns > 0 && this.enemyBleedDamage > 0) {
+      return 0xff6b6b;
+    }
+
+    return 0xc084fc;
+  }
+
+  private updateHpPreviewBar(config: {
+    bar?: Phaser.GameObjects.Rectangle;
+    maxWidth: number;
+    currentHp: number;
+    maxHp: number;
+    damage: number;
+    color: number;
+  }) {
+    const { bar, maxWidth, currentHp, maxHp, damage, color } = config;
+
+    if (!bar || maxHp <= 0 || damage <= 0 || currentHp <= 0) {
+      bar?.setVisible(false);
+      return;
+    }
+
+    const hpRatio = Phaser.Math.Clamp(currentHp / maxHp, 0, 1);
+    const damageRatio = Phaser.Math.Clamp(damage / maxHp, 0, hpRatio);
+    const currentWidth = maxWidth * hpRatio;
+    const damageWidth = Math.max(3, maxWidth * damageRatio);
+
+    bar.setVisible(true);
+    bar.setFillStyle(color, 0.78);
+    bar.x = -maxWidth / 2 + Math.max(0, currentWidth - damageWidth);
+    bar.displayWidth = damageWidth;
+  }
+
+  private updateHpPreviewBars(stats = this.getBattleStats()) {
+    this.updateHpPreviewBar({
+      bar: this.playerHpPreviewBar,
+      maxWidth: this.playerHpBarMaxWidth,
+      currentHp: player.hp,
+      maxHp: stats.maxHp,
+      damage: this.getPlayerIncomingEffectDamage(),
+      color: this.getPlayerIncomingEffectColor(),
+    });
+
+    this.updateHpPreviewBar({
+      bar: this.enemyHpPreviewBar,
+      maxWidth: this.enemyHpBarMaxWidth,
+      currentHp: this.enemy.hp,
+      maxHp: this.enemy.maxHp,
+      damage: this.getEnemyIncomingEffectDamage(),
+      color: this.getEnemyIncomingEffectColor(),
+    });
+  }
+
+  private getEnemyStunChance() {
+    const room = getCurrentRoom();
+    const isBoss = room?.type === 'boss' || room?.type === 'tier_boss';
+    const isElite = room?.type === 'elite';
+
+    let chance = isBoss ? 0.08 : isElite ? 0.12 : 0.07;
+
+    if (this.enemy.debuffOnHit) {
+      chance += 0.03;
+    }
+
+    return Phaser.Math.Clamp(chance, 0, 0.16);
+  }
+
+  private tryApplyEnemyStunOnHit(damage: number) {
+    if (damage <= 0 || player.hp <= 0 || this.playerStunTurns > 0) {
+      return '';
+    }
+
+    const chance = this.getEnemyStunChance();
+
+    if (Math.random() >= chance) {
+      return '';
+    }
+
+    this.playerStunTurns = 1;
+
+    this.showFloatingText(
+      this.playerCard.x,
+      this.playerCard.y - 94,
+      'ОГЛУШЕНИЕ',
+      '#f0d58a'
+    );
+
+    this.shakeBattle(0.004, 130);
+    this.renderPlayerEffectChips();
+
+    return `\nОглушение: следующий ход героя будет пропущен.`;
+  }
+
+  private consumePlayerStunBeforeAction() {
+    if (this.playerStunTurns <= 0) {
+      return false;
+    }
+
+    this.playerStunTurns = 0;
+    this.isBusy = true;
+
+    const text = 'Ты оглушён и не успеваешь действовать. Враг получает возможность ударить снова.';
+
+    this.logText.setText(text);
+    this.showFloatingText(
+      this.playerCard.x,
+      this.playerCard.y - 92,
+      'ПРОПУСК ХОДА',
+      '#f0d58a'
+    );
+    this.updateTexts();
+    this.createActionButtons();
+
+    this.time.delayedCall(480, () => {
+      this.enemyTurn(text, false);
+    });
+
+    return true;
+  }
+
 private applyDebuffDamageBeforePlayerAction() {
   let totalDamage = 0;
   const lines: string[] = [];
@@ -2316,6 +2499,15 @@ private getSkillCostPenalty() {
       0.98
     ).setOrigin(0, 0.5);
 
+    const hpPreviewBar = this.add.rectangle(
+      -barWidth / 2,
+      hpBarY,
+      1,
+      12,
+      0x75d184,
+      0.78
+    ).setOrigin(0, 0.5).setVisible(false);
+
     const hpBarFrame = this.add.rectangle(0, hpBarY, barWidth, 12)
       .setStrokeStyle(1, 0x000000, 0.85);
 
@@ -2349,6 +2541,7 @@ private getSkillCostPenalty() {
       extraText,
       barBack,
       hpBar,
+      hpPreviewBar,
       hpBarFrame,
       energyBack,
       energyBar,
@@ -2404,6 +2597,7 @@ private getSkillCostPenalty() {
     if (isEnemy) {
       this.enemyHpText = hpText;
       this.enemyHpBar = hpBar;
+      this.enemyHpPreviewBar = hpPreviewBar;
       this.enemyHpBarMaxWidth = barWidth;
 
       extraText.setText(`АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}`);
@@ -2430,6 +2624,7 @@ private getSkillCostPenalty() {
     } else {
       this.playerHpText = hpText;
       this.playerHpBar = hpBar;
+      this.playerHpPreviewBar = hpPreviewBar;
       this.playerHpBarMaxWidth = barWidth;
       this.energyBar = energyBar;
       this.energyBarMaxWidth = barWidth;
@@ -3060,6 +3255,7 @@ private getDebuffColor(id: string) {
   if (id === 'tainted_corruption') return 0xc084fc;
   if (id === 'hellfire_burn') return 0xff6b35;
   if (id === 'black_water_grip') return 0x70a6ff;
+  if (id === 'player_stun') return 0xf0d58a;
 
   return UI.colors.gold;
 }
@@ -3068,17 +3264,35 @@ private renderPlayerEffectChips() {
   this.playerEffectObjects.forEach(object => object.destroy());
   this.playerEffectObjects = [];
 
-  if (this.playerDebuffs.length === 0) {
+  const effects: {
+    id: string;
+    name: string;
+    duration: number;
+    power: number;
+  }[] = this.playerDebuffs.map(debuff => ({
+    ...debuff,
+  }));
+
+  if (this.playerStunTurns > 0) {
+    effects.unshift({
+      id: 'player_stun',
+      name: 'Оглушение',
+      duration: this.playerStunTurns,
+      power: 0,
+    });
+  }
+
+  if (effects.length === 0) {
     return;
   }
 
   const chipWidth = 168;
-  const totalVisible = Math.min(this.playerDebuffs.length, 3);
+  const totalVisible = Math.min(effects.length, 3);
   const totalWidth = totalVisible * chipWidth + Math.max(0, totalVisible - 1) * 8;
   const startX = -totalWidth / 2 + chipWidth / 2;
   const y = 84;
 
-  this.playerDebuffs.slice(0, 3).forEach((debuff, index) => {
+  effects.slice(0, 3).forEach((effect, index) => {
     const x = startX + index * (chipWidth + 8);
 
     this.createEffectChip({
@@ -3087,15 +3301,15 @@ private renderPlayerEffectChips() {
       y,
       width: chipWidth,
       height: 42,
-      text: `${debuff.name}
-${debuff.duration} х.`,
-      icon: this.getDebuffIcon(debuff.id),
-      color: this.getDebuffColor(debuff.id),
-      tooltipTitle: debuff.name,
+      text: `${effect.name}
+${effect.duration} х.`,
+      icon: this.getDebuffIcon(effect.id),
+      color: this.getDebuffColor(effect.id),
+      tooltipTitle: effect.name,
       tooltipDescription:
-        `${this.getDebuffShortDescription(debuff.id, debuff.power)}
+        `${this.getDebuffShortDescription(effect.id, effect.power)}
 ` +
-        `Осталось ходов: ${debuff.duration}.`,
+        `Осталось ходов: ${effect.duration}.`,
       targetArray: this.playerEffectObjects,
     });
   });
@@ -3373,22 +3587,96 @@ ${effect.duration} х.`,
     text: string,
     color = '#ffffff'
   ) {
-    const floatingText = this.add.text(x, y, text, {
-      fontFamily: 'Arial',
-      fontSize: '34px',
+    const isDamage = text.trim().startsWith('-');
+    const isHeal = text.trim().startsWith('+');
+    const isControl = text.toUpperCase().includes('ОГЛУШ') || text.toUpperCase().includes('УКЛОН');
+
+    const offsetX = Phaser.Math.Between(-16, 16);
+    const startY = y + Phaser.Math.Between(-4, 8);
+    const fontSize = isDamage ? 38 : isHeal ? 34 : 25;
+
+    const floatingText = this.add.text(x + offsetX, startY, text, {
+      fontFamily: UI.font.title,
+      fontSize: `${fontSize}px`,
       color,
       stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
+      strokeThickness: isDamage ? 6 : 4,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(260).setScale(0.58).setAlpha(0);
+
+    if (isDamage || isHeal || isControl) {
+      this.createImpactBurst(x + offsetX, startY + 12, Phaser.Display.Color.HexStringToColor(color).color, isHeal);
+    }
 
     this.tweens.add({
       targets: floatingText,
-      y: y - 70,
-      alpha: 0,
-      duration: 850,
-      ease: 'Power2',
+      alpha: 1,
+      scale: 1.12,
+      y: startY - 22,
+      duration: 120,
+      ease: 'Back.easeOut',
       onComplete: () => {
-        floatingText.destroy();
+        this.tweens.add({
+          targets: floatingText,
+          y: startY - 86,
+          x: x + offsetX + Phaser.Math.Between(-14, 14),
+          alpha: 0,
+          scale: 0.92,
+          duration: 760,
+          ease: 'Cubic.easeIn',
+          onComplete: () => {
+            floatingText.destroy();
+          },
+        });
+      },
+    });
+  }
+
+  private createImpactBurst(
+    x: number,
+    y: number,
+    color: number,
+    isHeal = false
+  ) {
+    const burstCount = isHeal ? 5 : 7;
+
+    for (let i = 0; i < burstCount; i += 1) {
+      const angle = Phaser.Math.DegToRad(Phaser.Math.Between(205, 335));
+      const distance = Phaser.Math.Between(18, isHeal ? 32 : 46);
+      const particle = this.add.circle(
+        x,
+        y,
+        Phaser.Math.Between(2, isHeal ? 3 : 4),
+        color,
+        isHeal ? 0.45 : 0.62
+      ).setDepth(248);
+
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.35,
+        duration: Phaser.Math.Between(260, 420),
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          particle.destroy();
+        },
+      });
+    }
+
+    const flash = this.add.circle(x, y, isHeal ? 18 : 22, color, isHeal ? 0.08 : 0.12)
+      .setDepth(247)
+      .setScale(0.35);
+
+    this.tweens.add({
+      targets: flash,
+      scale: 1.25,
+      alpha: 0,
+      duration: 240,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        flash.destroy();
       },
     });
   }
@@ -3493,6 +3781,10 @@ ${effect.duration} х.`,
     }
 
     if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
+    if (this.consumePlayerStunBeforeAction()) {
       return;
     }
 
@@ -4462,6 +4754,14 @@ ${daggerTreeCritTexts.join('\n')}`
       return;
     }
 
+    if (this.applyDebuffDamageAndCheckDeath()) {
+      return;
+    }
+
+    if (this.consumePlayerStunBeforeAction()) {
+      return;
+    }
+
     if (player.potions <= 0) {
       this.logText.setText('Зелий больше нет.');
       this.updateTexts();
@@ -4650,6 +4950,7 @@ ${daggerTreeCritTexts.join('\n')}`
       }
 
       const debuffText = this.tryApplyEnemyDebuffOnHit();
+      const enemyStunText = this.tryApplyEnemyStunOnHit(damage);
 
       let demonRageText = '';
 
@@ -4668,10 +4969,10 @@ ${daggerTreeCritTexts.join('\n')}`
           ? `${playerActionText}
 
 Ты заблокировал часть удара.
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}`
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`
           : `${playerActionText}
 
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}`;
+${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`;
 
         this.tickRaceTurnEffectsAfterEnemyAction();
         this.handleVictory(thornVictoryText);
@@ -4718,8 +5019,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
 
       this.logText.setText(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\n${energyRestoreText}${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}\n${energyRestoreText}${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
       );
 
       this.updateTexts();
@@ -4780,6 +5081,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
      const energyRatio = Phaser.Math.Clamp(player.energy / stats.maxEnergy, 0, 1);
      this.energyBar.displayWidth = this.energyBarMaxWidth * energyRatio;
    }
+
+   this.updateHpPreviewBars(stats);
 
     if (this.playerDebuffText) {
       this.playerDebuffText.setText('');
