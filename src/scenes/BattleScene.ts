@@ -140,6 +140,10 @@ export class BattleScene extends Phaser.Scene {
   private battleLogMaskGraphics?: Phaser.GameObjects.Graphics;
   private battleLogScrollTrack?: Phaser.GameObjects.Rectangle;
   private battleLogScrollThumb?: Phaser.GameObjects.Rectangle;
+  private battleLogViewportFrame?: Phaser.GameObjects.Graphics;
+  private battleLogTopFade?: Phaser.GameObjects.Graphics;
+  private battleLogBottomFade?: Phaser.GameObjects.Graphics;
+  private battleLogScrollTween?: { stop: () => void };
   private battleLogViewportTop = 0;
   private battleLogViewportHeight = 0;
   private battleLogViewportLeft = 0;
@@ -257,6 +261,8 @@ export class BattleScene extends Phaser.Scene {
   this.battleLogScrollY = 0;
   this.battleLogTargetScrollY = 0;
   this.battleLogMaxScrollY = 0;
+  this.battleLogScrollTween?.stop();
+  this.battleLogScrollTween = undefined;
 
   this.humanPassiveActivated = false;
   this.raceSkillCooldown = 0;
@@ -840,13 +846,60 @@ private getDebuffShortDescription(id: string, power: number) {
   this.battleLogMaxScrollY = 0;
 
   this.battleLogMaskGraphics?.destroy();
+  this.battleLogViewportFrame?.destroy();
+  this.battleLogTopFade?.destroy();
+  this.battleLogBottomFade?.destroy();
+
+  this.battleLogViewportFrame = this.add.graphics().setDepth(11).setAlpha(0);
+  this.battleLogViewportFrame.fillStyle(0x020304, 0.38);
+  this.battleLogViewportFrame.fillRoundedRect(
+    this.battleLogViewportLeft - 8,
+    this.battleLogViewportTop - 6,
+    this.battleLogViewportWidth + 14,
+    this.battleLogViewportHeight + 12,
+    layout.veryCompact ? 10 : 13
+  );
+  this.battleLogViewportFrame.lineStyle(1, UI.colors.goldDark, 0.24);
+  this.battleLogViewportFrame.strokeRoundedRect(
+    this.battleLogViewportLeft - 8,
+    this.battleLogViewportTop - 6,
+    this.battleLogViewportWidth + 14,
+    this.battleLogViewportHeight + 12,
+    layout.veryCompact ? 10 : 13
+  );
+  this.battleLogViewportFrame.lineStyle(1, 0x70a6ff, 0.08);
+  this.battleLogViewportFrame.strokeRoundedRect(
+    this.battleLogViewportLeft - 3,
+    this.battleLogViewportTop - 2,
+    this.battleLogViewportWidth + 4,
+    this.battleLogViewportHeight + 4,
+    layout.veryCompact ? 7 : 10
+  );
+
+  this.battleLogTopFade = this.createBattleLogEdgeFade(
+    this.battleLogViewportLeft - 6,
+    this.battleLogViewportTop - 4,
+    this.battleLogViewportWidth + 10,
+    layout.veryCompact ? 15 : 19,
+    true
+  ).setDepth(13).setAlpha(0);
+
+  this.battleLogBottomFade = this.createBattleLogEdgeFade(
+    this.battleLogViewportLeft - 6,
+    this.battleLogViewportTop + this.battleLogViewportHeight - (layout.veryCompact ? 13 : 17),
+    this.battleLogViewportWidth + 10,
+    layout.veryCompact ? 15 : 19,
+    false
+  ).setDepth(13).setAlpha(0);
+
   this.battleLogMaskGraphics = this.add.graphics().setDepth(0).setAlpha(0.0001);
   this.battleLogMaskGraphics.fillStyle(0xffffff, 1);
-  this.battleLogMaskGraphics.fillRect(
+  this.battleLogMaskGraphics.fillRoundedRect(
     this.battleLogViewportLeft - 2,
     this.battleLogViewportTop - 2,
     this.battleLogViewportWidth + 4,
-    this.battleLogViewportHeight + 4
+    this.battleLogViewportHeight + 4,
+    layout.veryCompact ? 8 : 11
   );
 
   this.battleLogContainer = this.add.container(0, 0).setDepth(12).setAlpha(0);
@@ -920,7 +973,7 @@ private getDebuffShortDescription(id: string, power: number) {
     }
 
     const deltaY = pointer.y - this.battleLogDragStartY;
-    this.scrollBattleLogTo(this.battleLogDragStartScrollY - deltaY);
+    this.scrollBattleLogTo(this.battleLogDragStartScrollY - deltaY, true);
   });
 
   logZone.on('wheel', (_pointer: Phaser.Input.Pointer, _dx: number, dy: number) => {
@@ -936,7 +989,7 @@ private getDebuffShortDescription(id: string, power: number) {
   });
 
   this.tweens.add({
-    targets: [panel.panel, panel.shadow, inner, titlePlate, titleText, mark, this.battleLogContainer, this.battleLogScrollTrack, this.battleLogScrollThumb, scrollHint],
+    targets: [panel.panel, panel.shadow, inner, titlePlate, titleText, mark, this.battleLogViewportFrame, this.battleLogContainer, this.battleLogScrollTrack, this.battleLogScrollThumb, scrollHint],
     alpha: 1,
     duration: 280,
     delay: 220,
@@ -946,6 +999,35 @@ private getDebuffShortDescription(id: string, power: number) {
 
   private stopBattleLogDrag() {
     this.battleLogDragging = false;
+  }
+
+  private createBattleLogEdgeFade(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    topFade: boolean
+  ) {
+    const graphics = this.add.graphics();
+    const steps = 8;
+    const stepHeight = height / steps;
+
+    for (let i = 0; i < steps; i += 1) {
+      const ratio = topFade
+        ? 1 - i / steps
+        : (i + 1) / steps;
+      const alpha = 0.06 + ratio * 0.42;
+
+      graphics.fillStyle(0x06080b, alpha);
+      graphics.fillRect(
+        x,
+        y + i * stepHeight,
+        width,
+        Math.ceil(stepHeight) + 1
+      );
+    }
+
+    return graphics;
   }
 
   private setBattleLog(text: string) {
@@ -998,20 +1080,20 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogMaxScrollY = Math.max(0, textHeight - this.battleLogViewportHeight + 4);
 
     if (autoScrollToBottom) {
-      this.battleLogTargetScrollY = this.battleLogMaxScrollY;
-      this.battleLogScrollY = this.battleLogMaxScrollY;
-    } else {
-      this.battleLogTargetScrollY = Phaser.Math.Clamp(
-        this.battleLogTargetScrollY,
-        0,
-        this.battleLogMaxScrollY
-      );
-      this.battleLogScrollY = Phaser.Math.Clamp(
-        this.battleLogScrollY,
-        0,
-        this.battleLogMaxScrollY
-      );
+      this.scrollBattleLogTo(this.battleLogMaxScrollY);
+      return;
     }
+
+    this.battleLogTargetScrollY = Phaser.Math.Clamp(
+      this.battleLogTargetScrollY,
+      0,
+      this.battleLogMaxScrollY
+    );
+    this.battleLogScrollY = Phaser.Math.Clamp(
+      this.battleLogScrollY,
+      0,
+      this.battleLogMaxScrollY
+    );
 
     this.applyBattleLogScroll();
   }
@@ -1024,10 +1106,38 @@ private getDebuffShortDescription(id: string, power: number) {
     this.scrollBattleLogTo(this.battleLogScrollY + deltaY);
   }
 
-  private scrollBattleLogTo(scrollY: number) {
-    this.battleLogTargetScrollY = Phaser.Math.Clamp(scrollY, 0, this.battleLogMaxScrollY);
-    this.battleLogScrollY = this.battleLogTargetScrollY;
-    this.applyBattleLogScroll();
+  private scrollBattleLogTo(scrollY: number, immediate = false) {
+    const targetScrollY = Phaser.Math.Clamp(scrollY, 0, this.battleLogMaxScrollY);
+    this.battleLogTargetScrollY = targetScrollY;
+
+    this.battleLogScrollTween?.stop();
+    this.battleLogScrollTween = undefined;
+
+    if (immediate || Math.abs(targetScrollY - this.battleLogScrollY) < 0.5) {
+      this.battleLogScrollY = targetScrollY;
+      this.applyBattleLogScroll();
+      return;
+    }
+
+    const tweenState = {
+      value: this.battleLogScrollY,
+    };
+
+    this.battleLogScrollTween = this.tweens.add({
+      targets: tweenState,
+      value: targetScrollY,
+      duration: 170,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        this.battleLogScrollY = tweenState.value;
+        this.applyBattleLogScroll();
+      },
+      onComplete: () => {
+        this.battleLogScrollY = targetScrollY;
+        this.battleLogScrollTween = undefined;
+        this.applyBattleLogScroll();
+      },
+    });
   }
 
   private applyBattleLogScroll() {
@@ -1036,6 +1146,25 @@ private getDebuffShortDescription(id: string, power: number) {
     }
 
     this.updateBattleLogScrollThumb();
+    this.updateBattleLogEdgeFades();
+  }
+
+  private updateBattleLogEdgeFades() {
+    if (!this.battleLogTopFade || !this.battleLogBottomFade) {
+      return;
+    }
+
+    if (this.battleLogMaxScrollY <= 1) {
+      this.battleLogTopFade.setAlpha(0);
+      this.battleLogBottomFade.setAlpha(0);
+      return;
+    }
+
+    const topAlpha = Phaser.Math.Clamp(this.battleLogScrollY / 22, 0, 1) * 0.9;
+    const bottomAlpha = Phaser.Math.Clamp((this.battleLogMaxScrollY - this.battleLogScrollY) / 22, 0, 1) * 0.9;
+
+    this.battleLogTopFade.setAlpha(topAlpha);
+    this.battleLogBottomFade.setAlpha(bottomAlpha);
   }
 
   private updateBattleLogScrollThumb() {
