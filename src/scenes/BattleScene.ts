@@ -2576,6 +2576,9 @@ private getSkillCostPenalty() {
     this.add.rectangle(width / 2, height * 0.38, width, height * 0.78, theme.background, 0.56).setDepth(0);
     this.add.rectangle(width / 2, height - 150, width, 330, 0x020202, 0.72).setDepth(0);
 
+    this.add.rectangle(width / 2, height * 0.48, width - layout.safeX * 2, 1, 0xd8b56d, 0.08).setDepth(1);
+    this.add.rectangle(width / 2, height * 0.48 + 4, (width - layout.safeX * 2) * 0.62, 1, 0x70a6ff, 0.055).setDepth(1);
+
     const haloY = layout.safeTop + (isBoss ? height * 0.22 : height * 0.18);
     this.add.circle(width / 2, haloY, width * 0.58, isBoss ? 0x5c120d : theme.glow, isBoss ? 0.08 : 0.045).setDepth(1);
     this.add.circle(width / 2, haloY + 18, width * 0.32, 0xd8b56d, isBoss ? 0.035 : 0.025).setDepth(1);
@@ -2733,7 +2736,57 @@ private getSkillCostPenalty() {
     bg.lineStyle(isBoss ? 4 : 2, strokeColor, isBoss ? 0.95 : 0.62);
     bg.strokeRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 30);
 
+    const innerFrame = this.add.graphics();
+    innerFrame.lineStyle(1, 0xf2d18d, isBoss ? 0.26 : 0.16);
+    innerFrame.strokeRoundedRect(
+      -cardWidth / 2 + 7,
+      -cardHeight / 2 + 7,
+      cardWidth - 14,
+      cardHeight - 14,
+      24
+    );
+    innerFrame.lineStyle(1, 0x090604, 0.85);
+    innerFrame.strokeRoundedRect(
+      -cardWidth / 2 + 13,
+      -cardHeight / 2 + 13,
+      cardWidth - 26,
+      cardHeight - 26,
+      18
+    );
+
+    const cornerFrame = this.add.graphics();
+    const cornerLength = layout.veryCompact ? 20 : 28;
+    const cornerInset = 15;
+    cornerFrame.lineStyle(2, strokeColor, isBoss ? 0.76 : 0.46);
+    [
+      [-cardWidth / 2 + cornerInset, -cardHeight / 2 + cornerInset, 1, 1],
+      [cardWidth / 2 - cornerInset, -cardHeight / 2 + cornerInset, -1, 1],
+      [-cardWidth / 2 + cornerInset, cardHeight / 2 - cornerInset, 1, -1],
+      [cardWidth / 2 - cornerInset, cardHeight / 2 - cornerInset, -1, -1],
+    ].forEach(([cx, cy, sx, sy]) => {
+      cornerFrame.lineBetween(cx, cy, cx + cornerLength * sx, cy);
+      cornerFrame.lineBetween(cx, cy, cx, cy + cornerLength * sy);
+    });
+
     const topGlow = this.add.circle(0, -cardHeight / 2 + 40, cardWidth * 0.3, isBoss ? 0xff6b35 : strokeColor, isBoss ? 0.11 : 0.045);
+
+    const namePlate = this.add.graphics();
+    namePlate.fillStyle(0x050403, 0.34);
+    namePlate.fillRoundedRect(
+      -cardWidth / 2 + 104,
+      -cardHeight / 2 + (isEnemy ? 9 : 22),
+      cardWidth - 132,
+      layout.veryCompact ? 32 : 40,
+      14
+    );
+    namePlate.lineStyle(1, strokeColor, isBoss ? 0.32 : 0.18);
+    namePlate.strokeRoundedRect(
+      -cardWidth / 2 + 104,
+      -cardHeight / 2 + (isEnemy ? 9 : 22),
+      cardWidth - 132,
+      layout.veryCompact ? 32 : 40,
+      14
+    );
 
     const sideAccent = this.add.rectangle(
       -cardWidth / 2 + 7,
@@ -2864,7 +2917,10 @@ private getSkillCostPenalty() {
     container.add([
       shadow,
       bg,
+      innerFrame,
+      cornerFrame,
       topGlow,
+      namePlate,
       sideAccent,
       iconBg,
       iconText,
