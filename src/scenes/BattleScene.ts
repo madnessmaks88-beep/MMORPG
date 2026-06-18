@@ -764,32 +764,66 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private createActionButtons() {
-    const layout = this.getBattleLayout();
-
-    this.actionButtons.forEach(object => {
-      object.destroy();
-    });
-
+    this.actionButtons.forEach(object => object.destroy());
     this.actionButtons = [];
+
+    if (this.isBattleEnded) {
+      return;
+    }
+
+    const layout = this.getBattleLayout();
+    const canUseRaceSkill = !this.isRaceSkillDisabled();
+    const canUsePower = !this.isBusy && !this.isBattleEnded && player.energy >= this.powerAttackEnergyCost + this.getSkillCostPenalty();
+    const canUsePotion = !this.isPotionDisabled() && player.hp < this.getBattleStats().maxHp;
 
     const panelObjects = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.actionPanelY,
       width: layout.contentWidth,
       height: layout.actionPanelHeight,
-      radius: 32,
-      color: 0x0b0908,
-      alpha: 0.96,
+      radius: layout.veryCompact ? 24 : 32,
+      color: 0x070606,
+      alpha: 0.94,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.58,
-      depth: 20,
+      strokeAlpha: 0.46,
+      depth: 18,
     });
 
-    this.actionButtons.push(panelObjects.shadow, panelObjects.panel);
+    const topY = layout.actionPanelY - layout.actionPanelHeight / 2;
+    const panelLeft = layout.centerX - layout.contentWidth / 2;
+    const panelRight = layout.centerX + layout.contentWidth / 2;
 
-    const actionTitle = this.add.text(layout.centerX, layout.actionPanelY - layout.actionPanelHeight / 2 + (layout.veryCompact ? 17 : 21), 'Действия', {
+    const innerGlow = this.add.graphics().setDepth(19);
+    innerGlow.fillStyle(0xd8b56d, 0.045);
+    innerGlow.fillRoundedRect(
+      panelLeft + 10,
+      topY + 10,
+      layout.contentWidth - 20,
+      layout.actionPanelHeight - 20,
+      layout.veryCompact ? 20 : 26
+    );
+
+    const redLine = this.add.rectangle(
+      layout.centerX,
+      topY + 7,
+      layout.contentWidth - 48,
+      1,
+      0x8e3a2a,
+      0.22
+    ).setDepth(20);
+
+    const goldLine = this.add.rectangle(
+      layout.centerX,
+      topY + 12,
+      layout.contentWidth * 0.42,
+      1,
+      UI.colors.goldDark,
+      0.28
+    ).setDepth(20);
+
+    const actionTitle = this.add.text(layout.centerX, topY + (layout.veryCompact ? 18 : 22), 'Боевые действия', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '14px' : '17px',
+      fontSize: layout.veryCompact ? '13px' : '16px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 3,
@@ -800,96 +834,138 @@ private getDebuffShortDescription(id: string, power: number) {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(22);
 
-    this.actionButtons.push(actionTitle);
+    const energyHint = this.add.text(panelRight - 24, topY + (layout.veryCompact ? 18 : 22), `⚡ ${player.energy}`, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '11px' : '13px',
+      color: '#9fc8ff',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'right',
+      wordWrap: {
+        width: 70,
+      },
+      maxLines: 1,
+    }).setOrigin(1, 0.5).setDepth(22);
 
-    const panelDivider = this.add.rectangle(
-      layout.centerX,
-      layout.actionPanelY - layout.actionPanelHeight / 2 + 16,
-      layout.contentWidth - 70,
-      2,
-      UI.colors.gold,
-      0.18
-    ).setDepth(22);
+    this.actionButtons.push(
+      panelObjects.shadow,
+      panelObjects.panel,
+      innerGlow,
+      redLine,
+      goldLine,
+      actionTitle,
+      energyHint
+    );
 
-    this.actionButtons.push(panelDivider);
+    for (let i = 0; i < 5; i += 1) {
+      const rune = this.add.text(
+        panelLeft + 28 + i * ((layout.contentWidth - 56) / 4),
+        topY + layout.actionPanelHeight - (layout.veryCompact ? 18 : 22),
+        i % 2 === 0 ? '◇' : '✦',
+        {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '11px' : '13px',
+          color: '#ffffff',
+        }
+      ).setOrigin(0.5).setDepth(20).setAlpha(0.07);
 
-    const attack = this.createBattleActionButton({
-      x: layout.centerX,
-      y: layout.attackButtonY,
-      width: layout.mainButtonWidth,
-      height: layout.veryCompact ? 46 : layout.compact ? 54 : 62,
-      icon: '⚔',
-      title: this.getWeaponAttackButtonText(),
-      subtitle: 'Базовая атака • 0 энергии',
-      accentColor: UI.colors.gold,
-      disabled: this.isBusy || this.isBattleEnded,
-      onClick: () => this.handleAttack(),
+      this.actionButtons.push(rune);
+    }
+
+    const primaryHeight = layout.veryCompact ? 54 : layout.compact ? 62 : 72;
+    const gridButtonHeight = layout.veryCompact ? 48 : layout.compact ? 56 : 66;
+    const gap = layout.veryCompact ? 8 : 10;
+    const gridTop = layout.firstRowY;
+    const gridBottom = layout.secondRowY;
+    const sideWidth = Math.min((layout.mainButtonWidth - gap) / 2, layout.sideButtonWidth);
+
+    this.actionButtons.push(
+      ...this.createBattleActionButton({
+        x: layout.centerX,
+        y: layout.attackButtonY,
+        width: layout.mainButtonWidth,
+        height: primaryHeight,
+        icon: '⚔',
+        title: 'Обычная атака',
+        subtitle: 'Быстрый удар оружием',
+        accentColor: UI.colors.gold,
+        variant: 'primary',
+        onClick: () => this.handleAttack(),
+      })
+    );
+
+    this.actionButtons.push(
+      ...this.createBattleActionButton({
+        x: layout.centerX - sideWidth / 2 - gap / 2,
+        y: gridTop,
+        width: sideWidth,
+        height: gridButtonHeight,
+        icon: '✦',
+        title: 'Сильный удар',
+        subtitle: `${this.powerAttackEnergyCost + this.getSkillCostPenalty()} энергии`,
+        accentColor: 0xd08a3b,
+        variant: 'heavy',
+        disabled: !canUsePower,
+        onClick: () => this.handlePowerAttack(),
+      })
+    );
+
+    this.actionButtons.push(
+      ...this.createBattleActionButton({
+        x: layout.centerX + sideWidth / 2 + gap / 2,
+        y: gridTop,
+        width: sideWidth,
+        height: gridButtonHeight,
+        icon: '🛡',
+        title: 'Защита',
+        subtitle: '+2 энергии',
+        accentColor: 0x70a6ff,
+        variant: 'defense',
+        onClick: () => this.handleDefend(),
+      })
+    );
+
+    this.actionButtons.push(
+      ...this.createBattleActionButton({
+        x: layout.centerX - sideWidth / 2 - gap / 2,
+        y: gridBottom,
+        width: sideWidth,
+        height: gridButtonHeight,
+        icon: '◆',
+        title: 'Навык расы',
+        subtitle: this.getRaceSkillSubtitle(),
+        accentColor: 0xc084fc,
+        variant: 'magic',
+        disabled: !canUseRaceSkill,
+        onClick: () => this.handleRaceSkill(),
+      })
+    );
+
+    this.actionButtons.push(
+      ...this.createBattleActionButton({
+        x: layout.centerX + sideWidth / 2 + gap / 2,
+        y: gridBottom,
+        width: sideWidth,
+        height: gridButtonHeight,
+        icon: '✚',
+        title: 'Зелье',
+        subtitle: this.getPotionButtonSubtitle(),
+        accentColor: 0x75d184,
+        variant: 'heal',
+        disabled: !canUsePotion,
+        onClick: () => this.handlePotion(),
+      })
+    );
+
+    this.tweens.add({
+      targets: this.actionButtons.filter(object => object !== panelObjects.shadow && object !== panelObjects.panel),
+      alpha: {
+        from: 0,
+        to: 1,
+      },
+      duration: 180,
+      ease: 'Sine.easeOut',
     });
-
-    this.actionButtons.push(...attack);
-
-    const leftX = layout.centerX - layout.sideButtonWidth / 2 - 9;
-    const rightX = layout.centerX + layout.sideButtonWidth / 2 + 9;
-
-    const power = this.createBattleActionButton({
-      x: leftX,
-      y: layout.firstRowY,
-      width: layout.sideButtonWidth,
-      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
-      icon: '◆',
-      title: 'Сильный удар',
-      subtitle: `${this.powerAttackEnergyCost + this.getSkillCostPenalty()} эн.`,
-      accentColor: UI.colors.redHex,
-      disabled: this.isBusy || this.isBattleEnded || player.energy < this.powerAttackEnergyCost + this.getSkillCostPenalty(),
-      onClick: () => this.handlePowerAttack(),
-    });
-
-    this.actionButtons.push(...power);
-
-    const raceSkill = this.createBattleActionButton({
-      x: rightX,
-      y: layout.firstRowY,
-      width: layout.sideButtonWidth,
-      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
-      icon: this.getRaceSkillIcon(),
-      title: this.getRaceSkillTitle(),
-      subtitle: this.getRaceSkillSubtitle(),
-      accentColor: UI.colors.gold,
-      disabled: this.isRaceSkillDisabled(),
-      onClick: () => this.handleRaceSkill(),
-    });
-
-    this.actionButtons.push(...raceSkill);
-
-    const defend = this.createBattleActionButton({
-      x: leftX,
-      y: layout.secondRowY,
-      width: layout.sideButtonWidth,
-      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
-      icon: '🛡',
-      title: 'Защита',
-      subtitle: 'Снизить урон • +1 эн.',
-      accentColor: UI.colors.blueHex,
-      disabled: this.isBusy || this.isBattleEnded,
-      onClick: () => this.handleDefend(),
-    });
-
-    this.actionButtons.push(...defend);
-
-    const potion = this.createBattleActionButton({
-      x: rightX,
-      y: layout.secondRowY,
-      width: layout.sideButtonWidth,
-      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
-      icon: '✚',
-      title: 'Зелье',
-      subtitle: this.getPotionButtonSubtitle(),
-      accentColor: UI.colors.greenHex,
-      disabled: this.isPotionDisabled(),
-      onClick: () => this.handlePotion(),
-    });
-
-    this.actionButtons.push(...potion);
   }
 
   private getPotionButtonSubtitle() {
@@ -931,129 +1007,212 @@ private getDebuffShortDescription(id: string, power: number) {
   subtitle: string;
   accentColor: number;
   disabled?: boolean;
+  variant?: 'primary' | 'heavy' | 'defense' | 'magic' | 'heal';
   onClick: () => void;
 }) {
   const disabled = config.disabled ?? false;
-  const compactButton = config.height <= 54;
+  const variant = config.variant ?? 'primary';
+  const isPrimary = variant === 'primary';
+  const compactButton = config.height <= 56;
 
-  const bgColor = disabled ? 0x0b0b0c : 0x11100d;
-  const hoverColor = 0x22170f;
-  const pressedColor = 0x2f1d13;
-  const alpha = disabled ? 0.5 : 0.98;
-  const strokeAlpha = disabled ? 0.22 : 0.74;
-
-  const textColor = disabled ? '#5b5b5b' : UI.colors.text;
-  const titleHoverColor = disabled ? '#5b5b5b' : UI.colors.goldText;
-
-  const objects: Phaser.GameObjects.GameObject[] = [];
-  const radius = Math.min(22, config.height / 2);
+  const radius = isPrimary ? Math.min(28, config.height / 2) : Math.min(20, config.height / 2);
   const left = config.x - config.width / 2;
   const top = config.y - config.height / 2;
 
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.34);
-  shadow.fillRoundedRect(left, top + 5, config.width, config.height, radius);
-  shadow.setDepth(21);
+  const baseColor =
+    variant === 'defense'
+      ? 0x08111d
+      : variant === 'magic'
+        ? 0x130a1d
+        : variant === 'heal'
+          ? 0x07150d
+          : variant === 'heavy'
+            ? 0x1b0d06
+            : 0x14100a;
 
-  const glow = this.add.graphics();
-  glow.fillStyle(config.accentColor, disabled ? 0.018 : 0.06);
-  glow.fillRoundedRect(left + 5, top + 5, config.width - 10, config.height - 10, radius);
-  glow.setDepth(22);
+  const hoverColor =
+    variant === 'defense'
+      ? 0x0d1b2c
+      : variant === 'magic'
+        ? 0x211030
+        : variant === 'heal'
+          ? 0x0c2415
+          : variant === 'heavy'
+            ? 0x2a1309
+            : 0x24170c;
 
-  const bg = this.add.graphics();
-  const drawBg = (fill: number, fillAlpha: number, borderAlpha: number) => {
-    bg.clear();
-    bg.fillStyle(fill, fillAlpha);
-    bg.fillRoundedRect(left, top, config.width, config.height, radius);
-    bg.lineStyle(2, config.accentColor, borderAlpha);
-    bg.strokeRoundedRect(left, top, config.width, config.height, radius);
-    bg.fillStyle(config.accentColor, disabled ? 0.045 : 0.115);
-    bg.fillRoundedRect(left + 6, top + 6, compactButton ? 36 : 46, config.height - 12, Math.min(16, radius));
-  };
+  const pressedColor =
+    variant === 'defense'
+      ? 0x10263b
+      : variant === 'magic'
+        ? 0x2f1644
+        : variant === 'heal'
+          ? 0x12351d
+          : variant === 'heavy'
+            ? 0x3a1a0b
+            : 0x33200f;
 
-  drawBg(bgColor, alpha, strokeAlpha);
-  bg.setDepth(23);
+  const disabledColor = 0x0a0a0b;
+  const textColor = disabled ? '#5a5650' : isPrimary ? UI.colors.goldText : UI.colors.text;
+  const subtitleColor = disabled ? '#403d38' : UI.colors.textMuted;
+  const strokeAlpha = disabled ? 0.2 : isPrimary ? 0.86 : 0.62;
 
-  const iconX = left + (compactButton ? 25 : 31);
+  const objects: Phaser.GameObjects.GameObject[] = [];
 
-  const iconBg = this.add.circle(iconX, config.y, compactButton ? 16 : 20, config.accentColor, disabled ? 0.07 : 0.16)
-    .setStrokeStyle(1, config.accentColor, disabled ? 0.22 : 0.58)
-    .setDepth(24);
+  const shadow = this.add.graphics().setDepth(21);
+  const glow = this.add.graphics().setDepth(22);
+  const bg = this.add.graphics().setDepth(23);
+  const topShine = this.add.rectangle(
+    config.x,
+    top + 8,
+    config.width - (isPrimary ? 58 : 34),
+    1,
+    config.accentColor,
+    disabled ? 0.08 : isPrimary ? 0.36 : 0.22
+  ).setDepth(24);
 
-  const icon = this.add.text(iconX, config.y, config.icon, {
-    fontFamily: UI.font.body,
-    fontSize: compactButton ? '14px' : config.width > 300 ? '18px' : '16px',
-    color: disabled ? '#555555' : UI.colors.goldText,
-    stroke: '#000000',
-    strokeThickness: 2,
-  }).setOrigin(0.5).setDepth(25);
+  const sideMark = this.add.rectangle(
+    left + 7,
+    config.y,
+    isPrimary ? 4 : 3,
+    config.height - 18,
+    config.accentColor,
+    disabled ? 0.12 : isPrimary ? 0.54 : 0.36
+  ).setDepth(24);
 
-  const textX = left + (compactButton ? 50 : 62);
-  const title = this.add.text(textX, config.y - (compactButton ? 9 : 13), config.title, {
-    fontFamily: UI.font.title,
-    fontSize: compactButton ? (config.width > 300 ? '15px' : '12px') : config.width > 300 ? '19px' : '14px',
-    color: textColor,
-    stroke: '#000000',
-    strokeThickness: 3,
-    wordWrap: {
-      width: config.width - (compactButton ? 58 : 72),
-      useAdvancedWrap: true,
-    },
-    maxLines: 1,
-  }).setOrigin(0, 0.5).setDepth(25);
-
-  const subtitle = this.add.text(textX, config.y + (compactButton ? 12 : 16), config.subtitle, {
-    fontFamily: UI.font.body,
-    fontSize: compactButton ? '10px' : config.width > 300 ? '12px' : '11px',
-    color: disabled ? '#444444' : UI.colors.textMuted,
-    wordWrap: {
-      width: config.width - (compactButton ? 58 : 72),
-      useAdvancedWrap: true,
-    },
-    maxLines: 1,
-  }).setOrigin(0, 0.5).setDepth(25);
-
-  const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
-
-  objects.push(shadow, glow, bg, iconBg, icon, title, subtitle, zone);
-
-  objects.forEach(object => {
-    if ('setAlpha' in object) {
-      const alphaObject = object as Phaser.GameObjects.GameObject & {
-      setAlpha?: (value: number) => Phaser.GameObjects.GameObject;
-    };
-    
-    if (typeof alphaObject.setAlpha === 'function') {
-      alphaObject.setAlpha(disabled ? 0.72 : 0);
-    }
-    }
-  });
-
-  this.tweens.add({
-    targets: objects.filter(object => object !== zone),
-    alpha: disabled ? 0.72 : 1,
-    duration: 220,
-    ease: 'Sine.easeOut',
-  });
-
-  const redrawButton = (
+  const drawButton = (
     fillColor: number,
     fillAlpha: number,
     borderAlpha: number,
-    titleColor: string,
     offsetY = 0
   ) => {
-    drawBg(fillColor, fillAlpha, borderAlpha);
+    shadow.clear();
+    shadow.fillStyle(0x000000, disabled ? 0.22 : 0.42);
+    shadow.fillRoundedRect(left, top + 6 + offsetY, config.width, config.height, radius);
 
-    iconBg.setY(config.y + offsetY);
-    icon.setY(config.y + offsetY);
-    title.setY(config.y - (compactButton ? 9 : 13) + offsetY);
-    subtitle.setY(config.y + (compactButton ? 12 : 16) + offsetY);
+    glow.clear();
+    glow.fillStyle(config.accentColor, disabled ? 0.015 : isPrimary ? 0.09 : 0.055);
+    glow.fillRoundedRect(left + 5, top + 5 + offsetY, config.width - 10, config.height - 10, Math.max(10, radius - 5));
 
-    title.setColor(titleColor);
+    bg.clear();
+    bg.fillStyle(fillColor, fillAlpha);
+    bg.fillRoundedRect(left, top + offsetY, config.width, config.height, radius);
+    bg.lineStyle(isPrimary ? 2 : 1.5, config.accentColor, borderAlpha);
+    bg.strokeRoundedRect(left, top + offsetY, config.width, config.height, radius);
+
+    bg.fillStyle(0x000000, 0.22);
+    bg.fillRoundedRect(left + 7, top + 7 + offsetY, config.width - 14, config.height - 14, Math.max(10, radius - 7));
+
+    bg.fillStyle(config.accentColor, disabled ? 0.035 : isPrimary ? 0.13 : 0.095);
+    bg.fillRoundedRect(
+      left + 9,
+      top + 9 + offsetY,
+      isPrimary ? 58 : 42,
+      config.height - 18,
+      Math.max(10, radius - 9)
+    );
+
+    topShine.setY(top + 8 + offsetY);
+    sideMark.setY(config.y + offsetY);
   };
 
+  drawButton(disabled ? disabledColor : baseColor, disabled ? 0.72 : 0.98, strokeAlpha);
+
+  const iconX = left + (isPrimary ? 38 : 28);
+  const iconRadius = isPrimary ? (compactButton ? 20 : 24) : compactButton ? 15 : 18;
+  const iconBg = this.add.circle(
+    iconX,
+    config.y,
+    iconRadius,
+    config.accentColor,
+    disabled ? 0.08 : isPrimary ? 0.18 : 0.14
+  )
+    .setStrokeStyle(1, config.accentColor, disabled ? 0.24 : 0.58)
+    .setDepth(25);
+
+  const icon = this.add.text(iconX, config.y, config.icon, {
+    fontFamily: UI.font.body,
+    fontSize: isPrimary ? (compactButton ? '18px' : '21px') : compactButton ? '13px' : '16px',
+    color: disabled ? '#55524d' : UI.colors.goldText,
+    stroke: '#000000',
+    strokeThickness: 3,
+    align: 'center',
+  }).setOrigin(0.5).setDepth(26);
+
+  const textX = left + (isPrimary ? 78 : 54);
+  const textWidth = config.width - (isPrimary ? 94 : 64);
+
+  const title = this.add.text(textX, config.y - (isPrimary ? compactButton ? 10 : 13 : compactButton ? 8 : 10), config.title, {
+    fontFamily: UI.font.title,
+    fontSize: isPrimary
+      ? compactButton ? '17px' : '20px'
+      : config.width < 210
+        ? compactButton ? '11px' : '12px'
+        : compactButton ? '13px' : '15px',
+    color: textColor,
+    stroke: '#000000',
+    strokeThickness: isPrimary ? 4 : 3,
+    wordWrap: {
+      width: textWidth,
+      useAdvancedWrap: true,
+    },
+    maxLines: 1,
+  }).setOrigin(0, 0.5).setDepth(26);
+
+  const subtitle = this.add.text(textX, config.y + (isPrimary ? compactButton ? 12 : 16 : compactButton ? 10 : 13), config.subtitle, {
+    fontFamily: UI.font.body,
+    fontSize: isPrimary
+      ? compactButton ? '11px' : '12px'
+      : config.width < 210
+        ? '9px'
+        : compactButton ? '10px' : '11px',
+    color: subtitleColor,
+    wordWrap: {
+      width: textWidth,
+      useAdvancedWrap: true,
+    },
+    maxLines: 1,
+  }).setOrigin(0, 0.5).setDepth(26);
+
+  const rune = this.add.text(config.x + config.width / 2 - (isPrimary ? 28 : 18), config.y, isPrimary ? '◇' : '·', {
+    fontFamily: UI.font.body,
+    fontSize: isPrimary ? '18px' : '15px',
+    color: '#ffffff',
+  }).setOrigin(0.5).setDepth(26).setAlpha(disabled ? 0.08 : 0.16);
+
+  const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
+
+  objects.push(shadow, glow, bg, topShine, sideMark, iconBg, icon, title, subtitle, rune, zone);
+
+  const alphaTargets = [shadow, glow, bg, topShine, sideMark, iconBg, icon, title, subtitle, rune];
+
+  alphaTargets.forEach(object => {
+    object.setAlpha(0);
+    object.y += 5;
+  });
+
+  this.tweens.add({
+    targets: alphaTargets,
+    alpha: disabled ? 0.72 : 1,
+    y: '-=5',
+    duration: 200,
+    ease: 'Sine.easeOut',
+  });
+
   if (!disabled) {
+    this.tweens.add({
+      targets: rune,
+      alpha: {
+        from: isPrimary ? 0.14 : 0.1,
+        to: isPrimary ? 0.34 : 0.22,
+      },
+      duration: 1250,
+      yoyo: true,
+      repeat: -1,
+      delay: isPrimary ? 180 : 0,
+      ease: 'Sine.easeInOut',
+    });
+
     let isPressed = false;
     let isLocked = false;
 
@@ -1066,7 +1225,9 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      redrawButton(hoverColor, 1, 0.92, titleHoverColor);
+      drawButton(hoverColor, 1, isPrimary ? 1 : 0.84);
+      title.setColor(UI.colors.goldText);
+      glow.setAlpha(1);
     });
 
     zone.on('pointerout', () => {
@@ -1076,7 +1237,8 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+      drawButton(baseColor, 0.98, strokeAlpha);
+      title.setColor(textColor);
     });
 
     zone.on('pointerdown', () => {
@@ -1085,12 +1247,12 @@ private getDebuffShortDescription(id: string, power: number) {
       }
 
       isPressed = true;
-      redrawButton(pressedColor, 0.96, 1, titleHoverColor, 1);
+      drawButton(pressedColor, 0.96, 1, 2);
 
       this.tweens.add({
-        targets: [iconBg, icon, title, subtitle],
-        scaleX: 0.985,
-        scaleY: 0.985,
+        targets: [iconBg, icon, title, subtitle, rune],
+        scaleX: 0.97,
+        scaleY: 0.97,
         duration: 70,
         ease: 'Sine.easeOut',
       });
@@ -1104,17 +1266,17 @@ private getDebuffShortDescription(id: string, power: number) {
       isPressed = false;
       isLocked = true;
 
-      redrawButton(hoverColor, 1, 1, titleHoverColor);
+      drawButton(hoverColor, 1, 1);
 
       this.tweens.add({
-        targets: [iconBg, icon, title, subtitle],
+        targets: [iconBg, icon, title, subtitle, rune],
         scaleX: 1,
         scaleY: 1,
-        duration: 80,
+        duration: 90,
         ease: 'Back.easeOut',
       });
 
-      this.time.delayedCall(40, () => {
+      this.time.delayedCall(45, () => {
         config.onClick();
       });
     });
@@ -1126,7 +1288,8 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+      drawButton(baseColor, 0.98, strokeAlpha);
+      title.setColor(textColor);
     });
 
     zone.on('pointercancel', () => {
@@ -1136,32 +1299,12 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      redrawButton(bgColor, alpha, strokeAlpha, textColor);
+      drawButton(baseColor, 0.98, strokeAlpha);
+      title.setColor(textColor);
     });
   }
 
   return objects;
-}
-
-private getRaceSkillIcon() {
-  if (player.raceId === 'human') return '!';
-  if (player.raceId === 'tainted_halfblood') return '☾';
-  if (player.raceId === 'stoneborn') return '▣';
-  if (player.raceId === 'night_elf') return '◐';
-  if (player.raceId === 'goblin') return '!';
-  if (player.raceId === 'demon') return '◆';
-
-  return '!';
-}
-
-private getRaceSkillTitle() {
-  const race = player.raceId ? getRaceById(player.raceId) : undefined;
-
-  if (race?.activeName) {
-    return race.activeName;
-  }
-
-  return 'Навык';
 }
 
 private getRaceSkillEnergyCost() {
@@ -1442,21 +1585,6 @@ private handleDemonSkill() {
 
   this.afterPlayerAttack(playerActionText);
 }
-
-  private getWeaponAttackButtonText() {
-    const equippedWeapon = getEquippedWeapon(player);
-    const weaponType = equippedWeapon?.item.weaponType ?? 'sword';
-
-    if (weaponType === 'dagger') return 'Быстрая атака';
-    if (weaponType === 'axe') return 'Рубящий удар';
-    if (weaponType === 'katana') return 'Режущий удар';
-    if (weaponType === 'hammer') return 'Удар молотом';
-    if (weaponType === 'shield_sword') return 'Осторожная атака';
-    if (weaponType === 'spear') return 'Глубинный выпад';
-    if (weaponType === 'trident') return 'Хватка воды';
-
-    return 'Атака';
-  }
 
   private handlePowerAttack() {
     if (this.isBattleEnded || this.isBusy) {
