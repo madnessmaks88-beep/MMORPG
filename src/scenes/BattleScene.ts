@@ -828,16 +828,19 @@ private getDebuffShortDescription(id: string, power: number) {
     0.35
   ).setDepth(12).setAlpha(0);
 
-  this.battleLogViewportLeft = left + (layout.veryCompact ? 34 : 40);
-  this.battleLogViewportTop = top + (layout.veryCompact ? 48 : 56);
-  this.battleLogViewportWidth = panelWidth - (layout.veryCompact ? 72 : 86);
-  this.battleLogViewportHeight = panelHeight - (layout.veryCompact ? 60 : 70);
+  const viewportTopPadding = layout.veryCompact ? 62 : layout.compact ? 66 : 72;
+  const viewportBottomPadding = layout.veryCompact ? 17 : layout.compact ? 20 : 22;
+
+  this.battleLogViewportLeft = left + (layout.veryCompact ? 38 : 44);
+  this.battleLogViewportTop = top + viewportTopPadding;
+  this.battleLogViewportWidth = panelWidth - (layout.veryCompact ? 82 : 98);
+  this.battleLogViewportHeight = Math.max(34, top + panelHeight - viewportBottomPadding - this.battleLogViewportTop);
   this.battleLogScrollY = 0;
   this.battleLogTargetScrollY = 0;
   this.battleLogMaxScrollY = 0;
 
   this.battleLogMaskGraphics?.destroy();
-  this.battleLogMaskGraphics = this.add.graphics().setVisible(false);
+  this.battleLogMaskGraphics = this.add.graphics().setDepth(0).setAlpha(0.0001);
   this.battleLogMaskGraphics.fillStyle(0xffffff, 1);
   this.battleLogMaskGraphics.fillRect(
     this.battleLogViewportLeft - 2,
@@ -862,7 +865,7 @@ private getDebuffShortDescription(id: string, power: number) {
         width: this.battleLogViewportWidth - 12,
         useAdvancedWrap: true,
       },
-      lineSpacing: layout.veryCompact ? 2 : 4,
+      lineSpacing: layout.veryCompact ? 4 : 6,
     }
   ).setOrigin(0, 0);
 
@@ -970,8 +973,12 @@ private getDebuffShortDescription(id: string, power: number) {
       ? this.battleLogHistory
           .map((entry, index) => {
             const marker = index === this.battleLogHistory.length - 1 ? '◆' : '•';
+            const normalizedEntry = entry
+              .split('\n')
+              .map((line, lineIndex) => lineIndex === 0 ? line : `   ${line}`)
+              .join('\n');
 
-            return `${marker} ${entry}`;
+            return `${marker} ${normalizedEntry}`;
           })
           .join('\n\n')
       : 'Выбери действие.';
