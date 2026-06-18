@@ -154,7 +154,6 @@ export class BattleScene extends Phaser.Scene {
   private logText!: Phaser.GameObjects.Text;
 
   private battleLogLines: BattleLogEntry[] = [];
-  private battleLogContainer?: Phaser.GameObjects.Container;
   private battleLogMask?: any;
   private battleLogMaskGraphics?: Phaser.GameObjects.Graphics;
   private battleLogScrollZone?: Phaser.GameObjects.Zone;
@@ -933,12 +932,6 @@ private getDebuffShortDescription(id: string, power: number) {
     );
     this.battleLogMask = this.battleLogMaskGraphics.createGeometryMask();
 
-    this.battleLogContainer = this.add.container(
-      this.battleLogViewportLeft,
-      this.battleLogViewportTop
-    ).setDepth(13);
-    this.battleLogContainer.setMask(this.battleLogMask);
-
     this.logText = this.add.text(0, 0, '', {
       fontFamily: UI.font.body,
       fontSize: '1px',
@@ -1051,7 +1044,6 @@ private getDebuffShortDescription(id: string, power: number) {
       leftMark,
       this.battleLogTopFade,
       this.battleLogBottomFade,
-      this.battleLogContainer,
       this.battleLogScrollTrack,
       this.battleLogScrollThumb,
       this.battleLogNewMessageText,
@@ -1174,7 +1166,6 @@ private getDebuffShortDescription(id: string, power: number) {
 
     this.battleLogLineObjects.forEach(object => object.destroy());
     this.battleLogLineObjects = [];
-    this.battleLogContainer?.removeAll(true);
 
     this.battleLogScrollTween?.stop();
     this.battleLogScrollTween = undefined;
@@ -1188,42 +1179,38 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private createBattleLogLine(text: string, type: BattleLogType = 'normal') {
-    if (!this.battleLogContainer) {
-      return undefined;
-    }
-
     const layout = this.getBattleLayout();
     const color = this.getBattleLogColor(type);
     const icon = this.getBattleLogIcon(type);
     const lineText = `${icon} ${text}`;
 
-    const line = this.add.text(0, 0, lineText, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
-      color,
-      align: 'left',
-      wordWrap: {
-        width: Math.max(80, this.battleLogViewportWidth - 6),
-        useAdvancedWrap: true,
-      },
-      lineSpacing: layout.veryCompact ? 2 : 4,
-    }).setOrigin(0, 0).setDepth(13).setAlpha(0);
+    const line = this.add.text(
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop,
+      lineText,
+      {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
+        color,
+        align: 'left',
+        wordWrap: {
+          width: Math.max(80, this.battleLogViewportWidth - 6),
+          useAdvancedWrap: true,
+        },
+        lineSpacing: layout.veryCompact ? 2 : 4,
+      }
+    ).setOrigin(0, 0).setDepth(13).setAlpha(0);
 
     if (this.battleLogMask) {
       line.setMask(this.battleLogMask);
     }
 
-    this.battleLogContainer.add(line);
     this.battleLogLineObjects.push(line);
 
     return line;
   }
 
   private updateBattleLogView(_animatedLastLine = false) {
-    if (!this.battleLogContainer) {
-      return;
-    }
-
     if (this.battleLogLineObjects.length === 0) {
       this.battleLogContentHeight = 0;
       this.battleLogMaxScroll = 0;
@@ -1236,11 +1223,14 @@ private getDebuffShortDescription(id: string, power: number) {
     const gap = this.getBattleLayout().veryCompact ? 6 : 8;
 
     this.battleLogLineObjects.forEach(line => {
-      line.setPosition(0, cursorY);
-
       if (this.battleLogMask && line.mask !== this.battleLogMask) {
         line.setMask(this.battleLogMask);
       }
+
+      line.setPosition(
+        this.battleLogViewportLeft,
+        this.battleLogViewportTop + cursorY - this.battleLogScrollY
+      );
 
       cursorY += Math.ceil(line.height) + gap;
     });
@@ -1320,12 +1310,21 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private applyBattleLogScroll() {
-    if (this.battleLogContainer) {
-      this.battleLogContainer.setPosition(
+    let cursorY = 0;
+    const gap = this.getBattleLayout().veryCompact ? 6 : 8;
+
+    this.battleLogLineObjects.forEach(line => {
+      line.setPosition(
         this.battleLogViewportLeft,
-        this.battleLogViewportTop - this.battleLogScrollY
+        this.battleLogViewportTop + cursorY - this.battleLogScrollY
       );
-    }
+
+      if (this.battleLogMask && line.mask !== this.battleLogMask) {
+        line.setMask(this.battleLogMask);
+      }
+
+      cursorY += Math.ceil(line.height) + gap;
+    });
 
     if (this.isBattleLogAtBottom()) {
       this.hideBattleLogNewMessageIndicator();
@@ -1480,7 +1479,6 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogObjects.forEach(object => object.destroy());
     this.battleLogObjects = [];
 
-    this.battleLogContainer = undefined;
     this.battleLogScrollZone = undefined;
     this.battleLogScrollTrack = undefined;
     this.battleLogScrollThumb = undefined;
@@ -1563,6 +1561,7 @@ private getDebuffShortDescription(id: string, power: number) {
 
     if (
       lower.includes('начало боя') ||
+      lower.includes('бой начался') ||
       lower.includes('выбери действие') ||
       lower.includes('ход')
     ) {
