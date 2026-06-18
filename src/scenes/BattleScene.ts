@@ -787,10 +787,10 @@ private getDebuffShortDescription(id: string, power: number) {
       width: layout.contentWidth,
       height: layout.actionPanelHeight,
       radius: layout.veryCompact ? 24 : 32,
-      color: 0x070606,
+      color: 0x050404,
       alpha: 0.96,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.5,
+      strokeAlpha: 0.55,
       depth: 18,
     });
 
@@ -799,34 +799,83 @@ private getDebuffShortDescription(id: string, power: number) {
     const panelRight = layout.centerX + layout.contentWidth / 2;
     const titleY = topY + (layout.veryCompact ? 24 : 28);
 
-    const innerPlate = this.add.graphics().setDepth(19);
-    innerPlate.fillStyle(0x0d0907, 0.86);
-    innerPlate.fillRoundedRect(
-      panelLeft + 12,
-      topY + 12,
-      layout.contentWidth - 24,
-      layout.actionPanelHeight - 24,
-      layout.veryCompact ? 20 : 26
+    const outerFrame = this.add.graphics().setDepth(19);
+    outerFrame.lineStyle(1, 0xe2bd76, 0.22);
+    outerFrame.strokeRoundedRect(
+      panelLeft + 4,
+      topY + 4,
+      layout.contentWidth - 8,
+      layout.actionPanelHeight - 8,
+      layout.veryCompact ? 22 : 30
     );
-    innerPlate.lineStyle(1, UI.colors.goldDark, 0.22);
-    innerPlate.strokeRoundedRect(
+    outerFrame.lineStyle(1, 0x4a2b16, 0.5);
+    outerFrame.strokeRoundedRect(
       panelLeft + 12,
       topY + 12,
       layout.contentWidth - 24,
       layout.actionPanelHeight - 24,
-      layout.veryCompact ? 20 : 26
+      layout.veryCompact ? 18 : 24
     );
 
-    const titleBack = this.add.rectangle(
-      layout.centerX,
-      titleY,
-      Math.min(layout.contentWidth - 180, 210),
-      layout.veryCompact ? 26 : 30,
-      0x050505,
-      0.76
-    )
-      .setStrokeStyle(1, UI.colors.goldDark, 0.32)
-      .setDepth(20);
+    const innerPlate = this.add.graphics().setDepth(20);
+    innerPlate.fillStyle(0x0b0705, 0.9);
+    innerPlate.fillRoundedRect(
+      panelLeft + 14,
+      topY + 14,
+      layout.contentWidth - 28,
+      layout.actionPanelHeight - 28,
+      layout.veryCompact ? 18 : 24
+    );
+    innerPlate.lineStyle(1, 0x1e1510, 0.92);
+    innerPlate.strokeRoundedRect(
+      panelLeft + 18,
+      topY + 18,
+      layout.contentWidth - 36,
+      layout.actionPanelHeight - 36,
+      layout.veryCompact ? 15 : 20
+    );
+
+    const cornerSize = layout.veryCompact ? 18 : 24;
+    const cornerAlpha = 0.46;
+    const corners = this.add.graphics().setDepth(22);
+    corners.lineStyle(2, UI.colors.goldDark, cornerAlpha);
+    [
+      [panelLeft + 19, topY + 19, 1, 1],
+      [panelRight - 19, topY + 19, -1, 1],
+      [panelLeft + 19, topY + layout.actionPanelHeight - 19, 1, -1],
+      [panelRight - 19, topY + layout.actionPanelHeight - 19, -1, -1],
+    ].forEach(([x, y, sx, sy]) => {
+      corners.lineBetween(x, y, x + cornerSize * sx, y);
+      corners.lineBetween(x, y, x, y + cornerSize * sy);
+    });
+
+    const titleBack = this.add.graphics().setDepth(22);
+    const titleWidth = Math.min(layout.contentWidth - 176, 230);
+    const titleHeight = layout.veryCompact ? 28 : 32;
+    titleBack.fillStyle(0x080604, 0.92);
+    titleBack.fillRoundedRect(
+      layout.centerX - titleWidth / 2,
+      titleY - titleHeight / 2,
+      titleWidth,
+      titleHeight,
+      14
+    );
+    titleBack.lineStyle(1, 0xe2bd76, 0.34);
+    titleBack.strokeRoundedRect(
+      layout.centerX - titleWidth / 2,
+      titleY - titleHeight / 2,
+      titleWidth,
+      titleHeight,
+      14
+    );
+    titleBack.lineStyle(1, 0x2b1b10, 0.8);
+    titleBack.strokeRoundedRect(
+      layout.centerX - titleWidth / 2 + 4,
+      titleY - titleHeight / 2 + 4,
+      titleWidth - 8,
+      titleHeight - 8,
+      10
+    );
 
     const actionTitle = this.add.text(layout.centerX, titleY, 'Боевые действия', {
       fontFamily: UI.font.title,
@@ -836,28 +885,36 @@ private getDebuffShortDescription(id: string, power: number) {
       strokeThickness: 3,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 170,
+        width: layout.contentWidth - 180,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(22);
+    }).setOrigin(0.5).setDepth(23);
 
-    const energyPillWidth = 74;
-    const energyPill = this.add.graphics().setDepth(21);
-    energyPill.fillStyle(0x07111d, 0.88);
+    const energyPillWidth = 78;
+    const energyPill = this.add.graphics().setDepth(22);
+    energyPill.fillStyle(0x06101c, 0.92);
     energyPill.fillRoundedRect(
       panelRight - energyPillWidth - 22,
-      titleY - 14,
+      titleY - 15,
       energyPillWidth,
-      28,
-      14
+      30,
+      15
     );
-    energyPill.lineStyle(1, 0x70a6ff, 0.42);
+    energyPill.lineStyle(1, 0x70a6ff, 0.52);
     energyPill.strokeRoundedRect(
       panelRight - energyPillWidth - 22,
-      titleY - 14,
+      titleY - 15,
       energyPillWidth,
-      28,
-      14
+      30,
+      15
+    );
+    energyPill.lineStyle(1, 0x1b3555, 0.85);
+    energyPill.strokeRoundedRect(
+      panelRight - energyPillWidth - 18,
+      titleY - 11,
+      energyPillWidth - 8,
+      22,
+      11
     );
 
     const energyHint = this.add.text(panelRight - 22 - energyPillWidth / 2, titleY, `⚡ ${player.energy}`, {
@@ -871,33 +928,35 @@ private getDebuffShortDescription(id: string, power: number) {
         width: energyPillWidth - 12,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(22);
+    }).setOrigin(0.5).setDepth(23);
 
-    const leftRune = this.add.text(panelLeft + 34, titleY, '◇', {
+    const leftRune = this.add.text(panelLeft + 36, titleY, '◇', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '13px' : '16px',
       color: UI.colors.goldText,
-    }).setOrigin(0.5).setAlpha(0.16).setDepth(22);
+    }).setOrigin(0.5).setAlpha(0.18).setDepth(23);
 
-    const rightRune = this.add.text(panelRight - 34, titleY, '◇', {
+    const rightRune = this.add.text(panelRight - 36, titleY, '◇', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '13px' : '16px',
       color: UI.colors.goldText,
-    }).setOrigin(0.5).setAlpha(0.16).setDepth(22);
+    }).setOrigin(0.5).setAlpha(0.18).setDepth(23);
 
     const dividerTop = this.add.rectangle(
       layout.centerX,
-      titleY + (layout.veryCompact ? 22 : 25),
-      layout.contentWidth - 54,
+      titleY + (layout.veryCompact ? 24 : 27),
+      layout.contentWidth - 62,
       1,
       UI.colors.goldDark,
-      0.2
-    ).setDepth(21);
+      0.24
+    ).setDepth(22);
 
     this.actionButtons.push(
       panelObjects.shadow,
       panelObjects.panel,
+      outerFrame,
       innerPlate,
+      corners,
       titleBack,
       energyPill,
       actionTitle,
@@ -1088,21 +1147,14 @@ private getDebuffShortDescription(id: string, power: number) {
   const disabledColor = 0x09090a;
   const textColor = disabled ? '#5a5650' : isPrimary ? UI.colors.goldText : UI.colors.text;
   const subtitleColor = disabled ? '#403d38' : UI.colors.textMuted;
-  const strokeAlpha = disabled ? 0.2 : isPrimary ? 0.88 : 0.62;
+  const strokeAlpha = disabled ? 0.2 : isPrimary ? 0.92 : 0.7;
 
   const objects: Phaser.GameObjects.GameObject[] = [];
 
   const shadow = this.add.graphics().setDepth(21);
   const glow = this.add.graphics().setDepth(22);
   const bg = this.add.graphics().setDepth(23);
-  const topShine = this.add.rectangle(
-    config.x,
-    top + 8,
-    config.width - (isPrimary ? 72 : 38),
-    1,
-    config.accentColor,
-    disabled ? 0.08 : isPrimary ? 0.3 : 0.18
-  ).setDepth(24);
+  const frame = this.add.graphics().setDepth(24);
 
   const drawButton = (
     fillColor: number,
@@ -1111,20 +1163,18 @@ private getDebuffShortDescription(id: string, power: number) {
     offsetY = 0
   ) => {
     shadow.clear();
-    shadow.fillStyle(0x000000, disabled ? 0.22 : 0.38);
-    shadow.fillRoundedRect(left, top + 5 + offsetY, config.width, config.height, radius);
+    shadow.fillStyle(0x000000, disabled ? 0.22 : 0.42);
+    shadow.fillRoundedRect(left, top + 6 + offsetY, config.width, config.height, radius);
 
     glow.clear();
-    glow.fillStyle(config.accentColor, disabled ? 0.012 : isPrimary ? 0.075 : 0.042);
-    glow.fillRoundedRect(left + 5, top + 5 + offsetY, config.width - 10, config.height - 10, Math.max(10, radius - 5));
+    glow.fillStyle(config.accentColor, disabled ? 0.012 : isPrimary ? 0.08 : 0.05);
+    glow.fillRoundedRect(left - 1, top + 3 + offsetY, config.width + 2, config.height + 2, radius);
 
     bg.clear();
     bg.fillStyle(fillColor, fillAlpha);
     bg.fillRoundedRect(left, top + offsetY, config.width, config.height, radius);
-    bg.lineStyle(isPrimary ? 2 : 1.5, config.accentColor, borderAlpha);
-    bg.strokeRoundedRect(left, top + offsetY, config.width, config.height, radius);
 
-    bg.fillStyle(0x000000, 0.2);
+    bg.fillStyle(0x000000, 0.24);
     bg.fillRoundedRect(left + 7, top + 7 + offsetY, config.width - 14, config.height - 14, Math.max(10, radius - 7));
 
     bg.fillStyle(config.accentColor, disabled ? 0.035 : isPrimary ? 0.12 : 0.085);
@@ -1136,7 +1186,42 @@ private getDebuffShortDescription(id: string, power: number) {
       Math.max(10, radius - 9)
     );
 
-    topShine.setY(top + 8 + offsetY);
+    frame.clear();
+    frame.lineStyle(isPrimary ? 2 : 1.6, config.accentColor, borderAlpha);
+    frame.strokeRoundedRect(left, top + offsetY, config.width, config.height, radius);
+
+    frame.lineStyle(1, 0xf2d18d, disabled ? 0.06 : isPrimary ? 0.38 : 0.2);
+    frame.strokeRoundedRect(
+      left + 3,
+      top + 3 + offsetY,
+      config.width - 6,
+      config.height - 6,
+      Math.max(9, radius - 3)
+    );
+
+    frame.lineStyle(1, 0x1a110b, 0.9);
+    frame.strokeRoundedRect(
+      left + 8,
+      top + 8 + offsetY,
+      config.width - 16,
+      config.height - 16,
+      Math.max(8, radius - 8)
+    );
+
+    const corner = isPrimary ? 18 : 13;
+    const cornerAlpha = disabled ? 0.08 : isPrimary ? 0.54 : 0.38;
+    frame.lineStyle(2, config.accentColor, cornerAlpha);
+    frame.lineBetween(left + 10, top + 10 + offsetY, left + 10 + corner, top + 10 + offsetY);
+    frame.lineBetween(left + 10, top + 10 + offsetY, left + 10, top + 10 + corner + offsetY);
+
+    frame.lineBetween(left + config.width - 10, top + 10 + offsetY, left + config.width - 10 - corner, top + 10 + offsetY);
+    frame.lineBetween(left + config.width - 10, top + 10 + offsetY, left + config.width - 10, top + 10 + corner + offsetY);
+
+    frame.lineBetween(left + 10, top + config.height - 10 + offsetY, left + 10 + corner, top + config.height - 10 + offsetY);
+    frame.lineBetween(left + 10, top + config.height - 10 + offsetY, left + 10, top + config.height - 10 - corner + offsetY);
+
+    frame.lineBetween(left + config.width - 10, top + config.height - 10 + offsetY, left + config.width - 10 - corner, top + config.height - 10 + offsetY);
+    frame.lineBetween(left + config.width - 10, top + config.height - 10 + offsetY, left + config.width - 10, top + config.height - 10 - corner + offsetY);
   };
 
   drawButton(disabled ? disabledColor : baseColor, disabled ? 0.72 : 0.98, strokeAlpha);
@@ -1200,9 +1285,9 @@ private getDebuffShortDescription(id: string, power: number) {
 
   const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
 
-  objects.push(shadow, glow, bg, topShine, iconBg, icon, title, subtitle, zone);
+  objects.push(shadow, glow, bg, frame, iconBg, icon, title, subtitle, zone);
 
-  const alphaTargets = [shadow, glow, bg, topShine, iconBg, icon, title, subtitle];
+  const alphaTargets = [shadow, glow, bg, frame, iconBg, icon, title, subtitle];
 
   alphaTargets.forEach(object => {
     object.setAlpha(0);
@@ -1230,7 +1315,7 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      drawButton(hoverColor, 1, isPrimary ? 1 : 0.84);
+      drawButton(hoverColor, 1, isPrimary ? 1 : 0.86);
       title.setColor(UI.colors.goldText);
       glow.setAlpha(1);
     });
@@ -1311,6 +1396,7 @@ private getDebuffShortDescription(id: string, power: number) {
 
   return objects;
 }
+
 private getRaceSkillEnergyCost() {
   if (player.raceId === 'human') return 3;
   if (player.raceId === 'tainted_halfblood') return 2;
