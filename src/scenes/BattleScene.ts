@@ -922,7 +922,8 @@ private getDebuffShortDescription(id: string, power: number) {
     ).setDepth(15).setAlpha(0);
 
     this.battleLogMaskGraphics = this.add.graphics();
-    this.battleLogMaskGraphics.setVisible(false);
+    this.battleLogMaskGraphics.setDepth(200);
+    this.battleLogMaskGraphics.setAlpha(0.0001);
     this.battleLogMaskGraphics.fillStyle(0xffffff, 1);
     this.battleLogMaskGraphics.fillRect(
       this.battleLogViewportLeft,
@@ -1136,16 +1137,15 @@ private getDebuffShortDescription(id: string, power: number) {
     this.updateBattleLogView(false);
 
     if (newLine) {
-      const finalY = newLine.y;
-      newLine.setY(finalY + 6);
       newLine.setAlpha(0);
 
       this.tweens.add({
         targets: newLine,
-        y: finalY,
         alpha: 1,
         duration: 170,
         ease: 'Sine.easeOut',
+        onUpdate: () => this.applyBattleLogScroll(),
+        onComplete: () => this.applyBattleLogScroll(),
       });
     }
 
@@ -1312,18 +1312,37 @@ private getDebuffShortDescription(id: string, power: number) {
   private applyBattleLogScroll() {
     let cursorY = 0;
     const gap = this.getBattleLayout().veryCompact ? 6 : 8;
+    const viewportTop = this.battleLogViewportTop;
+    const viewportBottom = this.battleLogViewportTop + this.battleLogViewportHeight;
+    const fadeDistance = this.getBattleLayout().veryCompact ? 18 : 24;
 
     this.battleLogLineObjects.forEach(line => {
-      line.setPosition(
-        this.battleLogViewportLeft,
-        this.battleLogViewportTop + cursorY - this.battleLogScrollY
-      );
+      const lineY = viewportTop + cursorY - this.battleLogScrollY;
+      const lineHeight = Math.ceil(line.height);
+      const lineBottom = lineY + lineHeight;
 
       if (this.battleLogMask && line.mask !== this.battleLogMask) {
         line.setMask(this.battleLogMask);
       }
 
-      cursorY += Math.ceil(line.height) + gap;
+      line.setPosition(this.battleLogViewportLeft, lineY);
+
+      const isOutsideViewport = lineBottom <= viewportTop || lineY >= viewportBottom;
+      const isTooCloseToTop = lineY < viewportTop + 2;
+      const isTooCloseToBottom = lineBottom > viewportBottom - 2;
+
+      if (isOutsideViewport || isTooCloseToTop || isTooCloseToBottom) {
+        line.setVisible(false);
+      } else {
+        const topFade = Phaser.Math.Clamp((lineY - viewportTop) / fadeDistance, 0, 1);
+        const bottomFade = Phaser.Math.Clamp((viewportBottom - lineBottom) / fadeDistance, 0, 1);
+        const edgeAlpha = Phaser.Math.Clamp(Math.min(topFade, bottomFade), 0.18, 1);
+
+        line.setVisible(true);
+        line.setAlpha(edgeAlpha);
+      }
+
+      cursorY += lineHeight + gap;
     });
 
     if (this.isBattleLogAtBottom()) {
