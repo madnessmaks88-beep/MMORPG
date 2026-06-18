@@ -155,7 +155,7 @@ export class BattleScene extends Phaser.Scene {
 
   private battleLogLines: BattleLogEntry[] = [];
   private battleLogContainer?: Phaser.GameObjects.Container;
-  private battleLogMask?: Phaser.Display.Masks.GeometryMask;
+  private battleLogMask?: any;
   private battleLogMaskGraphics?: Phaser.GameObjects.Graphics;
   private battleLogScrollZone?: Phaser.GameObjects.Zone;
   private battleLogScrollTrack?: Phaser.GameObjects.Rectangle;
@@ -423,10 +423,9 @@ export class BattleScene extends Phaser.Scene {
     this.clearBattleLog();
 
     this.appendBattleLog(
-      `Бой начался: ${player.name} против ${this.enemy.name}.`,
-      'system'
+      `Начало боя: ${player.name} против ${this.enemy.name}.`,
+      isBoss ? 'danger' : 'system'
     );
-
     this.createActionButtons();
 
     this.applyStartOfBattleTreeEffects();
@@ -1038,7 +1037,7 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      this.scrollBattleLog(deltaY * 0.55);
+      this.scrollBattleLogBy(deltaY * 0.55);
     };
 
     this.input.on('wheel', this.battleLogWheelHandler);
@@ -1147,6 +1146,25 @@ private getDebuffShortDescription(id: string, power: number) {
     if (resolvedType === 'crit' || resolvedType === 'danger' || resolvedType === 'reward') {
       this.pulseBattleLogPanel(resolvedType);
     }
+  }
+
+
+  private clearBattleLog() {
+    this.battleLogLines = [];
+
+    this.battleLogLineObjects.forEach(object => object.destroy());
+    this.battleLogLineObjects = [];
+
+    this.battleLogScrollTween?.stop();
+    this.battleLogScrollTween = undefined;
+    this.battleLogScrollY = 0;
+    this.battleLogTargetScrollY = 0;
+    this.battleLogMaxScroll = 0;
+    this.battleLogContentHeight = 0;
+
+    this.hideBattleLogNewMessageIndicator();
+    this.updateBattleLogScrollThumb();
+    this.updateBattleLogEdgeFades();
   }
 
   private createBattleLogLine(text: string, type: BattleLogType = 'normal') {
@@ -1263,30 +1281,8 @@ private getDebuffShortDescription(id: string, power: number) {
     this.scrollBattleLogTo(this.battleLogScrollY + delta);
   }
 
-  private clearBattleLog() {
-    this.battleLogLines = [];
-
-    this.battleLogLineObjects.forEach(object => {
-      object.destroy();
-    });
-
-    this.battleLogLineObjects = [];
-
-    this.battleLogScrollTween?.stop();
-    this.battleLogScrollTween = undefined;
-
-    this.battleLogScrollY = 0;
-    this.battleLogTargetScrollY = 0;
-    this.battleLogMaxScroll = 0;
-    this.battleLogContentHeight = 0;
-
-    this.hideBattleLogNewMessageIndicator();
-    this.updateBattleLogScrollThumb();
-    this.updateBattleLogEdgeFades();
-
-    if (this.logText) {
-      this.logText.setText('');
-    }
+  private scrollBattleLogBy(deltaY: number) {
+    this.scrollBattleLog(deltaY);
   }
 
   private isBattleLogAtBottom() {
