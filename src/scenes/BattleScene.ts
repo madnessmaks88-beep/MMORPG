@@ -1144,7 +1144,6 @@ private getDebuffShortDescription(id: string, power: number) {
         alpha: 1,
         duration: 170,
         ease: 'Sine.easeOut',
-        onUpdate: () => this.applyBattleLogScroll(),
         onComplete: () => this.applyBattleLogScroll(),
       });
     }
@@ -1317,8 +1316,8 @@ private getDebuffShortDescription(id: string, power: number) {
     const fadeDistance = this.getBattleLayout().veryCompact ? 18 : 24;
 
     this.battleLogLineObjects.forEach(line => {
-      const lineY = viewportTop + cursorY - this.battleLogScrollY;
       const lineHeight = Math.ceil(line.height);
+      const lineY = viewportTop + cursorY - this.battleLogScrollY;
       const lineBottom = lineY + lineHeight;
 
       if (this.battleLogMask && line.mask !== this.battleLogMask) {
@@ -1327,16 +1326,14 @@ private getDebuffShortDescription(id: string, power: number) {
 
       line.setPosition(this.battleLogViewportLeft, lineY);
 
-      const isOutsideViewport = lineBottom <= viewportTop || lineY >= viewportBottom;
-      const isTooCloseToTop = lineY < viewportTop + 2;
-      const isTooCloseToBottom = lineBottom > viewportBottom - 2;
+      const isCompletelyOutsideViewport = lineBottom <= viewportTop || lineY >= viewportBottom;
 
-      if (isOutsideViewport || isTooCloseToTop || isTooCloseToBottom) {
+      if (isCompletelyOutsideViewport) {
         line.setVisible(false);
       } else {
-        const topFade = Phaser.Math.Clamp((lineY - viewportTop) / fadeDistance, 0, 1);
-        const bottomFade = Phaser.Math.Clamp((viewportBottom - lineBottom) / fadeDistance, 0, 1);
-        const edgeAlpha = Phaser.Math.Clamp(Math.min(topFade, bottomFade), 0.18, 1);
+        const visibleTop = Phaser.Math.Clamp((lineBottom - viewportTop) / fadeDistance, 0, 1);
+        const visibleBottom = Phaser.Math.Clamp((viewportBottom - lineY) / fadeDistance, 0, 1);
+        const edgeAlpha = Phaser.Math.Clamp(Math.min(visibleTop, visibleBottom), 0.22, 1);
 
         line.setVisible(true);
         line.setAlpha(edgeAlpha);
