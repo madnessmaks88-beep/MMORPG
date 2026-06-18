@@ -160,11 +160,11 @@ export class BattleScene extends Phaser.Scene {
   private battleLogScrollZone?: Phaser.GameObjects.Zone;
   private battleLogScrollTrack?: Phaser.GameObjects.Rectangle;
   private battleLogScrollThumb?: Phaser.GameObjects.Rectangle;
-  private battleLogViewportFrame?: Phaser.GameObjects.Graphics;
   private battleLogTopFade?: Phaser.GameObjects.Graphics;
   private battleLogBottomFade?: Phaser.GameObjects.Graphics;
   private battleLogNewMessageText?: Phaser.GameObjects.Text;
   private battleLogLineObjects: Phaser.GameObjects.Text[] = [];
+  private battleLogObjects: Phaser.GameObjects.GameObject[] = [];
   private battleLogScrollTween?: { stop: () => void };
   private battleLogWheelHandler?: (
     pointer: Phaser.Input.Pointer,
@@ -800,22 +800,47 @@ private getDebuffShortDescription(id: string, power: number) {
 }
 
   private createBattleLogPanel() {
+    this.destroyBattleLogObjects();
+
     const layout = this.getBattleLayout();
     const panelWidth = layout.contentWidth;
     const panelHeight = layout.logHeight;
-    const top = layout.logY - panelHeight / 2;
-    const left = layout.centerX - panelWidth / 2;
+    const panelX = layout.centerX;
+    const panelY = layout.logY;
+    const panelLeft = panelX - panelWidth / 2;
+    const panelTop = panelY - panelHeight / 2;
+
+    const radius = layout.veryCompact ? 18 : 24;
+    const headerHeight = layout.veryCompact ? 34 : 38;
+    const horizontalPadding = layout.veryCompact ? 18 : 22;
+    const bottomPadding = layout.veryCompact ? 14 : 16;
+    const scrollbarWidth = 4;
+    const scrollbarGap = 10;
+
+    this.battleLogViewportLeft = panelLeft + horizontalPadding;
+    this.battleLogViewportTop = panelTop + headerHeight + (layout.veryCompact ? 12 : 14);
+    this.battleLogViewportWidth = panelWidth - horizontalPadding * 2 - scrollbarGap - scrollbarWidth;
+    this.battleLogViewportHeight = Math.max(
+      40,
+      panelTop + panelHeight - bottomPadding - this.battleLogViewportTop
+    );
+
+    this.battleLogScrollY = 0;
+    this.battleLogTargetScrollY = 0;
+    this.battleLogMaxScroll = 0;
+    this.battleLogContentHeight = 0;
+    this.battleLogDragging = false;
 
     const panel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: layout.logY,
+      x: panelX,
+      y: panelY,
       width: panelWidth,
       height: panelHeight,
-      radius: layout.veryCompact ? 18 : 24,
+      radius,
       color: 0x06080b,
-      alpha: 0.95,
+      alpha: 0.96,
       strokeColor: 0x5f4630,
-      strokeAlpha: 0.55,
+      strokeAlpha: 0.54,
       strokeWidth: 2,
       depth: 8,
     });
@@ -823,159 +848,126 @@ private getDebuffShortDescription(id: string, power: number) {
     panel.panel.setAlpha(0);
     panel.shadow.setAlpha(0);
 
-    const inner = this.add.graphics().setDepth(10).setAlpha(0);
-    inner.fillStyle(0x0a0d12, 0.72);
-    inner.fillRoundedRect(left + 10, top + 10, panelWidth - 20, panelHeight - 20, layout.veryCompact ? 14 : 18);
-    inner.lineStyle(1, 0xb9985b, 0.12);
-    inner.strokeRoundedRect(left + 16, top + 16, panelWidth - 32, panelHeight - 32, layout.veryCompact ? 10 : 14);
-
-    const titlePlate = this.add.rectangle(
-      left + (layout.veryCompact ? 78 : 92),
-      top + (layout.veryCompact ? 20 : 24),
-      layout.veryCompact ? 124 : 150,
-      layout.veryCompact ? 22 : 26,
-      0x0b0705,
-      0.96
-    ).setStrokeStyle(1, UI.colors.goldDark, 0.45).setDepth(11).setAlpha(0);
-
-    const titleText = this.add.text(titlePlate.x, titlePlate.y, 'летопись боя', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '11px' : '13px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'center',
-    }).setOrigin(0.5).setDepth(12).setAlpha(0);
+    const titleText = this.add.text(
+      panelLeft + horizontalPadding,
+      panelTop + (layout.veryCompact ? 18 : 20),
+      'Летопись боя',
+      {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '12px' : '14px',
+        color: UI.colors.goldText,
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'left',
+      }
+    ).setOrigin(0, 0.5).setDepth(12).setAlpha(0);
 
     this.statusText = this.add.text(
-      left + panelWidth - (layout.veryCompact ? 18 : 22),
-      titlePlate.y,
+      panelLeft + panelWidth - horizontalPadding,
+      titleText.y,
       'Нет эффектов',
       {
         fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '9px' : '11px',
+        fontSize: layout.veryCompact ? '9px' : '10px',
         color: '#8aa9c5',
         align: 'right',
         wordWrap: {
-          width: panelWidth - (layout.veryCompact ? 178 : 212),
+          width: Math.max(100, panelWidth - 200),
           useAdvancedWrap: true,
         },
         maxLines: 1,
       }
-    ).setOrigin(1, 0.5).setDepth(12).setAlpha(0.88);
+    ).setOrigin(1, 0.5).setDepth(12).setAlpha(0);
 
-    const mark = this.add.rectangle(
-      left + (layout.veryCompact ? 22 : 26),
-      top + panelHeight / 2 + (layout.veryCompact ? 10 : 12),
-      3,
-      panelHeight - (layout.veryCompact ? 58 : 66),
+    const headerLine = this.add.rectangle(
+      panelX,
+      panelTop + headerHeight,
+      panelWidth - horizontalPadding * 2,
+      1,
       UI.colors.goldDark,
-      0.35
-    ).setDepth(12).setAlpha(0);
+      0.22
+    ).setDepth(11).setAlpha(0);
 
-    const viewportTopPadding = layout.veryCompact ? 62 : layout.compact ? 66 : 72;
-    const viewportBottomPadding = layout.veryCompact ? 17 : layout.compact ? 20 : 22;
+    const viewportBg = this.add.rectangle(
+      this.battleLogViewportLeft + this.battleLogViewportWidth / 2,
+      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
+      this.battleLogViewportWidth,
+      this.battleLogViewportHeight,
+      0x030507,
+      0.32
+    ).setDepth(9).setAlpha(0);
 
-    this.battleLogViewportLeft = left + (layout.veryCompact ? 38 : 44);
-    this.battleLogViewportTop = top + viewportTopPadding;
-    this.battleLogViewportWidth = panelWidth - (layout.veryCompact ? 84 : 100);
-    this.battleLogViewportHeight = Math.max(34, top + panelHeight - viewportBottomPadding - this.battleLogViewportTop);
-    this.battleLogScrollY = 0;
-    this.battleLogTargetScrollY = 0;
-    this.battleLogMaxScroll = 0;
-    this.battleLogContentHeight = 0;
-
-    this.battleLogContainer?.destroy(true);
-    this.battleLogMaskGraphics?.destroy();
-    this.battleLogViewportFrame?.destroy();
-    this.battleLogTopFade?.destroy();
-    this.battleLogBottomFade?.destroy();
-    this.battleLogScrollZone?.destroy();
-    this.battleLogLineObjects = [];
-
-    this.battleLogViewportFrame = this.add.graphics().setDepth(11).setAlpha(0);
-    this.battleLogViewportFrame.fillStyle(0x020304, 0.38);
-    this.battleLogViewportFrame.fillRoundedRect(
-      this.battleLogViewportLeft - 8,
-      this.battleLogViewportTop - 6,
-      this.battleLogViewportWidth + 14,
-      this.battleLogViewportHeight + 12,
-      layout.veryCompact ? 10 : 13
-    );
-    this.battleLogViewportFrame.lineStyle(1, UI.colors.goldDark, 0.24);
-    this.battleLogViewportFrame.strokeRoundedRect(
-      this.battleLogViewportLeft - 8,
-      this.battleLogViewportTop - 6,
-      this.battleLogViewportWidth + 14,
-      this.battleLogViewportHeight + 12,
-      layout.veryCompact ? 10 : 13
-    );
-    this.battleLogViewportFrame.lineStyle(1, 0x70a6ff, 0.08);
-    this.battleLogViewportFrame.strokeRoundedRect(
-      this.battleLogViewportLeft - 3,
-      this.battleLogViewportTop - 2,
-      this.battleLogViewportWidth + 4,
-      this.battleLogViewportHeight + 4,
-      layout.veryCompact ? 7 : 10
-    );
+    const leftMark = this.add.rectangle(
+      panelLeft + 11,
+      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
+      2,
+      this.battleLogViewportHeight,
+      UI.colors.goldDark,
+      0.24
+    ).setDepth(11).setAlpha(0);
 
     this.battleLogTopFade = this.createBattleLogEdgeFade(
-      this.battleLogViewportLeft - 6,
-      this.battleLogViewportTop - 4,
-      this.battleLogViewportWidth + 10,
-      layout.veryCompact ? 15 : 19,
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop,
+      this.battleLogViewportWidth,
+      layout.veryCompact ? 12 : 15,
       true
-    ).setDepth(14).setAlpha(0);
+    ).setDepth(15).setAlpha(0);
 
     this.battleLogBottomFade = this.createBattleLogEdgeFade(
-      this.battleLogViewportLeft - 6,
-      this.battleLogViewportTop + this.battleLogViewportHeight - (layout.veryCompact ? 13 : 17),
-      this.battleLogViewportWidth + 10,
-      layout.veryCompact ? 15 : 19,
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop + this.battleLogViewportHeight - (layout.veryCompact ? 12 : 15),
+      this.battleLogViewportWidth,
+      layout.veryCompact ? 12 : 15,
       false
-    ).setDepth(14).setAlpha(0);
+    ).setDepth(15).setAlpha(0);
 
-    this.battleLogMaskGraphics = this.add.graphics().setDepth(0).setAlpha(0.0001);
+    this.battleLogMaskGraphics = this.add.graphics();
+    this.battleLogMaskGraphics.setVisible(false);
     this.battleLogMaskGraphics.fillStyle(0xffffff, 1);
-    this.battleLogMaskGraphics.fillRoundedRect(
-      this.battleLogViewportLeft - 2,
-      this.battleLogViewportTop - 2,
-      this.battleLogViewportWidth + 4,
-      this.battleLogViewportHeight + 4,
-      layout.veryCompact ? 8 : 11
+    this.battleLogMaskGraphics.fillRect(
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop,
+      this.battleLogViewportWidth,
+      this.battleLogViewportHeight
     );
     this.battleLogMask = this.battleLogMaskGraphics.createGeometryMask();
 
-    this.battleLogContainer = this.add.container(0, 0).setDepth(12).setAlpha(0);
+    this.battleLogContainer = this.add.container(
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop
+    ).setDepth(13);
     this.battleLogContainer.setMask(this.battleLogMask);
 
     this.logText = this.add.text(0, 0, '', {
       fontFamily: UI.font.body,
       fontSize: '1px',
-      color: '#ffffff',
-    }).setOrigin(0, 0).setVisible(false).setAlpha(0);
+      color: '#000000',
+    }).setOrigin(0, 0).setVisible(false).setAlpha(0).setDepth(-1000);
+
+    const scrollbarX = this.battleLogViewportLeft + this.battleLogViewportWidth + scrollbarGap + scrollbarWidth / 2;
 
     this.battleLogScrollTrack = this.add.rectangle(
-      left + panelWidth - (layout.veryCompact ? 17 : 20),
+      scrollbarX,
       this.battleLogViewportTop + this.battleLogViewportHeight / 2,
-      4,
+      scrollbarWidth,
       this.battleLogViewportHeight,
       0x000000,
       0.36
-    ).setDepth(13).setAlpha(0);
-
-    this.battleLogScrollThumb = this.add.rectangle(
-      this.battleLogScrollTrack.x,
-      this.battleLogViewportTop + 10,
-      4,
-      24,
-      UI.colors.goldDark,
-      0.72
     ).setDepth(14).setAlpha(0);
 
+    this.battleLogScrollThumb = this.add.rectangle(
+      scrollbarX,
+      this.battleLogViewportTop + 10,
+      scrollbarWidth,
+      24,
+      UI.colors.goldDark,
+      0.82
+    ).setDepth(15).setAlpha(0);
+
     this.battleLogNewMessageText = this.add.text(
-      this.battleLogViewportLeft + this.battleLogViewportWidth - 6,
-      this.battleLogViewportTop + this.battleLogViewportHeight - 10,
+      this.battleLogViewportLeft + this.battleLogViewportWidth - 2,
+      this.battleLogViewportTop + this.battleLogViewportHeight - 4,
       'новое ↓',
       {
         fontFamily: UI.font.body,
@@ -984,31 +976,21 @@ private getDebuffShortDescription(id: string, power: number) {
         stroke: '#000000',
         strokeThickness: 2,
       }
-    ).setOrigin(1, 1).setDepth(15).setVisible(false).setAlpha(0);
-
-    const scrollHint = this.add.text(
-      left + panelWidth - (layout.veryCompact ? 42 : 48),
-      top + panelHeight - (layout.veryCompact ? 13 : 16),
-      'листай',
-      {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '8px' : '9px',
-        color: '#6f665b',
-        align: 'right',
-      }
-    ).setOrigin(1, 0.5).setDepth(12).setAlpha(0);
+    ).setOrigin(1, 1).setDepth(16).setVisible(false).setAlpha(0);
 
     this.battleLogScrollZone = this.add.zone(
-      this.battleLogViewportLeft + this.battleLogViewportWidth / 2,
-      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
-      this.battleLogViewportWidth,
+      this.battleLogViewportLeft,
+      this.battleLogViewportTop,
+      this.battleLogViewportWidth + scrollbarGap + scrollbarWidth,
       this.battleLogViewportHeight
-    ).setInteractive({ useHandCursor: false }).setDepth(31);
+    ).setOrigin(0, 0).setInteractive({ useHandCursor: false }).setDepth(31);
 
     this.battleLogScrollZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.battleLogDragging = true;
       this.battleLogDragStartY = pointer.y;
       this.battleLogDragStartScrollY = this.battleLogScrollY;
+      this.battleLogScrollTween?.stop();
+      this.battleLogScrollTween = undefined;
     });
 
     this.battleLogScrollZone.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -1016,12 +998,14 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      const deltaY = pointer.y - this.battleLogDragStartY;
-      this.scrollBattleLogTo(this.battleLogDragStartScrollY - deltaY, true);
+      const deltaY = this.battleLogDragStartY - pointer.y;
+      this.scrollBattleLogTo(this.battleLogDragStartScrollY + deltaY, true);
     });
 
     this.battleLogScrollZone.on('pointerup', () => this.stopBattleLogDrag());
+    this.battleLogScrollZone.on('pointerupoutside', () => this.stopBattleLogDrag());
     this.battleLogScrollZone.on('pointerout', () => this.stopBattleLogDrag());
+    this.battleLogScrollZone.on('pointercancel', () => this.stopBattleLogDrag());
 
     if (this.battleLogWheelHandler) {
       this.input.off('wheel', this.battleLogWheelHandler);
@@ -1037,7 +1021,7 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      this.scrollBattleLogBy(deltaY * 0.55);
+      this.scrollBattleLogBy(deltaY * 0.5);
     };
 
     this.input.on('wheel', this.battleLogWheelHandler);
@@ -1057,27 +1041,43 @@ private getDebuffShortDescription(id: string, power: number) {
       this.battleLogScrollTween = undefined;
     });
 
+    this.battleLogObjects.push(
+      panel.panel,
+      panel.shadow,
+      titleText,
+      headerLine,
+      this.statusText,
+      viewportBg,
+      leftMark,
+      this.battleLogTopFade,
+      this.battleLogBottomFade,
+      this.battleLogContainer,
+      this.battleLogScrollTrack,
+      this.battleLogScrollThumb,
+      this.battleLogNewMessageText,
+      this.battleLogScrollZone,
+      this.logText
+    );
+
     this.tweens.add({
       targets: [
         panel.panel,
         panel.shadow,
-        inner,
-        titlePlate,
         titleText,
-        mark,
-        this.battleLogViewportFrame,
-        this.battleLogContainer,
+        headerLine,
+        this.statusText,
+        viewportBg,
+        leftMark,
         this.battleLogScrollTrack,
         this.battleLogScrollThumb,
-        scrollHint,
       ],
       alpha: 1,
-      duration: 280,
-      delay: 220,
+      duration: 240,
+      delay: 150,
       ease: 'Sine.easeOut',
     });
 
-    this.updateBattleLogView();
+    this.updateBattleLogView(false);
   }
 
   private stopBattleLogDrag() {
@@ -1099,7 +1099,7 @@ private getDebuffShortDescription(id: string, power: number) {
       const ratio = topFade
         ? 1 - i / steps
         : (i + 1) / steps;
-      const alpha = 0.06 + ratio * 0.42;
+      const alpha = 0.04 + ratio * 0.38;
 
       graphics.fillStyle(0x06080b, alpha);
       graphics.fillRect(
@@ -1114,7 +1114,15 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private appendBattleLog(message: string, type: BattleLogType = 'normal') {
-    const normalized = String(message ?? '').trim() || '...';
+    const normalized = String(message ?? '')
+      .replace(/\r/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    if (!normalized) {
+      return;
+    }
+
     const resolvedType = type === 'normal'
       ? this.inferBattleLogType(normalized)
       : type;
@@ -1131,10 +1139,23 @@ private getDebuffShortDescription(id: string, power: number) {
       oldObject?.destroy();
     }
 
-    this.createBattleLogLine(normalized, resolvedType);
-    this.updateBattleLogView(true);
+    const newLine = this.createBattleLogLine(normalized, resolvedType);
 
-    this.logText?.setText(normalized);
+    this.updateBattleLogView(false);
+
+    if (newLine) {
+      const finalY = newLine.y;
+      newLine.setY(finalY + 6);
+      newLine.setAlpha(0);
+
+      this.tweens.add({
+        targets: newLine,
+        y: finalY,
+        alpha: 1,
+        duration: 170,
+        ease: 'Sine.easeOut',
+      });
+    }
 
     if (wasAtBottom || this.battleLogLines.length <= 2) {
       this.scrollBattleLogToBottom(true);
@@ -1148,12 +1169,12 @@ private getDebuffShortDescription(id: string, power: number) {
     }
   }
 
-
   private clearBattleLog() {
     this.battleLogLines = [];
 
     this.battleLogLineObjects.forEach(object => object.destroy());
     this.battleLogLineObjects = [];
+    this.battleLogContainer?.removeAll(true);
 
     this.battleLogScrollTween?.stop();
     this.battleLogScrollTween = undefined;
@@ -1163,8 +1184,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogContentHeight = 0;
 
     this.hideBattleLogNewMessageIndicator();
-    this.updateBattleLogScrollThumb();
-    this.updateBattleLogEdgeFades();
+    this.updateBattleLogView(false);
   }
 
   private createBattleLogLine(text: string, type: BattleLogType = 'normal') {
@@ -1177,28 +1197,18 @@ private getDebuffShortDescription(id: string, power: number) {
     const icon = this.getBattleLogIcon(type);
     const lineText = `${icon} ${text}`;
 
-    const line = this.add.text(
-      this.battleLogViewportLeft + 4,
-      this.battleLogViewportTop,
-      lineText,
-      {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '14px',
-        color,
-        align: 'left',
-        wordWrap: {
-          width: this.battleLogViewportWidth - 18,
-          useAdvancedWrap: true,
-        },
-        lineSpacing: layout.veryCompact ? 2 : 4,
-      }
-    ).setOrigin(0, 0).setDepth(12).setAlpha(0);
+    const line = this.add.text(0, 0, lineText, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
+      color,
+      align: 'left',
+      wordWrap: {
+        width: Math.max(80, this.battleLogViewportWidth - 6),
+        useAdvancedWrap: true,
+      },
+      lineSpacing: layout.veryCompact ? 2 : 4,
+    }).setOrigin(0, 0).setDepth(13).setAlpha(0);
 
-    // Важно: маску ставим не только на контейнер, но и на каждую строку.
-    // В Phaser 3 маска контейнера не всегда клипует дочерние Text-объекты
-    // одинаково стабильно на всех рендерах, из-за чего текст может вылезать
-    // поверх карточек бойцов. Индивидуальная GeometryMask гарантирует,
-    // что строка видна только внутри внутреннего окна летописи.
     if (this.battleLogMask) {
       line.setMask(this.battleLogMask);
     }
@@ -1206,18 +1216,10 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogContainer.add(line);
     this.battleLogLineObjects.push(line);
 
-    this.tweens.add({
-      targets: line,
-      alpha: 1,
-      y: '-=6',
-      duration: 180,
-      ease: 'Sine.easeOut',
-    });
-
     return line;
   }
 
-  private updateBattleLogView(animatedLastLine = false) {
+  private updateBattleLogView(_animatedLastLine = false) {
     if (!this.battleLogContainer) {
       return;
     }
@@ -1225,30 +1227,16 @@ private getDebuffShortDescription(id: string, power: number) {
     if (this.battleLogLineObjects.length === 0) {
       this.battleLogContentHeight = 0;
       this.battleLogMaxScroll = 0;
+      this.battleLogScrollY = 0;
       this.applyBattleLogScroll();
       return;
     }
 
-    let cursorY = this.battleLogViewportTop + 6;
+    let cursorY = 0;
     const gap = this.getBattleLayout().veryCompact ? 6 : 8;
 
-    this.battleLogLineObjects.forEach((line, index) => {
-      const targetY = cursorY;
-      const isLastLine = index === this.battleLogLineObjects.length - 1;
-
-      if (animatedLastLine && isLastLine) {
-        line.setY(targetY + 6);
-        this.tweens.add({
-          targets: line,
-          y: targetY,
-          duration: 180,
-          ease: 'Sine.easeOut',
-        });
-      } else {
-        line.setY(targetY);
-      }
-
-      line.setX(this.battleLogViewportLeft + 4);
+    this.battleLogLineObjects.forEach(line => {
+      line.setPosition(0, cursorY);
 
       if (this.battleLogMask && line.mask !== this.battleLogMask) {
         line.setMask(this.battleLogMask);
@@ -1257,10 +1245,10 @@ private getDebuffShortDescription(id: string, power: number) {
       cursorY += Math.ceil(line.height) + gap;
     });
 
-    this.battleLogContentHeight = Math.max(0, cursorY - this.battleLogViewportTop);
+    this.battleLogContentHeight = Math.max(0, cursorY);
     this.battleLogMaxScroll = Math.max(
       0,
-      this.battleLogContentHeight - this.battleLogViewportHeight + 8
+      this.battleLogContentHeight - this.battleLogViewportHeight
     );
 
     this.battleLogTargetScrollY = Phaser.Math.Clamp(
@@ -1313,7 +1301,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogScrollTween = this.tweens.add({
       targets: tweenState,
       value: targetScrollY,
-      duration: 170,
+      duration: 180,
       ease: 'Sine.easeOut',
       onUpdate: () => {
         this.battleLogScrollY = tweenState.value;
@@ -1333,7 +1321,10 @@ private getDebuffShortDescription(id: string, power: number) {
 
   private applyBattleLogScroll() {
     if (this.battleLogContainer) {
-      this.battleLogContainer.y = -this.battleLogScrollY;
+      this.battleLogContainer.setPosition(
+        this.battleLogViewportLeft,
+        this.battleLogViewportTop - this.battleLogScrollY
+      );
     }
 
     if (this.isBattleLogAtBottom()) {
@@ -1355,8 +1346,8 @@ private getDebuffShortDescription(id: string, power: number) {
       return;
     }
 
-    const topAlpha = Phaser.Math.Clamp(this.battleLogScrollY / 22, 0, 1) * 0.9;
-    const bottomAlpha = Phaser.Math.Clamp((this.battleLogMaxScroll - this.battleLogScrollY) / 22, 0, 1) * 0.9;
+    const topAlpha = Phaser.Math.Clamp(this.battleLogScrollY / 24, 0, 1) * 0.9;
+    const bottomAlpha = Phaser.Math.Clamp((this.battleLogMaxScroll - this.battleLogScrollY) / 24, 0, 1) * 0.9;
 
     this.battleLogTopFade.setAlpha(topAlpha);
     this.battleLogBottomFade.setAlpha(bottomAlpha);
@@ -1376,9 +1367,9 @@ private getDebuffShortDescription(id: string, power: number) {
     }
 
     const trackHeight = this.battleLogViewportHeight;
-    const contentHeight = this.battleLogViewportHeight + this.battleLogMaxScroll;
+    const contentHeight = Math.max(this.battleLogViewportHeight, this.battleLogContentHeight);
     const thumbHeight = Phaser.Math.Clamp(
-      trackHeight * (this.battleLogViewportHeight / Math.max(this.battleLogViewportHeight, contentHeight)),
+      trackHeight * (this.battleLogViewportHeight / contentHeight),
       18,
       trackHeight
     );
@@ -1389,6 +1380,8 @@ private getDebuffShortDescription(id: string, power: number) {
 
     this.battleLogScrollThumb.displayHeight = thumbHeight;
     this.battleLogScrollThumb.y = trackTop + thumbHeight / 2 + (trackHeight - thumbHeight) * scrollRatio;
+    this.battleLogScrollTrack.setAlpha(0.56);
+    this.battleLogScrollThumb.setAlpha(0.88);
   }
 
   private isPointerInsideBattleLog(pointer: Phaser.Input.Pointer) {
@@ -1410,7 +1403,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.tweens.add({
       targets: this.battleLogNewMessageText,
       alpha: 1,
-      y: this.battleLogViewportTop + this.battleLogViewportHeight - 14,
+      y: this.battleLogViewportTop + this.battleLogViewportHeight - 4,
       duration: 140,
       ease: 'Sine.easeOut',
     });
@@ -1434,10 +1427,6 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private pulseBattleLogPanel(type: BattleLogType) {
-    if (!this.battleLogViewportFrame) {
-      return;
-    }
-
     const color = type === 'reward'
       ? UI.colors.gold
       : type === 'danger'
@@ -1451,7 +1440,11 @@ private getDebuffShortDescription(id: string, power: number) {
       this.battleLogViewportHeight,
       color,
       0.08
-    ).setDepth(13).setAlpha(0);
+    ).setDepth(14).setAlpha(0);
+
+    if (this.battleLogMask) {
+      glow.setMask(this.battleLogMask);
+    }
 
     this.tweens.add({
       targets: glow,
@@ -1461,6 +1454,45 @@ private getDebuffShortDescription(id: string, power: number) {
       ease: 'Sine.easeOut',
       onComplete: () => glow.destroy(),
     });
+  }
+
+  private destroyBattleLogObjects() {
+    if (this.battleLogWheelHandler) {
+      this.input.off('wheel', this.battleLogWheelHandler);
+      this.battleLogWheelHandler = undefined;
+    }
+
+    this.input.off('pointerup', this.stopBattleLogDrag, this);
+    this.input.off('pointerupoutside', this.stopBattleLogDrag, this);
+
+    this.battleLogScrollTween?.stop();
+    this.battleLogScrollTween = undefined;
+
+    this.battleLogLineObjects.forEach(object => object.destroy());
+    this.battleLogLineObjects = [];
+
+    this.battleLogMask?.destroy?.();
+    this.battleLogMask = undefined;
+
+    this.battleLogMaskGraphics?.destroy();
+    this.battleLogMaskGraphics = undefined;
+
+    this.battleLogObjects.forEach(object => object.destroy());
+    this.battleLogObjects = [];
+
+    this.battleLogContainer = undefined;
+    this.battleLogScrollZone = undefined;
+    this.battleLogScrollTrack = undefined;
+    this.battleLogScrollThumb = undefined;
+    this.battleLogTopFade = undefined;
+    this.battleLogBottomFade = undefined;
+    this.battleLogNewMessageText = undefined;
+
+    this.battleLogDragging = false;
+    this.battleLogScrollY = 0;
+    this.battleLogTargetScrollY = 0;
+    this.battleLogMaxScroll = 0;
+    this.battleLogContentHeight = 0;
   }
 
   private inferBattleLogType(text: string): BattleLogType {
