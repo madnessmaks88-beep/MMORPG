@@ -11,6 +11,18 @@ function getBaseFloorMultiplier(floor: number) {
   return 1 + (floorInsideTier - 1) * 0.075;
 }
 
+function getTenFloorHpExpMultiplier(floor: number) {
+  // С 10 этажа и после каждого этажа, кратного 10:
+  // 1-9: x1
+  // 10-19: x1.5
+  // 20-29: x2.25
+  // 30-39: x3.375
+  // и так далее.
+  const milestoneCount = Math.max(0, Math.floor(floor / 10));
+
+  return 1.5 ** milestoneCount;
+}
+
 function getRoomTypeMultiplier(roomType?: FloorRoom['type']) {
   if (roomType === 'elite') {
     return {
@@ -58,8 +70,14 @@ export function createScaledEnemy(
 ): EnemyData {
   const floorMultiplier = getBaseFloorMultiplier(floor);
   const roomMultiplier = getRoomTypeMultiplier(roomType);
+  const tenFloorHpExpMultiplier = getTenFloorHpExpMultiplier(floor);
 
-  const maxHp = Math.round(enemy.maxHp * floorMultiplier * roomMultiplier.hp);
+  const maxHp = Math.round(
+    enemy.maxHp *
+      floorMultiplier *
+      roomMultiplier.hp *
+      tenFloorHpExpMultiplier
+  );
   const attack = Math.round(enemy.attack * floorMultiplier * roomMultiplier.attack);
   const defense = Math.round(enemy.defense * floorMultiplier * roomMultiplier.defense);
 
@@ -69,7 +87,12 @@ export function createScaledEnemy(
     hp: maxHp,
     attack,
     defense,
-    expReward: Math.round(enemy.expReward * floorMultiplier * roomMultiplier.exp),
+    expReward: Math.round(
+      enemy.expReward *
+        floorMultiplier *
+        roomMultiplier.exp *
+        tenFloorHpExpMultiplier
+    ),
     goldReward: Math.round(enemy.goldReward * floorMultiplier * roomMultiplier.gold),
   };
 }

@@ -122,6 +122,7 @@ type BattleLayout = {
   mainButtonWidth: number;
   sideButtonWidth: number;
   compact: boolean;
+  veryCompact: boolean;
 };
 
 export class BattleScene extends Phaser.Scene {
@@ -326,6 +327,8 @@ export class BattleScene extends Phaser.Scene {
 
     const layout = this.getBattleLayout();
 
+    this.cameras.main.fadeIn(260, 0, 0, 0);
+
     this.createBattleBackground(isBoss);
 
     this.createBattleHeader(
@@ -353,6 +356,8 @@ export class BattleScene extends Phaser.Scene {
       false,
       false
     );
+
+    this.animateBattleEntries();
 
     this.createBattleLogPanel();
     this.createActionButtons();
@@ -386,25 +391,28 @@ export class BattleScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 18, 34);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 28, 46);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 30);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.032), 24, 42);
     const contentWidth = Math.min(width - safeX * 2, 660);
     const compact = height < 1120;
+    const veryCompact = height < 940;
 
-    const actionPanelHeight = compact ? 286 : 306;
+    const actionPanelHeight = veryCompact ? 214 : compact ? 238 : 294;
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
-    const attackButtonY = actionPanelY - actionPanelHeight / 2 + 52;
-    const firstRowY = attackButtonY + (compact ? 78 : 86);
-    const secondRowY = firstRowY + (compact ? 78 : 88);
+    const attackButtonY = actionPanelY - actionPanelHeight / 2 + (veryCompact ? 42 : compact ? 47 : 54);
+    const firstRowY = attackButtonY + (veryCompact ? 58 : compact ? 66 : 84);
+    const secondRowY = firstRowY + (veryCompact ? 58 : compact ? 66 : 86);
 
-    const logHeight = compact ? 188 : 220;
-    const logY = actionPanelY - actionPanelHeight / 2 - logHeight / 2 - 18;
+    const logHeight = veryCompact ? 118 : compact ? 146 : 206;
+    const logY = actionPanelY - actionPanelHeight / 2 - logHeight / 2 - (veryCompact ? 10 : 16);
 
-    const playerY = logY - logHeight / 2 - (compact ? 116 : 128);
-    const enemyY = safeTop + (this.isBossBattle ? (compact ? 218 : 236) : (compact ? 182 : 198));
+    const playerY = logY - logHeight / 2 - (veryCompact ? 76 : compact ? 92 : 124);
+    const enemyY = safeTop + (this.isBossBattle
+      ? veryCompact ? 182 : compact ? 202 : 246
+      : veryCompact ? 164 : compact ? 180 : 206);
 
-    const mainButtonWidth = Math.min(contentWidth - 70, 560);
-    const sideButtonWidth = Math.min((mainButtonWidth - 18) / 2, 272);
+    const mainButtonWidth = Math.min(contentWidth - 64, 560);
+    const sideButtonWidth = Math.min((mainButtonWidth - 14) / 2, 272);
 
     return {
       width,
@@ -426,9 +434,9 @@ export class BattleScene extends Phaser.Scene {
       mainButtonWidth,
       sideButtonWidth,
       compact,
+      veryCompact,
     };
   }
-
 
   private getCurrentWeaponType() {
   const equippedWeapon = getEquippedWeapon(player);
@@ -538,32 +546,60 @@ private getEnemyWeaknessDamageMultiplier() {
     return actualHeal;
   }
 
+  private animateBattleEntries() {
+    const entries = [this.enemyCard, this.playerCard];
+
+    entries.forEach((entry, index) => {
+      entry.setAlpha(0);
+      entry.setScale(0.94);
+      entry.y += index === 0 ? -14 : 14;
+
+      this.tweens.add({
+        targets: entry,
+        alpha: 1,
+        scale: 1,
+        y: entry.y + (index === 0 ? 14 : -14),
+        duration: 360,
+        delay: 80 + index * 90,
+        ease: 'Cubic.easeOut',
+      });
+    });
+  }
+
   private createBattleHeader(title: string, subtitle: string, isBoss: boolean) {
     const layout = this.getBattleLayout();
     const panelWidth = Math.min(layout.contentWidth, 640);
-    const panelHeight = isBoss ? 112 : 86;
-    const panelY = layout.safeTop + panelHeight / 2 + 6;
+    const panelHeight = isBoss
+      ? layout.veryCompact ? 82 : layout.compact ? 96 : 112
+      : layout.veryCompact ? 62 : layout.compact ? 74 : 86;
+    const panelY = layout.safeTop + panelHeight / 2 + 4;
 
     this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: panelWidth,
       height: panelHeight,
-      radius: 26,
-      color: isBoss ? 0x1a0807 : 0x0d0a08,
-      alpha: 0.95,
+      radius: layout.veryCompact ? 20 : 26,
+      color: isBoss ? 0x1a0807 : 0x0c0908,
+      alpha: 0.96,
       strokeColor: isBoss ? 0xff6b35 : UI.colors.goldDark,
-      strokeAlpha: isBoss ? 0.86 : 0.45,
+      strokeAlpha: isBoss ? 0.84 : 0.5,
       strokeWidth: isBoss ? 3 : 2,
       depth: 8,
     });
 
-    if (isBoss) {
-      this.add.circle(layout.centerX, panelY, panelWidth * 0.36, 0xff2f2f, 0.055).setDepth(9);
+    this.add.circle(
+      layout.centerX,
+      panelY,
+      panelWidth * 0.36,
+      isBoss ? 0xff2f2f : 0xd8b56d,
+      isBoss ? 0.05 : 0.025
+    ).setDepth(9);
 
-      this.add.text(layout.centerX, panelY - 36, '⚠ БОСС ПОДЗЕМЕЛЬЯ ⚠', {
+    if (isBoss) {
+      this.add.text(layout.centerX, panelY - panelHeight / 2 + 20, 'БОСС ПОДЗЕМЕЛЬЯ', {
         fontFamily: UI.font.title,
-        fontSize: layout.compact ? '18px' : '20px',
+        fontSize: layout.veryCompact ? '13px' : layout.compact ? '16px' : '18px',
         color: '#ff9a6b',
         stroke: '#000000',
         strokeThickness: 4,
@@ -575,32 +611,39 @@ private getEnemyWeaknessDamageMultiplier() {
       }).setOrigin(0.5).setDepth(11);
     }
 
-    this.add.text(layout.centerX, isBoss ? panelY - 6 : panelY - 14, title, {
+    const titleY = isBoss
+      ? panelY - (layout.veryCompact ? 4 : 6)
+      : panelY - (layout.veryCompact ? 9 : 12);
+
+    this.add.text(layout.centerX, titleY, title, {
       fontFamily: UI.font.title,
-      fontSize: isBoss ? (layout.compact ? '24px' : '27px') : (layout.compact ? '23px' : '26px'),
+      fontSize: isBoss
+        ? layout.veryCompact ? '20px' : layout.compact ? '23px' : '27px'
+        : layout.veryCompact ? '19px' : layout.compact ? '22px' : '26px',
       color: isBoss ? '#ffb36b' : UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
         width: panelWidth - 44,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(12);
 
-    this.add.text(layout.centerX, isBoss ? panelY + 29 : panelY + 20, subtitle, {
+    this.add.text(layout.centerX, panelY + (isBoss ? panelHeight * 0.3 : panelHeight * 0.22), subtitle, {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '13px' : '15px',
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '15px',
       color: isBoss ? '#f0c0a0' : UI.colors.textMuted,
       align: 'center',
       wordWrap: {
         width: panelWidth - 58,
+        useAdvancedWrap: true,
       },
       maxLines: 2,
-      lineSpacing: 3,
+      lineSpacing: 2,
     }).setOrigin(0.5).setDepth(12);
   }
-
 
   private getDebuffIcon(id: string) {
   if (id === 'bleeding') return '🩸';
@@ -668,46 +711,57 @@ private getDebuffShortDescription(id: string, power: number) {
   private createBattleLogPanel() {
     const layout = this.getBattleLayout();
 
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.logY,
       width: layout.contentWidth,
       height: layout.logHeight,
-      radius: 28,
-      color: 0x0d0a08,
+      radius: layout.veryCompact ? 22 : 28,
+      color: 0x0b0908,
       alpha: 0.92,
       strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.5,
+      strokeAlpha: 0.42,
       depth: 8,
     });
 
-    this.add.text(layout.centerX, layout.logY - layout.logHeight / 2 + 25, 'Ход боя', {
+    panel.panel.setAlpha(0);
+    panel.shadow.setAlpha(0);
+
+    this.tweens.add({
+      targets: [panel.panel, panel.shadow],
+      alpha: 1,
+      duration: 260,
+      delay: 180,
+      ease: 'Sine.easeOut',
+    });
+
+    this.add.text(layout.centerX, layout.logY - layout.logHeight / 2 + (layout.veryCompact ? 18 : 24), 'Ход боя', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '18px' : '21px',
+      fontSize: layout.veryCompact ? '15px' : layout.compact ? '17px' : '21px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 44,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(11);
 
-    this.logText = this.add.text(layout.centerX, layout.logY + 14, 'Выбери действие.', {
+    this.logText = this.add.text(layout.centerX, layout.logY + (layout.veryCompact ? 14 : 18), 'Выбери действие.', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '15px' : '17px',
+      fontSize: layout.veryCompact ? '12px' : layout.compact ? '14px' : '17px',
       color: UI.colors.text,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 66,
+        width: layout.contentWidth - 58,
         useAdvancedWrap: true,
       },
-      maxLines: layout.compact ? 7 : 8,
+      maxLines: layout.veryCompact ? 4 : layout.compact ? 5 : 8,
       lineSpacing: 3,
     }).setOrigin(0.5).setDepth(11);
   }
-
 
   private createActionButtons() {
     const layout = this.getBattleLayout();
@@ -733,6 +787,21 @@ private getDebuffShortDescription(id: string, power: number) {
 
     this.actionButtons.push(panelObjects.shadow, panelObjects.panel);
 
+    const actionTitle = this.add.text(layout.centerX, layout.actionPanelY - layout.actionPanelHeight / 2 + (layout.veryCompact ? 17 : 21), 'Действия', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '14px' : '17px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 70,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(22);
+
+    this.actionButtons.push(actionTitle);
+
     const panelDivider = this.add.rectangle(
       layout.centerX,
       layout.actionPanelY - layout.actionPanelHeight / 2 + 16,
@@ -748,7 +817,7 @@ private getDebuffShortDescription(id: string, power: number) {
       x: layout.centerX,
       y: layout.attackButtonY,
       width: layout.mainButtonWidth,
-      height: layout.compact ? 56 : 62,
+      height: layout.veryCompact ? 46 : layout.compact ? 54 : 62,
       icon: '⚔',
       title: this.getWeaponAttackButtonText(),
       subtitle: 'Базовая атака • 0 энергии',
@@ -766,7 +835,7 @@ private getDebuffShortDescription(id: string, power: number) {
       x: leftX,
       y: layout.firstRowY,
       width: layout.sideButtonWidth,
-      height: layout.compact ? 64 : 70,
+      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
       icon: '◆',
       title: 'Сильный удар',
       subtitle: `${this.powerAttackEnergyCost + this.getSkillCostPenalty()} эн.`,
@@ -781,7 +850,7 @@ private getDebuffShortDescription(id: string, power: number) {
       x: rightX,
       y: layout.firstRowY,
       width: layout.sideButtonWidth,
-      height: layout.compact ? 64 : 70,
+      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
       icon: this.getRaceSkillIcon(),
       title: this.getRaceSkillTitle(),
       subtitle: this.getRaceSkillSubtitle(),
@@ -796,7 +865,7 @@ private getDebuffShortDescription(id: string, power: number) {
       x: leftX,
       y: layout.secondRowY,
       width: layout.sideButtonWidth,
-      height: layout.compact ? 64 : 70,
+      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
       icon: '🛡',
       title: 'Защита',
       subtitle: 'Снизить урон • +1 эн.',
@@ -811,7 +880,7 @@ private getDebuffShortDescription(id: string, power: number) {
       x: rightX,
       y: layout.secondRowY,
       width: layout.sideButtonWidth,
-      height: layout.compact ? 64 : 70,
+      height: layout.veryCompact ? 50 : layout.compact ? 58 : 70,
       icon: '✚',
       title: 'Зелье',
       subtitle: this.getPotionButtonSubtitle(),
@@ -865,28 +934,29 @@ private getDebuffShortDescription(id: string, power: number) {
   onClick: () => void;
 }) {
   const disabled = config.disabled ?? false;
+  const compactButton = config.height <= 54;
 
-  const bgColor = disabled ? 0x0c0c0c : 0x17100c;
-  const hoverColor = 0x2a1b12;
-  const pressedColor = 0x342015;
-  const alpha = disabled ? 0.54 : 0.98;
-  const strokeAlpha = disabled ? 0.24 : 0.82;
+  const bgColor = disabled ? 0x0b0b0c : 0x11100d;
+  const hoverColor = 0x22170f;
+  const pressedColor = 0x2f1d13;
+  const alpha = disabled ? 0.5 : 0.98;
+  const strokeAlpha = disabled ? 0.22 : 0.74;
 
   const textColor = disabled ? '#5b5b5b' : UI.colors.text;
   const titleHoverColor = disabled ? '#5b5b5b' : UI.colors.goldText;
 
   const objects: Phaser.GameObjects.GameObject[] = [];
-  const radius = Math.min(24, config.height / 2);
+  const radius = Math.min(22, config.height / 2);
   const left = config.x - config.width / 2;
   const top = config.y - config.height / 2;
 
   const shadow = this.add.graphics();
   shadow.fillStyle(0x000000, 0.34);
-  shadow.fillRoundedRect(left, top + 6, config.width, config.height, radius);
+  shadow.fillRoundedRect(left, top + 5, config.width, config.height, radius);
   shadow.setDepth(21);
 
   const glow = this.add.graphics();
-  glow.fillStyle(config.accentColor, disabled ? 0.025 : 0.075);
+  glow.fillStyle(config.accentColor, disabled ? 0.018 : 0.06);
   glow.fillRoundedRect(left + 5, top + 5, config.width - 10, config.height - 10, radius);
   glow.setDepth(22);
 
@@ -897,48 +967,48 @@ private getDebuffShortDescription(id: string, power: number) {
     bg.fillRoundedRect(left, top, config.width, config.height, radius);
     bg.lineStyle(2, config.accentColor, borderAlpha);
     bg.strokeRoundedRect(left, top, config.width, config.height, radius);
-    bg.fillStyle(config.accentColor, disabled ? 0.06 : 0.14);
-    bg.fillRoundedRect(left + 6, top + 6, 46, config.height - 12, Math.min(18, radius));
+    bg.fillStyle(config.accentColor, disabled ? 0.045 : 0.115);
+    bg.fillRoundedRect(left + 6, top + 6, compactButton ? 36 : 46, config.height - 12, Math.min(16, radius));
   };
 
   drawBg(bgColor, alpha, strokeAlpha);
   bg.setDepth(23);
 
-  const iconX = left + 31;
+  const iconX = left + (compactButton ? 25 : 31);
 
-  const iconBg = this.add.circle(iconX, config.y, 20, config.accentColor, disabled ? 0.08 : 0.18)
-    .setStrokeStyle(1, config.accentColor, disabled ? 0.25 : 0.64)
+  const iconBg = this.add.circle(iconX, config.y, compactButton ? 16 : 20, config.accentColor, disabled ? 0.07 : 0.16)
+    .setStrokeStyle(1, config.accentColor, disabled ? 0.22 : 0.58)
     .setDepth(24);
 
   const icon = this.add.text(iconX, config.y, config.icon, {
     fontFamily: UI.font.body,
-    fontSize: config.width > 300 ? '18px' : '16px',
+    fontSize: compactButton ? '14px' : config.width > 300 ? '18px' : '16px',
     color: disabled ? '#555555' : UI.colors.goldText,
     stroke: '#000000',
     strokeThickness: 2,
   }).setOrigin(0.5).setDepth(25);
 
-  const textX = left + 62;
-  const title = this.add.text(textX, config.y - 13, config.title, {
+  const textX = left + (compactButton ? 50 : 62);
+  const title = this.add.text(textX, config.y - (compactButton ? 9 : 13), config.title, {
     fontFamily: UI.font.title,
-    fontSize: config.width > 300 ? '19px' : '14px',
+    fontSize: compactButton ? (config.width > 300 ? '15px' : '12px') : config.width > 300 ? '19px' : '14px',
     color: textColor,
     stroke: '#000000',
     strokeThickness: 3,
     wordWrap: {
-      width: config.width - 72,
+      width: config.width - (compactButton ? 58 : 72),
       useAdvancedWrap: true,
     },
-    maxLines: 2,
-    lineSpacing: -3,
+    maxLines: 1,
   }).setOrigin(0, 0.5).setDepth(25);
 
-  const subtitle = this.add.text(textX, config.y + 16, config.subtitle, {
+  const subtitle = this.add.text(textX, config.y + (compactButton ? 12 : 16), config.subtitle, {
     fontFamily: UI.font.body,
-    fontSize: config.width > 300 ? '12px' : '11px',
+    fontSize: compactButton ? '10px' : config.width > 300 ? '12px' : '11px',
     color: disabled ? '#444444' : UI.colors.textMuted,
     wordWrap: {
-      width: config.width - 72,
+      width: config.width - (compactButton ? 58 : 72),
+      useAdvancedWrap: true,
     },
     maxLines: 1,
   }).setOrigin(0, 0.5).setDepth(25);
@@ -946,6 +1016,25 @@ private getDebuffShortDescription(id: string, power: number) {
   const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
 
   objects.push(shadow, glow, bg, iconBg, icon, title, subtitle, zone);
+
+  objects.forEach(object => {
+    if ('setAlpha' in object) {
+      const alphaObject = object as Phaser.GameObjects.GameObject & {
+      setAlpha?: (value: number) => Phaser.GameObjects.GameObject;
+    };
+    
+    if (typeof alphaObject.setAlpha === 'function') {
+      alphaObject.setAlpha(disabled ? 0.72 : 0);
+    }
+    }
+  });
+
+  this.tweens.add({
+    targets: objects.filter(object => object !== zone),
+    alpha: disabled ? 0.72 : 1,
+    duration: 220,
+    ease: 'Sine.easeOut',
+  });
 
   const redrawButton = (
     fillColor: number,
@@ -958,8 +1047,8 @@ private getDebuffShortDescription(id: string, power: number) {
 
     iconBg.setY(config.y + offsetY);
     icon.setY(config.y + offsetY);
-    title.setY(config.y - 13 + offsetY);
-    subtitle.setY(config.y + 16 + offsetY);
+    title.setY(config.y - (compactButton ? 9 : 13) + offsetY);
+    subtitle.setY(config.y + (compactButton ? 12 : 16) + offsetY);
 
     title.setColor(titleColor);
   };
@@ -977,7 +1066,7 @@ private getDebuffShortDescription(id: string, power: number) {
         return;
       }
 
-      redrawButton(hoverColor, 1, 0.95, titleHoverColor);
+      redrawButton(hoverColor, 1, 0.92, titleHoverColor);
     });
 
     zone.on('pointerout', () => {
@@ -997,6 +1086,14 @@ private getDebuffShortDescription(id: string, power: number) {
 
       isPressed = true;
       redrawButton(pressedColor, 0.96, 1, titleHoverColor, 1);
+
+      this.tweens.add({
+        targets: [iconBg, icon, title, subtitle],
+        scaleX: 0.985,
+        scaleY: 0.985,
+        duration: 70,
+        ease: 'Sine.easeOut',
+      });
     });
 
     zone.on('pointerup', () => {
@@ -1008,6 +1105,14 @@ private getDebuffShortDescription(id: string, power: number) {
       isLocked = true;
 
       redrawButton(hoverColor, 1, 1, titleHoverColor);
+
+      this.tweens.add({
+        targets: [iconBg, icon, title, subtitle],
+        scaleX: 1,
+        scaleY: 1,
+        duration: 80,
+        ease: 'Back.easeOut',
+      });
 
       this.time.delayedCall(40, () => {
         config.onClick();
@@ -1037,7 +1142,6 @@ private getDebuffShortDescription(id: string, power: number) {
 
   return objects;
 }
-
 
 private getRaceSkillIcon() {
   if (player.raceId === 'human') return '!';
@@ -2245,115 +2349,112 @@ private getSkillCostPenalty() {
   }
 
   private createBattleBackground(isBoss = false) {
-    const { width, height } = this.scale;
     const layout = this.getBattleLayout();
-
+    const { width, height } = layout;
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
-
-    this.add.rectangle(width / 2, height / 2, width, height, theme.background, 1).setDepth(0);
-
     const arenaWidth = Math.min(width - layout.safeX * 2, 680);
-    const arenaHeight = Math.max(420, layout.playerY - layout.safeTop + 130);
-    const arenaY = layout.safeTop + arenaHeight / 2 + 56;
 
-    this.add.circle(width / 2, layout.enemyY - 40, arenaWidth * 0.42, isBoss ? 0xff2f2f : theme.glow, isBoss ? 0.22 : 0.16).setDepth(0);
-    this.add.circle(width / 2, layout.enemyY - 20, arenaWidth * 0.26, theme.fog, 0.11).setDepth(0);
-    this.add.circle(width / 2, layout.enemyY, arenaWidth * 0.13, isBoss ? 0xff6b35 : theme.accent, isBoss ? 0.12 : 0.07).setDepth(0);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x030304, 1).setDepth(0);
+    this.add.rectangle(width / 2, height * 0.38, width, height * 0.78, theme.background, 0.56).setDepth(0);
+    this.add.rectangle(width / 2, height - 150, width, 330, 0x020202, 0.72).setDepth(0);
 
-    this.add.rectangle(width / 2, arenaY, arenaWidth, arenaHeight, 0x0b0807, 0.92)
-      .setStrokeStyle(2, isBoss ? 0x6b1d12 : 0x332013, isBoss ? 0.9 : 0.7)
+    const haloY = layout.safeTop + (isBoss ? height * 0.22 : height * 0.18);
+    this.add.circle(width / 2, haloY, width * 0.58, isBoss ? 0x5c120d : theme.glow, isBoss ? 0.08 : 0.045).setDepth(1);
+    this.add.circle(width / 2, haloY + 18, width * 0.32, 0xd8b56d, isBoss ? 0.035 : 0.025).setDepth(1);
+
+    const arenaTop = Math.max(layout.safeTop + 82, layout.enemyY - (layout.veryCompact ? 84 : 118));
+    const arenaBottom = Math.min(layout.logY - layout.logHeight / 2 - 10, layout.playerY + (layout.veryCompact ? 100 : 124));
+    const arenaHeight = Math.max(260, arenaBottom - arenaTop);
+    const arenaY = arenaTop + arenaHeight / 2;
+
+    this.add.rectangle(width / 2, arenaY, arenaWidth, arenaHeight, isBoss ? 0x140605 : 0x0b0908, 0.82)
+      .setStrokeStyle(2, isBoss ? 0x5c1d12 : 0x312013, isBoss ? 0.62 : 0.42)
       .setDepth(1);
 
-    this.add.ellipse(width / 2, layout.enemyY - 18, arenaWidth * 0.72, 270, isBoss ? 0x220907 : 0x120b08, 0.78)
-      .setStrokeStyle(2, isBoss ? 0x6b1d12 : 0x2e1a10, isBoss ? 0.65 : 0.45)
-      .setDepth(1);
+    this.add.ellipse(width / 2, layout.enemyY + 4, arenaWidth * 0.42, layout.veryCompact ? 112 : 150, 0x050404, 0.72)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x28170f, 0.32)
+      .setDepth(2);
 
-    this.add.ellipse(width / 2, layout.enemyY + 4, arenaWidth * 0.48, 190, 0x080605, 0.88)
-      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x28170f, 0.38)
-      .setDepth(1);
-
-    const brickRows = [
-      { y: layout.enemyY - 92, count: 5, offset: 0 },
-      { y: layout.enemyY - 48, count: 6, offset: -38 },
-      { y: layout.enemyY - 4, count: 5, offset: 0 },
-      { y: layout.enemyY + 40, count: 6, offset: -38 },
-    ];
+    const brickRows = layout.veryCompact
+      ? [
+          { y: layout.enemyY - 48, count: 5, offset: 0 },
+          { y: layout.enemyY - 16, count: 6, offset: -32 },
+          { y: layout.enemyY + 16, count: 5, offset: 0 },
+        ]
+      : [
+          { y: layout.enemyY - 72, count: 5, offset: 0 },
+          { y: layout.enemyY - 34, count: 6, offset: -38 },
+          { y: layout.enemyY + 4, count: 5, offset: 0 },
+          { y: layout.enemyY + 42, count: 6, offset: -38 },
+        ];
 
     brickRows.forEach(row => {
-      const brickWidth = Math.min(88, arenaWidth / 6.5);
-      const brickHeight = 30;
+      const brickWidth = Math.min(84, arenaWidth / 6.5);
+      const brickHeight = layout.veryCompact ? 22 : 28;
 
       for (let i = 0; i < row.count; i += 1) {
         const x = width / 2 - ((row.count - 1) * brickWidth) / 2 + i * brickWidth + row.offset;
 
-        this.add.rectangle(x, row.y, brickWidth - 6, brickHeight, isBoss ? 0x1d0b08 : 0x120d0a, 0.42)
-          .setStrokeStyle(1, isBoss ? 0x4a160f : 0x2a1b12, 0.28)
+        this.add.rectangle(x, row.y, brickWidth - 6, brickHeight, isBoss ? 0x1d0b08 : 0x120d0a, 0.34)
+          .setStrokeStyle(1, isBoss ? 0x4a160f : 0x2a1b12, 0.22)
           .setDepth(2);
       }
     });
 
-    const columnX = Math.min(86, layout.safeX + 54);
-    this.add.rectangle(columnX, arenaY, 52, arenaHeight, 0x0e0a08, 0.88)
-      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.55)
+    const columnX = Math.min(78, layout.safeX + 46);
+    this.add.rectangle(columnX, arenaY, 44, arenaHeight, 0x0e0a08, 0.72)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.45)
       .setDepth(2);
 
-    this.add.rectangle(width - columnX, arenaY, 52, arenaHeight, 0x0e0a08, 0.88)
-      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.55)
+    this.add.rectangle(width - columnX, arenaY, 44, arenaHeight, 0x0e0a08, 0.72)
+      .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2a1a10, 0.45)
       .setDepth(2);
 
-    const floorTopY = layout.playerY + 52;
-    const floorBottomY = Math.min(height - 250, layout.logY - layout.logHeight / 2 - 8);
+    const floorTopY = layout.playerY + (layout.veryCompact ? 44 : 56);
+    const floorBottomY = Math.min(height - 220, layout.logY - layout.logHeight / 2 - 8);
 
-    this.add.rectangle(width / 2, (floorTopY + floorBottomY) / 2, arenaWidth, Math.max(90, floorBottomY - floorTopY), 0x0d0907, 0.96)
-      .setStrokeStyle(2, isBoss ? 0x5c1d12 : 0x372114, 0.7)
+    this.add.rectangle(width / 2, (floorTopY + floorBottomY) / 2, arenaWidth, Math.max(70, floorBottomY - floorTopY), 0x090706, 0.86)
+      .setStrokeStyle(2, isBoss ? 0x5c1d12 : 0x372114, 0.48)
       .setDepth(2);
 
-    for (let i = 0; i < 9; i += 1) {
-      const xTop = layout.safeX + 80 + i * ((width - layout.safeX * 2 - 160) / 8);
-      const xBottom = layout.safeX + 35 + i * ((width - layout.safeX * 2 - 70) / 8);
+    for (let i = 0; i < 8; i += 1) {
+      const xTop = layout.safeX + 60 + i * ((width - layout.safeX * 2 - 120) / 7);
+      const xBottom = layout.safeX + 30 + i * ((width - layout.safeX * 2 - 60) / 7);
 
-      this.add.line(0, 0, xTop, floorTopY, xBottom, floorBottomY, isBoss ? 0x4a160f : 0x2a1a10, isBoss ? 0.45 : 0.34)
+      this.add.line(0, 0, xTop, floorTopY, xBottom, floorBottomY, isBoss ? 0x4a160f : 0x2a1a10, isBoss ? 0.34 : 0.24)
         .setOrigin(0, 0)
         .setDepth(3);
     }
 
-    for (let i = 0; i < 5; i += 1) {
-      const y = floorTopY + i * ((floorBottomY - floorTopY) / 4);
-
-      this.add.line(0, 0, layout.safeX + 54, y, width - layout.safeX - 54, y, isBoss ? 0x4a160f : 0x2a1a10, 0.3)
-        .setOrigin(0, 0)
-        .setDepth(3);
-    }
-
-    for (let i = 0; i < 16; i += 1) {
-      const x = layout.safeX + 28 + (i % 8) * ((width - layout.safeX * 2 - 56) / 7);
-      const y = layout.safeTop + 120 + Math.floor(i / 8) * 118 + (i % 3) * 18;
-      const radius = 36 + (i % 4) * 14;
-
-      this.add.circle(x, y, radius, isBoss ? 0xff6b35 : 0x8a6a48, isBoss ? 0.028 : 0.02).setDepth(1);
-    }
-
-    for (let i = 0; i < 48; i += 1) {
-      const x = layout.safeX + 14 + (i * 37) % Math.max(1, width - layout.safeX * 2 - 28);
-      const y = layout.safeTop + 58 + (i * 61) % Math.max(1, height - layout.safeTop - layout.safeBottom - 260);
+    for (let i = 0; i < 24; i += 1) {
+      const x = layout.safeX + 18 + (i * 37) % Math.max(1, width - layout.safeX * 2 - 36);
+      const y = layout.safeTop + 56 + (i * 61) % Math.max(1, height - layout.safeTop - layout.safeBottom - 180);
       const size = 1 + (i % 3);
-      const alpha = 0.035 + (i % 5) * 0.011;
+      const alpha = 0.025 + (i % 5) * 0.007;
 
-      this.add.circle(x, y, size, isBoss && i % 2 === 0 ? 0xff6b35 : 0xd8b56d, alpha).setDepth(4);
+      const ash = this.add.circle(x, y, size, isBoss && i % 2 === 0 ? 0xff6b35 : 0xd8b56d, alpha).setDepth(4);
+
+      this.tweens.add({
+        targets: ash,
+        y: y - Phaser.Math.Between(4, 18),
+        alpha: alpha * 1.7,
+        duration: Phaser.Math.Between(1800, 3200),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 45,
+        ease: 'Sine.easeInOut',
+      });
     }
 
     if (isBoss) {
-      this.add.rectangle(width / 2, height / 2, width, height, 0x3a0505, 0.14).setDepth(5);
-      this.add.rectangle(width / 2, layout.enemyY + 18, arenaWidth - 46, 3, 0xff6b35, 0.34).setDepth(5);
+      this.add.rectangle(width / 2, height / 2, width, height, 0x3a0505, 0.12).setDepth(5);
+      this.add.rectangle(width / 2, layout.enemyY + 18, arenaWidth - 58, 3, 0xff6b35, 0.3).setDepth(5);
     }
 
-    this.add.rectangle(width / 2, height - 150, width, 330, 0x040302, 0.6).setDepth(6);
-    this.add.rectangle(24, height / 2, 48, height, 0x000000, 0.32).setDepth(6);
-    this.add.rectangle(width - 24, height / 2, 48, height, 0x000000, 0.32).setDepth(6);
+    this.add.rectangle(20, height / 2, 40, height, 0x000000, 0.34).setDepth(6);
+    this.add.rectangle(width - 20, height / 2, 40, height, 0x000000, 0.34).setDepth(6);
   }
-
-
 
   private checkHumanPassive() {
     if (player.raceId !== 'human') {
@@ -2388,8 +2489,12 @@ private getSkillCostPenalty() {
   ) {
     const layout = this.getBattleLayout();
     const cardWidth = Math.min(layout.contentWidth, isBoss ? 660 : 620);
-    const cardHeight = isEnemy ? (isBoss ? 248 : 202) : 214;
-    const barWidth = Math.max(260, cardWidth - 100);
+    const cardHeight = isEnemy
+      ? isBoss
+        ? layout.veryCompact ? 154 : layout.compact ? 178 : 248
+        : layout.veryCompact ? 136 : layout.compact ? 158 : 202
+      : layout.veryCompact ? 148 : layout.compact ? 166 : 214;
+    const barWidth = Math.max(layout.veryCompact ? 220 : 260, cardWidth - (layout.veryCompact ? 86 : 100));
 
     const container = this.add.container(x, y).setDepth(isEnemy ? 18 : 19);
 
@@ -2432,18 +2537,22 @@ private getSkillCostPenalty() {
       currentRoom?.type === 'tier_boss' ||
       Boolean(this.enemy.debuffOnHit);
 
-    const iconBg = this.add.circle(iconX, -cardHeight / 2 + 58, isBoss ? 43 : 36, isEnemy ? 0x2a1010 : 0x2a1d13, 1)
+    const iconY = -cardHeight / 2 + (layout.veryCompact ? 43 : 58);
+
+    const iconBg = this.add.circle(iconX, iconY, isBoss ? (layout.veryCompact ? 34 : 43) : (layout.veryCompact ? 29 : 36), isEnemy ? 0x2a1010 : 0x2a1d13, 1)
       .setStrokeStyle(2, strokeColor, 0.78);
 
-    const iconText = this.add.text(iconX, -cardHeight / 2 + 58, icon, {
+    const iconText = this.add.text(iconX, iconY, icon, {
       fontFamily: UI.font.body,
-      fontSize: isBoss ? '34px' : '29px',
+      fontSize: isBoss ? (layout.veryCompact ? '27px' : '34px') : (layout.veryCompact ? '23px' : '29px'),
       color: isEnemy ? (isBoss ? '#ffb36b' : UI.colors.red) : UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    const nameTextY = isEnemy ? -cardHeight / 2 + 22 : -cardHeight / 2 + 38;
+    const nameTextY = isEnemy
+      ? -cardHeight / 2 + (layout.veryCompact ? 14 : 22)
+      : -cardHeight / 2 + (layout.veryCompact ? 26 : 38);
     const nameTextMaxLines = isEnemy ? 2 : 1;
     const nameTextWidth = isEnemy ? cardWidth - 245 : cardWidth - 190;
 
@@ -2451,9 +2560,9 @@ private getSkillCostPenalty() {
       fontFamily: UI.font.title,
       fontSize: isEnemy
         ? isBoss
-          ? layout.compact ? '21px' : '24px'
-          : layout.compact ? '19px' : '22px'
-        : layout.compact ? '21px' : '24px',
+          ? layout.veryCompact ? '17px' : layout.compact ? '21px' : '24px'
+          : layout.veryCompact ? '16px' : layout.compact ? '19px' : '22px'
+        : layout.veryCompact ? '18px' : layout.compact ? '21px' : '24px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
@@ -2465,9 +2574,11 @@ private getSkillCostPenalty() {
       lineSpacing: -3,
     }).setOrigin(0, isEnemy ? 0 : 0.5);
 
-    const hpText = this.add.text(titleX, isEnemy ? -cardHeight / 2 + 86 : -cardHeight / 2 + 75, '', {
+    const hpText = this.add.text(titleX, isEnemy
+      ? -cardHeight / 2 + (layout.veryCompact ? 58 : 86)
+      : -cardHeight / 2 + (layout.veryCompact ? 58 : 75), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '15px' : '17px',
+      fontSize: layout.veryCompact ? '12px' : layout.compact ? '15px' : '17px',
       color: isDangerTooltip ? '#ffd0c2' : UI.colors.text,
       wordWrap: {
         width: cardWidth - 190,
@@ -2475,9 +2586,11 @@ private getSkillCostPenalty() {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const extraText = this.add.text(titleX, isEnemy ? -cardHeight / 2 + 116 : -cardHeight / 2 + 106, '', {
+    const extraText = this.add.text(titleX, isEnemy
+      ? -cardHeight / 2 + (layout.veryCompact ? 78 : 116)
+      : -cardHeight / 2 + (layout.veryCompact ? 78 : 106), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '13px' : '15px',
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
       color: UI.colors.textMuted,
       wordWrap: {
         width: cardWidth - 190,
@@ -2485,8 +2598,10 @@ private getSkillCostPenalty() {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const hpBarY = isEnemy ? cardHeight / 2 - 54 : cardHeight / 2 - 66;
-    const energyBarY = hpBarY + 22;
+    const hpBarY = isEnemy
+      ? cardHeight / 2 - (layout.veryCompact ? 27 : 54)
+      : cardHeight / 2 - (layout.veryCompact ? 40 : 66);
+    const energyBarY = hpBarY + (layout.veryCompact ? 16 : 22);
 
     const barBack = this.add.rectangle(0, hpBarY, barWidth, 12, 0x050505, 0.92);
 
@@ -2630,9 +2745,9 @@ private getSkillCostPenalty() {
       this.energyBarMaxWidth = barWidth;
       this.energyText = extraText;
 
-      this.playerDebuffText = this.add.text(titleX, cardHeight / 2 - 29, '', {
+      this.playerDebuffText = this.add.text(titleX, cardHeight / 2 - (layout.veryCompact ? 15 : 29), '', {
         fontFamily: UI.font.body,
-        fontSize: '12px',
+        fontSize: layout.veryCompact ? '10px' : '12px',
         color: '#c084fc',
         wordWrap: {
           width: cardWidth - 178,
@@ -2643,9 +2758,9 @@ private getSkillCostPenalty() {
 
       const stats = this.getBattleStats();
 
-      this.potionText = this.add.text(cardWidth / 2 - 24, -4, `Зелья: ${player.potions}`, {
+      this.potionText = this.add.text(cardWidth / 2 - 24, layout.veryCompact ? 4 : -4, `Зелья: ${player.potions}`, {
         fontFamily: UI.font.body,
-        fontSize: layout.compact ? '13px' : '15px',
+        fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
         color: UI.colors.textMuted,
         align: 'right',
         wordWrap: {
@@ -2654,7 +2769,7 @@ private getSkillCostPenalty() {
         maxLines: 1,
       }).setOrigin(1, 0.5);
 
-      const statsText = this.add.text(cardWidth / 2 - 24, -48, [
+      const statsText = this.add.text(cardWidth / 2 - 24, layout.veryCompact ? -30 : -48, [
         `АТК ${stats.attack}`,
         `ЗАЩ ${stats.defense}`,
         `КРИТ ${Math.round(stats.critChance * 100)}%`,
