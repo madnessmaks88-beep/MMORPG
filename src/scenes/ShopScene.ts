@@ -162,11 +162,11 @@ export class ShopScene extends Phaser.Scene {
 
     const compact = height < 1120;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.024), 20, 34);
-    const safeBottom = 154;
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 30);
+    const safeBottom = height < 760 ? 142 : 154;
 
     const contentWidth = Math.min(width - safeX * 2, 640);
-    const headerHeight = compact ? 176 : 188;
+    const headerHeight = compact ? 206 : 224;
     const contentTop = safeTop + headerHeight;
     const contentBottom = height - safeBottom;
 
@@ -182,7 +182,7 @@ export class ShopScene extends Phaser.Scene {
       contentTop,
       contentBottom,
       contentWidth,
-      viewportHeight: Math.max(300, contentBottom - contentTop),
+      viewportHeight: Math.max(280, contentBottom - contentTop),
 
       compact,
     };
@@ -190,48 +190,44 @@ export class ShopScene extends Phaser.Scene {
   private createShopBackdrop(layout: ShopLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.rectangle(centerX, height / 2, width, height, SHOP_COLORS.ink, 0.88).setDepth(0);
-    this.add.rectangle(centerX, height - 178, width, 360, 0x020202, 0.62).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, SHOP_COLORS.ink, 0.96).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, 0x140d08, 0.28).setDepth(0);
+    this.add.rectangle(centerX, height - 188, width, 376, 0x020202, 0.66).setDepth(0);
 
-    const counterY = layout.safeTop + 146;
+    const candleY = layout.safeTop + 132;
+    this.add.circle(centerX, candleY, width * 0.68, SHOP_COLORS.bronze, 0.075).setDepth(0);
+    this.add.circle(centerX, candleY + 8, width * 0.44, SHOP_COLORS.gold, 0.075).setDepth(0);
+    this.add.circle(centerX, candleY + 10, width * 0.22, 0xffb45d, 0.05).setDepth(0);
 
-    this.add.circle(centerX, counterY, width * 0.5, SHOP_COLORS.violet, 0.09).setDepth(0);
-    this.add.circle(centerX, counterY + 8, width * 0.33, SHOP_COLORS.bronze, 0.12).setDepth(0);
-    this.add.circle(centerX, counterY + 18, width * 0.17, SHOP_COLORS.gold, 0.065).setDepth(0);
+    const shelfWidth = Math.min(layout.contentWidth * 0.92, 560);
+    const shelfTop = layout.safeTop + 72;
 
-    const shelfWidth = Math.min(layout.contentWidth * 0.86, 520);
-    const shelfTop = layout.safeTop + 90;
+    for (let row = 0; row < 3; row += 1) {
+      const y = shelfTop + row * 48;
+      this.add.rectangle(centerX, y + 24, shelfWidth, 38, 0x0a0807, 0.58)
+        .setStrokeStyle(1, 0x3f3324, 0.36)
+        .setDepth(1);
+      this.add.rectangle(centerX, y + 46, shelfWidth + 28, 10, 0x1a120d, 0.88)
+        .setStrokeStyle(1, 0x5d4d33, 0.34)
+        .setDepth(2);
+    }
 
-    this.add.rectangle(centerX, shelfTop + 54, shelfWidth, 94, 0x0b0908, 0.7)
-      .setStrokeStyle(2, 0x3f3324, 0.52)
-      .setDepth(1);
-
-    this.add.rectangle(centerX, shelfTop + 104, shelfWidth + 36, 18, 0x16120e, 0.92)
-      .setStrokeStyle(1, 0x5d4d33, 0.45)
-      .setDepth(2);
-
-    this.add.rectangle(centerX, shelfTop + 11, shelfWidth + 22, 14, 0x15100d, 0.84)
-      .setStrokeStyle(1, 0x4d4030, 0.42)
-      .setDepth(2);
-
-    const leftColumnX = centerX - shelfWidth / 2 - 24;
-    const rightColumnX = centerX + shelfWidth / 2 + 24;
+    const leftColumnX = centerX - shelfWidth / 2 - 20;
+    const rightColumnX = centerX + shelfWidth / 2 + 20;
 
     [leftColumnX, rightColumnX].forEach(x => {
-      this.add.rectangle(x, shelfTop + 60, 24, 132, 0x111113, 0.9)
-        .setStrokeStyle(1, 0x4a4034, 0.48)
+      this.add.rectangle(x, shelfTop + 66, 22, 160, 0x101012, 0.86)
+        .setStrokeStyle(1, 0x4a4034, 0.42)
         .setDepth(2);
-
-      this.add.rectangle(x, shelfTop - 8, 40, 18, 0x17130f, 0.92)
-        .setStrokeStyle(1, 0x5b513e, 0.42)
+      this.add.rectangle(x, shelfTop - 16, 40, 16, 0x17130f, 0.9)
+        .setStrokeStyle(1, 0x5b513e, 0.38)
         .setDepth(3);
-
-      this.add.rectangle(x, shelfTop + 128, 44, 20, 0x17130f, 0.94)
-        .setStrokeStyle(1, 0x5b513e, 0.42)
+      this.add.rectangle(x, shelfTop + 146, 44, 18, 0x17130f, 0.92)
+        .setStrokeStyle(1, 0x5b513e, 0.38)
         .setDepth(3);
     });
 
-    this.add.text(centerX, shelfTop + 54, '⚖', {
+    this.add.text(centerX, shelfTop + 60, '⚖', {
       fontFamily: UI.font.body,
       fontSize: layout.compact ? '72px' : '84px',
       color: '#ffffff',
@@ -239,43 +235,88 @@ export class ShopScene extends Phaser.Scene {
       strokeThickness: 3,
     })
       .setOrigin(0.5)
-      .setAlpha(0.04)
+      .setAlpha(0.045)
       .setDepth(2);
 
-    for (let i = 0; i < 34; i += 1) {
-      const x = layout.safeX + 12 + ((i * 41) % Math.max(1, width - layout.safeX * 2 - 24));
-      const y = layout.safeTop + 78 + ((i * 67) % Math.max(1, height - layout.safeTop - layout.safeBottom - 160));
-      const color = i % 5 === 0 ? SHOP_COLORS.blue : SHOP_COLORS.gold;
-      const alpha = 0.025 + (i % 4) * 0.009;
+    for (let i = 0; i < 42; i += 1) {
+      const x = layout.safeX + 12 + ((i * 43) % Math.max(1, width - layout.safeX * 2 - 24));
+      const y = layout.safeTop + 62 + ((i * 71) % Math.max(1, height - layout.safeTop - layout.safeBottom - 120));
+      const color = i % 6 === 0 ? SHOP_COLORS.blue : i % 3 === 0 ? SHOP_COLORS.gold : 0x7a6043;
+      const alpha = 0.018 + (i % 4) * 0.008;
 
-      this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
+      const mote = this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
+
+      this.tweens.add({
+        targets: mote,
+        alpha: { from: alpha * 0.55, to: alpha * 1.65 },
+        y: y - Phaser.Math.Between(4, 18),
+        duration: Phaser.Math.Between(1700, 3100),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 35,
+        ease: 'Sine.easeInOut',
+      });
     }
 
-    this.add.rectangle(22, height / 2, 44, height, 0x000000, 0.28).setDepth(4);
-    this.add.rectangle(width - 22, height / 2, 44, height, 0x000000, 0.28).setDepth(4);
+    for (let i = 0; i < 4; i += 1) {
+      const x = i % 2 === 0 ? layout.safeX + 34 : width - layout.safeX - 34;
+      const y = layout.safeTop + 92 + i * 62;
+
+      const flameGlow = this.add.circle(x, y, 34, 0xff9d3a, 0.08).setDepth(2);
+      const flame = this.add.text(x, y, '♨', {
+        fontFamily: UI.font.body,
+        fontSize: '24px',
+        color: '#d2a060',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(3);
+
+      this.tweens.add({
+        targets: [flameGlow, flame],
+        alpha: { from: 0.42, to: 0.9 },
+        scale: { from: 0.95, to: 1.08 },
+        duration: 1100 + i * 160,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    this.add.rectangle(18, height / 2, 36, height, 0x000000, 0.36).setDepth(4);
+    this.add.rectangle(width - 18, height / 2, 36, height, 0x000000, 0.36).setDepth(4);
   }
   private createHeader(layout: ShopLayout) {
-    const panelHeight = layout.compact ? 92 : 102;
+    const panelHeight = layout.compact ? 68 : 76;
     const panelY = layout.safeTop + panelHeight / 2 + 2;
-
-    this.createRoundedPanel({
+    const panelParts = this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 28,
+      radius: 26,
       color: SHOP_COLORS.panel,
-      alpha: 0.94,
+      alpha: 0.92,
       strokeColor: SHOP_COLORS.bronze,
-      strokeAlpha: 0.62,
+      strokeAlpha: 0.58,
       strokeWidth: 2,
       depth: 96,
       glowColor: SHOP_COLORS.gold,
     });
 
-    this.add.text(layout.centerX, panelY - 28, 'Лавка Пепельного торговца', {
+    panelParts.shadow.setAlpha(0);
+    panelParts.panel.setAlpha(0);
+
+    this.tweens.add({
+      targets: [panelParts.shadow, panelParts.panel],
+      alpha: 1,
+      y: '+=0',
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+
+    const title = this.add.text(layout.centerX, panelY - 14, 'Лавка Пепельного торговца', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '26px' : '30px',
+      fontSize: layout.compact ? '22px' : '26px',
       color: '#d2b87a',
       stroke: '#000000',
       strokeThickness: 5,
@@ -285,57 +326,68 @@ export class ShopScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(100);
+    }).setOrigin(0.5).setDepth(100).setAlpha(0).setY(panelY - 22);
 
-    this.add.text(layout.centerX, panelY + 6, 'Тихий прилавок у входа в катакомбы', {
+    const subtitle = this.add.text(layout.centerX, panelY + 18, 'Оружие • броня • талисманы у входа в катакомбы', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '13px' : '15px',
-      color: '#8f887b',
+      fontSize: layout.compact ? '11px' : '13px',
+      color: '#9b9386',
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 60,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(100);
+    }).setOrigin(0.5).setDepth(100).setAlpha(0).setY(panelY + 26);
 
-    this.add.text(layout.centerX, panelY + 33, 'Оружие • броня • талисманы', {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#6f675c',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 60,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(100);
+    this.tweens.add({
+      targets: [title, subtitle],
+      alpha: 1,
+      y: '-=8',
+      duration: 280,
+      delay: 80,
+      ease: 'Cubic.easeOut',
+    });
   }
   private createResourcePanel(layout: ShopLayout) {
-    const panelY = layout.safeTop + (layout.compact ? 135 : 148);
+    const panelHeight = layout.compact ? 118 : 128;
+    const panelY = layout.safeTop + (layout.compact ? 140 : 154);
 
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
-      height: layout.compact ? 72 : 76,
-      radius: 24,
-      color: 0x09090b,
-      alpha: 0.95,
-      strokeColor: 0x3b3328,
-      strokeAlpha: 0.68,
+      height: panelHeight,
+      radius: 26,
+      color: 0x08080a,
+      alpha: 0.955,
+      strokeColor: 0x4f3d28,
+      strokeAlpha: 0.72,
       strokeWidth: 1,
       depth: 10,
+      glowColor: SHOP_COLORS.gold,
+    });
+
+    panel.shadow.setAlpha(0);
+    panel.panel.setAlpha(0);
+
+    this.tweens.add({
+      targets: [panel.shadow, panel.panel],
+      alpha: 1,
+      duration: 240,
+      delay: 90,
+      ease: 'Sine.easeOut',
     });
 
     const chipGap = 10;
     const chipWidth = Math.min((layout.contentWidth - 44 - chipGap) / 2, 250);
     const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
     const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
+    const chipY = panelY - (layout.compact ? 29 : 32);
 
     this.createResourceChip({
       x: leftX,
-      y: panelY,
+      y: chipY,
       width: chipWidth,
       icon: '◆',
       title: 'Золото',
@@ -345,15 +397,23 @@ export class ShopScene extends Phaser.Scene {
 
     this.createResourceChip({
       x: rightX,
-      y: panelY,
+      y: chipY,
       width: chipWidth,
       icon: '☾',
       title: 'Купоны',
       value: `${this.getRefreshCoupons()}`,
       color: SHOP_COLORS.blue,
     });
+
+    this.createCouponBanner({
+      x: layout.centerX,
+      y: panelY + (layout.compact ? 32 : 36),
+      width: layout.contentWidth - 44,
+      height: layout.compact ? 50 : 56,
+    });
   }
   private createScrollableContent(layout: ShopLayout) {
+    this.contentContainer?.destroy(true);
     this.contentContainer = this.add.container(0, 0).setDepth(5);
 
     const maskGraphics = this.add.graphics();
@@ -369,11 +429,9 @@ export class ShopScene extends Phaser.Scene {
     const mask = maskGraphics.createGeometryMask();
     this.contentContainer.setMask(mask);
 
-    let cursorY = layout.contentTop + 14;
+    let cursorY = layout.contentTop + 12;
 
-    // Правила лавки теперь находятся в самом верху списка,
-    // чтобы игрок сразу видел механику обновления ассортимента.
-    cursorY = this.createInfoSection(layout, cursorY + 14);
+    cursorY = this.createInfoSection(layout, cursorY + 10);
     cursorY = this.createItemSection(layout, cursorY + 14, 'weapons', 'Оружие', '⚔');
     cursorY = this.createItemSection(layout, cursorY + 14, 'armors', 'Броня', '▣');
     cursorY = this.createItemSection(layout, cursorY + 14, 'trinkets', 'Талисманы', '☥');
@@ -817,7 +875,7 @@ export class ShopScene extends Phaser.Scene {
   private createInfoSection(layout: ShopLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const panelHeight = 138;
+    const panelHeight = layout.compact ? 116 : 128;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -827,19 +885,20 @@ export class ShopScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: panelHeight,
       radius: 28,
-      color: 0x09090b,
-      alpha: 0.92,
-      strokeColor: 0x3b3328,
-      strokeAlpha: 0.52,
+      color: 0x0b0908,
+      alpha: 0.93,
+      strokeColor: 0x4d3a25,
+      strokeAlpha: 0.54,
       strokeWidth: 1,
       depth: 2,
+      glowColor: SHOP_COLORS.gold,
     });
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 34, 'Правила лавки', {
+      this.add.text(layout.centerX, topY + 30, 'Прилавок у катакомб', {
         fontFamily: UI.font.title,
-        fontSize: '22px',
+        fontSize: layout.compact ? '20px' : '22px',
         color: '#c9a86a',
         stroke: '#000000',
         strokeThickness: 3,
@@ -856,12 +915,12 @@ export class ShopScene extends Phaser.Scene {
       container,
       this.add.text(
         layout.centerX,
-        topY + 86,
-        'Купон полностью меняет ассортимент. Купленные товары остаются отмеченными до обновления лавки. Чем выше редкость — тем дороже предмет и тем реже он появляется у торговца.',
+        topY + 78,
+        'Торговец меняет ассортимент за купоны лавки. Купленные товары отмечаются до следующего обновления. Чем выше редкость — тем дороже и реже предмет.',
         {
           fontFamily: UI.font.body,
-          fontSize: layout.compact ? '12px' : '14px',
-          color: '#8f887b',
+          fontSize: layout.compact ? '12px' : '13px',
+          color: '#9b9386',
           align: 'center',
           wordWrap: {
             width: layout.contentWidth - 64,
@@ -876,41 +935,218 @@ export class ShopScene extends Phaser.Scene {
     return topY + panelHeight;
   }
   private createBottomActions(layout: ShopLayout) {
-    const refreshY = layout.height - 112;
-    const panelHeight = 68;
+    const dockY = layout.height - 112;
+    const panelHeight = 58;
 
     this.createRoundedPanel({
       x: layout.centerX,
-      y: refreshY,
+      y: dockY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 24,
+      radius: 22,
       color: 0x050506,
-      alpha: 0.86,
+      alpha: 0.82,
       strokeColor: 0x30271e,
-      strokeAlpha: 0.62,
+      strokeAlpha: 0.5,
       strokeWidth: 1,
       depth: 232,
     });
 
-    const canRefresh = this.getRefreshCoupons() > 0;
-
-    this.createUiButton({
-      x: layout.centerX,
-      y: refreshY,
-      width: Math.min(layout.contentWidth - 42, 540),
-      height: 50,
-      text: canRefresh
-        ? 'Обновить ассортимент за 1 купон'
-        : 'Нет купонов для обновления',
-      accentColor: canRefresh ? SHOP_COLORS.blue : SHOP_COLORS.bronze,
-      disabled: !canRefresh,
-      onClick: () => {
-        this.handleRefreshAssortment();
+    this.add.text(layout.centerX, dockY, 'Купоны лавки можно получить за задания. Обновление ассортимента — в верхней панели.', {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '11px' : '12px',
+      color: '#8f887b',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 58,
+        useAdvancedWrap: true,
       },
-      depth: 240,
+      maxLines: 2,
+      lineSpacing: 2,
+    }).setOrigin(0.5).setDepth(236);
+  }
+  private createCouponBanner(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) {
+    const coupons = this.getRefreshCoupons();
+    const hasCoupons = coupons > 0;
+    const radius = 20;
+    const left = config.x - config.width / 2;
+    const accent = hasCoupons ? SHOP_COLORS.green : SHOP_COLORS.bronze;
+    const titleColor = hasCoupons ? '#bfe4b9' : '#b8aa91';
+    const subtitle = hasCoupons
+      ? 'Обнови ассортимент редких товаров за 1 купон'
+      : 'Купонов нет. Их можно получить за задания.';
+
+    const shadow = this.add.graphics().setDepth(17);
+    shadow.fillStyle(0x000000, 0.34);
+    shadow.fillRoundedRect(left, config.y - config.height / 2 + 5, config.width, config.height, radius);
+
+    const glow = this.add.graphics().setDepth(18);
+    glow.fillStyle(accent, hasCoupons ? 0.12 : 0.045);
+    glow.fillRoundedRect(left + 5, config.y - config.height / 2 + 5, config.width - 10, config.height - 10, radius - 3);
+
+    const bg = this.add.graphics().setDepth(19);
+    const drawBg = (fill: number, strokeAlpha: number) => {
+      bg.clear();
+      bg.fillStyle(fill, hasCoupons ? 0.98 : 0.88);
+      bg.fillRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+      bg.lineStyle(2, accent, strokeAlpha);
+      bg.strokeRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+      bg.lineStyle(1, 0xffffff, hasCoupons ? 0.06 : 0.03);
+      bg.strokeRoundedRect(left + 4, config.y - config.height / 2 + 4, config.width - 8, config.height - 8, Math.max(1, radius - 4));
+    };
+
+    drawBg(hasCoupons ? 0x0f1711 : 0x10100e, hasCoupons ? 0.82 : 0.38);
+
+    const iconX = left + 34;
+    const iconHalo = this.add.circle(iconX, config.y, 20, accent, hasCoupons ? 0.2 : 0.08)
+      .setStrokeStyle(1, accent, hasCoupons ? 0.62 : 0.28)
+      .setDepth(20);
+
+    const icon = this.add.text(iconX, config.y, '券', {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: hasCoupons ? '#e5ffd0' : '#8f887b',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(21);
+
+    const title = this.add.text(left + 66, config.y - 11, `Купоны лавки: ${coupons}`, {
+      fontFamily: UI.font.title,
+      fontSize: '16px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: config.width - 150,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(21);
+
+    const description = this.add.text(left + 66, config.y + 12, subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: '11px',
+      color: hasCoupons ? '#aebda4' : '#756f66',
+      wordWrap: {
+        width: config.width - 150,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(21);
+
+    const action = this.add.text(left + config.width - 48, config.y, hasCoupons ? 'ОБМЕН' : 'ПУСТО', {
+      fontFamily: UI.font.title,
+      fontSize: '11px',
+      color: hasCoupons ? '#d8f7b8' : '#786f63',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: 82,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(21);
+
+    const zone = this.add.zone(config.x, config.y, config.width, config.height)
+      .setDepth(22)
+      .setInteractive({ useHandCursor: true });
+
+    const objects = [shadow, glow, bg, iconHalo, icon, title, description, action];
+    objects.forEach(object => object.setAlpha(0));
+
+    this.tweens.add({
+      targets: objects,
+      alpha: 1,
+      scale: { from: 0.985, to: 1 },
+      duration: 300,
+      delay: 190,
+      ease: 'Back.easeOut',
+    });
+
+    if (hasCoupons) {
+      this.tweens.add({
+        targets: [glow, iconHalo, title, action],
+        alpha: { from: 0.72, to: 1 },
+        scale: { from: 0.99, to: 1.035 },
+        duration: 1050,
+        yoyo: true,
+        repeat: -1,
+        delay: 520,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    zone.on('pointerover', () => {
+      drawBg(hasCoupons ? 0x152018 : 0x151310, hasCoupons ? 1 : 0.5);
+      title.setColor(hasCoupons ? '#e7ffd0' : '#d2b87a');
+      action.setColor(hasCoupons ? '#ffffff' : '#b8aa91');
+    });
+
+    zone.on('pointerout', () => {
+      drawBg(hasCoupons ? 0x0f1711 : 0x10100e, hasCoupons ? 0.82 : 0.38);
+      title.setColor(titleColor);
+      action.setColor(hasCoupons ? '#d8f7b8' : '#786f63');
+      bg.setScale(1);
+    });
+
+    zone.on('pointerdown', () => {
+      bg.setScale(0.992);
+      title.setY(config.y - 10);
+    });
+
+    zone.on('pointerup', () => {
+      bg.setScale(1);
+      title.setY(config.y - 11);
+
+      if (hasCoupons) {
+        this.showCouponRefreshModal();
+        return;
+      }
+
+      this.showCouponInfoModal();
+    });
+
+    zone.on('pointerupoutside', () => {
+      bg.setScale(1);
+      title.setY(config.y - 11);
     });
   }
+
+  private showCouponRefreshModal() {
+    this.showConfirmModal({
+      title: 'Купоны лавки',
+      description: [
+        `Купонов доступно: ${this.getRefreshCoupons()}`,
+        '',
+        'Один купон полностью обновит ассортимент торговца.',
+        'Купленные товары исчезнут из текущего списка, а лавка предложит новые оружие, броню и талисманы.',
+      ].join('\n'),
+      confirmText: 'Обновить за 1 купон',
+      disabled: this.getRefreshCoupons() <= 0,
+      onConfirm: () => {
+        this.handleRefreshAssortment();
+      },
+    });
+  }
+
+  private showCouponInfoModal() {
+    this.showConfirmModal({
+      title: 'Купоны лавки',
+      description: [
+        'Купонов сейчас нет.',
+        '',
+        'Купоны можно получить за задания. Позже их можно потратить на обновление ассортимента торговца.',
+      ].join('\n'),
+      confirmText: 'Понятно',
+      onConfirm: () => undefined,
+    });
+  }
+
   private createResourceChip(config: {
     x: number;
     y: number;
@@ -920,16 +1156,16 @@ export class ShopScene extends Phaser.Scene {
     value: string;
     color: number;
   }) {
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x: config.x,
       y: config.y,
       width: config.width,
-      height: 54,
-      radius: 18,
+      height: 46,
+      radius: 17,
       color: SHOP_COLORS.card,
       alpha: 0.96,
       strokeColor: config.color,
-      strokeAlpha: 0.28,
+      strokeAlpha: 0.34,
       strokeWidth: 1,
       depth: 12,
       glowColor: config.color,
@@ -937,11 +1173,11 @@ export class ShopScene extends Phaser.Scene {
 
     const left = config.x - config.width / 2;
 
-    this.add.circle(left + 27, config.y, 16, config.color, 0.14)
-      .setStrokeStyle(1, config.color, 0.46)
+    const iconGlow = this.add.circle(left + 27, config.y, 15, config.color, 0.16)
+      .setStrokeStyle(1, config.color, 0.5)
       .setDepth(15);
 
-    this.add.text(left + 27, config.y, config.icon, {
+    const icon = this.add.text(left + 27, config.y, config.icon, {
       fontFamily: UI.font.body,
       fontSize: '13px',
       color: '#d2b87a',
@@ -949,10 +1185,10 @@ export class ShopScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(16);
 
-    this.add.text(left + 50, config.y - 10, config.title, {
+    const title = this.add.text(left + 50, config.y - 9, config.title, {
       fontFamily: UI.font.body,
       fontSize: '10px',
-      color: '#8f887b',
+      color: '#9b9386',
       wordWrap: {
         width: config.width - 56,
         useAdvancedWrap: true,
@@ -960,9 +1196,9 @@ export class ShopScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(16);
 
-    this.add.text(left + 50, config.y + 10, config.value, {
+    const value = this.add.text(left + 50, config.y + 10, config.value, {
       fontFamily: UI.font.title,
-      fontSize: '15px',
+      fontSize: '16px',
       color: '#d1c7b4',
       stroke: '#000000',
       strokeThickness: 2,
@@ -972,6 +1208,18 @@ export class ShopScene extends Phaser.Scene {
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(16);
+
+    [panel.shadow, panel.panel, iconGlow, icon, title, value].forEach(object => {
+      object.setAlpha(0);
+    });
+
+    this.tweens.add({
+      targets: [panel.shadow, panel.panel, iconGlow, icon, title, value],
+      alpha: 1,
+      duration: 260,
+      delay: 130,
+      ease: 'Sine.easeOut',
+    });
   }
   private createPriceText(
     parent: Phaser.GameObjects.Container,
@@ -1261,7 +1509,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.isModalOpen = true;
 
-    const modal = this.add.container(0, 0).setDepth(1000);
+    const modal = this.add.container(0, 0).setDepth(1000).setAlpha(0).setScale(0.96);
 
     const overlay = this.add.rectangle(
       width / 2,
@@ -1361,6 +1609,14 @@ export class ShopScene extends Phaser.Scene {
       },
       depth: 1004,
     });
+
+    this.tweens.add({
+      targets: modal,
+      alpha: 1,
+      scale: 1,
+      duration: 180,
+      ease: 'Back.easeOut',
+    });
   }
   private showMessage(message: string) {
     const layout = this.layout ?? this.getLayout();
@@ -1368,7 +1624,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.isModalOpen = true;
 
-    const modal = this.add.container(0, 0).setDepth(1000);
+    const modal = this.add.container(0, 0).setDepth(1000).setAlpha(0).setScale(0.96);
 
     const overlay = this.add.rectangle(
       width / 2,
@@ -1444,6 +1700,14 @@ export class ShopScene extends Phaser.Scene {
         this.scene.restart();
       },
       depth: 1004,
+    });
+
+    this.tweens.add({
+      targets: modal,
+      alpha: 1,
+      scale: 1,
+      duration: 180,
+      ease: 'Back.easeOut',
     });
   }
   private buyOffer(sectionId: ShopSectionId, offerIndex: number, price: number) {

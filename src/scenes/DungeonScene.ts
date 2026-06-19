@@ -22,7 +22,6 @@ import {
   completeCurrentFloor,
   getAvailableNextRooms,
   getCurrentRoom,
-  getFloorDescription,
   getFloorRequirement,
   getFloorModifierName,
   getNextFloorAfterCurrent,
@@ -209,40 +208,35 @@ export class DungeonScene extends Phaser.Scene {
     const compact = height < 1120;
     const veryCompact = height < 940;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 34);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 14, 30);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.035), 26, 44);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 12, 26);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.032), 24, 40);
     const contentWidth = Math.min(width - safeX * 2, 640);
 
-    const primaryButtonHeight = veryCompact ? 58 : 68;
-    const secondaryButtonHeight = veryCompact ? 50 : 56;
+    const primaryButtonHeight = veryCompact ? 56 : 66;
+    const secondaryButtonHeight = veryCompact ? 48 : 56;
 
     const exitButtonY = height - safeBottom - secondaryButtonHeight / 2;
-    const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - 18;
+    const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - (veryCompact ? 14 : 18);
 
-    const headerHeight = veryCompact ? 76 : compact ? 86 : 96;
-    const floorPanelHeight = veryCompact ? 60 : compact ? 70 : 78;
-
-    // Карта разломов стала главным визуальным блоком, но на 360x640
-    // оставлен запас под карточку комнаты и кнопки.
-    const mapHeight = veryCompact ? 132 : compact ? 168 : 198;
+    const headerHeight = veryCompact ? 76 : compact ? 88 : 98;
+    const mapHeight = veryCompact ? 124 : compact ? 156 : 184;
 
     const headerY = safeTop + headerHeight / 2;
-    const floorInfoY = headerY + headerHeight / 2 + 10 + floorPanelHeight / 2;
-    const routeY = floorInfoY + floorPanelHeight / 2 + 12 + mapHeight / 2;
-    const roomCardTop = routeY + mapHeight / 2 + 12;
+    const floorInfoY = headerY;
+    const routeY = headerY + headerHeight / 2 + (veryCompact ? 8 : 10) + mapHeight / 2;
+    const roomCardTop = routeY + mapHeight / 2 + (veryCompact ? 10 : 12);
 
-    const maxRoomCardHeight = veryCompact ? 430 : compact ? 510 : 600;
-    const availableRoomCardHeight = actionDockTop - roomCardTop - 16;
-    const minRoomCardHeight = veryCompact ? 250 : compact ? 360 : 430;
+    const maxRoomCardHeight = veryCompact ? 382 : compact ? 500 : 590;
+    const availableRoomCardHeight = actionDockTop - roomCardTop - (veryCompact ? 10 : 14);
     const roomCardHeight = Phaser.Math.Clamp(
       availableRoomCardHeight,
-      minRoomCardHeight,
+      veryCompact ? 238 : compact ? 330 : 410,
       maxRoomCardHeight
     );
 
     const roomCardBottom = roomCardTop + roomCardHeight;
-    const actionGap = veryCompact ? 8 : 12;
-    const actionBottomPadding = veryCompact ? 16 : 22;
+    const actionGap = veryCompact ? 7 : 10;
+    const actionBottomPadding = veryCompact ? 14 : 20;
 
     const prepareButtonY = roomCardBottom - actionBottomPadding - secondaryButtonHeight / 2;
     const mainButtonY = prepareButtonY - secondaryButtonHeight / 2 - actionGap - primaryButtonHeight / 2;
@@ -279,101 +273,151 @@ export class DungeonScene extends Phaser.Scene {
     const modifierName = getFloorModifierName(gameState.floorRun.modifier);
     const theme = getCryptDepthTheme(floor);
     const stats = getPlayerStats(player);
+    const rooms = gameState.floorRun.rooms;
+    const completedRooms = rooms.filter((room: any) => room.completed).length;
+    const totalRooms = Math.max(1, rooms.length);
+    const isBossHeader = isTierBossFloor(floor) || getCurrentRoom()?.type === 'boss' || getCurrentRoom()?.type === 'tier_boss';
 
-    const headerHeight = layout.veryCompact ? 76 : layout.compact ? 86 : 96;
+    const headerHeight = layout.veryCompact ? 76 : layout.compact ? 88 : 98;
     const headerTop = layout.headerY - headerHeight / 2;
+    const accent = isBossHeader ? DUNGEON_DARK.blood : theme.stroke;
+
     const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.headerY,
       width: layout.contentWidth,
       height: headerHeight,
-      radius: 30,
-      color: 0x08090d,
-      alpha: 0.96,
-      strokeColor: UI.colors.goldDark,
-      strokeAlpha: 0.62,
+      radius: 28,
+      color: isBossHeader ? 0x150708 : 0x08090d,
+      alpha: 0.965,
+      strokeColor: accent,
+      strokeAlpha: isBossHeader ? 0.78 : 0.62,
       strokeWidth: 2,
       depth: 2,
     });
 
     panel.shadow.setAlpha(0);
     panel.panel.setAlpha(0);
+    panel.shadow.setY(panel.shadow.y - 8);
+    panel.panel.setY(panel.panel.y - 8);
 
     this.tweens.add({
       targets: [panel.shadow, panel.panel],
       alpha: 1,
-      duration: 260,
+      y: '+=8',
+      duration: 300,
+      ease: 'Cubic.easeOut',
+    });
+
+    const glow = this.add.circle(layout.centerX, layout.headerY + 3, layout.contentWidth * 0.42, accent, isBossHeader ? 0.09 : 0.055)
+      .setDepth(3)
+      .setAlpha(0);
+
+    const rune = this.add.text(layout.centerX, layout.headerY + 2, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '58px' : '72px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(4).setAlpha(0.035);
+
+    this.tweens.add({
+      targets: glow,
+      alpha: isBossHeader ? 0.09 : 0.055,
+      duration: 360,
       ease: 'Sine.easeOut',
     });
 
-    this.add.circle(layout.centerX, layout.headerY - 10, layout.contentWidth * 0.38, theme.glow, 0.045)
-      .setDepth(3);
+    const tierPillWidth = Math.min((layout.contentWidth - 66) / 2, 236);
+    const pillGap = 10;
+    const tierX = layout.centerX - tierPillWidth / 2 - pillGap / 2;
+    const floorX = layout.centerX + tierPillWidth / 2 + pillGap / 2;
+    const pillY = headerTop + (layout.veryCompact ? 23 : 27);
+    const pillHeight = layout.veryCompact ? 34 : 38;
 
-    this.add.text(layout.centerX, headerTop + 20, `Ярус ${tier} • Этаж ${floor}`, {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '22px' : '26px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 5,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 46,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(7);
+    this.createHeaderPlate({
+      x: tierX,
+      y: pillY,
+      width: tierPillWidth,
+      height: pillHeight,
+      label: 'Ярус',
+      value: `${tier}`,
+      accentColor: accent,
+      delay: 60,
+    });
 
-    this.add.text(layout.centerX, headerTop + (layout.compact ? 45 : 50), `${theme.name} • ${modifierName}`, {
+    this.createHeaderPlate({
+      x: floorX,
+      y: pillY,
+      width: tierPillWidth,
+      height: pillHeight,
+      label: 'Этаж',
+      value: `${floor}`,
+      accentColor: isBossHeader ? DUNGEON_DARK.blood : DUNGEON_DARK.gold,
+      delay: 105,
+    });
+
+    const zoneText = this.add.text(layout.centerX, headerTop + (layout.veryCompact ? 50 : 58), `${theme.name} • ${modifierName}`, {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '12px' : '13px',
-      color: theme.mutedText,
+      fontSize: layout.veryCompact ? '10px' : layout.compact ? '11px' : '12px',
+      color: isBossHeader ? '#d49b96' : theme.mutedText,
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 58,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(7);
+    }).setOrigin(0.5).setDepth(7).setAlpha(0);
 
-    const pillY = headerTop + headerHeight - 18;
-    const pillWidth = Math.min((layout.contentWidth - 54) / 3, 174);
-    const startX = layout.centerX - pillWidth - 8;
+    const metaText = isAwaitingRoomChoice()
+      ? `Доступно проходов: ${getAvailableNextRooms().length}`
+      : `${completedRooms}/${totalRooms} комнат пройдено`;
 
+    const meta = this.add.text(layout.centerX, headerTop + headerHeight - (layout.veryCompact ? 10 : 12), metaText, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '9px' : '10px',
+      color: '#8f877a',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 60,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(7).setAlpha(0);
+
+    this.tweens.add({
+      targets: [zoneText, meta],
+      alpha: 1,
+      duration: 240,
+      delay: 160,
+      ease: 'Sine.easeOut',
+    });
+
+    const chipY = headerTop + headerHeight - (layout.veryCompact ? 27 : 31);
+    const chipWidth = Math.min((layout.contentWidth - 62) / 3, 174);
+    const chipStartX = layout.centerX - chipWidth - 8;
     const hpColor = player.hp <= Math.max(1, Math.floor(stats.maxHp * 0.3))
       ? DUNGEON_DARK.blood
       : DUNGEON_DARK.green;
 
-    const pills = [
-      {
-        x: startX,
-        label: `HP ${player.hp}/${stats.maxHp}`,
-        color: hpColor,
-      },
-      {
-        x: layout.centerX,
-        label: `ЭН ${player.energy}/${stats.maxEnergy}`,
-        color: DUNGEON_DARK.cold,
-      },
-      {
-        x: layout.centerX + pillWidth + 8,
-        label: `ЗЕЛЬЯ ${player.potions}/${this.maxPotionCount}`,
-        color: DUNGEON_DARK.gold,
-      },
+    const chips = [
+      { x: chipStartX, label: `HP ${player.hp}/${stats.maxHp}`, color: hpColor, icon: '♥' },
+      { x: layout.centerX, label: `ЭН ${player.energy}/${stats.maxEnergy}`, color: DUNGEON_DARK.cold, icon: '✦' },
+      { x: layout.centerX + chipWidth + 8, label: `ЗЕЛЬЯ ${player.potions}/${this.maxPotionCount}`, color: DUNGEON_DARK.gold, icon: '✚' },
     ];
 
-    pills.forEach((pill, index) => {
-      const bg = this.add.rectangle(pill.x, pillY, pillWidth, 24, 0x050507, 0.72)
-        .setStrokeStyle(1, pill.color, 0.46)
+    chips.forEach((chip, index) => {
+      const bg = this.add.rectangle(chip.x, chipY, chipWidth, layout.veryCompact ? 18 : 22, 0x050507, 0.72)
+        .setStrokeStyle(1, chip.color, 0.46)
         .setDepth(6)
         .setAlpha(0);
 
-      const text = this.add.text(pill.x, pillY, pill.label, {
+      const text = this.add.text(chip.x, chipY, `${chip.icon} ${chip.label}`, {
         fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '10px' : '11px',
+        fontSize: layout.veryCompact ? '8px' : '10px',
         color: '#d8d2c4',
         align: 'center',
         wordWrap: {
-          width: pillWidth - 10,
+          width: chipWidth - 8,
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(7).setAlpha(0);
@@ -381,12 +425,86 @@ export class DungeonScene extends Phaser.Scene {
       this.tweens.add({
         targets: [bg, text],
         alpha: 1,
-        duration: 240,
-        delay: 80 + index * 55,
+        duration: 220,
+        delay: 180 + index * 45,
         ease: 'Sine.easeOut',
       });
     });
+
+    if (isBossHeader) {
+      this.tweens.add({
+        targets: [glow, rune],
+        alpha: { from: 0.045, to: 0.12 },
+        duration: 1150,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
+
+  private createHeaderPlate(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label: string;
+    value: string;
+    accentColor: number;
+    delay: number;
+  }) {
+    const radius = config.height / 2;
+    const bg = this.add.graphics().setDepth(6).setAlpha(0);
+    bg.fillStyle(0x050507, 0.86);
+    bg.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+    bg.lineStyle(1, config.accentColor, 0.62);
+    bg.strokeRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+
+    const label = this.add.text(config.x - config.width / 2 + 18, config.y, config.label, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#8f877a',
+      align: 'left',
+      maxLines: 1,
+      wordWrap: {
+        width: config.width * 0.42,
+      },
+    }).setOrigin(0, 0.5).setDepth(7).setAlpha(0);
+
+    const value = this.add.text(config.x + config.width / 2 - 18, config.y, config.value, {
+      fontFamily: UI.font.title,
+      fontSize: '20px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'right',
+      maxLines: 1,
+      wordWrap: {
+        width: config.width * 0.48,
+      },
+    }).setOrigin(1, 0.5).setDepth(7).setAlpha(0);
+
+    this.tweens.add({
+      targets: [bg, label, value],
+      alpha: 1,
+      duration: 220,
+      delay: config.delay,
+      ease: 'Sine.easeOut',
+    });
+  }
+
 
   private createDungeonBackdrop() {
     const layout = this.getLayout();
@@ -437,98 +555,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private createFloorProgress() {
-    const layout = this.getLayout();
-    const floor = gameState.floorRun.currentFloor;
-    const theme = getCryptDepthTheme(floor);
-    const rooms = gameState.floorRun.rooms;
-    const completedRooms = rooms.filter(room => room.completed).length;
-    const totalRooms = Math.max(1, rooms.length);
-    const availableChoices = getAvailableNextRooms().length;
-    const currentRoom = getCurrentRoom();
-    const currentLayer = currentRoom?.branchLayer ?? 0;
-    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
-    const panelHeight = layout.veryCompact ? 60 : layout.compact ? 70 : 78;
-
-    const panel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: layout.floorInfoY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: 26,
-      color: 0x0b0d12,
-      alpha: 0.9,
-      strokeColor: theme.stroke,
-      strokeAlpha: 0.42,
-      strokeWidth: 2,
-      depth: 2,
-    });
-
-    panel.panel.setAlpha(0);
-    panel.shadow.setAlpha(0);
-
-    this.tweens.add({
-      targets: [panel.panel, panel.shadow],
-      alpha: 1,
-      duration: 250,
-      ease: 'Sine.easeOut',
-    });
-
-    const descriptionText = isAwaitingRoomChoice()
-      ? 'Выбери один из открывшихся проходов. Остальные ветви останутся в тени.'
-      : getFloorDescription(floor);
-
-    this.add.text(layout.centerX, layout.floorInfoY - (layout.veryCompact ? 15 : 18), descriptionText, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : layout.compact ? '11px' : '12px',
-      color: theme.mutedText,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 56,
-        useAdvancedWrap: true,
-      },
-      lineSpacing: 2,
-      maxLines: 2,
-    }).setOrigin(0.5).setDepth(7);
-
-    const barWidth = layout.contentWidth - 88;
-    const barY = layout.floorInfoY + (layout.veryCompact ? 15 : 18);
-    const progress = Phaser.Math.Clamp(completedRooms / totalRooms, 0, 1);
-
-    this.add.rectangle(layout.centerX, barY, barWidth, 8, 0x050507, 0.72)
-      .setStrokeStyle(1, 0x33291d, 0.7)
-      .setDepth(6);
-
-    const fillWidth = Math.max(4, barWidth * progress);
-    const fill = this.add.rectangle(
-      layout.centerX - barWidth / 2 + fillWidth / 2,
-      barY,
-      fillWidth,
-      8,
-      UI.colors.goldDark,
-      0.82
-    ).setDepth(7).setAlpha(0);
-
-    this.tweens.add({
-      targets: fill,
-      alpha: 1,
-      duration: 280,
-      ease: 'Sine.easeOut',
-    });
-
-    const metaText = isAwaitingRoomChoice()
-      ? `Доступно путей: ${availableChoices}`
-      : `Глубина ветви: ${currentLayer + 1}/${maxLayer + 1}`;
-
-    this.add.text(layout.centerX, barY + 18, `${completedRooms}/${totalRooms} комнат • ${metaText}`, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '11px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 70,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(7);
+    // Большой информационный блок под заголовком убран.
+    // Полезная информация о прогрессе теперь встроена в компактный верхний header.
   }
 
   private getRewardLineColor(line: string) {
@@ -928,7 +956,7 @@ export class DungeonScene extends Phaser.Scene {
 
     this.createBranchMapMist(layout.centerX, layout.routeY, width, mapHeight, theme.fog);
 
-    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
+    const maxLayer = Math.max(...rooms.map((room: any) => room.branchLayer ?? 0), 0);
     const layerCount = maxLayer + 1;
     const nodeLeft = left + (layout.veryCompact ? 34 : 42);
     const nodeRight = right - (layout.veryCompact ? 34 : 42);
@@ -943,22 +971,22 @@ export class DungeonScene extends Phaser.Scene {
 
     const layerRooms = new Map<number, typeof rooms>();
 
-    rooms.forEach(room => {
+    rooms.forEach((room: any) => {
       const layer = room.branchLayer ?? 0;
       const list = layerRooms.get(layer) ?? [];
 
       list.push(room);
-      list.sort((a, b) => (a.branchColumn ?? 0) - (b.branchColumn ?? 0));
+      list.sort((a: any, b: any) => (a.branchColumn ?? 0) - (b.branchColumn ?? 0));
       layerRooms.set(layer, list);
     });
 
-    rooms.forEach(room => {
+    rooms.forEach((room: any) => {
       const fromX = layerX(room.branchLayer ?? 0);
       const fromY = this.getBranchNodeY(top, mapHeight, room, layerRooms);
       const isCompleted = Boolean(room.completed);
 
-      (room.nextRoomIds ?? []).forEach(nextRoomId => {
-        const nextRoom = rooms.find(candidate => candidate.id === nextRoomId);
+      (room.nextRoomIds ?? []).forEach((nextRoomId: string) => {
+        const nextRoom = rooms.find((candidate: any) => candidate.id === nextRoomId);
 
         if (!nextRoom) {
           return;
@@ -996,7 +1024,7 @@ export class DungeonScene extends Phaser.Scene {
       });
     });
 
-    rooms.forEach((room, index) => {
+    rooms.forEach((room: any, index: number) => {
       const x = layerX(room.branchLayer ?? 0);
       const y = this.getBranchNodeY(top, mapHeight, room, layerRooms);
       const roomType = String(room.type);
@@ -2425,7 +2453,7 @@ export class DungeonScene extends Phaser.Scene {
       description
     );
 
-    event.choices.forEach((choice, index) => {
+    event.choices.forEach((choice: DungeonEventChoice, index: number) => {
       const y = firstButtonY + index * (buttonHeight + buttonGap);
 
       this.createEventChoiceButton({
@@ -3462,72 +3490,83 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
   private createActionDock(layout = this.getLayout()) {
     const dockHeight = layout.height - layout.actionDockTop;
+    const panelWidth = Math.min(layout.contentWidth + 10, layout.width - 18);
+    const panelLeft = layout.centerX - panelWidth / 2;
+    const panelTop = layout.actionDockTop + 6;
+    const panelHeight = dockHeight - 10;
 
-    const bg = this.add.graphics().setDepth(18);
-    bg.fillStyle(0x020203, 0.88);
-    bg.fillRect(
-      0,
-      layout.actionDockTop,
+    const veil = this.add.rectangle(
+      layout.centerX,
+      layout.actionDockTop + dockHeight / 2,
       layout.width,
-      dockHeight
-    );
+      dockHeight,
+      0x020203,
+      0.82
+    ).setDepth(17).setAlpha(0);
 
-    bg.fillStyle(0x0b0705, 0.72);
-    bg.fillRoundedRect(
-      layout.centerX - layout.contentWidth / 2,
-      layout.actionDockTop + 8,
-      layout.contentWidth,
-      dockHeight - 12,
-      28
-    );
+    const bg = this.add.graphics().setDepth(18).setAlpha(0);
+    bg.fillStyle(0x000000, 0.42);
+    bg.fillRoundedRect(panelLeft, panelTop + 8, panelWidth, panelHeight, 30);
+    bg.fillStyle(0x080706, 0.94);
+    bg.fillRoundedRect(panelLeft, panelTop, panelWidth, panelHeight, 30);
+    bg.lineStyle(2, UI.colors.goldDark, 0.46);
+    bg.strokeRoundedRect(panelLeft, panelTop, panelWidth, panelHeight, 30);
+    bg.lineStyle(1, 0xffffff, 0.035);
+    bg.strokeRoundedRect(panelLeft + 5, panelTop + 5, panelWidth - 10, panelHeight - 10, 24);
 
-    bg.lineStyle(1, UI.colors.goldDark, 0.34);
-    bg.strokeRoundedRect(
-      layout.centerX - layout.contentWidth / 2,
-      layout.actionDockTop + 8,
-      layout.contentWidth,
-      dockHeight - 12,
-      28
-    );
-
-    this.add.rectangle(
+    const topGlow = this.add.rectangle(
       layout.centerX,
       layout.actionDockTop + 2,
-      layout.contentWidth - 30,
-      1,
+      layout.contentWidth - 32,
+      2,
       UI.colors.goldDark,
-      0.34
+      0.0
     ).setDepth(19);
 
-    this.add.rectangle(
-      layout.centerX,
-      layout.actionDockTop + 6,
-      layout.contentWidth * 0.52,
-      1,
-      0x5e4631,
-      0.18
-    ).setDepth(19);
+    const title = this.add.text(layout.centerX, panelTop + 15, 'Командный алтарь', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '9px' : '10px',
+      color: '#8f806d',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 60,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(20).setAlpha(0);
 
-    for (let i = 0; i < 8; i += 1) {
+    this.tweens.add({
+      targets: [veil, bg, topGlow, title],
+      alpha: { from: 0, to: 1 },
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+
+    this.tweens.add({
+      targets: topGlow,
+      alpha: { from: 0.18, to: 0.46 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    for (let i = 0; i < 7; i += 1) {
       const ash = this.add.circle(
         Phaser.Math.Between(24, Math.max(26, layout.width - 24)),
-        Phaser.Math.Between(Math.ceil(layout.actionDockTop + 12), Math.floor(layout.height - 18)),
+        Phaser.Math.Between(Math.ceil(layout.actionDockTop + 18), Math.floor(layout.height - 22)),
         Phaser.Math.Between(1, 2),
-        DUNGEON_DARK.ash,
-        0.035
+        i % 3 === 0 ? UI.colors.goldDark : DUNGEON_DARK.ash,
+        0.025
       ).setDepth(19);
 
       this.tweens.add({
         targets: ash,
-        alpha: {
-          from: 0.015,
-          to: 0.07,
-        },
+        alpha: { from: 0.01, to: 0.06 },
         y: ash.y - Phaser.Math.Between(5, 16),
         duration: Phaser.Math.Between(1500, 2600),
         yoyo: true,
         repeat: -1,
-        delay: i * 90,
+        delay: i * 95,
         ease: 'Sine.easeInOut',
       });
     }
@@ -3575,7 +3614,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       icon: '▣',
       title: 'Подготовка',
       subtitle: 'Открыть сумку и проверить снаряжение перед боем',
-      accentColor: UI.colors.gold,
+      accentColor: DUNGEON_DARK.cold,
       onClick: () => {
         this.scene.start('InventoryScene', {
           returnScene: 'DungeonScene',
@@ -3643,7 +3682,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       icon: '▣',
       title: 'Подготовка',
       subtitle: 'Проверить экипировку, зелья и характеристики перед боссом',
-      accentColor: UI.colors.gold,
+      accentColor: DUNGEON_DARK.cold,
       onClick: () => {
         this.scene.start('InventoryScene', {
           returnScene: 'DungeonScene',
@@ -3684,20 +3723,52 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
   }) {
     const danger = config.danger ?? false;
     const large = config.large ?? false;
+    const isExit = config.title.toLowerCase().includes('выйти');
+    const isPrepare = config.title.toLowerCase().includes('подготов');
+    const isCampfire = config.title.toLowerCase().includes('кост') || config.icon === '♨';
 
-    const radius = large ? 26 : 22;
-    const bgColor = danger ? 0x1b0808 : 0x09090d;
-    const innerColor = danger ? 0x2a1010 : 0x16100c;
-    const hoverColor = danger ? 0x301111 : 0x20140e;
-    const textColor = danger ? '#ff8d7f' : UI.colors.goldText;
-    const hoverTextColor = danger ? '#ffd0c8' : '#f1e2b7';
-    const subtitleColor = danger ? '#d6a49b' : '#aaa08d';
+    const radius = large ? 26 : 21;
+    const bgColor = danger
+      ? 0x1b0808
+      : isPrepare
+        ? 0x071018
+        : isCampfire
+          ? 0x1b1007
+          : isExit
+            ? 0x120c0a
+            : 0x09090d;
+    const innerColor = danger
+      ? 0x2a1010
+      : isPrepare
+        ? 0x0d1b27
+        : isCampfire
+          ? 0x2b1709
+          : 0x16100c;
+    const hoverColor = danger
+      ? 0x321111
+      : isPrepare
+        ? 0x102336
+        : isCampfire
+          ? 0x3a210e
+          : 0x24170f;
+    const titleColor = danger
+      ? '#ff9a8f'
+      : isPrepare
+        ? '#a6c8ea'
+        : isCampfire
+          ? '#ffd28a'
+          : '#f0d58a';
+    const subtitleColor = danger
+      ? '#d6a49b'
+      : isPrepare
+        ? '#9fb2c3'
+        : '#aaa08d';
 
-    const iconRadius = large ? 28 : 23;
-    const iconX = config.x - config.width / 2 + (large ? 50 : 42);
-    const textX = config.x - config.width / 2 + (large ? 94 : 80);
-    const textWidth = config.width - (large ? 122 : 104);
-    const titleOffset = large ? -15 : -12;
+    const iconRadius = large ? 30 : 24;
+    const iconX = config.x - config.width / 2 + (large ? 52 : 43);
+    const textX = config.x - config.width / 2 + (large ? 98 : 82);
+    const textWidth = config.width - (large ? 126 : 106);
+    const titleOffset = large ? -16 : -12;
     const subtitleOffset = large ? 18 : 15;
 
     const shadow = this.add.graphics().setDepth(20).setAlpha(0);
@@ -3707,34 +3778,34 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     const topLine = this.add.rectangle(
       config.x + 18,
       config.y - config.height / 2 + 10,
-      config.width - 88,
+      config.width - 92,
       1,
       config.accentColor,
-      danger ? 0.3 : 0.2
+      danger || large ? 0.36 : 0.2
     ).setDepth(23).setAlpha(0);
 
     const sideGlow = this.add.rectangle(
       config.x - config.width / 2 + 7,
       config.y,
-      3,
+      4,
       config.height - 20,
       config.accentColor,
-      danger ? 0.42 : 0.3
+      danger || large ? 0.48 : 0.3
     ).setDepth(23).setAlpha(0);
 
-    const iconBack = this.add.circle(iconX, config.y, iconRadius, config.accentColor, danger ? 0.16 : 0.12)
-      .setStrokeStyle(2, config.accentColor, danger ? 0.72 : 0.58)
+    const iconBack = this.add.circle(iconX, config.y, iconRadius, config.accentColor, danger ? 0.18 : large ? 0.16 : 0.12)
+      .setStrokeStyle(2, config.accentColor, danger || large ? 0.82 : 0.58)
       .setDepth(24)
       .setAlpha(0);
 
-    const iconCore = this.add.circle(iconX, config.y, Math.max(12, iconRadius - 8), 0x050506, 0.8)
+    const iconCore = this.add.circle(iconX, config.y, Math.max(12, iconRadius - 9), 0x050506, 0.82)
       .setDepth(25)
       .setAlpha(0);
 
     const iconText = this.add.text(iconX, config.y, config.icon, {
       fontFamily: UI.font.body,
-      fontSize: large ? '23px' : '19px',
-      color: textColor,
+      fontSize: large ? '24px' : '19px',
+      color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(26).setAlpha(0);
@@ -3742,7 +3813,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     const titleText = this.add.text(textX, config.y + titleOffset, config.title, {
       fontFamily: UI.font.title,
       fontSize: large ? '21px' : '17px',
-      color: textColor,
+      color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       wordWrap: {
@@ -3768,7 +3839,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       fillColor: number,
       fillAlpha: number,
       strokeAlpha: number,
-      titleColor: string,
+      labelColor: string,
       offsetY = 0
     ) => {
       shadow.clear();
@@ -3798,18 +3869,18 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
         config.height,
         radius
       );
+      bg.lineStyle(1, 0xffffff, 0.035);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2 + 4,
+        config.y - config.height / 2 + 4 + offsetY,
+        config.width - 8,
+        config.height - 8,
+        Math.max(10, radius - 5)
+      );
 
       inner.clear();
-      inner.fillStyle(innerColor, danger ? 0.36 : 0.28);
+      inner.fillStyle(innerColor, danger ? 0.42 : large ? 0.34 : 0.27);
       inner.fillRoundedRect(
-        config.x - config.width / 2 + 8,
-        config.y - config.height / 2 + 8 + offsetY,
-        config.width - 16,
-        config.height - 16,
-        Math.max(12, radius - 8)
-      );
-      inner.lineStyle(1, 0x000000, 0.35);
-      inner.strokeRoundedRect(
         config.x - config.width / 2 + 8,
         config.y - config.height / 2 + 8 + offsetY,
         config.width - 16,
@@ -3825,161 +3896,100 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       topLine.setY(config.y - config.height / 2 + 10 + offsetY);
       sideGlow.setY(config.y + offsetY);
 
-      titleText.setColor(titleColor);
-      iconText.setColor(titleColor);
+      titleText.setColor(labelColor);
+      iconText.setColor(labelColor);
     };
 
-    redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
+    redrawButton(bgColor, 0.965, danger ? 0.86 : large ? 0.78 : 0.58, titleColor);
 
-    const animatedTargets = [
-      shadow,
-      bg,
-      inner,
-      topLine,
-      sideGlow,
-      iconBack,
-      iconCore,
-      iconText,
-      titleText,
-      subtitleText,
-    ];
-
-    animatedTargets.forEach(target => {
-      target.setY(target.y + 8);
-    });
+    const objects = [shadow, bg, inner, topLine, sideGlow, iconBack, iconCore, iconText, titleText, subtitleText];
 
     this.tweens.add({
-      targets: animatedTargets,
+      targets: objects,
       alpha: 1,
-      y: '-=8',
       duration: 260,
-      ease: 'Cubic.easeOut',
+      delay: large ? 130 : isExit ? 220 : 170,
+      ease: 'Sine.easeOut',
     });
 
-    this.tweens.add({
-      targets: iconBack,
-      alpha: {
-        from: 0.55,
-        to: danger ? 0.92 : 0.76,
-      },
-      scale: {
-        from: 1,
-        to: 1.07,
-      },
-      duration: 1150,
-      yoyo: true,
-      repeat: -1,
-      delay: 380,
-      ease: 'Sine.easeInOut',
-    });
+    if (large || danger || isCampfire) {
+      this.tweens.add({
+        targets: [iconBack, sideGlow],
+        alpha: { from: large ? 0.55 : 0.34, to: large ? 0.95 : 0.62 },
+        duration: danger ? 1250 : 1450,
+        yoyo: true,
+        repeat: -1,
+        delay: 480,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    const zone = this.add.zone(config.x, config.y, config.width, config.height)
+      .setDepth(30)
+      .setInteractive({ useHandCursor: true });
 
     let isPressed = false;
-    let isLocked = false;
 
-    bg.setInteractive(
-      new Phaser.Geom.Rectangle(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height
-      ),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    bg.on('pointerover', () => {
-      if (isPressed || isLocked) return;
-
-      redrawButton(hoverColor, 1, danger ? 0.95 : 0.82, hoverTextColor);
-      sideGlow.setAlpha(danger ? 0.8 : 0.58);
-      topLine.setAlpha(danger ? 0.52 : 0.34);
+    zone.on('pointerover', () => {
+      if (isPressed) return;
+      redrawButton(hoverColor, 1, 0.98, '#ffffff');
+      subtitleText.setColor(danger ? '#ffd0c8' : isPrepare ? '#c8e0f8' : '#d8c7a3');
     });
 
-    bg.on('pointerout', () => {
+    zone.on('pointerout', () => {
       isPressed = false;
-
-      if (isLocked) return;
-
-      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
-      sideGlow.setAlpha(danger ? 0.42 : 0.3);
-      topLine.setAlpha(danger ? 0.3 : 0.2);
+      redrawButton(bgColor, 0.965, danger ? 0.86 : large ? 0.78 : 0.58, titleColor);
+      subtitleText.setColor(subtitleColor);
     });
 
-    bg.on('pointerdown', () => {
-      if (isLocked) return;
-
+    zone.on('pointerdown', () => {
       isPressed = true;
-      redrawButton(hoverColor, 0.94, danger ? 1 : 0.88, hoverTextColor, 2);
+      redrawButton(hoverColor, 0.92, 1, '#ffffff', 1);
     });
 
-    bg.on('pointerup', () => {
-      if (!isPressed || isLocked) return;
-
+    zone.on('pointerup', () => {
+      if (!isPressed) return;
       isPressed = false;
-      isLocked = true;
-
-      redrawButton(hoverColor, 1, danger ? 1 : 0.94, hoverTextColor);
+      redrawButton(hoverColor, 1, 1, '#ffffff');
 
       this.tweens.add({
-        targets: [bg, inner, iconBack, iconCore, iconText, titleText, subtitleText],
+        targets: [iconBack, iconCore, iconText, titleText, subtitleText],
         scaleX: 0.985,
         scaleY: 0.985,
-        duration: 45,
+        duration: 55,
         yoyo: true,
         ease: 'Sine.easeOut',
       });
 
-      this.time.delayedCall(70, () => {
-        redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
+      this.time.delayedCall(45, () => {
         config.onClick();
       });
     });
 
-    bg.on('pointerupoutside', () => {
+    zone.on('pointerupoutside', () => {
       isPressed = false;
-
-      if (isLocked) return;
-
-      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
+      redrawButton(bgColor, 0.965, danger ? 0.86 : large ? 0.78 : 0.58, titleColor);
+      subtitleText.setColor(subtitleColor);
     });
-
-    bg.on('pointercancel', () => {
-      isPressed = false;
-
-      if (isLocked) return;
-
-      redrawButton(bgColor, 0.96, danger ? 0.82 : large ? 0.66 : 0.48, textColor);
-    });
-
-    return {
-      shadow,
-      bg,
-      iconBack,
-      iconCore,
-      iconText,
-      titleText,
-      subtitleText,
-    };
   }
 
-private exitToTownKeepingCampfireCheckpoint() {
-  const checkpoint = getActiveCampfireBattleCheckpoint();
+  private exitToTownKeepingCampfireCheckpoint() {
+    const checkpoint = getActiveCampfireBattleCheckpoint();
 
-  resetFloorRun();
+    resetFloorRun();
 
-  if (!checkpoint) {
-    this.resetCampfireState(true);
-  } else {
-    // Активный костёр остаётся жить после выхода в город.
-    // Не сбрасываем dungeonCampfireState, чтобы при возврате не предлагался выбор огнива заново.
-    const state = this.getCampfireState();
-    state.selectionDone = true;
+    if (!checkpoint) {
+      this.resetCampfireState(true);
+    } else {
+      const state = this.getCampfireState();
+      state.selectionDone = true;
+    }
+
+    clearResumePoint('exit-to-town');
+    void saveGameAsync();
+
+    this.scene.start('CampScene');
   }
-
-  clearResumePoint('exit-to-town');
-  void saveGameAsync();
-
-  this.scene.start('CampScene');
-}
 
   private createRoundedPanel(config: {
     x: number;
@@ -4003,10 +4013,10 @@ private exitToTownKeepingCampfireCheckpoint() {
     const depth = config.depth ?? 1;
 
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillStyle(0x000000, 0.34);
     shadow.fillRoundedRect(
       config.x - config.width / 2,
-      config.y - config.height / 2 + 6,
+      config.y - config.height / 2 + 7,
       config.width,
       config.height,
       radius
@@ -4014,6 +4024,14 @@ private exitToTownKeepingCampfireCheckpoint() {
     shadow.setDepth(depth);
 
     const panel = this.add.graphics();
+    panel.fillStyle(strokeColor, 0.035);
+    panel.fillRoundedRect(
+      config.x - config.width / 2 + 5,
+      config.y - config.height / 2 + 5,
+      config.width - 10,
+      config.height - 10,
+      Math.max(6, radius - 5)
+    );
     panel.fillStyle(color, alpha);
     panel.fillRoundedRect(
       config.x - config.width / 2,
@@ -4030,6 +4048,15 @@ private exitToTownKeepingCampfireCheckpoint() {
       config.width,
       config.height,
       radius
+    );
+
+    panel.lineStyle(1, 0xffffff, 0.035);
+    panel.strokeRoundedRect(
+      config.x - config.width / 2 + 4,
+      config.y - config.height / 2 + 4,
+      config.width - 8,
+      config.height - 8,
+      Math.max(2, radius - 5)
     );
 
     panel.setDepth(depth + 1);
