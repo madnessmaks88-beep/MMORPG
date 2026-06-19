@@ -93,6 +93,8 @@ export class InventoryScene extends Phaser.Scene {
 
   private inventoryContainer?: Phaser.GameObjects.Container;
   private inventoryMaskGraphics?: Phaser.GameObjects.Graphics;
+  private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
+  private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
   private inventoryScrollY = 0;
   private inventoryTargetScrollY = 0;
@@ -145,6 +147,8 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     const layout = this.getLayout();
+
+    this.cameras.main.fadeIn(260, 0, 0, 0);
 
     createSceneBackground(this);
     this.createInventoryBackdrop(layout);
@@ -738,6 +742,9 @@ export class InventoryScene extends Phaser.Scene {
       this.inventoryMaxScrollY
     );
 
+    this.createInventoryScrollbar(layout);
+    this.updateInventoryScrollbar(layout);
+
     this.renderInventoryContent(layout);
     this.createInventoryTouchScrollHandlers(layout);
 
@@ -760,6 +767,8 @@ export class InventoryScene extends Phaser.Scene {
           0,
           this.inventoryMaxScrollY
         );
+
+        this.updateInventoryScrollbar(layout);
       }
     );
 
@@ -1506,6 +1515,67 @@ export class InventoryScene extends Phaser.Scene {
     });
   }
 
+
+  private createInventoryScrollbar(layout: InventoryLayout) {
+    this.inventoryScrollbarTrack?.destroy();
+    this.inventoryScrollbarThumb?.destroy();
+
+    const trackHeight = Math.max(40, this.inventoryListHeight - 10);
+    const x = layout.centerX + layout.contentWidth / 2 - 13;
+    const y = this.inventoryListTop + this.inventoryListHeight / 2;
+
+    this.inventoryScrollbarTrack = this.add.rectangle(
+      x,
+      y,
+      4,
+      trackHeight,
+      0x17110d,
+      0.72
+    ).setDepth(90);
+
+    this.inventoryScrollbarThumb = this.add.rectangle(
+      x,
+      this.inventoryListTop + 6,
+      5,
+      24,
+      INVENTORY_DARK.gold,
+      0.92
+    ).setDepth(91);
+  }
+
+  private updateInventoryScrollbar(layout: InventoryLayout) {
+    if (!this.inventoryScrollbarTrack || !this.inventoryScrollbarThumb) {
+      return;
+    }
+
+    if (this.inventoryMaxScrollY <= 0) {
+      this.inventoryScrollbarTrack.setVisible(false);
+      this.inventoryScrollbarThumb.setVisible(false);
+      return;
+    }
+
+    this.inventoryScrollbarTrack.setVisible(true);
+    this.inventoryScrollbarThumb.setVisible(true);
+
+    const trackHeight = Math.max(40, this.inventoryListHeight - 10);
+    const contentHeight = this.inventoryListHeight + this.inventoryMaxScrollY;
+    const thumbHeight = Phaser.Math.Clamp(
+      (this.inventoryListHeight / Math.max(1, contentHeight)) * trackHeight,
+      22,
+      trackHeight
+    );
+
+    const progress = this.inventoryTargetScrollY / Math.max(1, this.inventoryMaxScrollY);
+    const y = this.inventoryListTop + 5 + thumbHeight / 2 + (trackHeight - thumbHeight) * progress;
+
+    const x = layout.centerX + layout.contentWidth / 2 - 13;
+
+    this.inventoryScrollbarTrack.setPosition(x, this.inventoryListTop + this.inventoryListHeight / 2);
+    this.inventoryScrollbarTrack.setSize(4, trackHeight);
+    this.inventoryScrollbarThumb.setPosition(x, y);
+    this.inventoryScrollbarThumb.setSize(5, thumbHeight);
+  }
+
   private createInventoryTouchScrollHandlers(layout: InventoryLayout) {
     this.input.off('pointerdown');
     this.input.off('pointermove');
@@ -1548,6 +1618,7 @@ export class InventoryScene extends Phaser.Scene {
 
       this.inventoryScrollY = this.inventoryTargetScrollY;
       this.renderInventoryContent(layout);
+      this.updateInventoryScrollbar(layout);
     });
 
     this.input.on('pointerup', () => {
@@ -1600,6 +1671,11 @@ export class InventoryScene extends Phaser.Scene {
 
     if (scrollChanged && renderChanged) {
       this.renderInventoryContent(layout);
+      this.updateInventoryScrollbar(layout);
+    }
+
+    if (scrollChanged && !renderChanged) {
+      this.updateInventoryScrollbar(layout);
     }
   }
 
