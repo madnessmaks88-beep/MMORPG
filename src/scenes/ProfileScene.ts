@@ -76,6 +76,9 @@ const PROFILE = {
 export class ProfileScene extends Phaser.Scene {
   private contentContainer?: Phaser.GameObjects.Container;
   private scrollZone?: Phaser.GameObjects.Rectangle;
+  private scrollMaskGraphics?: Phaser.GameObjects.Graphics;
+  private scrollbarTrack?: Phaser.GameObjects.Rectangle;
+  private scrollbarThumb?: Phaser.GameObjects.Rectangle;
 
   private currentScrollY = 0;
   private targetScrollY = 0;
@@ -91,6 +94,7 @@ export class ProfileScene extends Phaser.Scene {
 
   create() {
     createSceneBackground(this);
+    this.cameras.main.fadeIn(260, 0, 0, 0);
 
     const layout = this.getLayout();
 
@@ -114,6 +118,7 @@ export class ProfileScene extends Phaser.Scene {
     }
 
     this.contentContainer.y = -this.currentScrollY;
+    this.updateProfileScrollbar();
   }
 
   private getLayout(): ProfileLayout {
@@ -153,55 +158,94 @@ export class ProfileScene extends Phaser.Scene {
   private createCatacombBackdrop(layout: ProfileLayout) {
     const { width, height, centerX } = layout;
 
+    this.add.rectangle(centerX, height / 2, width, height, PROFILE.black, 0.88).setDepth(0);
     this.add.rectangle(centerX, height / 2, width, height, PROFILE.void, 0.78).setDepth(0);
 
-    this.add.circle(centerX, layout.safeTop + 156, width * 0.5, PROFILE.violet, 0.06).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 176, width * 0.31, PROFILE.blue, 0.045).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 196, width * 0.17, PROFILE.gold, 0.035).setDepth(0);
+    const sealY = layout.safeTop + Math.round(height * 0.18);
+    this.add.circle(centerX, sealY, width * 0.54, PROFILE.violet, 0.055).setDepth(0);
+    this.add.circle(centerX, sealY + 8, width * 0.36, PROFILE.blue, 0.04).setDepth(0);
+    this.add.circle(centerX, sealY + 14, width * 0.2, PROFILE.gold, 0.032).setDepth(0);
 
-    this.add.rectangle(centerX, height - 210, width, 420, 0x020202, 0.52).setDepth(0);
+    const hallTop = layout.safeTop + 64;
+    const hallHeight = Math.min(320, height * 0.38);
+    const archWidth = Math.min(width * 0.78, 430);
+    const archX = centerX;
+    const archY = hallTop + hallHeight * 0.52;
 
-    for (let i = 0; i < 22; i += 1) {
-      const x = layout.safeX + 12 + i * ((width - layout.safeX * 2 - 24) / 21);
-      const y = layout.safeTop + 96 + (i % 8) * 74;
-      const alpha = 0.025 + (i % 3) * 0.012;
+    this.add.rectangle(archX, archY + 44, archWidth, hallHeight * 0.72, 0x090a0d, 0.46)
+      .setStrokeStyle(2, PROFILE.bronzeDark, 0.28)
+      .setDepth(1);
+    this.add.ellipse(archX, archY - 36, archWidth * 0.86, hallHeight * 0.68, 0x0d0f15, 0.44)
+      .setStrokeStyle(2, PROFILE.bronze, 0.22)
+      .setDepth(1);
 
-      this.add.circle(x, y, 1.5 + (i % 2), PROFILE.goldSoft, alpha).setDepth(1);
-    }
-
-    for (let i = 0; i < 7; i += 1) {
-      const x = centerX + (i - 3) * (width * 0.14);
-      const y = height - 130 + (i % 2) * 12;
-      this.add.rectangle(x, y, width * 0.12, 18, PROFILE.ash, 0.18)
-        .setRotation((i - 3) * 0.015)
+    for (let i = 0; i < 6; i += 1) {
+      const pillarX = centerX - archWidth / 2 + 38 + i * ((archWidth - 76) / 5);
+      this.add.rectangle(pillarX, archY + 66, 8, hallHeight * 0.72, PROFILE.ash, 0.14)
         .setDepth(1);
     }
 
-    this.add.text(centerX, layout.safeTop + 178, '☥', {
+    this.add.text(centerX, sealY + 8, '☥', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '86px' : '104px',
+      fontSize: layout.compact ? '96px' : '120px',
       color: '#ffffff',
     })
       .setOrigin(0.5)
-      .setAlpha(0.025)
+      .setAlpha(0.028)
       .setDepth(1);
+
+    this.add.rectangle(centerX, height - 210, width, 420, 0x020202, 0.54).setDepth(0);
+
+    for (let i = 0; i < 34; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop + 52, height - layout.safeBottom - 18);
+      const size = Phaser.Math.Between(1, 3);
+      const color = i % 6 === 0 ? PROFILE.violet : i % 3 === 0 ? PROFILE.blueSoft : PROFILE.goldSoft;
+      const mote = this.add.circle(x, y, size, color, 0.026 + (i % 4) * 0.006).setDepth(1);
+
+      this.tweens.add({
+        targets: mote,
+        y: y - Phaser.Math.Between(8, 24),
+        alpha: { from: 0.012, to: 0.055 },
+        duration: Phaser.Math.Between(1800, 3200),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 55,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    for (let i = 0; i < 8; i += 1) {
+      const y = height - 150 + (i % 3) * 15;
+      const x = centerX + (i - 3.5) * (width * 0.14);
+      this.add.rectangle(x, y, width * 0.12, 18, PROFILE.ash, 0.16)
+        .setRotation((i - 3.5) * 0.018)
+        .setDepth(1);
+    }
+
+    const vignetteTop = this.add.rectangle(centerX, layout.safeTop - 10, width, 74, 0x000000, 0.32).setDepth(2);
+    const vignetteBottom = this.add.rectangle(centerX, height - 96, width, 190, 0x000000, 0.38).setDepth(2);
+    vignetteTop.setAlpha(0.7);
+    vignetteBottom.setAlpha(0.9);
   }
 
 
   private createScrollableContent(layout: ProfileLayout) {
     this.contentContainer = this.add.container(0, 0).setDepth(5);
+    this.contentContainer.setAlpha(0);
 
-    const maskGraphics = this.add.graphics();
-    maskGraphics.setVisible(false);
-    maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRect(
+    this.scrollMaskGraphics?.destroy();
+    this.scrollMaskGraphics = this.add.graphics();
+    this.scrollMaskGraphics.setVisible(false);
+    this.scrollMaskGraphics.fillStyle(0xffffff, 1);
+    this.scrollMaskGraphics.fillRect(
       layout.safeX,
       layout.contentTop,
       layout.width - layout.safeX * 2,
       layout.viewportHeight
     );
 
-    this.contentContainer.setMask(maskGraphics.createGeometryMask());
+    this.contentContainer.setMask(this.scrollMaskGraphics.createGeometryMask());
 
     let cursorY = layout.contentTop + 8;
 
@@ -213,17 +257,26 @@ export class ProfileScene extends Phaser.Scene {
     cursorY = this.createSecretAvatarsPanel(layout, cursorY + 14);
     cursorY = this.createRelicsPanel(layout, cursorY + 14);
 
-    const contentHeight = cursorY - layout.contentTop + 28;
+    const contentHeight = cursorY - layout.contentTop + 36;
 
     this.maxScrollY = Math.max(0, contentHeight - layout.viewportHeight);
     this.currentScrollY = Phaser.Math.Clamp(this.currentScrollY, 0, this.maxScrollY);
     this.targetScrollY = this.currentScrollY;
 
     this.createScrollInput(layout);
+    this.createProfileScrollbar(layout);
 
     if (this.maxScrollY > 0) {
       this.createScrollHint(layout);
     }
+
+    this.tweens.add({
+      targets: this.contentContainer,
+      alpha: 1,
+      duration: 260,
+      delay: 110,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private createHeroIdentityPanel(layout: ProfileLayout, topY: number) {
@@ -733,9 +786,15 @@ export class ProfileScene extends Phaser.Scene {
       if (this.contentContainer) {
         this.contentContainer.y = -this.currentScrollY;
       }
+
+      this.updateProfileScrollbar();
     });
 
     this.input.on('pointerup', () => {
+      this.isDragging = false;
+    });
+
+    this.input.on('pointerupoutside', () => {
       this.isDragging = false;
     });
 
@@ -750,13 +809,59 @@ export class ProfileScene extends Phaser.Scene {
       }
 
       this.targetScrollY = Phaser.Math.Clamp(this.targetScrollY + deltaY * 0.55, 0, this.maxScrollY);
+      this.updateProfileScrollbar();
     });
+  }
+
+  private createProfileScrollbar(layout: ProfileLayout) {
+    this.scrollbarTrack?.destroy();
+    this.scrollbarThumb?.destroy();
+
+    const x = layout.centerX + layout.contentWidth / 2 + 9;
+    const height = layout.viewportHeight - 22;
+    const y = layout.contentTop + layout.viewportHeight / 2;
+
+    this.scrollbarTrack = this.add.rectangle(x, y, 4, height, 0x0b0b0d, 0.48)
+      .setDepth(235)
+      .setVisible(this.maxScrollY > 0);
+
+    this.scrollbarThumb = this.add.rectangle(x, layout.contentTop + 14, 4, 36, PROFILE.gold, 0.82)
+      .setDepth(236)
+      .setVisible(this.maxScrollY > 0);
+
+    this.updateProfileScrollbar();
+  }
+
+  private updateProfileScrollbar() {
+    if (!this.scrollbarTrack || !this.scrollbarThumb) {
+      return;
+    }
+
+    if (this.maxScrollY <= 0) {
+      this.scrollbarTrack.setVisible(false);
+      this.scrollbarThumb.setVisible(false);
+      return;
+    }
+
+    const layout = this.getLayout();
+    const trackHeight = layout.viewportHeight - 22;
+    const trackTop = layout.contentTop + 11;
+    const thumbHeight = Phaser.Math.Clamp((layout.viewportHeight / (layout.viewportHeight + this.maxScrollY)) * trackHeight, 34, trackHeight);
+    const progress = this.targetScrollY / Math.max(1, this.maxScrollY);
+    const thumbY = trackTop + thumbHeight / 2 + (trackHeight - thumbHeight) * progress;
+
+    this.scrollbarTrack.setVisible(true);
+    this.scrollbarThumb.setVisible(true);
+    this.scrollbarThumb.setSize(4, thumbHeight);
+    this.scrollbarThumb.setY(thumbY);
   }
 
   private createScrollHint(layout: ProfileLayout) {
     const hintY = layout.contentBottom - 18;
 
-    const bg = this.add.rectangle(layout.centerX, hintY, 232, 28, 0x000000, 0.42).setDepth(230);
+    const bg = this.add.rectangle(layout.centerX, hintY, 218, 28, 0x000000, 0.42)
+      .setStrokeStyle(1, PROFILE.bronzeDark, 0.42)
+      .setDepth(230);
     const text = this.add.text(layout.centerX, hintY, 'Прокручивай профиль', {
       fontFamily: UI.font.body,
       fontSize: '12px',
@@ -765,10 +870,11 @@ export class ProfileScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: [bg, text],
-      alpha: 0.25,
+      alpha: { from: 0.75, to: 0.28 },
       duration: 900,
       yoyo: true,
       repeat: -1,
+      ease: 'Sine.easeInOut',
     });
   }
 
@@ -951,10 +1057,19 @@ export class ProfileScene extends Phaser.Scene {
     );
 
     this.addTo(container, this.add.rectangle(x, y + 7, width, 12, 0x030303, 0.92).setDepth(6));
-    this.addTo(
-      container,
-      this.add.rectangle(x - width / 2 + Math.max(2, width * progress) / 2, y + 7, Math.max(2, width * progress), 12, PROFILE.gold, 0.92).setDepth(7)
-    );
+    const expFillWidth = Math.max(2, width * progress);
+    const expFill = this.add.rectangle(x - width / 2 + expFillWidth / 2, y + 7, expFillWidth, 12, PROFILE.gold, 0.92)
+      .setDepth(7)
+      .setScale(0.01, 1);
+    this.addTo(container, expFill);
+
+    this.tweens.add({
+      targets: expFill,
+      scaleX: 1,
+      duration: 520,
+      delay: 220,
+      ease: 'Cubic.easeOut',
+    });
     this.addTo(container, this.add.rectangle(x, y + 7, width, 12).setStrokeStyle(1, PROFILE.bronze, 0.55).setDepth(8));
   }
 
@@ -985,8 +1100,20 @@ export class ProfileScene extends Phaser.Scene {
 
     const barX = left + labelWidth + barWidth / 2;
     this.addTo(container, this.add.rectangle(barX, y, barWidth, 13, 0x030303, 0.92).setDepth(6));
-    this.addTo(container, this.add.rectangle(barX - barWidth / 2 + Math.max(2, barWidth * clamped) / 2, y, Math.max(2, barWidth * clamped), 13, color, 0.92).setDepth(7));
+    const fillWidth = Math.max(2, barWidth * clamped);
+    const fill = this.add.rectangle(barX - barWidth / 2 + fillWidth / 2, y, fillWidth, 13, color, 0.92)
+      .setDepth(7)
+      .setScale(0.01, 1);
+    this.addTo(container, fill);
     this.addTo(container, this.add.rectangle(barX, y, barWidth, 13).setStrokeStyle(1, PROFILE.bronze, 0.55).setDepth(8));
+
+    this.tweens.add({
+      targets: fill,
+      scaleX: 1,
+      duration: 460,
+      delay: 260,
+      ease: 'Cubic.easeOut',
+    });
 
     this.addTo(container, this.add.text(barX + barWidth / 2 - 4, y - 18, value, {
       fontFamily: UI.font.body,
@@ -1343,11 +1470,28 @@ export class ProfileScene extends Phaser.Scene {
     topLine.strokePath();
     topLine.setDepth(depth + 2);
 
+    const cornerSize = Math.min(18, Math.max(10, radius * 0.55));
+    const corners = this.add.graphics();
+    corners.lineStyle(1, stroke, Math.min(0.6, strokeAlpha + 0.12));
+    const left = config.x - safeWidth / 2;
+    const right = config.x + safeWidth / 2;
+    const top = config.y - safeHeight / 2;
+    const bottom = config.y + safeHeight / 2;
+    corners.lineBetween(left + 12, top + cornerSize, left + 12, top + 12);
+    corners.lineBetween(left + 12, top + 12, left + cornerSize, top + 12);
+    corners.lineBetween(right - 12, top + cornerSize, right - 12, top + 12);
+    corners.lineBetween(right - 12, top + 12, right - cornerSize, top + 12);
+    corners.lineBetween(left + 12, bottom - cornerSize, left + 12, bottom - 12);
+    corners.lineBetween(left + 12, bottom - 12, left + cornerSize, bottom - 12);
+    corners.lineBetween(right - 12, bottom - cornerSize, right - 12, bottom - 12);
+    corners.lineBetween(right - 12, bottom - 12, right - cornerSize, bottom - 12);
+    corners.setDepth(depth + 3);
+
     if (config.parent) {
-      config.parent.add([shadow, panel, topLine]);
+      config.parent.add([shadow, panel, topLine, corners]);
     }
 
-    return { shadow, panel, topLine };
+    return { shadow, panel, topLine, corners };
   }
 
   private requireContentContainer() {
