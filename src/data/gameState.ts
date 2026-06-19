@@ -65,6 +65,8 @@ export type FloorRun = {
   materialsEarned: Partial<Record<string, number>>;
 };
 
+
+
 export function createEmptyFloorRun(): FloorRun {
   return {
     active: false,
@@ -100,6 +102,8 @@ export const gameState = {
 
   highestClearedFloor: 0,
   highestClearedTier: 0,
+
+  cityCampfire: createEmptyCityCampfireState(),
 
   floorRun: createEmptyFloorRun(),
 
@@ -167,6 +171,24 @@ export function goToNextRoom() {
   gameState.floorRun.availableRoomIds = [];
   gameState.floorRun.awaitingRoomChoice = false;
   gameState.currentRoomIndex = gameState.floorRun.currentRoomIndex;
+}
+
+export type CityFlintType = 'common' | 'rare' | 'donate';
+
+export type CityCampfireState = {
+  active: boolean;
+  flintType: CityFlintType | null;
+  startedAt: number;
+  expiresAt: number | null;
+};
+
+export function createEmptyCityCampfireState(): CityCampfireState {
+  return {
+    active: false,
+    flintType: null,
+    startedAt: 0,
+    expiresAt: null,
+  };
 }
 
 export function resetFloorRun() {

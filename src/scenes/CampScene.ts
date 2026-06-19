@@ -117,13 +117,14 @@ export class CampScene extends Phaser.Scene {
     const layout = this.getLayout();
 
     createSceneBackground(this);
-    this.extinguishCityCampfireIfExpired();
-    this.createCampBackdrop(layout);
-    this.createCityCampfireVisualState(layout);
 
     await this.prepareStartupOnce();
-
+      
     this.grantStartGoldOnce();
+    this.extinguishCityCampfireIfExpired();
+      
+    this.createCampBackdrop(layout);
+    this.createCityCampfireVisualState(layout);
 
     this.createHeader(layout);
     this.createPlayerLine(layout);
@@ -1710,45 +1711,121 @@ export class CampScene extends Phaser.Scene {
     };
   }
 
-  private getCityCampfireState(): CityCampfireState {
+  private readLocalCityCampfireState(): CityCampfireState | null {
     try {
       const raw = localStorage.getItem(this.CITY_CAMPFIRE_KEY);
 
       if (!raw) {
-        return this.getDefaultCityCampfireState();
+        return null;
       }
 
       const parsed = JSON.parse(raw) as Partial<CityCampfireState>;
-      const flintType = parsed.flintType === 'common' || parsed.flintType === 'rare' || parsed.flintType === 'donate'
-        ? parsed.flintType
-        : null;
 
-      const state: CityCampfireState = {
-        active: Boolean(parsed.active) && Boolean(flintType),
-        flintType,
+      if (
+        parsed.flintType !== 'common' &&
+        parsed.flintType !== 'rare' &&
+        parsed.flintType !== 'donate'
+      ) {
+        return null;
+      }
+
+      return {
+        active: Boolean(parsed.active),
+        flintType: parsed.flintType,
         startedAt: typeof parsed.startedAt === 'number' ? parsed.startedAt : 0,
         expiresAt: typeof parsed.expiresAt === 'number' ? parsed.expiresAt : null,
       };
-
-      if (state.active && state.flintType !== 'donate' && state.expiresAt !== null && Date.now() >= state.expiresAt) {
-        this.clearCityCampfireState();
-        return this.getDefaultCityCampfireState();
-      }
-
-      return state;
-    } catch (error) {
-      console.warn('City campfire state parse failed:', error);
-      this.clearCityCampfireState();
-      return this.getDefaultCityCampfireState();
+    } catch {
+      return null;
     }
   }
 
+  private getCityCampfireState(): CityCampfireState {
+    const current = gameState.cityCampfire as CityCampfireState | undefined;
+
+    if (current && typeof current === 'object') {
+      current.active = Boolean(current.active);
+
+      if (
+        current.flintType !== 'common' &&
+        current.flintType !== 'rare' &&
+        current.flintType !== 'donate'
+      ) {
+        current.flintType = null;
+        current.active = false;
+      }
+
+      if (typeof current.startedAt !== 'number') {
+        current.startedAt = 0;
+      }
+
+      if (current.expiresAt !== null && typeof current.expiresAt !== 'number') {
+        current.expiresAt = null;
+      }
+
+      return current;
+    }
+
+    const localState = this.readLocalCityCampfireState();
+
+    if (localState?.active) {
+      gameState.cityCampfire = localState;
+      void saveGameAsync();
+      return gameState.cityCampfire;
+    }
+
+    gameState.cityCampfire = this.getDefaultCityCampfireState();
+    return gameState.cityCampfire;
+  }
+
   private saveCityCampfireState(state: CityCampfireState) {
-    localStorage.setItem(this.CITY_CAMPFIRE_KEY, JSON.stringify(state));
+    gameState.cityCampfire = {
+      active: state.active,
+      flintType: state.flintType,
+      startedAt: state.startedAt,
+      expiresAt: state.expiresAt,
+    };
+
+    try {
+      localStorage.setItem(this.CITY_CAMPFIRE_KEY, JSON.stringify(gameState.cityCampfire));
+    } catch {
+      // localStorage не обязателен, основное сохранение теперь через saveGameAsync().
+    }
+
+    void saveGameAsync();
   }
 
   private clearCityCampfireState() {
-    localStorage.removeItem(this.CITY_CAMPFIRE_KEY);
+    gameState.cityCampfire = this.getDefaultCityCampfireState();
+
+    try {
+      localStorage.removeItem(this.CITY_CAMPFIRE_KEY);
+    } catch {
+      // localStorage не обязателен.
+    }
+
+    void saveGameAsync();
+  }
+
+  private extinguishCityCampfireIfExpired() {
+    const state = this.getCityCampfireState();
+
+    if (!state.active) {
+      return;
+    }
+
+    if (state.flintType === 'donate') {
+      return;
+    }
+
+    if (typeof state.expiresAt !== 'number') {
+      this.clearCityCampfireState();
+      return;
+    }
+
+    if (Date.now() >= state.expiresAt) {
+      this.clearCityCampfireState();
+    }
   }
 
   private isCityCampfireActive() {
@@ -1830,7 +1907,6 @@ export class CampScene extends Phaser.Scene {
     };
 
     this.saveCityCampfireState(state);
-    void saveGameAsync();
 
     this.updateCampfireButtonText();
     this.createCityCampfireVisualState(this.getLayout());
@@ -1847,30 +1923,6 @@ export class CampScene extends Phaser.Scene {
       'Костёр зажжён',
       `${title} вспыхнуло в очаге.\n${timeText}\n${costText}\n\nУбежище стало заметно теплее и светлее. Отдых у костра теперь доступен.`
     );
-  }
-
-  private extinguishCityCampfireIfExpired() {
-    const raw = localStorage.getItem(this.CITY_CAMPFIRE_KEY);
-
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const state = JSON.parse(raw) as Partial<CityCampfireState>;
-
-      if (
-        state.active &&
-        state.flintType !== 'donate' &&
-        typeof state.expiresAt === 'number' &&
-        Date.now() >= state.expiresAt
-      ) {
-        this.clearCityCampfireState();
-      }
-    } catch (error) {
-      console.warn('City campfire expiration check failed:', error);
-      this.clearCityCampfireState();
-    }
   }
 
   private createCityCampfireVisualState(layout: CampLayout) {

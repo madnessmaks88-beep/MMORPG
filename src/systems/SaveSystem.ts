@@ -4,7 +4,9 @@ import { getPlayerStats } from './InventorySystem';
 import {
   gameState,
   createEmptyFloorRun,
+  createEmptyCityCampfireState,
   getCurrentTierByFloor,
+  type CityCampfireState,
   type FloorRun,
   type QuestProgress,
 } from '../data/gameState';
@@ -138,6 +140,8 @@ const LOCAL_RESET_KEYS = [
   'catacombs_shop_assortment_v3',
   'catacombs_shop_assortment_v2',
   'catacombs_shop_assortment_v1',
+  
+  'catacombs_city_campfire_v1',
 
   'below_ashes_campfire_battle_checkpoint_v1',
   'campfire_battle_checkpoint_v1',
@@ -199,6 +203,8 @@ type SaveData = {
 
     lastCampRestAt: number;
 
+    cityCampfire?: CityCampfireState;
+
     highestClearedFloor: number;
     highestClearedTier: number;
 
@@ -246,6 +252,8 @@ function createSaveData(): SaveData {
       unlockedDungeonIds: [...gameState.unlockedDungeonIds],
 
       lastCampRestAt: gameState.lastCampRestAt,
+
+      cityCampfire: clone(gameState.cityCampfire),
 
       highestClearedFloor: gameState.highestClearedFloor,
       highestClearedTier: gameState.highestClearedTier,
@@ -306,6 +314,33 @@ function fixMissingPlayerFields() {
 
   if (player.raceId !== undefined && !isValidRaceId(player.raceId)) {
     player.raceId = undefined;
+  }
+
+  if (!gameState.cityCampfire) {
+    gameState.cityCampfire = createEmptyCityCampfireState();
+  }
+
+  if (typeof gameState.cityCampfire.active !== 'boolean') {
+    gameState.cityCampfire.active = false;
+  }
+
+  if (
+    gameState.cityCampfire.flintType !== 'common' &&
+    gameState.cityCampfire.flintType !== 'rare' &&
+    gameState.cityCampfire.flintType !== 'donate'
+  ) {
+    gameState.cityCampfire.flintType = null;
+  }
+
+  if (typeof gameState.cityCampfire.startedAt !== 'number') {
+    gameState.cityCampfire.startedAt = 0;
+  }
+
+  if (
+    gameState.cityCampfire.expiresAt !== null &&
+    typeof gameState.cityCampfire.expiresAt !== 'number'
+  ) {
+    gameState.cityCampfire.expiresAt = null;
   }
 
   if (!player.relicIds) player.relicIds = [];
@@ -1491,6 +1526,8 @@ function resetGameStateToNewGame() {
 
   gameState.highestClearedFloor = 0;
   gameState.highestClearedTier = 0;
+
+  gameState.cityCampfire = createEmptyCityCampfireState();
 
   gameState.floorRun = createEmptyFloorRun();
 
