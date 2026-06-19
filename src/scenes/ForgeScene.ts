@@ -222,36 +222,36 @@ export class ForgeScene extends Phaser.Scene {
     const veryCompact = height < 740;
 
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 16, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.02), 12, 28);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.024), 18, 34);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 10, 26);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.02), 14, 30);
 
     const contentWidth = Math.min(width - safeX * 2, 640);
 
-    const bottomBarHeight = veryCompact ? 76 : compact ? 84 : 94;
-    const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + 8;
-    const itemsActionBottom = height - bottomBarHeight - safeBottom - 6;
+    const bottomBarHeight = veryCompact ? 64 : compact ? 74 : 88;
+    const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + (veryCompact ? 4 : 6);
+    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 2 : 6);
 
-    const headerTop = safeTop + 4;
-    const headerHeight = veryCompact ? 64 : compact ? 74 : 84;
+    const headerTop = safeTop + 2;
+    const headerHeight = veryCompact ? 54 : compact ? 66 : 80;
 
-    const resourcesTop = headerTop + headerHeight + (veryCompact ? 6 : 8);
-    const resourcesHeight = veryCompact ? 50 : compact ? 58 : 64;
+    const resourcesTop = headerTop + headerHeight + (veryCompact ? 4 : 7);
+    const resourcesHeight = veryCompact ? 42 : compact ? 52 : 62;
 
-    const anvilTop = resourcesTop + resourcesHeight + (veryCompact ? 8 : 10);
-    const anvilHeight = veryCompact ? 86 : compact ? 96 : 108;
+    const anvilTop = resourcesTop + resourcesHeight + (veryCompact ? 5 : 8);
+    const anvilHeight = veryCompact ? 74 : compact ? 88 : 104;
 
-    const materialsTop = anvilTop + anvilHeight + (veryCompact ? 8 : 10);
-    const materialsHeight = veryCompact ? 90 : compact ? 104 : 118;
+    const materialsTop = anvilTop + anvilHeight + (veryCompact ? 5 : 8);
+    const materialsHeight = veryCompact ? 54 : compact ? 86 : 112;
 
-    const tabsTop = materialsTop + materialsHeight + (veryCompact ? 8 : 10);
-    const tabsHeight = veryCompact ? 52 : compact ? 58 : 64;
+    const tabsTop = materialsTop + materialsHeight + (veryCompact ? 5 : 8);
+    const tabsHeight = veryCompact ? 44 : compact ? 54 : 62;
 
-    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 8 : 10);
-    const minItemsHeight = veryCompact ? 126 : compact ? 170 : 220;
+    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 5 : 8);
+    const minItemsHeight = veryCompact ? 178 : compact ? 230 : 280;
     const itemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
-    const itemsListTop = itemsPanelTop + (veryCompact ? 58 : 66);
-    const itemsListBottom = itemsPanelTop + itemsPanelHeight - (veryCompact ? 14 : 18);
-    const itemsListHeight = Math.max(90, itemsListBottom - itemsListTop);
+    const itemsListTop = itemsPanelTop + (veryCompact ? 42 : 60);
+    const itemsListBottom = itemsPanelTop + itemsPanelHeight - (veryCompact ? 10 : 16);
+    const itemsListHeight = Math.max(150, itemsListBottom - itemsListTop);
 
     return {
       width,
@@ -478,8 +478,8 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsScrollbarTrack?.destroy();
     this.itemsScrollbarThumb?.destroy();
 
-    this.itemsContainer = this.add.container(0, 0).setDepth(48);
-    this.itemsMaskGraphics = this.add.graphics().setVisible(false);
+    this.itemsContainer = this.add.container(0, layout.itemsListTop).setDepth(48);
+    this.itemsMaskGraphics = this.add.graphics().setDepth(47).setAlpha(0.001);
     this.itemsMaskGraphics.fillStyle(0xffffff, 1);
     this.itemsMaskGraphics.fillRect(
       layout.safeX + 10,
@@ -537,7 +537,7 @@ export class ForgeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(41);
 
-    this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 14), 'Видимые карточки создаются только внутри этого окна.', {
+    this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 14), 'Выбери трофей и закали его у горна.', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: '#8f8879',
@@ -576,7 +576,7 @@ export class ForgeScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.itemsContainer,
       alpha: { from: 0, to: 1 },
-      y: { from: 10, to: 0 },
+      y: { from: layout.itemsListTop + 8, to: layout.itemsListTop },
       duration: 240,
       ease: 'Sine.easeOut',
     });
@@ -612,22 +612,22 @@ export class ForgeScene extends Phaser.Scene {
     const items = this.getForgeItemsByCategory(this.selectedCategory);
 
     if (items.length === 0) {
-      this.createEmptyState(container, layout, this.itemsListTop + this.itemsListHeight / 2);
+      this.createEmptyState(container, layout, this.itemsListHeight / 2);
       return;
     }
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const buffer = cardHeight + 56;
+    const buffer = layout.veryCompact ? 8 : 22;
 
     items.forEach((inventoryItem, index) => {
-      const y = this.itemsListTop + cardHeight / 2 + 14 + index * spacing - this.itemsScrollY;
+      const y = cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
 
-      if (y + cardHeight / 2 < this.itemsListTop - buffer) {
+      if (y + cardHeight / 2 < -buffer) {
         return;
       }
 
-      if (y - cardHeight / 2 > this.itemsListBottom + buffer) {
+      if (y - cardHeight / 2 > this.itemsListHeight + buffer) {
         return;
       }
 
@@ -637,7 +637,6 @@ export class ForgeScene extends Phaser.Scene {
 
   private clearVisibleForgeItems() {
     this.itemsContainer?.removeAll(true);
-    this.itemsLastRenderedScrollY = -1;
   }
 
   private getForgeItemCardHeight(layout: ForgeLayout) {
@@ -928,15 +927,36 @@ export class ForgeScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(8)
     );
 
+    if (layout.veryCompact) {
+      const summary = MATERIAL_IDS.map(id => `${this.getShortMaterialName(id)} ${player.materials[id] ?? 0}`).join('  •  ');
+
+      this.addTo(
+        container,
+        this.add.text(layout.centerX, topY + 40, summary, {
+          fontFamily: UI.font.body,
+          fontSize: '10px',
+          color: '#a9a091',
+          align: 'center',
+          wordWrap: {
+            width: layout.contentWidth - 34,
+            useAdvancedWrap: true,
+          },
+          maxLines: 1,
+        }).setOrigin(0.5).setDepth(8)
+      );
+
+      return topY + panelHeight;
+    }
+
     const chipGap = 10;
     const chipWidth = (layout.contentWidth - 56 - chipGap) / 2;
     const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
     const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
-    const rowGap = layout.veryCompact ? 19 : 23;
+    const rowGap = 23;
 
     MATERIAL_IDS.forEach((id, index) => {
       const x = index % 2 === 0 ? leftX : rightX;
-      const y = topY + (layout.veryCompact ? 43 : 56) + Math.floor(index / 2) * rowGap;
+      const y = topY + 56 + Math.floor(index / 2) * rowGap;
 
       this.createMaterialLine(container, x, y, chipWidth, id, 8);
     });
@@ -1878,19 +1898,19 @@ export class ForgeScene extends Phaser.Scene {
 
   private getShortMaterialName(id: MaterialId) {
     if (id === 'darkened_bone') return 'Кость';
-    if (id === 'dim_gem') return 'Самоцвет';
+    if (id === 'dim_gem') return 'Самоцв.';
     if (id === 'old_leather') return 'Кожа';
-    if (id === 'dark_flame_heart') return 'Сердце пламени';
-    if (id === 'black_gem') return 'Чёрный самоцвет';
+    if (id === 'dark_flame_heart') return 'Пламя';
+    if (id === 'black_gem') return 'Чёрн.кам.';
     if (id === 'cursed_seal') return 'Печать';
-    if (id === 'black_sarcophagus_shard') return 'Осколок';
+    if (id === 'black_sarcophagus_shard') return 'Оскол.';
 
     return getMaterialName(id);
   }
 
   private getTotalMaterialCount() {
-    return Object.values(player.materials ?? {}).reduce((sum, amount) => {
-      return sum + (amount ?? 0);
+    return MATERIAL_IDS.reduce((sum, id) => {
+      return sum + (player.materials[id] ?? 0);
     }, 0);
   }
 
