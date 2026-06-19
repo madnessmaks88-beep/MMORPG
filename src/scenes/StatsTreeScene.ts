@@ -43,24 +43,21 @@ type BranchData = {
   stages: StageData[];
 };
 
-type FreeTreeLayout = {
+type TreeLayout = {
   width: number;
   height: number;
   centerX: number;
-
   safeX: number;
   safeTop: number;
   safeBottom: number;
-
   headerHeight: number;
   bottomBarHeight: number;
-
   contentTop: number;
   contentBottom: number;
   contentWidth: number;
   viewportHeight: number;
-
   compact: boolean;
+  veryCompact: boolean;
 };
 
 type TreeButton = {
@@ -70,10 +67,14 @@ type TreeButton = {
   zone: Phaser.GameObjects.Zone;
 };
 
-type NodePoint = {
+type VisibleStage = {
   stage: StageData;
-  x: number;
-  y: number;
+  displayIndex: number;
+};
+
+type SelectedNode = {
+  branchId: BranchId;
+  stageLevel: number;
 };
 
 const TREE_STYLE = {
@@ -162,22 +163,10 @@ const BRANCHES: BranchData[] = [
       normalTitle: 'Сила удара',
       normalDescription: '+3 к атаке.',
       milestones: {
-        5: {
-          title: 'Точный замах',
-          description: 'Базовая атака наносит +5% урона.',
-        },
-        10: {
-          title: 'Пробивающий удар',
-          description: 'Атаки игнорируют 10% защиты врага.',
-        },
-        15: {
-          title: 'Добивание',
-          description: 'Если у врага меньше 30% HP, герой наносит ему +12% урона.',
-        },
-        20: {
-          title: 'Казнь',
-          description: 'Первый удар по врагу в бою наносит +25% урона.',
-        },
+        5: { title: 'Точный замах', description: 'Базовая атака наносит +5% урона.' },
+        10: { title: 'Пробивающий удар', description: 'Атаки игнорируют 10% защиты врага.' },
+        15: { title: 'Добивание', description: 'Если у врага меньше 30% HP, герой наносит ему +12% урона.' },
+        20: { title: 'Казнь', description: 'Первый удар по врагу в бою наносит +25% урона.' },
       },
     }),
   },
@@ -196,22 +185,10 @@ const BRANCHES: BranchData[] = [
       normalTitle: 'Укрепление брони',
       normalDescription: '+3 к защите.',
       milestones: {
-        5: {
-          title: 'Толстая броня',
-          description: 'Получаемый урон снижен на 3%.',
-        },
-        10: {
-          title: 'Стойкость',
-          description: 'После действия “Защита” следующий удар врага дополнительно ослабляется на 10%.',
-        },
-        15: {
-          title: 'Каменная стойка',
-          description: 'Первый полученный удар в бою всегда наносит на 40% меньше урона.',
-        },
-        20: {
-          title: 'Глухой блок',
-          description: 'Есть 12% шанс уменьшить входящий урон вдвое.',
-        },
+        5: { title: 'Толстая броня', description: 'Получаемый урон снижен на 3%.' },
+        10: { title: 'Стойкость', description: 'После действия “Защита” следующий удар врага дополнительно ослабляется на 10%.' },
+        15: { title: 'Каменная стойка', description: 'Первый полученный удар в бою всегда наносит на 40% меньше урона.' },
+        20: { title: 'Глухой блок', description: 'Есть 12% шанс уменьшить входящий урон вдвое.' },
       },
     }),
   },
@@ -311,6 +288,8 @@ export class StatsTreeScene extends Phaser.Scene {
   private contentContainer?: Phaser.GameObjects.Container;
   private contentMaskGraphics?: Phaser.GameObjects.Graphics;
   private modalObjects: Phaser.GameObjects.GameObject[] = [];
+  private scrollHintObjects: Phaser.GameObjects.GameObject[] = [];
+  private branchCardObjects: Phaser.GameObjects.GameObject[] = [];
 
   private currentScrollY = 0;
   private targetScrollY = 0;
@@ -321,12 +300,29 @@ export class StatsTreeScene extends Phaser.Scene {
   private dragStartY = 0;
   private dragStartScrollY = 0;
 
+  private selectedNode?: SelectedNode;
+
   constructor() {
     super('StatsTreeScene');
   }
 
+  init(data?: {
+    selectedNode?: SelectedNode;
+    scrollY?: number;
+  }) {
+    if (data?.selectedNode) {
+      this.selectedNode = data.selectedNode;
+    }
+
+    if (typeof data?.scrollY === 'number') {
+      this.currentScrollY = data.scrollY;
+      this.targetScrollY = data.scrollY;
+    }
+  }
+
   create() {
     this.ensureTreeState();
+    this.ensureSelectedNode();
 
     const layout = this.getLayout();
 
@@ -335,6 +331,7 @@ export class StatsTreeScene extends Phaser.Scene {
     this.createHeader(layout);
     this.createScrollableContent(layout);
     this.createBottomButton(layout);
+    this.playEntryAnimation(layout);
   }
 
   update() {
@@ -351,102 +348,105 @@ export class StatsTreeScene extends Phaser.Scene {
     this.contentContainer.y = -this.currentScrollY;
   }
 
-  private getLayout(): FreeTreeLayout {
+  private getLayout(): TreeLayout {
     const { width, height } = this.scale;
 
-    const compact = height < 1120;
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
+    const veryCompact = height <= 700;
+    const compact = height < 860;
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 30);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.024), 18, 34);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.026), 24, 38);
-    const bottomBarHeight = compact ? 104 : 112;
-    const headerHeight = compact ? 132 : 146;
-    const contentWidth = Math.min(width - safeX * 2, 640);
-
-    const contentTop = safeTop + headerHeight + 12;
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.026), 22, 36);
+    const bottomBarHeight = veryCompact ? 92 : compact ? 98 : 108;
+    const headerHeight = veryCompact ? 104 : compact ? 118 : 132;
+    const contentWidth = Math.min(width - safeX * 2, 660);
+    const contentTop = safeTop + headerHeight + (veryCompact ? 8 : 12);
     const contentBottom = height - safeBottom - bottomBarHeight;
 
     return {
       width,
       height,
       centerX: width / 2,
-
       safeX,
       safeTop,
       safeBottom,
-
       headerHeight,
       bottomBarHeight,
-
       contentTop,
       contentBottom,
       contentWidth,
-      viewportHeight: Math.max(320, contentBottom - contentTop),
-
+      viewportHeight: Math.max(280, contentBottom - contentTop),
       compact,
+      veryCompact,
     };
   }
 
-  private createBackdrop(layout: FreeTreeLayout) {
+  private createBackdrop(layout: TreeLayout) {
     const { width, height, centerX } = layout;
 
     this.add.rectangle(centerX, height / 2, width, height, TREE_STYLE.black, 0.96).setDepth(0);
-    this.add.rectangle(centerX, height - 190, width, 380, 0x020202, 0.58).setDepth(0);
+    this.add.rectangle(centerX, height * 0.62, width, height * 0.84, TREE_STYLE.void, 0.62).setDepth(0);
 
-    this.add.circle(centerX, layout.safeTop + 150, width * 0.52, TREE_STYLE.violet, 0.11).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 162, width * 0.34, TREE_STYLE.bronze, 0.07).setDepth(0);
-    this.add.circle(centerX, layout.safeTop + 176, width * 0.16, TREE_STYLE.gold, 0.035).setDepth(0);
+    this.add.circle(centerX, layout.safeTop + 180, Math.min(width * 0.48, 220), TREE_STYLE.violet, 0.09).setDepth(0);
+    this.add.circle(centerX, layout.safeTop + 190, Math.min(width * 0.33, 150), TREE_STYLE.gold, 0.05).setDepth(0);
+    this.add.text(centerX, layout.safeTop + 182, '✦', {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '82px' : '98px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setAlpha(0.03).setDepth(1);
 
-    const trunkX = centerX;
-    const trunkTop = layout.contentTop - 24;
-    const trunkBottom = layout.contentBottom + 16;
+    const slab = this.add.graphics();
+    slab.fillStyle(TREE_STYLE.stone, 0.38);
+    slab.fillRoundedRect(
+      layout.safeX - 10,
+      layout.contentTop - 34,
+      layout.contentWidth + 20,
+      layout.viewportHeight + 52,
+      34
+    );
+    slab.lineStyle(2, TREE_STYLE.bronzeDark, 0.18);
+    slab.strokeRoundedRect(
+      layout.safeX - 10,
+      layout.contentTop - 34,
+      layout.contentWidth + 20,
+      layout.viewportHeight + 52,
+      34
+    );
+    slab.setDepth(1);
 
-    this.add.line(0, 0, trunkX, trunkTop, trunkX, trunkBottom, TREE_STYLE.bronze, 0.16)
-      .setLineWidth(3)
-      .setDepth(1);
-
-    for (let index = 0; index < 18; index += 1) {
-      const side = index % 2 === 0 ? -1 : 1;
-      const y = trunkTop + 38 + index * 44;
-      const length = Phaser.Math.Clamp(width * 0.16 + (index % 4) * 15, 82, 160);
-
-      this.add.line(
-        0,
-        0,
-        trunkX,
-        y,
-        trunkX + side * length,
-        y + 16 + (index % 3) * 7,
-        TREE_STYLE.bronze,
-        0.07
-      )
+    for (let index = 0; index < 16; index += 1) {
+      const x = centerX + (index % 2 === 0 ? -1 : 1) * Phaser.Math.Between(60, Math.round(width * 0.38));
+      const y = layout.contentTop - 20 + index * Math.round((layout.viewportHeight + 20) / 16);
+      const len = Phaser.Math.Between(22, 58);
+      this.add.line(0, 0, x - len / 2, y, x + len / 2, y + Phaser.Math.Between(-12, 12), TREE_STYLE.bronze, 0.06)
         .setLineWidth(2)
         .setDepth(1);
     }
 
-    for (let i = 0; i < 42; i += 1) {
-      const x = Phaser.Math.Between(layout.safeX + 10, width - layout.safeX - 10);
-      const y = Phaser.Math.Between(layout.safeTop + 74, height - layout.safeBottom - 96);
-      const color = i % 5 === 0 ? TREE_STYLE.gold : i % 3 === 0 ? TREE_STYLE.violet : TREE_STYLE.ash;
-      const alpha = i % 5 === 0 ? 0.034 : 0.02;
+    for (let i = 0; i < 48; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop, height - layout.safeBottom - 60);
+      const dot = this.add.circle(x, y, 1 + (i % 3), i % 4 === 0 ? TREE_STYLE.gold : TREE_STYLE.ash, i % 4 === 0 ? 0.035 : 0.02)
+        .setDepth(1);
 
-      this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
+      this.tweens.add({
+        targets: dot,
+        alpha: { from: dot.alpha, to: dot.alpha * 1.8 },
+        duration: 1400 + i * 24,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
     }
-
-    this.add.text(centerX, layout.safeTop + 152, '✦', {
-      fontFamily: UI.font.body,
-      fontSize: layout.compact ? '82px' : '98px',
-      color: '#ffffff',
-    }).setOrigin(0.5).setAlpha(0.024).setDepth(1);
   }
 
-  private createHeader(layout: FreeTreeLayout) {
+  private createHeader(layout: TreeLayout) {
     const panelY = layout.safeTop + layout.headerHeight / 2;
-
-    this.createRoundedPanel({
+    const panelHeight = layout.headerHeight;
+    const panelParts = this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
-      height: layout.headerHeight,
+      height: panelHeight,
       radius: 32,
       color: TREE_STYLE.graphite,
       alpha: 0.95,
@@ -457,9 +457,9 @@ export class StatsTreeScene extends Phaser.Scene {
       depth: 100,
     });
 
-    this.add.text(layout.centerX, panelY - (layout.compact ? 48 : 54), 'Свободное развитие', {
+    const title = this.add.text(layout.centerX, panelY - (layout.compact ? 34 : 40), 'Руническое древо', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '29px' : '34px',
+      fontSize: layout.veryCompact ? '24px' : layout.compact ? '28px' : '32px',
       color: '#d8c088',
       stroke: '#000000',
       strokeThickness: 5,
@@ -471,38 +471,48 @@ export class StatsTreeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(106);
 
-    this.createPointChip(layout.centerX, panelY - 8, layout.contentWidth - 52);
+    const pointsChip = this.createPointChip(layout.centerX, panelY + 2, layout.contentWidth - 52);
 
-    this.add.text(
+    const hint = this.add.text(
       layout.centerX,
-      panelY + (layout.compact ? 36 : 42),
-      'Выбирай узлы в ветках. Особые печати открываются на ключевых этапах и стоят дороже.',
+      panelY + (layout.compact ? 36 : 44),
+      'Выбери узел, чтобы увидеть описание и открыть следующую печать.',
       {
         fontFamily: UI.font.body,
-        fontSize: layout.compact ? '12px' : '13px',
+        fontSize: layout.veryCompact ? '11px' : '12px',
         color: '#9b9488',
         align: 'center',
         lineSpacing: 3,
         wordWrap: {
-          width: layout.contentWidth - 72,
+          width: layout.contentWidth - 68,
           useAdvancedWrap: true,
         },
         maxLines: 2,
       }
     ).setOrigin(0.5).setDepth(106);
+
+    [panelParts.shadow, panelParts.panel, panelParts.glow, title, pointsChip.shadow, pointsChip.panel, pointsChip.glow, pointsChip.text, hint].forEach(object => {
+      object.setAlpha(0);
+      this.tweens.add({
+        targets: object,
+        alpha: 1,
+        duration: 260,
+        ease: 'Sine.easeOut',
+      });
+    });
   }
 
   private createPointChip(x: number, y: number, maxWidth: number) {
     const points = this.getTreePoints();
-    const width = Math.min(maxWidth, 360);
+    const width = Math.min(maxWidth, 340);
     const canSpend = points > 0;
 
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x,
       y,
       width,
       height: 40,
-      radius: 19,
+      radius: 18,
       color: canSpend ? 0x0f1510 : 0x11100e,
       alpha: 0.96,
       strokeColor: canSpend ? TREE_STYLE.green : TREE_STYLE.bronze,
@@ -512,23 +522,29 @@ export class StatsTreeScene extends Phaser.Scene {
       depth: 103,
     });
 
-    this.add.text(x, y, `Свободные очки: ${points}`, {
+    const text = this.add.text(x, y, `Свободные очки: ${points}`, {
       fontFamily: UI.font.title,
       fontSize: '17px',
       color: canSpend ? '#9fd0a6' : '#b8aa91',
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
-      wordWrap: {
-        width: width - 30,
-      },
+      wordWrap: { width: width - 30 },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(107);
+
+    return {
+      ...panel,
+      text,
+    };
   }
 
-  private createScrollableContent(layout: FreeTreeLayout) {
+  private createScrollableContent(layout: TreeLayout) {
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
+    this.scrollHintObjects.forEach(object => object.destroy());
+    this.scrollHintObjects = [];
+    this.branchCardObjects = [];
 
     this.contentContainer = this.add.container(0, 0).setDepth(5);
 
@@ -538,31 +554,41 @@ export class StatsTreeScene extends Phaser.Scene {
     this.contentMaskGraphics.fillRect(
       layout.safeX,
       layout.contentTop,
-      layout.width - layout.safeX * 2,
+      layout.contentWidth,
       layout.viewportHeight
     );
 
     const mask = this.contentMaskGraphics.createGeometryMask();
     this.contentContainer.setMask(mask);
 
-    let cursorY = layout.contentTop + 16;
+    let cursorY = layout.contentTop + 10;
 
     cursorY = this.createIntroPanel(layout, cursorY);
 
-    BRANCHES.forEach(branch => {
+    BRANCHES.forEach((branch, index) => {
       const cardHeight = this.getBranchCardHeight(layout, branch);
-      this.createBranchCard(layout, branch, cursorY + cardHeight / 2, cardHeight);
+      const objects = this.createBranchCard(layout, branch, cursorY + cardHeight / 2, cardHeight);
+      this.branchCardObjects.push(...objects);
       cursorY += cardHeight + (layout.compact ? 14 : 16);
+
+      objects.filter(object => this.hasSetAlpha(object)).forEach(object => {
+        object.setAlpha(0);
+        this.tweens.add({
+          targets: object,
+          alpha: 1,
+          duration: 220,
+          delay: 100 + index * 45,
+          ease: 'Sine.easeOut',
+        });
+      });
     });
 
     cursorY = this.createAdvicePanel(layout, cursorY + 2);
 
-    const contentHeight = cursorY - layout.contentTop + 26;
-
+    const contentHeight = cursorY - layout.contentTop + 24;
     this.maxScrollY = Math.max(0, contentHeight - layout.viewportHeight);
     this.currentScrollY = Phaser.Math.Clamp(this.currentScrollY, 0, this.maxScrollY);
     this.targetScrollY = Phaser.Math.Clamp(this.targetScrollY, 0, this.maxScrollY);
-
     this.contentContainer.y = -this.currentScrollY;
 
     this.createScrollInput(layout);
@@ -572,23 +598,19 @@ export class StatsTreeScene extends Phaser.Scene {
     }
   }
 
-  private getBranchCardHeight(layout: FreeTreeLayout, branch: BranchData) {
+  private getBranchCardHeight(layout: TreeLayout, branch: BranchData) {
     if (branch.locked) {
-      return layout.compact ? 214 : 226;
+      return layout.veryCompact ? 244 : 258;
     }
 
-    // Карточки стали выше, чтобы блок описания следующего узла
-    // не перекрывался большой кнопкой “Изучить узел”.
-    if (branch.maxLevel > 10) {
-      return layout.compact ? 470 : 500;
-    }
-
-    return layout.compact ? 430 : 460;
+    return branch.maxLevel > 10
+      ? layout.veryCompact ? 348 : layout.compact ? 362 : 378
+      : layout.veryCompact ? 332 : layout.compact ? 344 : 360;
   }
 
-  private createIntroPanel(layout: FreeTreeLayout, topY: number) {
+  private createIntroPanel(layout: TreeLayout, topY: number) {
     const container = this.requireContentContainer();
-    const panelHeight = layout.compact ? 112 : 124;
+    const panelHeight = layout.veryCompact ? 106 : 118;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -597,9 +619,9 @@ export class StatsTreeScene extends Phaser.Scene {
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 30,
+      radius: 28,
       color: TREE_STYLE.warmStone,
-      alpha: 0.92,
+      alpha: 0.9,
       strokeColor: TREE_STYLE.bronze,
       strokeAlpha: 0.44,
       strokeWidth: 2,
@@ -609,9 +631,9 @@ export class StatsTreeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 32, 'Ветки силы', {
+      this.add.text(layout.centerX, topY + 28, 'Древо силы героя', {
         fontFamily: UI.font.title,
-        fontSize: layout.compact ? '22px' : '24px',
+        fontSize: layout.veryCompact ? '20px' : '22px',
         color: '#d8c088',
         stroke: '#000000',
         strokeThickness: 4,
@@ -626,174 +648,162 @@ export class StatsTreeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(
-        layout.centerX,
-        topY + 78,
-        'Каждая ветка — это цепь печатей. Обычные узлы дают стабильные характеристики, крупные печати меняют стиль боя.',
-        {
-          fontFamily: UI.font.body,
-          fontSize: layout.compact ? '12px' : '13px',
-          color: '#b8aa91',
-          align: 'center',
-          lineSpacing: 4,
-          wordWrap: {
-            width: layout.contentWidth - 64,
-            useAdvancedWrap: true,
-          },
-          maxLines: 3,
-        }
-      ).setOrigin(0.5).setDepth(8)
+      this.add.text(layout.centerX, topY + 72, 'Каждая ветка — цепь рунических печатей. Обычные узлы дают стабильный прирост, особые печати меняют стиль боя.', {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '11px' : '12px',
+        color: '#b8aa91',
+        align: 'center',
+        lineSpacing: 4,
+        wordWrap: {
+          width: layout.contentWidth - 64,
+          useAdvancedWrap: true,
+        },
+        maxLines: 3,
+      }).setOrigin(0.5).setDepth(8)
     );
 
-    return topY + panelHeight;
+    return topY + panelHeight + 6;
   }
 
-  private createBranchCard(layout: FreeTreeLayout, branch: BranchData, y: number, height: number) {
+  private createBranchCard(layout: TreeLayout, branch: BranchData, y: number, height: number) {
     const container = this.requireContentContainer();
+    const objects: Phaser.GameObjects.GameObject[] = [];
 
     const level = this.getBranchLevel(branch.id);
-    const nextStage = branch.stages[level];
+    const selectedStage = this.getSelectedStage(branch);
     const isLocked = branch.locked ?? false;
     const isMaxed = branch.maxLevel > 0 && level >= branch.maxLevel;
-    const cost = nextStage?.cost ?? 0;
-    const canUpgrade = !isLocked && !isMaxed && this.getTreePoints() >= cost;
 
     const width = layout.contentWidth;
     const left = layout.centerX - width / 2;
-    const right = layout.centerX + width / 2;
     const top = y - height / 2;
+    const headerHeight = 84;
 
-    this.createRoundedPanel({
+    const panelParts = this.createRoundedPanel({
       parent: container,
       x: layout.centerX,
       y,
       width,
       height,
-      radius: 32,
+      radius: 30,
       color: isLocked ? TREE_STYLE.graphite : TREE_STYLE.soot,
       alpha: 0.96,
-      strokeColor: isLocked ? 0x4a3a27 : branch.accentColor,
-      strokeAlpha: isLocked ? 0.34 : 0.66,
+      strokeColor: isLocked ? TREE_STYLE.bronzeDark : branch.accentColor,
+      strokeAlpha: isLocked ? 0.32 : 0.6,
       strokeWidth: isLocked ? 1 : 2,
       glowColor: branch.accentColor,
       depth: 2,
     });
+    objects.push(panelParts.shadow, panelParts.panel, panelParts.glow);
 
-    this.addTo(
-      container,
-      this.add.rectangle(left + 8, y, 5, height - 36, branch.accentColor, isLocked ? 0.2 : 0.72)
-        .setDepth(7)
-    );
+    const accent = this.add.rectangle(left + 8, y, 6, height - 32, branch.accentColor, isLocked ? 0.16 : 0.72).setDepth(7);
+    this.addTo(container, accent);
+    objects.push(accent);
 
-    this.addTo(
-      container,
-      this.add.circle(left + 52, top + 54, 32, branch.accentColor, isLocked ? 0.08 : 0.16)
-        .setStrokeStyle(2, branch.accentColor, isLocked ? 0.26 : 0.72)
-        .setDepth(7)
-    );
+    const iconBack = this.add.circle(left + 44, top + 42, 26, branch.accentColor, isLocked ? 0.08 : 0.15)
+      .setStrokeStyle(2, branch.accentColor, isLocked ? 0.24 : 0.82)
+      .setDepth(8);
+    this.addTo(container, iconBack);
+    objects.push(iconBack);
 
-    this.addTo(
-      container,
-      this.add.text(left + 52, top + 54, branch.icon, {
-        fontFamily: UI.font.body,
-        fontSize: '24px',
-        color: isLocked ? '#77716a' : '#f1eadc',
-        stroke: '#000000',
-        strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(8)
-    );
+    const icon = this.add.text(left + 44, top + 42, branch.icon, {
+      fontFamily: UI.font.title,
+      fontSize: '22px',
+      color: isLocked ? '#7d756d' : '#f1eadc',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(9);
+    this.addTo(container, icon);
+    objects.push(icon);
 
-    const titleWidth = width - 208;
+    const title = this.add.text(left + 84, top + 30, branch.title, {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '18px' : '20px',
+      color: isLocked ? '#8f806d' : '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 4,
+      wordWrap: {
+        width: width - 186,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(9);
+    this.addTo(container, title);
+    objects.push(title);
 
-    this.addTo(
-      container,
-      this.add.text(left + 96, top + 34, branch.title, {
-        fontFamily: UI.font.title,
-        fontSize: layout.compact ? '20px' : '23px',
-        color: isLocked ? '#8f806d' : '#d8c088',
-        stroke: '#000000',
-        strokeThickness: 4,
-        wordWrap: {
-          width: titleWidth,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(8)
-    );
+    const subtitle = this.add.text(left + 84, top + 58, branch.subtitle, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: isLocked ? '#6f665b' : this.getAccentTextColor(branch.accentColor),
+      wordWrap: {
+        width: width - 186,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(9);
+    this.addTo(container, subtitle);
+    objects.push(subtitle);
 
-    this.addTo(
-      container,
-      this.add.text(left + 96, top + 64, branch.subtitle, {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: isLocked ? '#6f665b' : this.getAccentTextColor(branch.accentColor),
-        wordWrap: {
-          width: titleWidth,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(8)
-    );
-
-    this.createLevelPill(container, right - 70, top + 52, branch, level, isLocked, isMaxed);
+    const levelPill = this.createLevelPill(container, layout.centerX + width / 2 - 64, top + 44, branch, level, isLocked, isMaxed);
+    objects.push(...levelPill);
 
     if (isLocked) {
-      this.createLockedBranchContent(container, layout, branch, top + 110, width - 54);
-      return;
+      objects.push(...this.createLockedBranchContent(container, layout, branch, top + headerHeight + 6, width - 46));
+      return objects;
     }
 
-    const treeTop = top + 100;
-    const treeHeight = branch.maxLevel > 10
-      ? layout.compact ? 158 : 176
-      : layout.compact ? 130 : 146;
-
-    this.createBranchTreeMap({
+    const visibleStages = this.getVisibleStages(branch);
+    const treeY = top + headerHeight + 24;
+    const treeHeight = layout.veryCompact ? 92 : 100;
+    objects.push(...this.createBranchTreeMap({
       parent: container,
       branch,
-      level,
-      x: left + 26,
-      y: treeTop,
-      width: width - 52,
+      currentLevel: level,
+      selectedStageLevel: selectedStage?.level,
+      visibleStages,
+      x: left + 18,
+      y: treeY,
+      width: width - 36,
       height: treeHeight,
       compact: layout.compact,
-    });
+    }));
 
-    const infoY = treeTop + treeHeight + (layout.compact ? 58 : 64);
-
-    this.createNextStageBox({
+    const detailTop = treeY + treeHeight + 12;
+    const detailHeight = layout.veryCompact ? 120 : 128;
+    const buttonHeight = 52;
+    const buttonY = top + height - 42;
+    objects.push(...this.createSelectedNodePanel({
       parent: container,
-      x: layout.centerX,
-      y: infoY,
-      width: width - 56,
-      height: layout.compact ? 86 : 94,
       branch,
-      nextStage,
-      isMaxed,
-      canUpgrade,
-    });
+      selectedStage,
+      currentLevel: level,
+      x: layout.centerX,
+      y: detailTop + detailHeight / 2,
+      width: width - 36,
+      height: detailHeight,
+    }));
 
-    const buttonY = top + height - (layout.compact ? 42 : 44);
-    const buttonWidth = Math.min(width - 56, 460);
-
-    this.createTreeButton({
+    const status = this.getSelectedNodeStatus(branch, selectedStage, level);
+    const button = this.createTreeButton({
       parent: container,
       x: layout.centerX,
       y: buttonY,
-      width: buttonWidth,
-      height: 52,
-      text: isMaxed
-        ? 'Ветка изучена полностью'
-        : canUpgrade
-          ? `Изучить узел за ${cost}`
-          : `Нужно ${cost} очк.`,
-      disabled: isMaxed || !canUpgrade,
+      width: Math.min(width - 42, 420),
+      height: buttonHeight,
+      text: status.buttonText,
       accentColor: branch.accentColor,
-      variant: isMaxed ? 'green' : canUpgrade ? 'gold' : 'dark',
+      variant: status.variant,
+      disabled: status.disabled,
       onClick: () => {
-        this.showUpgradeConfirm(branch);
+        if (selectedStage && status.canUpgrade) {
+          this.showUpgradeConfirm(branch, selectedStage);
+        }
       },
-      depth: 9,
+      depth: 10,
     });
+    objects.push(button.shadow, button.bg, button.label, button.zone);
+
+    return objects;
   }
 
   private createLevelPill(
@@ -805,17 +815,12 @@ export class StatsTreeScene extends Phaser.Scene {
     isLocked: boolean,
     isMaxed: boolean
   ) {
-    const text = isLocked
-      ? 'скоро'
-      : isMaxed
-        ? 'полностью'
-        : `${level}/${branch.maxLevel}`;
-
+    const text = isLocked ? 'скоро' : isMaxed ? 'полностью' : `${level}/${branch.maxLevel}`;
     const width = isMaxed ? 104 : 86;
     const color = isLocked ? 0x12100d : isMaxed ? 0x0f1510 : 0x17100c;
-    const stroke = isLocked ? 0x4a3a27 : isMaxed ? TREE_STYLE.green : branch.accentColor;
+    const stroke = isLocked ? TREE_STYLE.bronzeDark : isMaxed ? TREE_STYLE.green : branch.accentColor;
 
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       parent: container,
       x,
       y,
@@ -831,36 +836,35 @@ export class StatsTreeScene extends Phaser.Scene {
       depth: 7,
     });
 
-    this.addTo(
-      container,
-      this.add.text(x, y, text, {
-        fontFamily: UI.font.title,
-        fontSize: isMaxed ? '12px' : '14px',
-        color: isLocked ? '#6f665b' : isMaxed ? '#9fd0a6' : '#d8d0bf',
-        stroke: '#000000',
-        strokeThickness: 2,
-        align: 'center',
-        wordWrap: {
-          width: width - 12,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(10)
-    );
+    const label = this.add.text(x, y, text, {
+      fontFamily: UI.font.title,
+      fontSize: isMaxed ? '12px' : '14px',
+      color: isLocked ? '#6f665b' : isMaxed ? '#9fd0a6' : '#d8d0bf',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: { width: width - 12 },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(10);
+    this.addTo(container, label);
+
+    return [panel.shadow, panel.panel, panel.glow, label];
   }
 
   private createLockedBranchContent(
     container: Phaser.GameObjects.Container,
-    layout: FreeTreeLayout,
+    layout: TreeLayout,
     branch: BranchData,
     y: number,
     width: number
   ) {
-    this.createRoundedPanel({
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    const panel = this.createRoundedPanel({
       parent: container,
       x: layout.centerX,
-      y: y + 46,
+      y: y + 64,
       width,
-      height: 112,
+      height: 140,
       radius: 24,
       color: TREE_STYLE.graphite,
       alpha: 0.88,
@@ -870,60 +874,64 @@ export class StatsTreeScene extends Phaser.Scene {
       glowColor: branch.accentColor,
       depth: 7,
     });
+    objects.push(panel.shadow, panel.panel, panel.glow);
 
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, y + 22, 'Ветка запечатана', {
-        fontFamily: UI.font.title,
-        fontSize: '18px',
-        color: '#8f806d',
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'center',
-        wordWrap: {
-          width: width - 36,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(10)
-    );
+    const title = this.add.text(layout.centerX, y + 28, 'Ветка запечатана', {
+      fontFamily: UI.font.title,
+      fontSize: '18px',
+      color: '#8f806d',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      wordWrap: {
+        width: width - 36,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(10);
+    this.addTo(container, title);
+    objects.push(title);
 
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, y + 68, branch.normalText, {
-        fontFamily: UI.font.body,
-        fontSize: '13px',
-        color: '#8f806d',
-        align: 'center',
-        lineSpacing: 4,
-        wordWrap: {
-          width: width - 48,
-          useAdvancedWrap: true,
-        },
-        maxLines: 3,
-      }).setOrigin(0.5).setDepth(10)
-    );
+    const desc = this.add.text(layout.centerX, y + 82, branch.normalText, {
+      fontFamily: UI.font.body,
+      fontSize: '13px',
+      color: '#8f806d',
+      align: 'center',
+      lineSpacing: 4,
+      wordWrap: {
+        width: width - 48,
+        useAdvancedWrap: true,
+      },
+      maxLines: 4,
+    }).setOrigin(0.5).setDepth(10);
+    this.addTo(container, desc);
+    objects.push(desc);
+
+    return objects;
   }
 
   private createBranchTreeMap(config: {
     parent: Phaser.GameObjects.Container;
     branch: BranchData;
-    level: number;
+    currentLevel: number;
+    selectedStageLevel?: number;
+    visibleStages: VisibleStage[];
     x: number;
     y: number;
     width: number;
     height: number;
     compact: boolean;
   }) {
-    const { parent, branch, level, x, y, width, height, compact } = config;
+    const { parent, branch, currentLevel, selectedStageLevel, visibleStages, x, y, width, height, compact } = config;
+    const objects: Phaser.GameObjects.GameObject[] = [];
 
-    this.createRoundedPanel({
+    const bg = this.createRoundedPanel({
       parent,
       x: x + width / 2,
       y: y + height / 2,
       width,
       height,
-      radius: 24,
+      radius: 22,
       color: TREE_STYLE.graphite,
       alpha: 0.72,
       strokeColor: TREE_STYLE.bronzeDark,
@@ -932,282 +940,311 @@ export class StatsTreeScene extends Phaser.Scene {
       glowColor: branch.accentColor,
       depth: 7,
     });
+    objects.push(bg.shadow, bg.panel, bg.glow);
 
-    this.addTo(
-      parent,
-      this.add.text(x + 18, y + 20, this.getBranchTreeLabel(branch, level), {
-        fontFamily: UI.font.body,
-        fontSize: compact ? '11px' : '12px',
-        color: '#8f806d',
-        wordWrap: {
-          width: width - 36,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(10)
-    );
+    const smallLabel = this.add.text(x + 16, y + 15, this.getBranchTreeLabel(branch, currentLevel), {
+      fontFamily: UI.font.body,
+      fontSize: compact ? '11px' : '12px',
+      color: '#8f806d',
+      wordWrap: {
+        width: width - 32,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(10);
+    this.addTo(parent, smallLabel);
+    objects.push(smallLabel);
 
-    const mapTop = y + 42;
-    const mapHeight = height - 56;
-    const points = this.getNodePoints(branch, x + 24, mapTop, width - 48, mapHeight);
-
-    const lines = this.add.graphics();
-    lines.setDepth(9);
-
-    for (let index = 1; index < points.length; index += 1) {
-      const previous = points[index - 1];
-      const current = points[index];
-      const unlocked = level >= current.stage.level;
-
-      lines.lineStyle(
-        unlocked ? 4 : 2,
-        unlocked ? branch.accentColor : TREE_STYLE.bronzeDark,
-        unlocked ? 0.7 : 0.42
-      );
-
-      lines.beginPath();
-      lines.moveTo(previous.x, previous.y);
-
-      const midX = (previous.x + current.x) / 2;
-      lines.lineTo(midX, previous.y);
-      lines.lineTo(midX, current.y);
-      lines.lineTo(current.x, current.y);
-      lines.strokePath();
-    }
-
-    parent.add(lines);
-
-    points.forEach(point => {
-      this.createTreeNode(parent, branch, point, level);
-    });
-  }
-
-  private getNodePoints(branch: BranchData, x: number, y: number, width: number, height: number): NodePoint[] {
-    const stages = branch.maxLevel > 10
-      ? branch.stages.filter(stage => stage.special)
-      : branch.stages;
-
-    if (stages.length === 0) {
-      return [];
-    }
-
-    const count = stages.length;
-    const stepX = count <= 1 ? 0 : width / (count - 1);
-    const centerY = y + height / 2;
-
-    return stages.map((stage, index) => {
-      const wave = index % 3 === 0
-        ? -height * 0.24
-        : index % 3 === 1
-          ? height * 0.18
-          : -height * 0.03;
-
+    const pathY = y + height - 34;
+    const points = visibleStages.map((visibleStage, index) => {
+      const step = visibleStages.length <= 1 ? 0 : (width - 52) / (visibleStages.length - 1);
       return {
-        stage,
-        x: x + stepX * index,
-        y: centerY + wave,
+        stage: visibleStage.stage,
+        x: x + 26 + step * index,
+        y: pathY,
       };
     });
+
+    const lines = this.add.graphics().setDepth(9);
+    visibleStages.forEach((_visibleStage, index) => {
+      if (index === 0) {
+        return;
+      }
+
+      const previous = points[index - 1];
+      const current = points[index];
+      const prevUnlocked = currentLevel >= previous.stage.level;
+      const currUnlocked = currentLevel >= current.stage.level;
+      const currAvailable = currentLevel + 1 === current.stage.level;
+
+      const color = currUnlocked || prevUnlocked
+        ? branch.accentColor
+        : currAvailable
+          ? TREE_STYLE.bronze
+          : TREE_STYLE.bronzeDark;
+
+      const alpha = currUnlocked
+        ? 0.78
+        : currAvailable
+          ? 0.45
+          : 0.24;
+
+      lines.lineStyle(currUnlocked ? 5 : 3, color, alpha);
+      lines.beginPath();
+      lines.moveTo(previous.x, previous.y);
+      lines.lineTo(current.x, current.y);
+      lines.strokePath();
+    });
+    parent.add(lines);
+    objects.push(lines);
+
+    points.forEach(point => {
+      objects.push(...this.createTreeNode(parent, branch, point.x, point.y, point.stage, currentLevel, selectedStageLevel));
+    });
+
+    return objects;
   }
 
   private createTreeNode(
     container: Phaser.GameObjects.Container,
     branch: BranchData,
-    point: NodePoint,
-    currentLevel: number
+    x: number,
+    y: number,
+    stage: StageData,
+    currentLevel: number,
+    selectedStageLevel?: number
   ) {
-    const unlocked = currentLevel >= point.stage.level;
-    const next = currentLevel + 1 === point.stage.level;
-    const completedPrevious = currentLevel >= point.stage.level - 1;
-    const available = next && completedPrevious;
-    const special = point.stage.special ?? false;
+    const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const radius = special ? 21 : 17;
+    const unlocked = currentLevel >= stage.level;
+    const available = currentLevel + 1 === stage.level;
+    const locked = currentLevel + 1 < stage.level;
+    const selected = selectedStageLevel === stage.level;
+    const special = stage.special ?? false;
+
+    const radius = special ? 20 : 17;
     const fill = unlocked
       ? branch.accentColor
-      : next
+      : available
         ? TREE_STYLE.warmStone
         : TREE_STYLE.stoneSoft;
-
-    const stroke = special || next ? TREE_STYLE.gold : branch.accentColor;
-    const alpha = unlocked ? 0.95 : next ? 0.92 : 0.72;
-
-    this.addTo(
-      container,
-      this.add.circle(point.x, point.y, radius, fill, alpha)
-        .setStrokeStyle(next ? 3 : 2, stroke, unlocked || next ? 0.9 : 0.42)
-        .setDepth(11)
-    );
-
-    this.addTo(
-      container,
-      this.add.circle(point.x, point.y, radius + 7, stroke, next ? 0.08 : unlocked ? 0.045 : 0.018)
-        .setDepth(10)
-    );
-
-    const iconText = unlocked
-      ? '✓'
-      : special
-        ? '★'
-        : `${point.stage.level}`;
-
-    this.addTo(
-      container,
-      this.add.text(point.x, point.y, iconText, {
-        fontFamily: UI.font.title,
-        fontSize: special ? '13px' : '11px',
-        color: unlocked ? '#ffffff' : next ? '#d8c088' : '#8f806d',
-        stroke: '#000000',
-        strokeThickness: 2,
-        align: 'center',
-        wordWrap: {
-          width: radius * 2,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(12)
-    );
+    const stroke = selected
+      ? TREE_STYLE.goldSoft
+      : special || available
+        ? TREE_STYLE.gold
+        : branch.accentColor;
 
     if (available) {
-      const zone = this.add.zone(point.x, point.y, 54, 54)
-        .setDepth(14)
-        .setInteractive({ useHandCursor: true });
-
-      zone.on('pointerup', () => {
-        if (this.didDrag) {
-          return;
-        }
-
-        this.showUpgradeConfirm(branch);
+      const pulse = this.add.circle(x, y, radius + 9, branch.accentColor, 0.12).setDepth(10);
+      this.addTo(container, pulse);
+      this.tweens.add({
+        targets: pulse,
+        alpha: { from: 0.06, to: 0.2 },
+        scaleX: { from: 1, to: 1.16 },
+        scaleY: { from: 1, to: 1.16 },
+        duration: 980,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       });
-
-      container.add(zone);
+      objects.push(pulse);
     }
 
-    this.addTo(
-      container,
-      this.add.text(point.x, point.y + radius + 12, `${point.stage.cost} очк.`, {
+    if (unlocked) {
+      const glow = this.add.circle(x, y, radius + 10, branch.accentColor, 0.08).setDepth(10);
+      this.addTo(container, glow);
+      this.tweens.add({
+        targets: glow,
+        alpha: { from: 0.05, to: 0.14 },
+        duration: 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      objects.push(glow);
+    }
+
+    const ring = this.add.circle(x, y, radius + (selected ? 8 : 6), stroke, selected ? 0.14 : 0.05)
+      .setStrokeStyle(selected ? 2 : 1, stroke, selected ? 0.8 : 0.25)
+      .setDepth(11);
+    this.addTo(container, ring);
+    objects.push(ring);
+
+    const node = this.add.circle(x, y, radius, fill, unlocked ? 0.96 : available ? 0.92 : 0.72)
+      .setStrokeStyle(selected ? 3 : available ? 3 : 2, stroke, unlocked || available || selected ? 0.9 : 0.42)
+      .setDepth(12);
+    this.addTo(container, node);
+    objects.push(node);
+
+    const iconText = unlocked ? '✓' : special ? '★' : `${stage.level}`;
+    const icon = this.add.text(x, y, iconText, {
+      fontFamily: UI.font.title,
+      fontSize: special ? '13px' : '11px',
+      color: unlocked ? '#ffffff' : available ? '#d8c088' : '#8f806d',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: { width: radius * 2 },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(13);
+    this.addTo(container, icon);
+    objects.push(icon);
+
+    const costText = this.add.text(x, y + radius + 11, `${stage.cost}`, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: unlocked ? '#9fd0a6' : available ? '#d8c088' : '#6f665b',
+      align: 'center',
+      wordWrap: { width: 38 },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(13);
+    this.addTo(container, costText);
+    objects.push(costText);
+
+    const zone = this.add.zone(x, y, 56, 64).setDepth(16).setInteractive({ useHandCursor: true });
+    zone.on('pointerdown', () => {
+      if (this.didDrag) {
+        return;
+      }
+
+      this.selectedNode = {
+        branchId: branch.id,
+        stageLevel: stage.level,
+      };
+
+      this.tweens.add({
+        targets: [node, ring],
+        scaleX: { from: 1, to: 1.08 },
+        scaleY: { from: 1, to: 1.08 },
+        duration: 90,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+      });
+
+      this.scene.restart({
+        selectedNode: this.selectedNode,
+        scrollY: this.targetScrollY,
+      });
+    });
+    container.add(zone);
+    objects.push(zone);
+
+    if (locked) {
+      const lock = this.add.text(x, y - radius - 10, '⛨', {
         fontFamily: UI.font.body,
-        fontSize: '10px',
-        color: unlocked ? '#9fd0a6' : next ? '#d8c088' : '#6f665b',
-        align: 'center',
-        wordWrap: {
-          width: 58,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(12)
-    );
+        fontSize: '12px',
+        color: '#5f564d',
+      }).setOrigin(0.5).setDepth(13).setAlpha(0.8);
+      this.addTo(container, lock);
+      objects.push(lock);
+    }
+
+    return objects;
   }
 
-  private createNextStageBox(config: {
+  private createSelectedNodePanel(config: {
     parent: Phaser.GameObjects.Container;
+    branch: BranchData;
+    selectedStage?: StageData;
+    currentLevel: number;
     x: number;
     y: number;
     width: number;
     height: number;
-    branch: BranchData;
-    nextStage?: StageData;
-    isMaxed: boolean;
-    canUpgrade: boolean;
   }) {
-    const {
-      parent,
-      x,
-      y,
-      width,
-      height,
-      branch,
-      nextStage,
-      isMaxed,
-      canUpgrade,
-    } = config;
+    const { parent, branch, selectedStage, currentLevel, x, y, width, height } = config;
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    const status = this.getSelectedNodeStatus(branch, selectedStage, currentLevel);
 
-    const title = isMaxed
-      ? 'Ветка полностью изучена'
-      : nextStage
-        ? `${nextStage.special ? 'Особая печать' : 'Следующий узел'}: ${nextStage.title}`
-        : 'Узел недоступен';
-
-    const description = isMaxed
-      ? 'Все доступные этапы этой ветки уже открыты.'
-      : nextStage?.description ?? branch.normalText;
-
-    const costText = isMaxed
-      ? 'MAX'
-      : nextStage
-        ? `${nextStage.cost} очк.`
-        : '—';
-
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       parent,
       x,
       y,
       width,
       height,
       radius: 22,
-      color: isMaxed ? 0x0f1510 : 0x12100d,
-      alpha: 0.92,
-      strokeColor: isMaxed ? TREE_STYLE.green : canUpgrade ? branch.accentColor : TREE_STYLE.bronzeDark,
-      strokeAlpha: isMaxed ? 0.58 : canUpgrade ? 0.58 : 0.38,
+      color: TREE_STYLE.graphite,
+      alpha: 0.9,
+      strokeColor: status.strokeColor,
+      strokeAlpha: 0.55,
       strokeWidth: 1,
       glowColor: branch.accentColor,
       depth: 7,
     });
+    objects.push(panel.shadow, panel.panel, panel.glow);
 
     const left = x - width / 2;
-    const right = x + width / 2;
+    const title = this.add.text(left + 18, y - height / 2 + 16, selectedStage ? selectedStage.title : 'Выбери узел', {
+      fontFamily: UI.font.title,
+      fontSize: '14px',
+      color: status.titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: width - 128,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0, 0).setDepth(10);
+    this.addTo(parent, title);
+    objects.push(title);
 
-    this.addTo(
-      parent,
-      this.add.text(left + 18, y - height / 2 + 18, title, {
-        fontFamily: UI.font.title,
-        fontSize: '14px',
-        color: isMaxed ? '#9fd0a6' : '#d8c088',
-        stroke: '#000000',
-        strokeThickness: 3,
-        wordWrap: {
-          width: width - 112,
-          useAdvancedWrap: true,
-        },
-        maxLines: 2,
-        lineSpacing: 1,
-      }).setOrigin(0, 0).setDepth(10)
-    );
+    const badge = this.add.text(x + width / 2 - 18, y - height / 2 + 18, status.shortText, {
+      fontFamily: UI.font.body,
+      fontSize: '11px',
+      color: status.badgeColor,
+      backgroundColor: '#000000',
+      padding: { left: 8, right: 8, top: 4, bottom: 4 },
+    }).setOrigin(1, 0).setDepth(10);
+    this.addTo(parent, badge);
+    objects.push(badge);
 
-    this.addTo(
-      parent,
-      this.add.text(right - 18, y - height / 2 + 22, costText, {
-        fontFamily: UI.font.title,
-        fontSize: '13px',
-        color: isMaxed ? '#9fd0a6' : canUpgrade ? '#d8c088' : '#8f806d',
-        stroke: '#000000',
-        strokeThickness: 2,
-        align: 'right',
-        wordWrap: {
-          width: 76,
-        },
-        maxLines: 1,
-      }).setOrigin(1, 0).setDepth(10)
-    );
+    const meta = this.add.text(left + 18, y - height / 2 + 42, selectedStage ? `Ветка: ${branch.title} • уровень ${selectedStage.level}` : `Ветка: ${branch.title}`, {
+      fontFamily: UI.font.body,
+      fontSize: '11px',
+      color: '#8f806d',
+      wordWrap: {
+        width: width - 36,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0).setDepth(10);
+    this.addTo(parent, meta);
+    objects.push(meta);
 
-    this.addTo(
-      parent,
-      this.add.text(left + 18, y - height / 2 + 52, description, {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: '#b8aa91',
-        lineSpacing: 4,
-        wordWrap: {
-          width: width - 36,
-          useAdvancedWrap: true,
-        },
-        maxLines: 3,
-      }).setOrigin(0, 0).setDepth(10)
-    );
+    const description = this.add.text(left + 18, y - height / 2 + 64, selectedStage?.description ?? branch.normalText, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: '#b8aa91',
+      lineSpacing: 4,
+      wordWrap: {
+        width: width - 36,
+        useAdvancedWrap: true,
+      },
+      maxLines: 3,
+    }).setOrigin(0, 0).setDepth(10);
+    this.addTo(parent, description);
+    objects.push(description);
+
+    const foot = this.add.text(left + 18, y + height / 2 - 22, status.footText, {
+      fontFamily: UI.font.body,
+      fontSize: '11px',
+      color: status.badgeColor,
+      wordWrap: {
+        width: width - 36,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(10);
+    this.addTo(parent, foot);
+    objects.push(foot);
+
+    return objects;
   }
 
-  private createAdvicePanel(layout: FreeTreeLayout, topY: number) {
+  private createAdvicePanel(layout: TreeLayout, topY: number) {
     const container = this.requireContentContainer();
-    const panelHeight = 120;
+    const panelHeight = 112;
     const panelY = topY + panelHeight / 2;
 
     this.createRoundedPanel({
@@ -1226,53 +1263,47 @@ export class StatsTreeScene extends Phaser.Scene {
       depth: 2,
     });
 
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, topY + 30, 'Совет по развитию', {
-        fontFamily: UI.font.title,
-        fontSize: '21px',
-        color: '#d8c088',
-        stroke: '#000000',
-        strokeThickness: 4,
+    this.addTo(container, this.add.text(layout.centerX, topY + 24, 'Совет по развитию', {
+      fontFamily: UI.font.title,
+      fontSize: '20px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 58,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(8));
+
+    this.addTo(container, this.add.text(
+      layout.centerX,
+      topY + 70,
+      'Начни с 1–2 ключевых веток под роль героя. Длинные ветки дают базу, короткие ветки — дорогие сильные эффекты.',
+      {
+        fontFamily: UI.font.body,
+        fontSize: '13px',
+        color: '#9b9488',
         align: 'center',
+        lineSpacing: 4,
         wordWrap: {
-          width: layout.contentWidth - 58,
+          width: layout.contentWidth - 64,
           useAdvancedWrap: true,
         },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(8)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(
-        layout.centerX,
-        topY + 78,
-        'Сначала открой 1–2 ветки под роль героя. Длинные ветки дают стабильный рост, короткие — дорогие сильные эффекты.',
-        {
-          fontFamily: UI.font.body,
-          fontSize: '13px',
-          color: '#9b9488',
-          align: 'center',
-          lineSpacing: 4,
-          wordWrap: {
-            width: layout.contentWidth - 64,
-            useAdvancedWrap: true,
-          },
-          maxLines: 3,
-        }
-      ).setOrigin(0.5).setDepth(8)
-    );
+        maxLines: 3,
+      }
+    ).setOrigin(0.5).setDepth(8));
 
     return topY + panelHeight;
   }
 
-  private createScrollInput(layout: FreeTreeLayout) {
-    this.input.off('pointerdown');
-    this.input.off('pointermove');
-    this.input.off('pointerup');
-    this.input.off('pointerupoutside');
-    this.input.off('wheel');
+  private createScrollInput(layout: TreeLayout) {
+    this.input.removeAllListeners('pointerdown');
+    this.input.removeAllListeners('pointermove');
+    this.input.removeAllListeners('pointerup');
+    this.input.removeAllListeners('pointerupoutside');
+    this.input.removeAllListeners('wheel');
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.isPointerInsideContent(pointer, layout) || this.maxScrollY <= 0) {
@@ -1291,17 +1322,11 @@ export class StatsTreeScene extends Phaser.Scene {
       }
 
       const deltaY = pointer.y - this.dragStartY;
-
       if (Math.abs(deltaY) > 8) {
         this.didDrag = true;
       }
 
-      this.targetScrollY = Phaser.Math.Clamp(
-        this.dragStartScrollY - deltaY,
-        0,
-        this.maxScrollY
-      );
-
+      this.targetScrollY = Phaser.Math.Clamp(this.dragStartScrollY - deltaY, 0, this.maxScrollY);
       this.currentScrollY = this.targetScrollY;
 
       if (this.contentContainer) {
@@ -1309,77 +1334,73 @@ export class StatsTreeScene extends Phaser.Scene {
       }
     });
 
-    this.input.on('pointerup', () => {
+    const resetDrag = () => {
       this.isDragging = false;
       this.time.delayedCall(0, () => {
         this.didDrag = false;
       });
-    });
+    };
 
-    this.input.on('pointerupoutside', () => {
-      this.isDragging = false;
-      this.time.delayedCall(0, () => {
-        this.didDrag = false;
-      });
-    });
+    this.input.on('pointerup', resetDrag);
+    this.input.on('pointerupoutside', resetDrag);
 
-    this.input.on(
-      'wheel',
-      (
-        pointer: Phaser.Input.Pointer,
-        _objects: Phaser.GameObjects.GameObject[],
-        _deltaX: number,
-        deltaY: number
-      ) => {
-        if (!this.isPointerInsideContent(pointer, layout) || this.maxScrollY <= 0) {
-          return;
-        }
-
-        this.targetScrollY = Phaser.Math.Clamp(
-          this.targetScrollY + deltaY * 0.55,
-          0,
-          this.maxScrollY
-        );
+    this.input.on('wheel', (
+      pointer: Phaser.Input.Pointer,
+      _objects: Phaser.GameObjects.GameObject[],
+      _deltaX: number,
+      deltaY: number
+    ) => {
+      if (!this.isPointerInsideContent(pointer, layout) || this.maxScrollY <= 0) {
+        return;
       }
-    );
+
+      this.targetScrollY = Phaser.Math.Clamp(this.targetScrollY + deltaY * 0.55, 0, this.maxScrollY);
+    });
   }
 
-  private isPointerInsideContent(pointer: Phaser.Input.Pointer, layout: FreeTreeLayout) {
+  private isPointerInsideContent(pointer: Phaser.Input.Pointer, layout: TreeLayout) {
     return (
       pointer.x >= layout.safeX &&
-      pointer.x <= layout.width - layout.safeX &&
+      pointer.x <= layout.safeX + layout.contentWidth &&
       pointer.y >= layout.contentTop &&
       pointer.y <= layout.contentBottom
     );
   }
 
-  private createScrollHint(layout: FreeTreeLayout) {
-    const hintY = layout.contentBottom - 18;
+  private createScrollHint(layout: TreeLayout) {
+    const trackX = layout.safeX + layout.contentWidth - 6;
+    const trackY = layout.contentTop + layout.viewportHeight / 2;
+    const viewportHeight = layout.viewportHeight;
+    const visibleRatio = viewportHeight / Math.max(viewportHeight + this.maxScrollY, viewportHeight + 1);
+    const thumbHeight = Phaser.Math.Clamp(viewportHeight * visibleRatio, 42, viewportHeight);
+    const travel = Math.max(0, viewportHeight - thumbHeight);
+    const progress = this.maxScrollY <= 0 ? 0 : this.currentScrollY / this.maxScrollY;
+    const thumbY = layout.contentTop + thumbHeight / 2 + travel * progress;
 
-    const bg = this.add.rectangle(layout.centerX, hintY, 250, 28, 0x000000, 0.4)
-      .setDepth(230);
-
-    const text = this.add.text(layout.centerX, hintY, 'Прокручивай ветки', {
+    const track = this.add.rectangle(trackX, trackY, 4, viewportHeight - 18, TREE_STYLE.bronzeDark, 0.42).setDepth(220);
+    const thumb = this.add.rectangle(trackX, thumbY, 4, thumbHeight, TREE_STYLE.gold, 0.72).setDepth(221);
+    const hintBg = this.add.rectangle(layout.centerX, layout.contentBottom - 14, 210, 28, 0x000000, 0.38).setDepth(220);
+    const hintText = this.add.text(layout.centerX, layout.contentBottom - 14, 'Прокручивай ветки', {
       fontFamily: UI.font.body,
-      fontSize: '12px',
+      fontSize: '11px',
       color: '#8f806d',
       align: 'center',
-      wordWrap: {
-        width: 230,
-      },
+      wordWrap: { width: 190 },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(231);
+    }).setOrigin(0.5).setDepth(221);
+
+    this.scrollHintObjects.push(track, thumb, hintBg, hintText);
 
     this.tweens.add({
-      targets: [bg, text],
-      alpha: 0.22,
+      targets: [hintBg, hintText],
+      alpha: 0.2,
       duration: 900,
       yoyo: true,
       repeat: -1,
     });
   }
 
-  private createBottomButton(layout: FreeTreeLayout) {
+  private createBottomButton(layout: TreeLayout) {
     const y = layout.height - layout.safeBottom - 32;
 
     this.add.rectangle(
@@ -1391,14 +1412,7 @@ export class StatsTreeScene extends Phaser.Scene {
       0.74
     ).setDepth(236);
 
-    this.add.rectangle(
-      layout.centerX,
-      y - 42,
-      layout.contentWidth,
-      1,
-      TREE_STYLE.bronze,
-      0.24
-    ).setDepth(237);
+    this.add.rectangle(layout.centerX, y - 42, layout.contentWidth, 1, TREE_STYLE.bronze, 0.24).setDepth(237);
 
     this.createTreeButton({
       x: layout.centerX,
@@ -1415,40 +1429,54 @@ export class StatsTreeScene extends Phaser.Scene {
     });
   }
 
-  private showUpgradeConfirm(branch: BranchData) {
+  private playEntryAnimation(layout: TreeLayout) {
+    const shade = this.add.rectangle(layout.centerX, layout.height / 2, layout.width, layout.height, 0x000000, 0.28).setDepth(500);
+    this.tweens.add({
+      targets: shade,
+      alpha: 0,
+      duration: 320,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        shade.destroy();
+      },
+    });
+  }
+
+  private showUpgradeConfirm(branch: BranchData, stage?: StageData) {
     if (this.didDrag) {
       return;
     }
 
     const level = this.getBranchLevel(branch.id);
-    const nextStage = branch.stages[level];
+    const targetStage = stage ?? branch.stages[level];
 
-    if (!nextStage || branch.locked || level >= branch.maxLevel) {
+    if (!targetStage || branch.locked || level >= branch.maxLevel) {
       return;
     }
 
-    const enough = this.getTreePoints() >= nextStage.cost;
+    if (targetStage.level !== level + 1) {
+      this.showMessage('Печать недоступна', 'Сначала нужно открыть предыдущие узлы этой ветки.');
+      return;
+    }
 
+    const enough = this.getTreePoints() >= targetStage.cost;
     if (!enough) {
-      this.showMessage(
-        'Недостаточно очков',
-        `Для узла “${nextStage.title}” нужно ${nextStage.cost} очк. Свободно: ${this.getTreePoints()}.`
-      );
+      this.showMessage('Недостаточно очков', `Для узла “${targetStage.title}” нужно ${targetStage.cost} очк. Свободно: ${this.getTreePoints()}.`);
       return;
     }
 
     const description = [
       `Ветка: ${branch.title}`,
-      `Узел: ${nextStage.title}`,
-      `Цена: ${nextStage.cost} очк.`,
+      `Узел: ${targetStage.title}`,
+      `Цена: ${targetStage.cost} очк.`,
       '',
-      nextStage.description,
+      targetStage.description,
     ].join('\n');
 
     this.showModal({
       title: 'Изучить печать?',
       description,
-      confirmText: `Изучить за ${nextStage.cost}`,
+      confirmText: `Изучить за ${targetStage.cost}`,
       confirmVariant: 'green',
       onConfirm: () => {
         this.upgradeBranch(branch.id);
@@ -1462,7 +1490,6 @@ export class StatsTreeScene extends Phaser.Scene {
     }
 
     const branch = BRANCHES.find(item => item.id === branchId);
-
     if (!branch || branch.locked) {
       return;
     }
@@ -1485,14 +1512,20 @@ export class StatsTreeScene extends Phaser.Scene {
       [branchId]: currentLevel + 1,
     };
 
+    this.selectedNode = {
+      branchId,
+      stageLevel: currentLevel + 1,
+    };
+
     void saveGameAsync();
 
-    this.modalObjects.forEach(object => {
-      object.destroy();
-    });
+    this.modalObjects.forEach(object => object.destroy());
     this.modalObjects = [];
 
-    this.scene.restart();
+    this.scene.restart({
+      selectedNode: this.selectedNode,
+      scrollY: this.targetScrollY,
+    });
   }
 
   private showMessage(title: string, message: string) {
@@ -1513,8 +1546,8 @@ export class StatsTreeScene extends Phaser.Scene {
     onConfirm: () => void;
   }) {
     const { width, height } = this.scale;
-    const modalWidth = Math.min(width - 52, 620);
-    const modalHeight = Math.min(height - 170, 430);
+    const modalWidth = Math.min(width - 46, 620);
+    const modalHeight = Math.min(height - 120, 430);
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -1540,9 +1573,9 @@ export class StatsTreeScene extends Phaser.Scene {
       depth: 1001,
     });
 
-    const titleText = this.add.text(centerX, centerY - modalHeight / 2 + 48, config.title, {
+    const titleText = this.add.text(centerX, centerY - modalHeight / 2 + 42, config.title, {
       fontFamily: UI.font.title,
-      fontSize: '26px',
+      fontSize: '24px',
       color: '#d8c088',
       stroke: '#000000',
       strokeThickness: 4,
@@ -1554,18 +1587,11 @@ export class StatsTreeScene extends Phaser.Scene {
       maxLines: 2,
     }).setOrigin(0.5).setDepth(1005);
 
-    const divider = this.add.rectangle(
-      centerX,
-      centerY - modalHeight / 2 + 88,
-      modalWidth - 92,
-      2,
-      TREE_STYLE.gold,
-      0.24
-    ).setDepth(1005);
+    const divider = this.add.rectangle(centerX, centerY - modalHeight / 2 + 82, modalWidth - 92, 2, TREE_STYLE.gold, 0.24).setDepth(1005);
 
-    const descriptionText = this.add.text(centerX, centerY - modalHeight / 2 + 116, config.description, {
+    const descriptionText = this.add.text(centerX, centerY - modalHeight / 2 + 106, config.description, {
       fontFamily: UI.font.body,
-      fontSize: '16px',
+      fontSize: '15px',
       color: '#d8c7a3',
       align: 'center',
       lineSpacing: 6,
@@ -1573,7 +1599,7 @@ export class StatsTreeScene extends Phaser.Scene {
         width: modalWidth - 86,
         useAdvancedWrap: true,
       },
-      maxLines: 9,
+      maxLines: 10,
     }).setOrigin(0.5, 0).setDepth(1005);
 
     const closeModal = () => {
@@ -1583,7 +1609,7 @@ export class StatsTreeScene extends Phaser.Scene {
 
     const confirmButton = this.createTreeButton({
       x: centerX,
-      y: centerY + modalHeight / 2 - 98,
+      y: centerY + modalHeight / 2 - 94,
       width: Math.min(modalWidth - 94, 390),
       height: 54,
       text: config.confirmText,
@@ -1598,46 +1624,42 @@ export class StatsTreeScene extends Phaser.Scene {
 
     const cancelButton = this.createTreeButton({
       x: centerX,
-      y: centerY + modalHeight / 2 - 36,
+      y: centerY + modalHeight / 2 - 34,
       width: Math.min(modalWidth - 94, 390),
       height: 52,
       text: 'Отмена',
       accentColor: TREE_STYLE.bronze,
       variant: 'dark',
-      onClick: () => {
-        closeModal();
-      },
+      onClick: closeModal,
       depth: 1005,
     });
 
-    this.modalObjects.push(
-      overlay,
-      panelParts.shadow,
-      panelParts.panel,
-      panelParts.glow,
-      titleText,
-      divider,
-      descriptionText,
-      confirmButton.shadow,
-      confirmButton.bg,
-      confirmButton.label,
-      confirmButton.zone,
-      cancelButton.shadow,
-      cancelButton.bg,
-      cancelButton.label,
-      cancelButton.zone
-    );
+    [overlay, panelParts.shadow, panelParts.panel, panelParts.glow, titleText, divider, descriptionText,
+      confirmButton.shadow, confirmButton.bg, confirmButton.label, confirmButton.zone,
+      cancelButton.shadow, cancelButton.bg, cancelButton.label, cancelButton.zone].forEach(object => {
+      if (this.hasSetAlpha(object)) {
+        object.setAlpha(0);
+      }
+
+      this.modalObjects.push(object);
+    });
+
+    this.tweens.add({
+      targets: [overlay, panelParts.shadow, panelParts.panel, panelParts.glow, titleText, divider, descriptionText,
+        confirmButton.shadow, confirmButton.bg, confirmButton.label, cancelButton.shadow, cancelButton.bg, cancelButton.label],
+      alpha: 1,
+      duration: 180,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private getBranchLevel(branchId: BranchId) {
     const state = this.ensureTreeState();
-
     return state.characterTree?.[branchId] ?? 0;
   }
 
   private getTreePoints() {
     const state = this.ensureTreeState();
-
     return state.characterTreePoints ?? 0;
   }
 
@@ -1655,6 +1677,128 @@ export class StatsTreeScene extends Phaser.Scene {
     return state;
   }
 
+  private ensureSelectedNode() {
+    if (this.selectedNode) {
+      return;
+    }
+
+    const firstAvailableBranch = BRANCHES.find(branch => !branch.locked && branch.maxLevel > 0) ?? BRANCHES[0];
+    const currentLevel = this.getBranchLevel(firstAvailableBranch.id);
+    const stage = firstAvailableBranch.stages[Math.min(currentLevel, Math.max(0, firstAvailableBranch.stages.length - 1))];
+
+    this.selectedNode = {
+      branchId: firstAvailableBranch.id,
+      stageLevel: stage?.level ?? 1,
+    };
+  }
+
+  private getVisibleStages(branch: BranchData): VisibleStage[] {
+    if (branch.maxLevel > 10) {
+      return branch.stages.filter(stage => stage.special).map((stage, displayIndex) => ({ stage, displayIndex }));
+    }
+
+    return branch.stages.map((stage, displayIndex) => ({ stage, displayIndex }));
+  }
+
+  private getSelectedStage(branch: BranchData) {
+    if (this.selectedNode?.branchId === branch.id) {
+      return branch.stages.find(stage => stage.level === this.selectedNode?.stageLevel) ?? branch.stages[this.getBranchLevel(branch.id)] ?? branch.stages[0];
+    }
+
+    return branch.stages[this.getBranchLevel(branch.id)] ?? branch.stages[0];
+  }
+
+  private getSelectedNodeStatus(branch: BranchData, selectedStage: StageData | undefined, currentLevel: number) {
+    if (branch.locked) {
+      return {
+        disabled: true,
+        canUpgrade: false,
+        buttonText: 'Ветка запечатана',
+        variant: 'dark' as const,
+        titleColor: '#8f806d',
+        badgeColor: '#8f806d',
+        shortText: 'скоро',
+        footText: 'Эта ветка ещё не открыта.',
+        strokeColor: TREE_STYLE.bronzeDark,
+      };
+    }
+
+    if (!selectedStage) {
+      return {
+        disabled: true,
+        canUpgrade: false,
+        buttonText: 'Выбери узел',
+        variant: 'dark' as const,
+        titleColor: '#b8aa91',
+        badgeColor: '#8f806d',
+        shortText: '—',
+        footText: 'Выбери узел для просмотра деталей.',
+        strokeColor: TREE_STYLE.bronzeDark,
+      };
+    }
+
+    const points = this.getTreePoints();
+    const unlocked = currentLevel >= selectedStage.level;
+    const available = currentLevel + 1 === selectedStage.level;
+    const locked = currentLevel + 1 < selectedStage.level;
+    const enoughPoints = points >= selectedStage.cost;
+    const isMaxed = currentLevel >= branch.maxLevel && unlocked;
+
+    if (unlocked) {
+      return {
+        disabled: true,
+        canUpgrade: false,
+        buttonText: isMaxed ? 'Ветка изучена полностью' : 'Узел уже изучен',
+        variant: 'green' as const,
+        titleColor: '#9fd0a6',
+        badgeColor: '#9fd0a6',
+        shortText: 'изучен',
+        footText: `Цена: ${selectedStage.cost} очк. • Уже открыто.`,
+        strokeColor: TREE_STYLE.green,
+      };
+    }
+
+    if (locked) {
+      return {
+        disabled: true,
+        canUpgrade: false,
+        buttonText: 'Нужно открыть предыдущий узел',
+        variant: 'dark' as const,
+        titleColor: '#d8c088',
+        badgeColor: '#8f806d',
+        shortText: 'заблокирован',
+        footText: `Требуется сначала открыть узел ${selectedStage.level - 1}.`,
+        strokeColor: TREE_STYLE.bronzeDark,
+      };
+    }
+
+    if (!enoughPoints) {
+      return {
+        disabled: true,
+        canUpgrade: false,
+        buttonText: `Нужно ${selectedStage.cost} очк.`,
+        variant: 'dark' as const,
+        titleColor: '#d8c088',
+        badgeColor: '#ff9a9a',
+        shortText: 'не хватает очков',
+        footText: `Нужно ${selectedStage.cost} очк. • Свободно: ${points}.`,
+        strokeColor: TREE_STYLE.blood,
+      };
+    }
+
+    return {
+      disabled: false,
+      canUpgrade: available,
+      buttonText: `Изучить узел за ${selectedStage.cost}`,
+      variant: 'gold' as const,
+      titleColor: '#d8c088',
+      badgeColor: '#d8c088',
+      shortText: 'доступно',
+      footText: `Цена: ${selectedStage.cost} очк. • Свободно: ${points}.`,
+      strokeColor: branch.accentColor,
+    };
+  }
+
   private getBranchTreeLabel(branch: BranchData, level: number) {
     if (branch.maxLevel <= 0) {
       return 'Ветка закрыта';
@@ -1669,7 +1813,7 @@ export class StatsTreeScene extends Phaser.Scene {
       .sort((a, b) => a.level - b.level)[0];
 
     if (nextSpecial) {
-      return `Открыто ${level}/${branch.maxLevel} • ближайшая особая печать: ${nextSpecial.level} ур.`;
+      return `Открыто ${level}/${branch.maxLevel} • особая печать: ${nextSpecial.level} ур.`;
     }
 
     return `Открыто ${level}/${branch.maxLevel}`;
@@ -1717,7 +1861,9 @@ export class StatsTreeScene extends Phaser.Scene {
       ? 0x183322
       : variant === 'red'
         ? 0x321515
-        : 0x2c1d14;
+        : variant === 'dark'
+          ? 0x181614
+          : 0x2c1d14;
 
     const textColor = disabled
       ? '#6f665b'
@@ -1729,35 +1875,16 @@ export class StatsTreeScene extends Phaser.Scene {
 
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.3);
-    shadow.fillRoundedRect(
-      config.x - config.width / 2,
-      config.y - config.height / 2 + 5,
-      config.width,
-      config.height,
-      radius
-    );
+    shadow.fillRoundedRect(config.x - config.width / 2, config.y - config.height / 2 + 5, config.width, config.height, radius);
     shadow.setDepth(depth);
 
     const bg = this.add.graphics();
-
     const draw = (color: number, alpha: number, strokeAlpha: number) => {
       bg.clear();
       bg.fillStyle(color, alpha);
-      bg.fillRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+      bg.fillRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
       bg.lineStyle(2, strokeColor, strokeAlpha);
-      bg.strokeRoundedRect(
-        config.x - config.width / 2,
-        config.y - config.height / 2,
-        config.width,
-        config.height,
-        radius
-      );
+      bg.strokeRoundedRect(config.x - config.width / 2, config.y - config.height / 2, config.width, config.height, radius);
     };
 
     draw(fillColor, disabled ? 0.55 : 0.96, disabled ? 0.35 : 0.82);
@@ -1785,7 +1912,6 @@ export class StatsTreeScene extends Phaser.Scene {
 
     if (!disabled) {
       let isPressed = false;
-
       zone.setInteractive({ useHandCursor: true });
 
       zone.on('pointerover', () => {
@@ -1802,6 +1928,8 @@ export class StatsTreeScene extends Phaser.Scene {
         draw(fillColor, 0.96, 0.82);
         label.setY(config.y);
         label.setColor(textColor);
+        bg.setScale(1);
+        shadow.setScale(1);
       });
 
       zone.on('pointerdown', () => {
@@ -1809,6 +1937,8 @@ export class StatsTreeScene extends Phaser.Scene {
         draw(hoverColor, 0.92, 0.95);
         label.setY(config.y + 1);
         label.setColor('#ffffff');
+        bg.setScale(0.985);
+        shadow.setScale(0.985);
       });
 
       zone.on('pointerup', () => {
@@ -1818,6 +1948,8 @@ export class StatsTreeScene extends Phaser.Scene {
 
         isPressed = false;
         label.setY(config.y);
+        bg.setScale(1);
+        shadow.setScale(1);
 
         if (this.didDrag) {
           draw(fillColor, 0.96, 0.82);
@@ -1838,6 +1970,8 @@ export class StatsTreeScene extends Phaser.Scene {
         draw(fillColor, 0.96, 0.82);
         label.setY(config.y);
         label.setColor(textColor);
+        bg.setScale(1);
+        shadow.setScale(1);
       });
 
       zone.on('pointercancel', () => {
@@ -1845,15 +1979,12 @@ export class StatsTreeScene extends Phaser.Scene {
         draw(fillColor, 0.96, 0.82);
         label.setY(config.y);
         label.setColor(textColor);
+        bg.setScale(1);
+        shadow.setScale(1);
       });
     }
 
-    return {
-      shadow,
-      bg,
-      label,
-      zone,
-    };
+    return { shadow, bg, label, zone };
   }
 
   private createRoundedPanel(config: {
@@ -1885,65 +2016,41 @@ export class StatsTreeScene extends Phaser.Scene {
 
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.34);
-    shadow.fillRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2 + 7,
-      safeWidth,
-      safeHeight,
-      radius
-    );
+    shadow.fillRoundedRect(config.x - safeWidth / 2, config.y - safeHeight / 2 + 7, safeWidth, safeHeight, radius);
     shadow.setDepth(depth);
 
     const panel = this.add.graphics();
     panel.fillStyle(color, alpha);
-    panel.fillRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2,
-      safeWidth,
-      safeHeight,
-      radius
-    );
+    panel.fillRoundedRect(config.x - safeWidth / 2, config.y - safeHeight / 2, safeWidth, safeHeight, radius);
     panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
-    panel.strokeRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2,
-      safeWidth,
-      safeHeight,
-      radius
-    );
+    panel.strokeRoundedRect(config.x - safeWidth / 2, config.y - safeHeight / 2, safeWidth, safeHeight, radius);
     panel.setDepth(depth + 1);
 
-    const glow = this.add.circle(
-      config.x,
-      config.y - safeHeight / 2 + 30,
-      safeWidth * 0.26,
-      glowColor,
-      0.035
-    ).setDepth(depth + 2);
+    const glow = this.add.circle(config.x, config.y - safeHeight / 2 + 30, safeWidth * 0.26, glowColor, 0.035).setDepth(depth + 2);
 
     if (config.parent) {
       config.parent.add([shadow, panel, glow]);
     }
 
-    return {
-      shadow,
-      panel,
-      glow,
-    };
+    return { shadow, panel, glow };
+  }
+
+
+  private hasSetAlpha(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
+    setAlpha: (value?: number, topLeft?: number, topRight?: number, bottomLeft?: number, bottomRight?: number) => unknown;
+  } {
+    return typeof (object as { setAlpha?: unknown }).setAlpha === 'function';
   }
 
   private requireContentContainer() {
     if (!this.contentContainer) {
-      throw new Error('Stats free content container was not created.');
+      throw new Error('Stats tree content container was not created.');
     }
 
     return this.contentContainer;
   }
 
-  private addTo<T extends Phaser.GameObjects.GameObject>(
-    container: Phaser.GameObjects.Container,
-    object: T
-  ) {
+  private addTo<T extends Phaser.GameObjects.GameObject>(container: Phaser.GameObjects.Container, object: T) {
     container.add(object);
     return object;
   }
