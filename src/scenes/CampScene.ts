@@ -585,6 +585,7 @@ export class CampScene extends Phaser.Scene {
     const activeCheckpoint = getActiveCampfireBattleCheckpoint();
     const hasActiveCheckpoint = Boolean(activeCheckpoint);
     const hasQuestReward = this.hasClaimableQuests();
+    const cityCampfireActive = this.isCityCampfireActive();
 
     const actionsPanel = this.createRoundedPanel({
       x: layout.centerX,
@@ -592,10 +593,10 @@ export class CampScene extends Phaser.Scene {
       width: layout.contentWidth,
       height: layout.actionsViewportHeight,
       radius: layout.veryCompact ? 24 : 32,
-      color: 0x06070a,
-      alpha: 0.78,
-      strokeColor: 0x4b3928,
-      strokeAlpha: 0.62,
+      color: cityCampfireActive ? 0x0d0a08 : 0x06070a,
+      alpha: cityCampfireActive ? 0.82 : 0.78,
+      strokeColor: cityCampfireActive ? 0x8f6238 : 0x4b3928,
+      strokeAlpha: cityCampfireActive ? 0.54 : 0.62,
       strokeWidth: 1,
       depth: 4,
     });
@@ -798,6 +799,12 @@ export class CampScene extends Phaser.Scene {
 
     this.restButtonLabel = restCard.titleText;
     this.restButtonDescription = restCard.descriptionText;
+    this.createCityCampfireButtonFireEffect({
+      x: layout.centerX,
+      y: currentY,
+      width: innerWidth,
+      height: wideHeight,
+    });
     this.startCampfireTimer();
 
     currentY += wideHeight + gap;
@@ -866,6 +873,89 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(9);
 
     container.add([lineLeft, lineRight, label]);
+  }
+
+  private createCityCampfireButtonFireEffect(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) {
+    const container = this.requireActionContainer();
+    const active = this.isCityCampfireActive();
+    const left = config.x - config.width / 2;
+    const iconX = left + 44;
+    const fireY = config.y;
+    const warmColor = active ? 0xd28a3a : 0x6f5432;
+
+    const glow = this.add.circle(iconX, fireY, active ? 30 : 22, warmColor, active ? 0.16 : 0.07)
+      .setDepth(10);
+    const inner = this.add.circle(iconX, fireY + 2, active ? 18 : 14, active ? 0xffbd64 : 0x5a351d, active ? 0.22 : 0.1)
+      .setDepth(11);
+    const flame = this.add.text(iconX, fireY - 1, '♨', {
+      fontFamily: UI.font.body,
+      fontSize: active ? '21px' : '17px',
+      color: active ? '#f4c475' : '#9b7043',
+      stroke: '#000000',
+      strokeThickness: active ? 3 : 3,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(12).setAlpha(active ? 0.86 : 0.72);
+
+    const warmLine = this.add.rectangle(
+      config.x,
+      config.y + config.height / 2 - 5,
+      config.width - 48,
+      1,
+      0xd28a3a,
+      active ? 0.18 : 0.05
+    ).setDepth(9);
+
+    container.add([glow, inner, flame, warmLine]);
+
+    if (!active) {
+      return;
+    }
+
+    this.tweens.add({
+      targets: [glow, inner, flame, warmLine],
+      alpha: '+=0.06',
+      scale: { from: 0.98, to: 1.06 },
+      duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      const sparkX = iconX + Phaser.Math.Between(-12, 12);
+      const sparkY = fireY + Phaser.Math.Between(-3, 12);
+      const spark = this.add.circle(
+        sparkX,
+        sparkY,
+        1,
+        i % 2 === 0 ? 0xffd98a : 0xd28a3a,
+        0
+      ).setDepth(13);
+
+      container.add(spark);
+
+      this.tweens.add({
+        targets: spark,
+        alpha: { from: 0, to: 0.42 },
+        y: sparkY - Phaser.Math.Between(16, 32),
+        x: sparkX + Phaser.Math.Between(-8, 8),
+        duration: Phaser.Math.Between(900, 1500),
+        repeat: -1,
+        delay: i * 140,
+        ease: 'Sine.easeOut',
+        onRepeat: () => {
+          spark.setPosition(
+            iconX + Phaser.Math.Between(-12, 12),
+            fireY + Phaser.Math.Between(-3, 12)
+          );
+        },
+      });
+    }
   }
 
   private createActionScrollInput(layout: CampLayout) {
@@ -1790,11 +1880,15 @@ export class CampScene extends Phaser.Scene {
     this.cityCampfireIsVisuallyActive = active;
 
     const { width, height, centerX } = layout;
-    const fireY = Phaser.Math.Clamp(layout.actionsTop - (layout.veryCompact ? 16 : 20), 245, height - layout.safeBottom - 170);
-    const warmAlpha = active ? 0.16 : 0.025;
+    const glowY = Phaser.Math.Clamp(
+      layout.heroTop + layout.heroHeight + (layout.veryCompact ? 16 : 24),
+      layout.safeTop + 180,
+      layout.actionsTop + 36
+    );
+    const warmAlpha = active ? 0.11 : 0.018;
 
     const overlay = this.add.rectangle(centerX, height / 2, width, height, 0xffa23d, 0)
-      .setDepth(active ? 30 : 1.25);
+      .setDepth(1.35);
 
     this.cityCampfireWarmOverlay = overlay;
     this.cityCampfireGlowObjects.push(overlay);
@@ -1806,96 +1900,86 @@ export class CampScene extends Phaser.Scene {
       ease: 'Sine.easeOut',
     });
 
-    const backLight = this.add.circle(centerX, fireY + 34, active ? width * 0.72 : width * 0.34, 0xff9d3a, active ? 0.14 : 0.035)
-      .setDepth(active ? 22 : 2);
-    const outerGlow = this.add.circle(centerX, fireY, active ? 178 : 92, 0xd98a3a, active ? 0.18 : 0.045)
-      .setDepth(active ? 31 : 3);
-    const midGlow = this.add.circle(centerX, fireY + 8, active ? 118 : 58, 0xf0b35a, active ? 0.24 : 0.065)
-      .setDepth(active ? 32 : 3);
-    const ember = this.add.circle(centerX, fireY + 16, active ? 42 : 22, active ? 0xffc46b : 0x6d3a20, active ? 0.38 : 0.12)
-      .setDepth(active ? 33 : 3);
-    const flame = this.add.text(centerX, fireY + 6, active ? '♨' : '♨', {
-      fontFamily: UI.font.body,
-      fontSize: active
-        ? layout.veryCompact ? '42px' : layout.compact ? '50px' : '58px'
-        : layout.veryCompact ? '27px' : '34px',
-      color: active ? '#ffd28a' : '#8a5a32',
-      stroke: '#000000',
-      strokeThickness: active ? 6 : 4,
-      align: 'center',
-    }).setOrigin(0.5).setDepth(active ? 34 : 4).setAlpha(active ? 0.95 : 0.38);
+    const horizonGlow = this.add.rectangle(
+      centerX,
+      layout.actionsTop - 14,
+      width,
+      active ? 92 : 54,
+      0xffb45b,
+      active ? 0.045 : 0.012
+    ).setDepth(1.55);
 
-    this.cityCampfireGlowObjects.push(backLight, outerGlow, midGlow, ember, flame);
+    const backLight = this.add.circle(
+      centerX,
+      glowY + 34,
+      active ? width * 0.54 : width * 0.28,
+      0xff9d3a,
+      active ? 0.06 : 0.018
+    ).setDepth(1.6);
+
+    const outerGlow = this.add.circle(
+      centerX,
+      glowY,
+      active ? 126 : 70,
+      0xd98a3a,
+      active ? 0.075 : 0.024
+    ).setDepth(1.65);
+
+    const midGlow = this.add.circle(
+      centerX,
+      glowY + 8,
+      active ? 76 : 42,
+      0xf0b35a,
+      active ? 0.09 : 0.03
+    ).setDepth(1.7);
+
+    this.cityCampfireGlowObjects.push(horizonGlow, backLight, outerGlow, midGlow);
 
     if (active) {
       this.cityCampfireVisualTweens.push(
         this.tweens.add({
-          targets: [backLight, outerGlow, midGlow, ember, flame],
-          alpha: '+=0.08',
-          scale: { from: 0.95, to: 1.1 },
-          duration: 1150,
+          targets: [horizonGlow, backLight, outerGlow, midGlow],
+          alpha: '+=0.025',
+          scale: { from: 0.98, to: 1.04 },
+          duration: 1550,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
         })
       );
 
-      for (let i = 0; i < 34; i += 1) {
-        const sparkX = centerX + Phaser.Math.Between(-76, 76);
-        const sparkY = fireY + Phaser.Math.Between(-10, 42);
+      for (let i = 0; i < 12; i += 1) {
+        const sparkX = centerX + Phaser.Math.Between(-72, 72);
+        const sparkY = glowY + Phaser.Math.Between(4, 42);
         const spark = this.add.circle(
           sparkX,
           sparkY,
-          Phaser.Math.Between(1, 3),
-          i % 5 === 0 ? 0xffefb0 : i % 3 === 0 ? 0xffb75a : 0xd28a3a,
+          1,
+          i % 3 === 0 ? 0xffd98a : 0xc98742,
           0
-        ).setDepth(35);
+        ).setDepth(1.9);
 
         this.cityCampfireGlowObjects.push(spark);
         this.cityCampfireVisualTweens.push(
           this.tweens.add({
             targets: spark,
-            alpha: { from: 0, to: 0.86 },
-            y: sparkY - Phaser.Math.Between(48, 112),
-            x: sparkX + Phaser.Math.Between(-24, 24),
-            scale: { from: 0.55, to: 1.18 },
-            duration: Phaser.Math.Between(1050, 2200),
+            alpha: { from: 0, to: 0.24 },
+            y: sparkY - Phaser.Math.Between(34, 78),
+            x: sparkX + Phaser.Math.Between(-18, 18),
+            scale: { from: 0.55, to: 1 },
+            duration: Phaser.Math.Between(1500, 2800),
             repeat: -1,
-            delay: i * 58,
+            delay: i * 140,
             ease: 'Sine.easeOut',
             onRepeat: () => {
               spark.setPosition(
-                centerX + Phaser.Math.Between(-76, 76),
-                fireY + Phaser.Math.Between(-10, 42)
+                centerX + Phaser.Math.Between(-72, 72),
+                glowY + Phaser.Math.Between(4, 42)
               );
             },
           })
         );
       }
-
-      const timerText = this.add.text(centerX, fireY + (layout.veryCompact ? 72 : 86), this.getCityCampfireTimerVisualText(), {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '11px' : '12px',
-        color: '#ffd696',
-        stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center',
-        wordWrap: {
-          width: layout.contentWidth - 48,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(36).setAlpha(0);
-
-      this.cityCampfireTimerText = timerText;
-      this.cityCampfireGlowObjects.push(timerText);
-
-      this.tweens.add({
-        targets: timerText,
-        alpha: 0.94,
-        duration: 300,
-        ease: 'Sine.easeOut',
-      });
     }
   }
 
