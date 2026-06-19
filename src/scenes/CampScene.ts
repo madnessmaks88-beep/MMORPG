@@ -53,6 +53,7 @@ type CampLayout = {
   actionsViewportHeight: number;
 
   compact: boolean;
+  veryCompact: boolean;
 };
 
 type CampActionButton = {
@@ -71,6 +72,9 @@ export class CampScene extends Phaser.Scene {
   private didDrag = false;
   private dragStartY = 0;
   private dragStartScrollY = 0;
+
+  private actionScrollTrack?: Phaser.GameObjects.Rectangle;
+  private actionScrollThumb?: Phaser.GameObjects.Rectangle;
 
   private restButtonLabel?: Phaser.GameObjects.Text;
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
@@ -110,17 +114,20 @@ export class CampScene extends Phaser.Scene {
   }
 
   update() {
-    if (!this.actionContainer || this.isDragging) {
+    if (!this.actionContainer) {
       return;
     }
 
-    if (Math.abs(this.currentScrollY - this.targetScrollY) < 0.5) {
-      this.currentScrollY = this.targetScrollY;
-    } else {
-      this.currentScrollY = Phaser.Math.Linear(this.currentScrollY, this.targetScrollY, 0.2);
+    if (!this.isDragging) {
+      if (Math.abs(this.currentScrollY - this.targetScrollY) < 0.5) {
+        this.currentScrollY = this.targetScrollY;
+      } else {
+        this.currentScrollY = Phaser.Math.Linear(this.currentScrollY, this.targetScrollY, 0.22);
+      }
     }
 
     this.actionContainer.y = -this.currentScrollY;
+    this.updateActionScrollbar();
   }
 
   private resetScrollState() {
@@ -132,6 +139,8 @@ export class CampScene extends Phaser.Scene {
     this.didDrag = false;
     this.dragStartY = 0;
     this.dragStartScrollY = 0;
+    this.actionScrollTrack = undefined;
+    this.actionScrollThumb = undefined;
   }
 
   private async prepareStartupOnce() {
@@ -160,19 +169,20 @@ export class CampScene extends Phaser.Scene {
   private getLayout(): CampLayout {
     const { width, height } = this.scale;
 
-    const compact = height < 1120;
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.025), 20, 34);
-    const safeBottom = 116;
+    const veryCompact = height < 760;
+    const compact = height < 900;
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.048), 16, 34);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.02), 14, 30);
+    const safeBottom = veryCompact ? 92 : compact ? 104 : 116;
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    const headerHeight = compact ? 106 : 118;
-    const heroTop = safeTop + headerHeight + 10;
-    const heroHeight = compact ? 142 : 158;
-    const actionsTop = heroTop + heroHeight + 14;
-    const actionsBottom = bottomNavTop - 12;
-    const actionsViewportHeight = Math.max(260, actionsBottom - actionsTop);
+    const headerHeight = veryCompact ? 82 : compact ? 94 : 112;
+    const heroTop = safeTop + headerHeight + (veryCompact ? 8 : 10);
+    const heroHeight = veryCompact ? 126 : compact ? 138 : 156;
+    const actionsTop = heroTop + heroHeight + (veryCompact ? 10 : 14);
+    const actionsBottom = bottomNavTop - (veryCompact ? 8 : 12);
+    const actionsViewportHeight = Math.max(190, actionsBottom - actionsTop);
 
     return {
       width,
@@ -194,66 +204,112 @@ export class CampScene extends Phaser.Scene {
       actionsViewportHeight,
 
       compact,
+      veryCompact,
     };
   }
 
   private createCampBackdrop(layout: CampLayout) {
     const { width, height, centerX } = layout;
-    const cryptY = Phaser.Math.Clamp(height * 0.33, 300, 420);
+    const cryptY = Phaser.Math.Clamp(height * 0.31, 250, 380);
+    const fireY = Phaser.Math.Clamp(height * 0.51, 330, 520);
 
-    this.add.rectangle(centerX, height / 2, width, height, 0x050608, 0.72).setDepth(0);
-    this.add.rectangle(centerX, height - 150, width, 320, 0x030202, 0.54).setDepth(0);
+    this.cameras.main.fadeIn(260, 0, 0, 0);
 
-    this.add.circle(centerX, cryptY, width * 0.52, 0x1a2134, 0.16).setDepth(0);
-    this.add.circle(centerX, cryptY + 18, width * 0.34, 0x392418, 0.13).setDepth(0);
-    this.add.circle(centerX, cryptY + 28, width * 0.18, 0xb06a2c, 0.08).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, 0x030405, 0.95).setDepth(0);
+    this.add.rectangle(centerX, height * 0.28, width, height * 0.58, 0x07101a, 0.2).setDepth(0);
+    this.add.rectangle(centerX, height - 140, width, 320, 0x030202, 0.7).setDepth(0);
 
-    const gateWidth = Math.min(layout.contentWidth * 0.74, 430);
-    const gateHeight = layout.compact ? 164 : 190;
+    const farGlow = this.add.circle(centerX, cryptY + 12, width * 0.56, 0x1d2741, 0.13).setDepth(0);
+    this.tweens.add({
+      targets: farGlow,
+      alpha: { from: 0.08, to: 0.16 },
+      scale: { from: 0.98, to: 1.04 },
+      duration: 2400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const gateWidth = Math.min(layout.contentWidth * 0.76, 450);
+    const gateHeight = layout.veryCompact ? 132 : layout.compact ? 154 : 184;
     const gateX = centerX;
-    const gateY = cryptY + 22;
+    const gateY = cryptY + 26;
 
-    this.add.rectangle(gateX, gateY + 42, gateWidth, gateHeight, 0x070809, 0.76)
-      .setStrokeStyle(2, 0x3b352c, 0.7)
+    this.add.rectangle(gateX, gateY + 35, gateWidth, gateHeight, 0x050608, 0.84)
+      .setStrokeStyle(2, 0x332a20, 0.72)
       .setDepth(1);
 
-    this.add.rectangle(gateX, gateY - gateHeight / 2 + 14, gateWidth + 28, 20, 0x17130f, 0.9)
-      .setStrokeStyle(1, 0x6d5430, 0.52)
+    this.add.rectangle(gateX, gateY - gateHeight / 2 + 10, gateWidth + 30, 18, 0x18130e, 0.96)
+      .setStrokeStyle(1, 0x6b5431, 0.58)
       .setDepth(2);
 
-    this.add.rectangle(gateX, gateY + gateHeight / 2 + 42, gateWidth + 40, 26, 0x13100e, 0.96)
-      .setStrokeStyle(1, 0x5c503d, 0.5)
+    this.add.rectangle(gateX, gateY + gateHeight / 2 + 36, gateWidth + 46, 24, 0x12100d, 0.96)
+      .setStrokeStyle(1, 0x594d3d, 0.5)
       .setDepth(2);
 
-    const columnOffset = gateWidth / 2 + 14;
-    this.createStoneColumn(gateX - columnOffset, gateY + 22, gateHeight + 70);
-    this.createStoneColumn(gateX + columnOffset, gateY + 22, gateHeight + 70);
+    const columnOffset = gateWidth / 2 + 15;
+    this.createStoneColumn(gateX - columnOffset, gateY + 18, gateHeight + 58);
+    this.createStoneColumn(gateX + columnOffset, gateY + 18, gateHeight + 58);
 
-    this.add.circle(centerX, cryptY + 92, 46, 0x000000, 0.38).setDepth(2);
-    this.add.circle(centerX, cryptY + 80, 34, 0xb86b2e, 0.16).setDepth(2);
-    this.add.text(centerX, cryptY + 76, '♨', {
+    this.add.ellipse(gateX, gateY - 16, gateWidth * 0.68, gateHeight * 0.76, 0x17130f, 0.42)
+      .setStrokeStyle(2, 0x4d4030, 0.32)
+      .setDepth(2);
+
+    const fireGlow = this.add.circle(centerX, fireY, width * 0.28, 0xb86b2e, 0.09).setDepth(2);
+    const fireCore = this.add.circle(centerX, fireY + 8, 38, 0xb86b2e, 0.14).setDepth(2);
+
+    this.tweens.add({
+      targets: [fireGlow, fireCore],
+      alpha: { from: 0.07, to: 0.18 },
+      scale: { from: 0.94, to: 1.08 },
+      duration: 760,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.add.text(centerX, fireY, '♨', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '38px' : '44px',
-      color: '#b99257',
+      fontSize: layout.veryCompact ? '32px' : layout.compact ? '38px' : '46px',
+      color: '#c09155',
       stroke: '#000000',
       strokeThickness: 5,
     }).setOrigin(0.5).setDepth(3);
 
-    for (let i = 0; i < 20; i += 1) {
-      const x = layout.safeX + 10 + i * ((width - layout.safeX * 2 - 20) / 19);
-      const y = layout.safeTop + 88 + (i % 5) * 58;
-      const alpha = 0.025 + (i % 3) * 0.012;
+    for (let i = 0; i < 24; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop + 60, height - layout.safeBottom - 40);
+      const ash = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.045)
+        .setDepth(1)
+        .setAlpha(0.02);
 
-      this.add.circle(x, y, 2 + (i % 2), 0x9f8a67, alpha).setDepth(1);
+      this.tweens.add({
+        targets: ash,
+        alpha: { from: 0.018, to: 0.075 },
+        y: y - Phaser.Math.Between(16, 40),
+        x: x + Phaser.Math.Between(-10, 10),
+        duration: Phaser.Math.Between(1800, 3400),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 80,
+        ease: 'Sine.easeInOut',
+      });
     }
 
-    this.add.text(centerX, cryptY - 96, 'КАТАКОМБЫ', {
+    for (let i = 0; i < 9; i += 1) {
+      const y = layout.safeTop + 90 + i * 64;
+      this.add.line(0, 0, layout.safeX, y, width - layout.safeX, y + (i % 2) * 12, 0x2a2119, 0.14)
+        .setOrigin(0, 0)
+        .setDepth(1);
+    }
+
+    this.add.text(centerX, cryptY - (layout.veryCompact ? 72 : 92), 'КАТАКОМБЫ', {
       fontFamily: UI.font.body,
-      fontSize: '15px',
+      fontSize: layout.veryCompact ? '12px' : '15px',
       color: '#6f6655',
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5).setAlpha(0.32).setDepth(2);
+    }).setOrigin(0.5).setAlpha(0.28).setDepth(2);
   }
 
   private createStoneColumn(x: number, y: number, height: number) {
@@ -279,24 +335,27 @@ export class CampScene extends Phaser.Scene {
     const panelHeight = layout.headerHeight;
     const panelY = layout.safeTop + panelHeight / 2;
 
-    this.createRoundedPanel({
+    const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 28,
-      color: 0x09090b,
-      alpha: 0.88,
-      strokeColor: 0x6e5634,
-      strokeAlpha: 0.55,
+      radius: layout.veryCompact ? 22 : 28,
+      color: 0x07080b,
+      alpha: 0.9,
+      strokeColor: 0x755a35,
+      strokeAlpha: 0.58,
       strokeWidth: 2,
       depth: 8,
     });
 
-    this.add.text(layout.centerX, panelY - 34, 'Убежище у катакомб', {
+    panel.shadow.setAlpha(0);
+    panel.panel.setAlpha(0);
+
+    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 24 : 32), 'Убежище у катакомб', {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '27px' : '31px',
-      color: '#c9a86a',
+      fontSize: layout.veryCompact ? '22px' : layout.compact ? '26px' : '31px',
+      color: '#d2b87a',
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
@@ -305,25 +364,41 @@ export class CampScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(12);
+    }).setOrigin(0.5).setDepth(12).setAlpha(0).setY(panelY - (layout.veryCompact ? 31 : 40));
 
-    this.add.text(layout.centerX, panelY - 3, 'Последний огонь перед спуском во тьму', {
+    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 4 : 0), 'Последний огонь перед спуском во тьму', {
       fontFamily: UI.font.body,
-      fontSize: layout.compact ? '13px' : '15px',
-      color: '#8e887b',
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
+      color: '#9a9385',
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 58,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(12);
+    }).setOrigin(0.5).setDepth(12).setAlpha(0);
+
+    this.tweens.add({
+      targets: [panel.shadow, panel.panel],
+      alpha: 1,
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+
+    this.tweens.add({
+      targets: [title, subtitle],
+      alpha: 1,
+      y: '+=8',
+      duration: 320,
+      delay: 90,
+      ease: 'Cubic.easeOut',
+    });
   }
 
   private createPlayerLine(layout: CampLayout) {
     const vkUser = getCachedVKUser();
     const vkName = vkUser ? vkUser.first_name : 'локальный режим';
-    const y = layout.safeTop + layout.headerHeight - 22;
+    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 16 : 22);
     const width = Math.min(layout.contentWidth - 86, 360);
 
     this.createDarkTag({
@@ -482,21 +557,33 @@ export class CampScene extends Phaser.Scene {
     const hasActiveCheckpoint = Boolean(activeCheckpoint);
     const hasQuestReward = this.hasClaimableQuests();
 
-    this.createRoundedPanel({
+    const actionsPanel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.actionsTop + layout.actionsViewportHeight / 2,
       width: layout.contentWidth,
       height: layout.actionsViewportHeight,
-      radius: 32,
-      color: 0x070708,
-      alpha: 0.7,
-      strokeColor: 0x3b3328,
-      strokeAlpha: 0.6,
+      radius: layout.veryCompact ? 24 : 32,
+      color: 0x06070a,
+      alpha: 0.78,
+      strokeColor: 0x4b3928,
+      strokeAlpha: 0.62,
       strokeWidth: 1,
       depth: 4,
     });
 
-    this.actionContainer = this.add.container(0, 0).setDepth(7);
+    actionsPanel.shadow.setAlpha(0);
+    actionsPanel.panel.setAlpha(0);
+
+    this.tweens.add({
+      targets: [actionsPanel.shadow, actionsPanel.panel],
+      alpha: 1,
+      duration: 260,
+      delay: 150,
+      ease: 'Sine.easeOut',
+    });
+
+    const actionContainer = this.add.container(0, 0).setDepth(7);
+    this.actionContainer = actionContainer;
 
     const maskGraphics = this.add.graphics();
     maskGraphics.setVisible(false);
@@ -508,20 +595,20 @@ export class CampScene extends Phaser.Scene {
       layout.actionsViewportHeight
     );
 
-    this.actionContainer.setMask(maskGraphics.createGeometryMask());
+    actionContainer.setMask(maskGraphics.createGeometryMask());
 
-    const gap = layout.compact ? 12 : 14;
-    const mainHeight = layout.compact ? 92 : 104;
-    const wideHeight = layout.compact ? 68 : 74;
-    const tileHeight = layout.compact ? 88 : 96;
-    const dangerHeight = layout.compact ? 62 : 66;
+    const gap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
+    const mainHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 104;
+    const wideHeight = layout.veryCompact ? 62 : layout.compact ? 68 : 74;
+    const tileHeight = layout.veryCompact ? 78 : layout.compact ? 88 : 96;
+    const dangerHeight = layout.veryCompact ? 58 : layout.compact ? 62 : 66;
     const innerWidth = layout.contentWidth - 44;
     const tileGap = 12;
     const tileWidth = Math.min((innerWidth - tileGap) / 2, 278);
     const leftX = layout.centerX - tileWidth / 2 - tileGap / 2;
     const rightX = layout.centerX + tileWidth / 2 + tileGap / 2;
 
-    let currentY = layout.actionsTop + 22;
+    let currentY = layout.actionsTop + (layout.veryCompact ? 16 : 22);
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Выход к глубинам');
     currentY += 24 + mainHeight / 2;
@@ -724,6 +811,7 @@ export class CampScene extends Phaser.Scene {
     this.targetScrollY = this.currentScrollY;
 
     this.createActionScrollInput(layout);
+    this.createActionScrollbar(layout);
 
     if (this.maxScrollY > 0) {
       this.createScrollHint(layout);
@@ -811,6 +899,47 @@ export class CampScene extends Phaser.Scene {
         );
       }
     );
+  }
+
+  private createActionScrollbar(layout: CampLayout) {
+    const trackHeight = Math.max(40, layout.actionsViewportHeight - 40);
+    const x = layout.centerX + layout.contentWidth / 2 - 13;
+    const y = layout.actionsTop + layout.actionsViewportHeight / 2;
+
+    this.actionScrollTrack = this.add.rectangle(x, y, 4, trackHeight, 0x21170f, 0.5)
+      .setDepth(18)
+      .setVisible(this.maxScrollY > 0);
+
+    this.actionScrollThumb = this.add.rectangle(x, layout.actionsTop + 24, 4, 28, 0xb89a5e, 0.82)
+      .setDepth(19)
+      .setVisible(this.maxScrollY > 0);
+
+    this.updateActionScrollbar();
+  }
+
+  private updateActionScrollbar() {
+    if (!this.actionScrollTrack || !this.actionScrollThumb) {
+      return;
+    }
+
+    if (this.maxScrollY <= 0) {
+      this.actionScrollTrack.setVisible(false);
+      this.actionScrollThumb.setVisible(false);
+      return;
+    }
+
+    this.actionScrollTrack.setVisible(true);
+    this.actionScrollThumb.setVisible(true);
+
+    const trackHeight = this.actionScrollTrack.height;
+    const viewportHeight = this.getLayout().actionsViewportHeight;
+    const contentHeight = viewportHeight + this.maxScrollY;
+    const thumbHeight = Phaser.Math.Clamp((viewportHeight / Math.max(1, contentHeight)) * trackHeight, 24, trackHeight);
+    const movementRange = Math.max(1, trackHeight - thumbHeight);
+    const progress = this.currentScrollY / Math.max(1, this.maxScrollY);
+
+    this.actionScrollThumb.setSize(this.actionScrollThumb.width, thumbHeight);
+    this.actionScrollThumb.setY(this.actionScrollTrack.y - trackHeight / 2 + thumbHeight / 2 + movementRange * progress);
   }
 
   private isPointerInsideActions(pointer: Phaser.Input.Pointer, layout: CampLayout) {
@@ -965,6 +1094,17 @@ export class CampScene extends Phaser.Scene {
       titleText,
       normalColor: titleColor,
     });
+
+    if (config.hasActiveRun) {
+      this.tweens.add({
+        targets: [ring, titleText],
+        alpha: { from: 0.72, to: 1 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private createCampTile(config: {
@@ -1184,7 +1324,29 @@ export class CampScene extends Phaser.Scene {
       config.titleText?.setColor(normalColor);
     });
 
+    zone.on('pointerdown', () => {
+      if (this.didDrag) {
+        return;
+      }
+
+      this.tweens.add({
+        targets: config.titleText,
+        scaleX: 0.98,
+        scaleY: 0.98,
+        duration: 70,
+        ease: 'Sine.easeOut',
+      });
+    });
+
     zone.on('pointerup', () => {
+      this.tweens.add({
+        targets: config.titleText,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 90,
+        ease: 'Back.easeOut',
+      });
+
       if (this.didDrag) {
         return;
       }
@@ -1774,26 +1936,73 @@ export class CampScene extends Phaser.Scene {
       layout.height,
       0x000000,
       0.78
-    ).setInteractive();
+    ).setInteractive().setAlpha(0);
 
     const panelWidth = Math.min(layout.contentWidth, 620);
-    const panelHeight = Math.min(height, layout.height - 120);
+    const panelHeight = Math.min(height, layout.height - 110);
 
-    const panel = this.add.rectangle(
-      layout.centerX,
-      layout.height / 2,
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.42);
+    shadow.fillRoundedRect(
+      layout.centerX - panelWidth / 2,
+      layout.height / 2 - panelHeight / 2 + 9,
       panelWidth,
       panelHeight,
-      0x101012,
-      0.98
-    ).setStrokeStyle(3, 0x6e5634, 0.85);
+      28
+    );
 
-    modal.add([overlay, panel]);
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0c0d10, 0.98);
+    panel.fillRoundedRect(
+      layout.centerX - panelWidth / 2,
+      layout.height / 2 - panelHeight / 2,
+      panelWidth,
+      panelHeight,
+      28
+    );
+    panel.lineStyle(3, 0x6e5634, 0.85);
+    panel.strokeRoundedRect(
+      layout.centerX - panelWidth / 2,
+      layout.height / 2 - panelHeight / 2,
+      panelWidth,
+      panelHeight,
+      28
+    );
+
+    const glow = this.add.rectangle(layout.centerX, layout.height / 2 - panelHeight / 2 + 18, panelWidth - 54, 1, 0xb89a5e, 0.32);
+
+    modal.add([overlay, shadow, panel, glow]);
+    modal.setScale(0.96);
+    modal.setAlpha(0);
+
+    this.tweens.add({
+      targets: overlay,
+      alpha: 1,
+      duration: 160,
+      ease: 'Sine.easeOut',
+    });
+
+    this.tweens.add({
+      targets: modal,
+      alpha: 1,
+      scale: 1,
+      duration: 220,
+      ease: 'Back.easeOut',
+    });
 
     return {
       container: modal,
       destroy: () => {
-        modal.destroy(true);
+        this.tweens.add({
+          targets: modal,
+          alpha: 0,
+          scale: 0.97,
+          duration: 120,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            modal.destroy(true);
+          },
+        });
       },
     };
   }
