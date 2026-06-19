@@ -169,6 +169,7 @@ export class DungeonScene extends Phaser.Scene {
 
   private readonly maxPotionCount = 6;
   private modalObjects: Phaser.GameObjects.GameObject[] = [];
+  private branchNodePositions = new Map<string, { x: number; y: number; color: number }>();
   
   constructor() {
     super('DungeonScene');
@@ -220,18 +221,22 @@ export class DungeonScene extends Phaser.Scene {
 
     const headerHeight = veryCompact ? 76 : compact ? 86 : 96;
     const floorPanelHeight = veryCompact ? 60 : compact ? 70 : 78;
-    const mapHeight = veryCompact ? 118 : compact ? 138 : 162;
+
+    // Карта разломов стала главным визуальным блоком, но на 360x640
+    // оставлен запас под карточку комнаты и кнопки.
+    const mapHeight = veryCompact ? 132 : compact ? 168 : 198;
 
     const headerY = safeTop + headerHeight / 2;
     const floorInfoY = headerY + headerHeight / 2 + 10 + floorPanelHeight / 2;
     const routeY = floorInfoY + floorPanelHeight / 2 + 12 + mapHeight / 2;
-    const roomCardTop = routeY + mapHeight / 2 + 14;
+    const roomCardTop = routeY + mapHeight / 2 + 12;
 
     const maxRoomCardHeight = veryCompact ? 430 : compact ? 510 : 600;
     const availableRoomCardHeight = actionDockTop - roomCardTop - 16;
+    const minRoomCardHeight = veryCompact ? 250 : compact ? 360 : 430;
     const roomCardHeight = Phaser.Math.Clamp(
       availableRoomCardHeight,
-      veryCompact ? 330 : compact ? 390 : 450,
+      minRoomCardHeight,
       maxRoomCardHeight
     );
 
@@ -265,6 +270,7 @@ export class DungeonScene extends Phaser.Scene {
       secondaryButtonHeight,
     };
   }
+
 
   private createHeader() {
     const layout = this.getLayout();
@@ -814,38 +820,25 @@ export class DungeonScene extends Phaser.Scene {
     const floor = gameState.floorRun.currentFloor || 1;
     const theme = getCryptDepthTheme(floor);
 
-    const mapHeight = layout.veryCompact ? 118 : layout.compact ? 138 : 162;
-    const top = layout.routeY - mapHeight / 2;
-    const width = layout.contentWidth;
-    const left = layout.centerX - width / 2 + 42;
-    const right = layout.centerX + width / 2 - 42;
-    const nodeRadius = layout.veryCompact ? 14 : 17;
-    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
-    const layerCount = maxLayer + 1;
+    this.branchNodePositions.clear();
 
-    this.add.text(layout.centerX, top + 16, 'Карта разломов', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '14px' : '17px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 4,
-      align: 'center',
-      wordWrap: {
-        width: width - 44,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(8);
+    const mapHeight = layout.veryCompact ? 132 : layout.compact ? 168 : 198;
+    const width = layout.contentWidth;
+    const top = layout.routeY - mapHeight / 2;
+    const left = layout.centerX - width / 2;
+    const right = layout.centerX + width / 2;
+    const nodeBaseRadius = layout.veryCompact ? 12 : layout.compact ? 14 : 16;
 
     const mapPanel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.routeY,
       width,
       height: mapHeight,
-      radius: 28,
-      color: 0x07070a,
-      alpha: 0.84,
+      radius: layout.veryCompact ? 24 : 30,
+      color: 0x050509,
+      alpha: 0.93,
       strokeColor: theme.stroke,
-      strokeAlpha: 0.28,
+      strokeAlpha: 0.42,
       strokeWidth: 2,
       depth: 2,
     });
@@ -856,18 +849,96 @@ export class DungeonScene extends Phaser.Scene {
     this.tweens.add({
       targets: [mapPanel.shadow, mapPanel.panel],
       alpha: 1,
-      duration: 280,
+      duration: 260,
       ease: 'Sine.easeOut',
     });
 
+    const inner = this.add.graphics().setDepth(3).setAlpha(0);
+    inner.fillStyle(0x111016, 0.64);
+    inner.fillRoundedRect(
+      left + 8,
+      top + 8,
+      width - 16,
+      mapHeight - 16,
+      layout.veryCompact ? 18 : 22
+    );
+    inner.lineStyle(1, DUNGEON_DARK.bronze, 0.22);
+    inner.strokeRoundedRect(
+      left + 14,
+      top + 14,
+      width - 28,
+      mapHeight - 28,
+      layout.veryCompact ? 14 : 18
+    );
+
+    this.tweens.add({
+      targets: inner,
+      alpha: 1,
+      duration: 300,
+      delay: 70,
+      ease: 'Sine.easeOut',
+    });
+
+    this.add.circle(layout.centerX, layout.routeY, width * 0.38, theme.glow, 0.055)
+      .setDepth(3)
+      .setAlpha(0.68);
+
+    const titleY = top + (layout.veryCompact ? 18 : 22);
+    this.add.text(layout.centerX, titleY, 'Карта разломов', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '14px' : layout.compact ? '16px' : '18px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: width - 68,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(8).setAlpha(0.95);
+
+    const runeLeft = this.add.text(left + 24, titleY, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '13px' : '16px',
+      color: '#76604a',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
+
+    const runeRight = this.add.text(right - 24, titleY, '◇', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '13px' : '16px',
+      color: '#76604a',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
+
+    this.tweens.add({
+      targets: [runeLeft, runeRight],
+      alpha: {
+        from: 0.34,
+        to: 0.82,
+      },
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
     this.createBranchMapMist(layout.centerX, layout.routeY, width, mapHeight, theme.fog);
+
+    const maxLayer = Math.max(...rooms.map(room => room.branchLayer ?? 0), 0);
+    const layerCount = maxLayer + 1;
+    const nodeLeft = left + (layout.veryCompact ? 34 : 42);
+    const nodeRight = right - (layout.veryCompact ? 34 : 42);
 
     const layerX = (layer: number) => {
       if (layerCount <= 1) {
         return layout.centerX;
       }
 
-      return Phaser.Math.Linear(left, right, layer / (layerCount - 1));
+      return Phaser.Math.Linear(nodeLeft, nodeRight, layer / (layerCount - 1));
     };
 
     const layerRooms = new Map<number, typeof rooms>();
@@ -877,6 +948,7 @@ export class DungeonScene extends Phaser.Scene {
       const list = layerRooms.get(layer) ?? [];
 
       list.push(room);
+      list.sort((a, b) => (a.branchColumn ?? 0) - (b.branchColumn ?? 0));
       layerRooms.set(layer, list);
     });
 
@@ -895,138 +967,154 @@ export class DungeonScene extends Phaser.Scene {
         const toX = layerX(nextRoom.branchLayer ?? 0);
         const toY = this.getBranchNodeY(top, mapHeight, nextRoom, layerRooms);
         const isAvailable = availableRooms.some(candidate => candidate.id === nextRoom.id);
+        const isNextBoss = String(nextRoom.type) === 'boss' || String(nextRoom.type) === 'tier_boss';
         const isPathCompleted = isCompleted && (nextRoom.completed || isAvailable || currentRoom?.id === nextRoom.id);
+        const connectionState = isNextBoss
+          ? 'boss'
+          : isPathCompleted
+            ? 'completed'
+            : isAvailable
+              ? 'available'
+              : 'locked';
 
         this.drawBranchConnection(
           fromX,
           fromY,
           toX,
           toY,
-          isPathCompleted ? UI.colors.gold : 0x3a302a,
-          isPathCompleted ? 0.62 : 0.24,
-          isAvailable
+          connectionState === 'boss'
+            ? DUNGEON_DARK.blood
+            : connectionState === 'completed'
+              ? DUNGEON_DARK.green
+              : connectionState === 'available'
+                ? DUNGEON_DARK.gold
+                : 0x2a241f,
+          connectionState === 'locked' ? 0.24 : 0.68,
+          connectionState === 'available',
+          connectionState === 'boss'
         );
       });
     });
 
-
-    this.add.text(layout.centerX, top + mapHeight - 14, '◆ доступно  •  ✓ пройдено  •  ? неизвестно  •  ♛ босс', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : '10px',
-      color: UI.colors.textMuted,
-      align: 'center',
-      wordWrap: {
-        width: width - 44,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
-
     rooms.forEach((room, index) => {
       const x = layerX(room.branchLayer ?? 0);
       const y = this.getBranchNodeY(top, mapHeight, room, layerRooms);
+      const roomType = String(room.type);
       const isCurrent = currentRoom?.id === room.id && !isAwaitingRoomChoice();
       const isAvailable = availableRooms.some(candidate => candidate.id === room.id);
       const isCompleted = Boolean(room.completed);
       const isQuestion = Boolean(room.question && !room.discovered);
+      const isBoss = roomType === 'boss' || roomType === 'tier_boss';
+      const isTierBoss = roomType === 'tier_boss';
       const isLocked = !isCurrent && !isAvailable && !isCompleted;
-      const stroke = isCurrent
-        ? UI.colors.gold
-        : isAvailable
-          ? 0x9b7cff
-          : isCompleted
-            ? 0x75d184
-            : 0x4a3b31;
-      const fill = isCurrent
-        ? 0x2a1b10
-        : isAvailable
-          ? 0x1c1326
-          : isCompleted
-            ? 0x0f1e14
-            : 0x0d0d10;
-      const icon = isQuestion ? '?' : this.getRoomIcon(String(room.type));
-      const textColor = isQuestion
-        ? '#c0a5ff'
-        : isLocked
-          ? '#5d5852'
-          : isCompleted
-            ? '#75d184'
-            : this.getRoomTextColor(String(room.type));
-
-      const delay = 90 + index * 35;
-
-      const glow = this.add.circle(x, y, nodeRadius + 12, stroke, isCurrent || isAvailable ? 0.14 : 0.035)
-        .setDepth(5)
-        .setAlpha(0)
-        .setScale(0.65);
-
-      const node = this.add.circle(x, y + 3, nodeRadius + 3, 0x000000, 0.32)
-        .setDepth(5)
-        .setAlpha(0)
-        .setScale(0.7);
-
-      const circle = this.add.circle(x, y, isCurrent || isAvailable ? nodeRadius + 2 : nodeRadius, fill, isLocked ? 0.68 : 1)
-        .setStrokeStyle(isCurrent || isAvailable ? 3 : 2, stroke, isLocked ? 0.38 : 0.84)
-        .setDepth(6)
-        .setAlpha(0)
-        .setScale(0.7);
-
-      const label = this.add.text(x, y, icon, {
-        fontFamily: UI.font.body,
-        fontSize: isCurrent || isAvailable ? (layout.veryCompact ? '15px' : '18px') : (layout.veryCompact ? '13px' : '16px'),
-        color: textColor,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(7).setAlpha(0).setScale(0.7);
-
-      this.tweens.add({
-        targets: [glow, node, circle, label],
-        alpha: 1,
-        scale: 1,
-        duration: 320,
-        delay,
-        ease: 'Back.easeOut',
+      const visual = this.getRoomMapVisual({
+        roomType,
+        isQuestion,
+        isCurrent,
+        isAvailable,
+        isCompleted,
+        isLocked,
+        isBoss,
+        isTierBoss,
       });
 
-      if (isCurrent || isAvailable) {
-        this.tweens.add({
-          targets: glow,
-          alpha: {
-            from: 0.08,
-            to: 0.22,
-          },
-          scale: {
-            from: 0.96,
-            to: 1.18,
-          },
-          duration: 1350,
-          yoyo: true,
-          repeat: -1,
-          delay: delay + 260,
-          ease: 'Sine.easeInOut',
-        });
-      }
+      const radius = isTierBoss
+        ? nodeBaseRadius + 8
+        : isBoss
+          ? nodeBaseRadius + 6
+          : isCurrent
+            ? nodeBaseRadius + 5
+            : isAvailable
+              ? nodeBaseRadius + 3
+              : nodeBaseRadius;
+
+      this.branchNodePositions.set(room.id, {
+        x,
+        y,
+        color: visual.stroke,
+      });
+
+      const delay = 110 + index * 35;
+
+      this.createRoomMapNode({
+        x,
+        y,
+        radius,
+        icon: isQuestion ? '?' : isBoss ? (isTierBoss ? '♚' : '♛') : this.getRoomIcon(roomType),
+        visual,
+        isCurrent,
+        isAvailable,
+        isCompleted,
+        isQuestion,
+        isBoss,
+        delay,
+        onClick: isAvailable
+          ? () => {
+              this.chooseBranchRoom(room.id);
+            }
+          : undefined,
+      });
+    });
+
+    const legendY = top + mapHeight - (layout.veryCompact ? 15 : 18);
+    const legendText = layout.veryCompact
+      ? '◆ путь   ✓ пройдено   ? тайна   ♛ босс'
+      : '◆ доступно   ✓ пройдено   ? неизвестно   ♛ босс';
+
+    const legendBg = this.add.rectangle(layout.centerX, legendY, width - 52, layout.veryCompact ? 18 : 22, 0x020203, 0.44)
+      .setStrokeStyle(1, DUNGEON_DARK.bronze, 0.2)
+      .setDepth(6);
+
+    const legend = this.add.text(layout.centerX, legendY, legendText, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '9px' : '10px',
+      color: '#b8aa91',
+      align: 'center',
+      wordWrap: {
+        width: width - 64,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(8);
+
+    this.tweens.add({
+      targets: [legendBg, legend],
+      alpha: {
+        from: 0.15,
+        to: 0.82,
+      },
+      duration: 260,
+      delay: 300,
+      ease: 'Sine.easeOut',
     });
   }
+
 
   private getBranchNodeY(
     top: number,
     mapHeight: number,
-    room: { branchLayer?: number; branchColumn?: number },
-    layerRooms: Map<number, Array<{ branchColumn?: number }>>
+    room: { id?: string; branchLayer?: number; branchColumn?: number },
+    layerRooms: Map<number, Array<{ id?: string; branchColumn?: number }>>
   ) {
     const layer = room.branchLayer ?? 0;
     const roomsInLayer = layerRooms.get(layer) ?? [];
     const count = Math.max(1, roomsInLayer.length);
-    const column = room.branchColumn ?? 0;
-    const mapTop = top + 38;
-    const mapBottom = top + mapHeight - 34;
+    const mapTop = top + (this.getLayout().veryCompact ? 46 : 54);
+    const mapBottom = top + mapHeight - (this.getLayout().veryCompact ? 36 : 42);
 
     if (count <= 1) {
       return (mapTop + mapBottom) / 2;
     }
 
-    return Phaser.Math.Linear(mapTop, mapBottom, column / (count - 1));
+    const roomIndex = roomsInLayer.findIndex(candidate => candidate.id === room.id);
+    const column = typeof room.branchColumn === 'number'
+      ? room.branchColumn
+      : Math.max(0, roomIndex);
+
+    const normalized = Phaser.Math.Clamp(column / Math.max(1, count - 1), 0, 1);
+
+    return Phaser.Math.Linear(mapTop, mapBottom, normalized);
   }
+
 
   private drawBranchConnection(
     fromX: number,
@@ -1035,37 +1123,75 @@ export class DungeonScene extends Phaser.Scene {
     toY: number,
     color: number,
     alpha: number,
-    animated: boolean
+    animated: boolean,
+    danger = false
   ) {
-    const graphics = this.add.graphics().setDepth(4).setAlpha(0);
     const midX = (fromX + toX) / 2;
+    const bend = Phaser.Math.Clamp(Math.abs(toY - fromY) * 0.18, 4, 14);
+    const cornerY1 = fromY + (toY >= fromY ? bend : -bend);
+    const cornerY2 = toY - (toY >= fromY ? bend : -bend);
 
-    graphics.lineStyle(animated ? 3 : 2, color, alpha);
-    graphics.lineBetween(fromX, fromY, midX, fromY);
-    graphics.lineBetween(midX, fromY, midX, toY);
-    graphics.lineBetween(midX, toY, toX, toY);
+    const shadow = this.add.graphics().setDepth(4).setAlpha(0);
+    shadow.lineStyle(danger ? 8 : 6, 0x000000, 0.44);
+    shadow.beginPath();
+    shadow.moveTo(fromX, fromY);
+    shadow.lineTo(midX - 10, cornerY1);
+    shadow.lineTo(midX + 10, cornerY2);
+    shadow.lineTo(toX, toY);
+    shadow.strokePath();
+
+    const crack = this.add.graphics().setDepth(5).setAlpha(0);
+    crack.lineStyle(danger ? 4 : animated ? 4 : 3, color, alpha);
+    crack.beginPath();
+    crack.moveTo(fromX, fromY);
+    crack.lineTo(midX - 10, cornerY1);
+    crack.lineTo(midX + 10, cornerY2);
+    crack.lineTo(toX, toY);
+    crack.strokePath();
+
+    const runeGlow = this.add.graphics().setDepth(6).setAlpha(0);
+    runeGlow.lineStyle(danger ? 2 : 1, color, danger ? 0.42 : animated ? 0.38 : 0.2);
+    runeGlow.beginPath();
+    runeGlow.moveTo(fromX + 2, fromY - 2);
+    runeGlow.lineTo(midX - 8, cornerY1 - 2);
+    runeGlow.lineTo(midX + 8, cornerY2 - 2);
+    runeGlow.lineTo(toX - 2, toY - 2);
+    runeGlow.strokePath();
+
+    const runeCount = animated || danger ? 4 : 2;
+    for (let i = 1; i <= runeCount; i += 1) {
+      const t = i / (runeCount + 1);
+      const x = Phaser.Math.Linear(fromX, toX, t);
+      const y = t < 0.5
+        ? Phaser.Math.Linear(fromY, cornerY1, t * 2)
+        : Phaser.Math.Linear(cornerY2, toY, (t - 0.5) * 2);
+
+      runeGlow.fillStyle(color, animated || danger ? 0.62 : 0.28);
+      runeGlow.fillCircle(x, y, danger ? 2.1 : 1.6);
+    }
 
     this.tweens.add({
-      targets: graphics,
+      targets: [shadow, crack, runeGlow],
       alpha: 1,
-      duration: animated ? 380 : 260,
+      duration: animated || danger ? 360 : 260,
       ease: 'Sine.easeOut',
     });
 
-    if (animated) {
+    if (animated || danger) {
       this.tweens.add({
-        targets: graphics,
+        targets: [crack, runeGlow],
         alpha: {
-          from: 0.55,
-          to: 1,
+          from: danger ? 0.52 : 0.46,
+          to: danger ? 0.95 : 0.86,
         },
-        duration: 900,
+        duration: danger ? 1300 : 900,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
     }
   }
+
 
   private createBranchMapMist(
     centerX: number,
@@ -1074,29 +1200,361 @@ export class DungeonScene extends Phaser.Scene {
     height: number,
     color: number
   ) {
-    const mistCount = this.getLayout().veryCompact ? 10 : 15;
+    const layout = this.getLayout();
+    const mistCount = layout.veryCompact ? 12 : layout.compact ? 16 : 20;
+    const left = centerX - width / 2;
+    const top = centerY - height / 2;
+
+    const maskGraphics = this.add.graphics().setDepth(3);
+    maskGraphics.fillStyle(0xffffff, 1);
+    maskGraphics.fillRoundedRect(
+      left + 10,
+      top + 10,
+      width - 20,
+      height - 20,
+      layout.veryCompact ? 18 : 24
+    );
+    maskGraphics.setVisible(false);
+
+    const mask = maskGraphics.createGeometryMask();
 
     for (let i = 0; i < mistCount; i += 1) {
-      const x = centerX - width / 2 + Phaser.Math.Between(24, Math.max(28, width - 24));
-      const y = centerY - height / 2 + Phaser.Math.Between(18, Math.max(24, height - 18));
-      const fog = this.add.circle(x, y, Phaser.Math.Between(8, 22), color, 0.025)
+      const x = left + Phaser.Math.Between(26, Math.max(30, Math.floor(width - 26)));
+      const y = top + Phaser.Math.Between(28, Math.max(32, Math.floor(height - 28)));
+      const fog = this.add.circle(x, y, Phaser.Math.Between(10, layout.veryCompact ? 22 : 30), color, 0.028)
         .setDepth(3)
-        .setAlpha(0);
+        .setAlpha(0)
+        .setMask(mask);
 
       this.tweens.add({
         targets: fog,
         alpha: {
-          from: 0.01,
-          to: 0.065,
+          from: 0.012,
+          to: 0.075,
         },
-        x: x + Phaser.Math.Between(-14, 14),
-        duration: Phaser.Math.Between(1700, 2900),
+        x: x + Phaser.Math.Between(-18, 18),
+        y: y + Phaser.Math.Between(-6, 8),
+        duration: Phaser.Math.Between(1800, 3100),
         yoyo: true,
         repeat: -1,
-        delay: i * 90,
+        delay: i * 85,
         ease: 'Sine.easeInOut',
       });
     }
+  }
+
+
+
+  private getRoomMapVisual(config: {
+    roomType: string;
+    isQuestion: boolean;
+    isCurrent: boolean;
+    isAvailable: boolean;
+    isCompleted: boolean;
+    isLocked: boolean;
+    isBoss: boolean;
+    isTierBoss: boolean;
+  }) {
+    const {
+      roomType,
+      isQuestion,
+      isCurrent,
+      isAvailable,
+      isCompleted,
+      isLocked,
+      isBoss,
+      isTierBoss,
+    } = config;
+
+    if (isCurrent) {
+      return {
+        fill: 0x2a1b10,
+        stroke: DUNGEON_DARK.goldSoft,
+        text: '#fff1c2',
+        glow: DUNGEON_DARK.gold,
+        alpha: 1,
+      };
+    }
+
+    if (isTierBoss) {
+      return {
+        fill: 0x1d0707,
+        stroke: 0xff6b6b,
+        text: '#ffb0a0',
+        glow: 0x8d2f2f,
+        alpha: isLocked ? 0.74 : 1,
+      };
+    }
+
+    if (isBoss) {
+      return {
+        fill: 0x180909,
+        stroke: DUNGEON_DARK.blood,
+        text: '#ff9a9a',
+        glow: DUNGEON_DARK.blood,
+        alpha: isLocked ? 0.72 : 1,
+      };
+    }
+
+    if (isAvailable) {
+      return {
+        fill: isQuestion ? 0x1a1027 : 0x1b1410,
+        stroke: isQuestion ? 0x9b7cff : DUNGEON_DARK.gold,
+        text: isQuestion ? '#d8c6ff' : '#f0dfb0',
+        glow: isQuestion ? 0x9b7cff : DUNGEON_DARK.gold,
+        alpha: 1,
+      };
+    }
+
+    if (isCompleted) {
+      return {
+        fill: 0x0d1c12,
+        stroke: DUNGEON_DARK.green,
+        text: '#a8f0b4',
+        glow: DUNGEON_DARK.green,
+        alpha: 0.96,
+      };
+    }
+
+    if (isQuestion) {
+      return {
+        fill: 0x110d18,
+        stroke: 0x62518a,
+        text: '#9f8bd1',
+        glow: 0x62518a,
+        alpha: 0.82,
+      };
+    }
+
+    if (isLocked) {
+      return {
+        fill: 0x09090c,
+        stroke: 0x3a302a,
+        text: '#5d5852',
+        glow: 0x1a1714,
+        alpha: 0.68,
+      };
+    }
+
+    return {
+      fill: 0x111016,
+      stroke: this.getRoomStrokeColor(roomType),
+      text: this.getRoomTextColor(roomType),
+      glow: this.getRoomStrokeColor(roomType),
+      alpha: 0.9,
+    };
+  }
+
+  private createRoomMapNode(config: {
+    x: number;
+    y: number;
+    radius: number;
+    icon: string;
+    visual: {
+      fill: number;
+      stroke: number;
+      text: string;
+      glow: number;
+      alpha: number;
+    };
+    isCurrent: boolean;
+    isAvailable: boolean;
+    isCompleted: boolean;
+    isQuestion: boolean;
+    isBoss: boolean;
+    delay: number;
+    onClick?: () => void;
+  }) {
+    const {
+      x,
+      y,
+      radius,
+      icon,
+      visual,
+      isCurrent,
+      isAvailable,
+      isCompleted,
+      isQuestion,
+      isBoss,
+      delay,
+      onClick,
+    } = config;
+
+    const glowRadius = radius + (isBoss ? 15 : isCurrent ? 14 : isAvailable ? 12 : 8);
+
+    const outerGlow = this.add.circle(x, y, glowRadius, visual.glow, isCurrent || isAvailable || isBoss ? 0.15 : 0.04)
+      .setDepth(6)
+      .setAlpha(0)
+      .setScale(0.62);
+
+    const shadow = this.add.circle(x, y + 4, radius + 4, 0x000000, 0.38)
+      .setDepth(6)
+      .setAlpha(0)
+      .setScale(0.64);
+
+    const ring = this.add.circle(x, y, radius + 4, 0x050506, visual.alpha)
+      .setStrokeStyle(isCurrent || isAvailable || isBoss ? 3 : 2, visual.stroke, isCurrent || isAvailable || isBoss ? 0.92 : 0.48)
+      .setDepth(7)
+      .setAlpha(0)
+      .setScale(0.64);
+
+    const core = this.add.circle(x, y, radius, visual.fill, visual.alpha)
+      .setStrokeStyle(1, 0x000000, 0.7)
+      .setDepth(8)
+      .setAlpha(0)
+      .setScale(0.64);
+
+    const label = this.add.text(x, y, icon, {
+      fontFamily: UI.font.body,
+      fontSize: `${Math.max(12, Math.floor(radius * (isBoss ? 1.22 : 1.12)))}px`,
+      color: visual.text,
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: radius * 2 + 8,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(9).setAlpha(0).setScale(0.64);
+
+    const stateMarker = isCurrent
+      ? 'ты'
+      : isAvailable
+        ? '◆'
+        : isCompleted
+          ? '✓'
+          : '';
+
+    const marker = stateMarker
+      ? this.add.text(x, y + radius + 10, stateMarker, {
+          fontFamily: UI.font.body,
+          fontSize: isCurrent ? '9px' : '11px',
+          color: isCurrent ? '#f4dfad' : isAvailable ? '#d8c088' : '#9fd0a6',
+          stroke: '#000000',
+          strokeThickness: 2,
+          align: 'center',
+          wordWrap: {
+            width: 42,
+          },
+          maxLines: 1,
+        }).setOrigin(0.5).setDepth(9).setAlpha(0)
+      : undefined;
+
+    const appearingTargets = marker
+      ? [outerGlow, shadow, ring, core, label, marker]
+      : [outerGlow, shadow, ring, core, label];
+
+    this.tweens.add({
+      targets: appearingTargets,
+      alpha: 1,
+      scale: 1,
+      duration: 330,
+      delay,
+      ease: 'Back.easeOut',
+    });
+
+    if (isCurrent || isAvailable || isQuestion || isBoss) {
+      this.tweens.add({
+        targets: outerGlow,
+        alpha: {
+          from: isBoss ? 0.08 : isQuestion ? 0.06 : 0.09,
+          to: isBoss ? 0.26 : isQuestion ? 0.18 : 0.22,
+        },
+        scale: {
+          from: 0.96,
+          to: isBoss ? 1.2 : 1.15,
+        },
+        duration: isBoss ? 1450 : isQuestion ? 1200 : 1050,
+        yoyo: true,
+        repeat: -1,
+        delay: delay + 250,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    if (isAvailable && !isBoss) {
+      this.tweens.add({
+        targets: ring,
+        scale: {
+          from: 1,
+          to: 1.08,
+        },
+        duration: 980,
+        yoyo: true,
+        repeat: -1,
+        delay: delay + 260,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    if (onClick) {
+      const zoneSize = Math.max(52, radius * 2 + 22);
+      const zone = this.add.zone(x, y, zoneSize, zoneSize)
+        .setDepth(11)
+        .setInteractive({ useHandCursor: true });
+
+      zone.on('pointerover', () => {
+        this.tweens.add({
+          targets: [ring, core, label],
+          scale: 1.08,
+          duration: 90,
+          ease: 'Sine.easeOut',
+        });
+      });
+
+      zone.on('pointerout', () => {
+        this.tweens.add({
+          targets: [ring, core, label],
+          scale: 1,
+          duration: 90,
+          ease: 'Sine.easeOut',
+        });
+      });
+
+      zone.on('pointerdown', () => {
+        this.tweens.add({
+          targets: [ring, core],
+          scale: 0.94,
+          duration: 70,
+          ease: 'Sine.easeOut',
+        });
+      });
+
+      zone.on('pointerup', () => {
+        this.tweens.add({
+          targets: [ring, core],
+          scale: 1.12,
+          duration: 90,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+        });
+
+        onClick();
+      });
+    }
+  }
+
+  private flashChosenBranchNode(roomId: string) {
+    const point = this.branchNodePositions.get(roomId);
+
+    if (!point) {
+      return;
+    }
+
+    const pulse = this.add.circle(point.x, point.y, 12, point.color, 0.02)
+      .setStrokeStyle(3, point.color, 0.92)
+      .setDepth(18);
+
+    this.tweens.add({
+      targets: pulse,
+      radius: 42,
+      alpha: 0,
+      duration: 220,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        pulse.destroy();
+      },
+    });
   }
 
   private createCurrentRoom() {
@@ -1451,6 +1909,8 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   private chooseBranchRoom(roomId: string) {
+    this.flashChosenBranchNode(roomId);
+
     if (!chooseNextFloorRoom(roomId)) {
       return;
     }
@@ -1458,9 +1918,9 @@ export class DungeonScene extends Phaser.Scene {
     markDungeonResumePoint('choose-branch-room');
     void saveGameAsync();
 
-    this.cameras.main.fadeOut(180, 0, 0, 0);
+    this.cameras.main.fadeOut(220, 0, 0, 0);
 
-    this.time.delayedCall(190, () => {
+    this.time.delayedCall(230, () => {
       this.scene.restart();
     });
   }
