@@ -58,6 +58,16 @@ type CampLayout = {
 
 type CampActionButton = {
   titleText: Phaser.GameObjects.Text;
+  descriptionText: Phaser.GameObjects.Text;
+};
+
+type CityFlintType = 'common' | 'rare' | 'donate';
+
+type CityCampfireState = {
+  active: boolean;
+  flintType: CityFlintType | null;
+  startedAt: number;
+  expiresAt: number | null;
 };
 
 export class CampScene extends Phaser.Scene {
@@ -77,10 +87,17 @@ export class CampScene extends Phaser.Scene {
   private actionScrollThumb?: Phaser.GameObjects.Rectangle;
 
   private restButtonLabel?: Phaser.GameObjects.Text;
+  private restButtonDescription?: Phaser.GameObjects.Text;
+  private cityCampfireTimerText?: Phaser.GameObjects.Text;
+  private cityCampfireWarmOverlay?: Phaser.GameObjects.Rectangle;
+  private cityCampfireGlowObjects: Phaser.GameObjects.GameObject[] = [];
+  private cityCampfireVisualTweens: Phaser.Tweens.Tween[] = [];
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
+  private cityCampfireIsVisuallyActive = false;
 
-  private readonly CAMPFIRE_COOLDOWN_MS = 30 * 60 * 1000;
-  private readonly CAMPFIRE_LAST_USE_KEY = 'campfire_last_rest_at';
+  private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
+  private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
+  private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
 
   constructor() {
     super('CampScene');
@@ -92,7 +109,9 @@ export class CampScene extends Phaser.Scene {
     const layout = this.getLayout();
 
     createSceneBackground(this);
+    this.extinguishCityCampfireIfExpired();
     this.createCampBackdrop(layout);
+    this.createCityCampfireVisualState(layout);
 
     await this.prepareStartupOnce();
 
@@ -110,6 +129,8 @@ export class CampScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.campfireTimerEvent?.remove(false);
       this.campfireTimerEvent = undefined;
+      this.cityCampfireVisualTweens.forEach(tween => tween.stop());
+      this.cityCampfireVisualTweens = [];
     });
   }
 
@@ -759,15 +780,16 @@ export class CampScene extends Phaser.Scene {
       width: innerWidth,
       height: wideHeight,
       icon: '♨',
-      title: this.getRestButtonText(),
-      description: 'Восстановить HP, энергию и зелья у последнего огня.',
-      accentColor: 0x9a6b3b,
+      title: this.getCityCampfireButtonTitle(),
+      description: this.getCityCampfireButtonDescription(),
+      accentColor: this.isCityCampfireActive() ? 0xd28a3a : 0x6f5432,
       onClick: () => {
         this.restAtCampfire();
       },
     });
 
     this.restButtonLabel = restCard.titleText;
+    this.restButtonDescription = restCard.descriptionText;
     this.startCampfireTimer();
 
     currentY += wideHeight + gap;
@@ -979,20 +1001,37 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private getRestButtonText() {
-    const cooldownLeft = this.getCampfireCooldownLeft();
+  private getCityCampfireButtonTitle() {
+    return this.isCityCampfireActive()
+      ? 'Отдохнуть у костра'
+      : 'Зажечь костёр';
+  }
 
-    return cooldownLeft > 0
-      ? `Костёр: ${this.formatCooldown(cooldownLeft)}`
-      : 'Отдохнуть у костра';
+  private getCityCampfireButtonDescription() {
+    if (!this.isCityCampfireActive()) {
+      return 'Выбери огниво, чтобы осветить убежище и открыть отдых.';
+    }
+
+    const state = this.getCityCampfireState();
+
+    if (state.flintType === 'donate') {
+      return 'Донатное огниво горит постоянно.';
+    }
+
+    return `Огонь активен ещё ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}.`;
   }
 
   private updateCampfireButtonText() {
-    if (!this.restButtonLabel) {
-      return;
-    }
+    this.extinguishCityCampfireIfExpired();
 
-    this.restButtonLabel.setText(this.getRestButtonText());
+    this.restButtonLabel?.setText(this.getCityCampfireButtonTitle());
+    this.restButtonDescription?.setText(this.getCityCampfireButtonDescription());
+
+    if (this.cityCampfireTimerText) {
+      const active = this.isCityCampfireActive();
+      this.cityCampfireTimerText.setVisible(active);
+      this.cityCampfireTimerText.setText(this.getCityCampfireTimerVisualText());
+    }
   }
 
   private startCampfireTimer() {
@@ -1007,6 +1046,7 @@ export class CampScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         this.updateCampfireButtonText();
+        this.updateCityCampfireVisualState();
       },
     });
   }
@@ -1265,7 +1305,7 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const description = this.add.text(textX, config.y + 16, config.description, {
+    const descriptionText = this.add.text(textX, config.y + 16, config.description, {
       fontFamily: UI.font.body,
       fontSize: '12px',
       color: '#8d8578',
@@ -1277,7 +1317,7 @@ export class CampScene extends Phaser.Scene {
       lineSpacing: 2,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    container.add([iconBg, icon, titleText, description]);
+    container.add([iconBg, icon, titleText, descriptionText]);
 
     this.createClickZone({
       parent: container,
@@ -1292,6 +1332,7 @@ export class CampScene extends Phaser.Scene {
 
     return {
       titleText,
+      descriptionText,
     };
   }
 
@@ -1562,58 +1603,559 @@ export class CampScene extends Phaser.Scene {
     return this.actionContainer;
   }
 
-  private restAtCampfire() {
-    const stats = getPlayerStats(player);
+  private getDefaultCityCampfireState(): CityCampfireState {
+    return {
+      active: false,
+      flintType: null,
+      startedAt: 0,
+      expiresAt: null,
+    };
+  }
 
+  private getCityCampfireState(): CityCampfireState {
+    try {
+      const raw = localStorage.getItem(this.CITY_CAMPFIRE_KEY);
+
+      if (!raw) {
+        return this.getDefaultCityCampfireState();
+      }
+
+      const parsed = JSON.parse(raw) as Partial<CityCampfireState>;
+      const flintType = parsed.flintType === 'common' || parsed.flintType === 'rare' || parsed.flintType === 'donate'
+        ? parsed.flintType
+        : null;
+
+      const state: CityCampfireState = {
+        active: Boolean(parsed.active) && Boolean(flintType),
+        flintType,
+        startedAt: typeof parsed.startedAt === 'number' ? parsed.startedAt : 0,
+        expiresAt: typeof parsed.expiresAt === 'number' ? parsed.expiresAt : null,
+      };
+
+      if (state.active && state.flintType !== 'donate' && state.expiresAt !== null && Date.now() >= state.expiresAt) {
+        this.clearCityCampfireState();
+        return this.getDefaultCityCampfireState();
+      }
+
+      return state;
+    } catch (error) {
+      console.warn('City campfire state parse failed:', error);
+      this.clearCityCampfireState();
+      return this.getDefaultCityCampfireState();
+    }
+  }
+
+  private saveCityCampfireState(state: CityCampfireState) {
+    localStorage.setItem(this.CITY_CAMPFIRE_KEY, JSON.stringify(state));
+  }
+
+  private clearCityCampfireState() {
+    localStorage.removeItem(this.CITY_CAMPFIRE_KEY);
+  }
+
+  private isCityCampfireActive() {
+    return this.getCityCampfireState().active;
+  }
+
+  private getCityCampfireTimeLeft() {
+    const state = this.getCityCampfireState();
+
+    if (!state.active) {
+      return 0;
+    }
+
+    if (state.flintType === 'donate' || state.expiresAt === null) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.max(0, state.expiresAt - Date.now());
+  }
+
+  private formatCityCampfireTimeLeft(ms: number) {
+    if (!Number.isFinite(ms)) {
+      return 'постоянно';
+    }
+
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours} ч ${minutes.toString().padStart(2, '0')} мин`;
+    }
+
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private getCityCampfireTimerVisualText() {
+    const state = this.getCityCampfireState();
+
+    if (!state.active) {
+      return 'Городской костёр погас';
+    }
+
+    if (state.flintType === 'donate') {
+      return 'Донатное огниво • огонь постоянный';
+    }
+
+    return `Городской костёр • ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}`;
+  }
+
+  private igniteCityCampfire(flintType: CityFlintType) {
+    const startedAt = Date.now();
+    const duration = flintType === 'common'
+      ? this.CITY_COMMON_FLINT_MS
+      : flintType === 'rare'
+        ? this.CITY_RARE_FLINT_MS
+        : null;
+
+    const state: CityCampfireState = {
+      active: true,
+      flintType,
+      startedAt,
+      expiresAt: duration === null ? null : startedAt + duration,
+    };
+
+    this.saveCityCampfireState(state);
+    this.updateCampfireButtonText();
+    this.createCityCampfireVisualState(this.getLayout());
+
+    const title = this.getCityFlintTitle(flintType);
+    const timeText = flintType === 'donate'
+      ? 'Костёр теперь горит постоянно.'
+      : `Костёр будет гореть ${this.formatCityCampfireTimeLeft(duration ?? 0)}.`;
+
+    this.showMessage(
+      'Костёр зажжён',
+      `${title} вспыхнуло в очаге.\n${timeText}\n\nУбежище стало теплее, а отдых у костра теперь доступен.`
+    );
+  }
+
+  private extinguishCityCampfireIfExpired() {
+    const raw = localStorage.getItem(this.CITY_CAMPFIRE_KEY);
+
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const state = JSON.parse(raw) as Partial<CityCampfireState>;
+
+      if (
+        state.active &&
+        state.flintType !== 'donate' &&
+        typeof state.expiresAt === 'number' &&
+        Date.now() >= state.expiresAt
+      ) {
+        this.clearCityCampfireState();
+      }
+    } catch (error) {
+      console.warn('City campfire expiration check failed:', error);
+      this.clearCityCampfireState();
+    }
+  }
+
+  private createCityCampfireVisualState(layout: CampLayout) {
+    this.clearCityCampfireVisualObjects();
+
+    const active = this.isCityCampfireActive();
+    this.cityCampfireIsVisuallyActive = active;
+
+    const { width, height, centerX } = layout;
+    const fireY = Phaser.Math.Clamp(height * 0.51, 330, 520);
+    const warmAlpha = active ? 0.1 : 0;
+
+    const overlay = this.add.rectangle(centerX, height / 2, width, height, 0xff9d3a, 0)
+      .setDepth(1.25);
+
+    this.cityCampfireWarmOverlay = overlay;
+    this.cityCampfireGlowObjects.push(overlay);
+
+    this.tweens.add({
+      targets: overlay,
+      alpha: warmAlpha,
+      duration: active ? 420 : 260,
+      ease: 'Sine.easeOut',
+    });
+
+    const outerGlow = this.add.circle(centerX, fireY, active ? 142 : 76, 0xd98a3a, active ? 0.09 : 0.025)
+      .setDepth(2);
+    const midGlow = this.add.circle(centerX, fireY + 8, active ? 96 : 48, 0xf0b35a, active ? 0.15 : 0.045)
+      .setDepth(2);
+    const ember = this.add.circle(centerX, fireY + 18, active ? 34 : 18, active ? 0xffc46b : 0x5b3520, active ? 0.24 : 0.08)
+      .setDepth(3);
+
+    this.cityCampfireGlowObjects.push(outerGlow, midGlow, ember);
+
+    if (active) {
+      this.cityCampfireVisualTweens.push(
+        this.tweens.add({
+          targets: [outerGlow, midGlow, ember],
+          alpha: '+=0.06',
+          scale: { from: 0.96, to: 1.08 },
+          duration: 1250,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      );
+
+      for (let i = 0; i < 22; i += 1) {
+        const sparkX = centerX + Phaser.Math.Between(-52, 52);
+        const sparkY = fireY + Phaser.Math.Between(-16, 38);
+        const spark = this.add.circle(
+          sparkX,
+          sparkY,
+          Phaser.Math.Between(1, 3),
+          i % 4 === 0 ? 0xffdf92 : 0xd28a3a,
+          0
+        ).setDepth(3);
+
+        this.cityCampfireGlowObjects.push(spark);
+        this.cityCampfireVisualTweens.push(
+          this.tweens.add({
+            targets: spark,
+            alpha: { from: 0, to: 0.72 },
+            y: sparkY - Phaser.Math.Between(34, 78),
+            x: sparkX + Phaser.Math.Between(-18, 18),
+            scale: { from: 0.6, to: 1.12 },
+            duration: Phaser.Math.Between(1200, 2300),
+            repeat: -1,
+            delay: i * 75,
+            ease: 'Sine.easeOut',
+            onRepeat: () => {
+              spark.setPosition(
+                centerX + Phaser.Math.Between(-52, 52),
+                fireY + Phaser.Math.Between(-16, 38)
+              );
+            },
+          })
+        );
+      }
+
+      const timerText = this.add.text(centerX, fireY + 84, this.getCityCampfireTimerVisualText(), {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '11px' : '12px',
+        color: '#e6c184',
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: {
+          width: layout.contentWidth - 62,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(4).setAlpha(0);
+
+      this.cityCampfireTimerText = timerText;
+      this.cityCampfireGlowObjects.push(timerText);
+
+      this.tweens.add({
+        targets: timerText,
+        alpha: 0.86,
+        duration: 300,
+        ease: 'Sine.easeOut',
+      });
+    }
+  }
+
+  private clearCityCampfireVisualObjects() {
+    this.cityCampfireVisualTweens.forEach(tween => tween.stop());
+    this.cityCampfireVisualTweens = [];
+
+    this.cityCampfireGlowObjects.forEach(object => object.destroy());
+    this.cityCampfireGlowObjects = [];
+
+    this.cityCampfireWarmOverlay = undefined;
+    this.cityCampfireTimerText = undefined;
+  }
+
+  private updateCityCampfireVisualState() {
+    const active = this.isCityCampfireActive();
+
+    if (active !== this.cityCampfireIsVisuallyActive) {
+      this.createCityCampfireVisualState(this.getLayout());
+      return;
+    }
+
+    this.cityCampfireWarmOverlay?.setVisible(true);
+
+    if (this.cityCampfireTimerText) {
+      this.cityCampfireTimerText.setText(this.getCityCampfireTimerVisualText());
+    }
+  }
+
+  private getCityFlintTitle(flintType: CityFlintType) {
+    if (flintType === 'common') {
+      return 'Обычное огниво';
+    }
+
+    if (flintType === 'rare') {
+      return 'Редкое огниво';
+    }
+
+    return 'Донатное огниво';
+  }
+
+  private showCityFlintSelectionModal() {
+    const layout = this.getLayout();
+    const modalHeight = layout.veryCompact ? 520 : 570;
+    const modal = this.createModalShell(layout, modalHeight);
+    const panelHeight = Math.min(modalHeight, layout.height - 110);
+    const top = layout.height / 2 - panelHeight / 2;
+    const optionWidth = Math.min(layout.contentWidth - 52, 540);
+    const optionHeight = layout.veryCompact ? 76 : 84;
+    const gap = layout.veryCompact ? 10 : 12;
+    const startY = top + (layout.veryCompact ? 128 : 142);
+
+    const titleText = this.add.text(layout.centerX, top + 42, 'Выбери огниво', {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '27px' : '31px',
+      color: '#d8b36f',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 70,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1002);
+
+    const subtitle = this.add.text(
+      layout.centerX,
+      top + (layout.veryCompact ? 76 : 84),
+      'Огниво зажигает городской костёр. Пока он горит, можно отдыхать без cooldown.',
+      {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '12px' : '14px',
+        color: '#b8aa91',
+        align: 'center',
+        lineSpacing: 4,
+        wordWrap: {
+          width: layout.contentWidth - 86,
+          useAdvancedWrap: true,
+        },
+        maxLines: 2,
+      }
+    ).setOrigin(0.5).setDepth(1002);
+
+    modal.container.add([titleText, subtitle]);
+
+    const closeModal = () => {
+      modal.destroy();
+    };
+
+    this.createCityFlintOption({
+      modal: modal.container,
+      x: layout.centerX,
+      y: startY,
+      width: optionWidth,
+      height: optionHeight,
+      flintType: 'common',
+      title: 'Обычное огниво',
+      description: 'Костёр будет гореть 1 час.',
+      accentColor: 0xd28a3a,
+      closeModal,
+    });
+
+    this.createCityFlintOption({
+      modal: modal.container,
+      x: layout.centerX,
+      y: startY + optionHeight + gap,
+      width: optionWidth,
+      height: optionHeight,
+      flintType: 'rare',
+      title: 'Редкое огниво',
+      description: 'Костёр будет гореть 24 часа.',
+      accentColor: 0xb89a5e,
+      closeModal,
+    });
+
+    this.createCityFlintOption({
+      modal: modal.container,
+      x: layout.centerX,
+      y: startY + (optionHeight + gap) * 2,
+      width: optionWidth,
+      height: optionHeight,
+      flintType: 'donate',
+      title: 'Донатное огниво',
+      description: 'Костёр будет гореть постоянно.',
+      accentColor: 0xc084fc,
+      closeModal,
+    });
+
+    const cancelY = top + panelHeight - (layout.veryCompact ? 42 : 48);
+    const cancel = createButton(
+      this,
+      layout.centerX,
+      cancelY,
+      'Отмена',
+      () => {
+        modal.destroy();
+      },
+      Math.min(optionWidth, 360),
+      52
+    );
+
+    this.setButtonDepth(cancel, 1001);
+    modal.container.add([cancel.shadow, cancel.bg, cancel.label]);
+  }
+
+  private createCityFlintOption(config: {
+    modal: Phaser.GameObjects.Container;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    flintType: CityFlintType;
+    title: string;
+    description: string;
+    accentColor: number;
+    closeModal: () => void;
+  }) {
+    const radius = 22;
+    const left = config.x - config.width / 2;
+    const iconX = left + 42;
+    const textX = left + 82;
+
+    const shadow = this.add.graphics().setDepth(1002);
+    shadow.fillStyle(0x000000, 0.35);
+    shadow.fillRoundedRect(left, config.y - config.height / 2 + 5, config.width, config.height, radius);
+
+    const bg = this.add.graphics().setDepth(1003);
+    const drawBg = (fillColor: number, strokeAlpha: number) => {
+      bg.clear();
+      bg.fillStyle(fillColor, 0.96);
+      bg.fillRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+      bg.lineStyle(2, config.accentColor, strokeAlpha);
+      bg.strokeRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+    };
+
+    drawBg(0x120d0a, 0.72);
+
+    const iconGlow = this.add.circle(iconX, config.y, 25, config.accentColor, 0.15)
+      .setStrokeStyle(1, config.accentColor, 0.55)
+      .setDepth(1004);
+
+    const icon = this.add.text(iconX, config.y, config.flintType === 'donate' ? '✦' : '♨', {
+      fontFamily: UI.font.body,
+      fontSize: '20px',
+      color: config.flintType === 'donate' ? '#d7b7ff' : '#f0c17d',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(1005);
+
+    const title = this.add.text(textX, config.y - 16, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: '17px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: config.width - 146,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(1005);
+
+    const description = this.add.text(textX, config.y + 16, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: '#b8aa91',
+      wordWrap: {
+        width: config.width - 146,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(1005);
+
+    const action = this.add.text(left + config.width - 48, config.y, 'Зажечь', {
+      fontFamily: UI.font.title,
+      fontSize: '13px',
+      color: '#f0d58a',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: 76,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1005);
+
+    const zone = this.add.zone(config.x, config.y, config.width, config.height)
+      .setDepth(1006)
+      .setInteractive({ useHandCursor: true });
+
+    zone.on('pointerover', () => {
+      drawBg(0x21150f, 0.96);
+      title.setColor('#ffffff');
+      action.setColor('#ffffff');
+    });
+
+    zone.on('pointerout', () => {
+      drawBg(0x120d0a, 0.72);
+      title.setColor('#d8c088');
+      action.setColor('#f0d58a');
+    });
+
+    zone.on('pointerdown', () => {
+      drawBg(0x2a1a10, 1);
+      config.modal.setScale(0.99);
+    });
+
+    zone.on('pointerup', () => {
+      config.modal.setScale(1);
+      config.closeModal();
+      this.igniteCityCampfire(config.flintType);
+    });
+
+    zone.on('pointerupoutside', () => {
+      config.modal.setScale(1);
+      drawBg(0x120d0a, 0.72);
+    });
+
+    config.modal.add([shadow, bg, iconGlow, icon, title, description, action, zone]);
+  }
+
+  private restAtCampfire() {
+    if (!this.isCityCampfireActive()) {
+      this.showCityFlintSelectionModal();
+      return;
+    }
+
+    const stats = getPlayerStats(player);
     const maxPotions = 6;
     const hpIsFull = player.hp >= stats.maxHp;
+    const energyIsFull = player.energy >= stats.maxEnergy;
     const potionsAreFull = player.potions >= maxPotions;
 
-    const cooldownLeft = this.getCampfireCooldownLeft();
-
-    if (cooldownLeft > 0) {
-      this.showMessage(
-        'Костёр остывает',
-        `Костёр можно использовать снова через ${this.formatCooldown(cooldownLeft)}.`
-      );
-      return;
-    }
-
-    if (hpIsFull && potionsAreFull) {
+    if (hpIsFull && energyIsFull && potionsAreFull) {
       this.showMessage(
         'Костёр не нужен',
-        `HP уже полное, а зелий максимум: ${player.potions}/${maxPotions}.`
+        `HP и энергия уже полные, а зелий максимум: ${player.potions}/${maxPotions}.\n\nОгонь продолжает гореть.`
       );
       return;
     }
 
-    restorePlayerVitalsToMaximum(player, 6);
+    restorePlayerVitalsToMaximum(player, maxPotions);
+    player.hp = stats.maxHp;
+    player.energy = stats.maxEnergy;
     player.potions = maxPotions;
-
-    localStorage.setItem(
-      this.CAMPFIRE_LAST_USE_KEY,
-      String(Date.now())
-    );
 
     void saveGameAsync();
 
     this.showMessage(
       'Отдых у костра',
-      `HP полностью восстановлено.\nЗелья восстановлены до ${maxPotions}.\n\nКостёр снова будет доступен через 30 минут.`
+      [
+        'HP полностью восстановлено.',
+        'Энергия полностью восстановлена.',
+        `Зелья восстановлены до ${maxPotions}.`,
+        '',
+        this.getCityCampfireButtonDescription(),
+      ].join('\n')
     );
-  }
-
-  private getCampfireCooldownLeft() {
-    const lastUse = Number(localStorage.getItem(this.CAMPFIRE_LAST_USE_KEY) ?? 0);
-
-    if (!lastUse) {
-      return 0;
-    }
-
-    const passed = Date.now() - lastUse;
-    const left = this.CAMPFIRE_COOLDOWN_MS - passed;
-
-    return Math.max(0, left);
   }
 
   private tryEnterCatacombs() {
@@ -1682,8 +2224,7 @@ export class CampScene extends Phaser.Scene {
     const stats = getPlayerStats(player);
 
     const hpPercent = Math.round((player.hp / stats.maxHp) * 100);
-    const cooldownLeft = this.getCampfireCooldownLeft();
-    const canRest = cooldownLeft <= 0;
+    const canRest = this.isCityCampfireActive();
 
     const modal = this.createModalShell(layout, layout.compact ? 430 : 460);
     const centerY = layout.height / 2;
@@ -1711,8 +2252,8 @@ export class CampScene extends Phaser.Scene {
         '',
         'Перед спуском лучше отдохнуть у костра.',
         canRest
-          ? 'Костёр сейчас доступен.'
-          : `Костёр будет доступен через ${this.formatCooldown(cooldownLeft)}.`,
+          ? this.getCityCampfireButtonDescription()
+          : 'Сначала нужно зажечь городской костёр через огниво.',
       ].join('\n'),
       {
         fontFamily: UI.font.body,
@@ -1749,20 +2290,19 @@ export class CampScene extends Phaser.Scene {
       this,
       layout.centerX,
       centerY + 44,
-      canRest ? 'Отдохнуть у костра' : 'Костёр недоступен',
+      canRest ? 'Отдохнуть у костра' : 'Зажечь костёр',
       () => {
+        closePopup();
+
         if (!canRest) {
+          this.showCityFlintSelectionModal();
           return;
         }
 
-        closePopup();
         this.restAtCampfire();
       },
       buttonWidth,
-      52,
-      {
-        disabled: !canRest,
-      }
+      52
     );
 
     this.setButtonDepth(restButton, 1001);
@@ -1797,14 +2337,6 @@ export class CampScene extends Phaser.Scene {
     );
 
     this.setButtonDepth(cancelButton, 1001);
-  }
-
-  private formatCooldown(ms: number) {
-    const totalSeconds = Math.ceil(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
   private showLeaveRunMessage() {
@@ -1885,7 +2417,8 @@ export class CampScene extends Phaser.Scene {
       'quests_state_v1',
       'stats_tree_v1',
       'character_tree_v1',
-      this.CAMPFIRE_LAST_USE_KEY,
+      this.CITY_CAMPFIRE_KEY,
+      'campfire_last_rest_at',
       'start_gold_500_v1',
     ];
 
