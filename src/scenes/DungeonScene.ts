@@ -218,19 +218,19 @@ export class DungeonScene extends Phaser.Scene {
     const exitButtonY = height - safeBottom - secondaryButtonHeight / 2;
     const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - (veryCompact ? 14 : 18);
 
-    const headerHeight = veryCompact ? 76 : compact ? 88 : 98;
-    const mapHeight = veryCompact ? 124 : compact ? 156 : 184;
+    const headerHeight = veryCompact ? 112 : compact ? 122 : 132;
+    const mapHeight = veryCompact ? 132 : compact ? 168 : 198;
 
     const headerY = safeTop + headerHeight / 2;
     const floorInfoY = headerY;
     const routeY = headerY + headerHeight / 2 + (veryCompact ? 8 : 10) + mapHeight / 2;
     const roomCardTop = routeY + mapHeight / 2 + (veryCompact ? 10 : 12);
 
-    const maxRoomCardHeight = veryCompact ? 382 : compact ? 500 : 590;
+    const maxRoomCardHeight = veryCompact ? 372 : compact ? 488 : 580;
     const availableRoomCardHeight = actionDockTop - roomCardTop - (veryCompact ? 10 : 14);
     const roomCardHeight = Phaser.Math.Clamp(
       availableRoomCardHeight,
-      veryCompact ? 238 : compact ? 330 : 410,
+      veryCompact ? 232 : compact ? 322 : 400,
       maxRoomCardHeight
     );
 
@@ -265,7 +265,6 @@ export class DungeonScene extends Phaser.Scene {
     };
   }
 
-
   private createHeader() {
     const layout = this.getLayout();
     const floor = gameState.floorRun.currentFloor;
@@ -278,7 +277,7 @@ export class DungeonScene extends Phaser.Scene {
     const totalRooms = Math.max(1, rooms.length);
     const isBossHeader = isTierBossFloor(floor) || getCurrentRoom()?.type === 'boss' || getCurrentRoom()?.type === 'tier_boss';
 
-    const headerHeight = layout.veryCompact ? 76 : layout.compact ? 88 : 98;
+    const headerHeight = layout.veryCompact ? 112 : layout.compact ? 122 : 132;
     const headerTop = layout.headerY - headerHeight / 2;
     const accent = isBossHeader ? DUNGEON_DARK.blood : theme.stroke;
 
@@ -309,21 +308,21 @@ export class DungeonScene extends Phaser.Scene {
       ease: 'Cubic.easeOut',
     });
 
-    const glow = this.add.circle(layout.centerX, layout.headerY + 3, layout.contentWidth * 0.42, accent, isBossHeader ? 0.09 : 0.055)
+    const glow = this.add.circle(layout.centerX, layout.headerY + 5, layout.contentWidth * 0.42, accent, isBossHeader ? 0.075 : 0.045)
       .setDepth(3)
       .setAlpha(0);
 
-    const rune = this.add.text(layout.centerX, layout.headerY + 2, '◇', {
+    const rune = this.add.text(layout.centerX, layout.headerY + 4, '◇', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '58px' : '72px',
+      fontSize: layout.veryCompact ? '62px' : '76px',
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(4).setAlpha(0.035);
+    }).setOrigin(0.5).setDepth(4).setAlpha(0.028);
 
     this.tweens.add({
       targets: glow,
-      alpha: isBossHeader ? 0.09 : 0.055,
+      alpha: isBossHeader ? 0.075 : 0.045,
       duration: 360,
       ease: 'Sine.easeOut',
     });
@@ -332,7 +331,7 @@ export class DungeonScene extends Phaser.Scene {
     const pillGap = 10;
     const tierX = layout.centerX - tierPillWidth / 2 - pillGap / 2;
     const floorX = layout.centerX + tierPillWidth / 2 + pillGap / 2;
-    const pillY = headerTop + (layout.veryCompact ? 23 : 27);
+    const pillY = headerTop + (layout.veryCompact ? 25 : 29);
     const pillHeight = layout.veryCompact ? 34 : 38;
 
     this.createHeaderPlate({
@@ -357,7 +356,11 @@ export class DungeonScene extends Phaser.Scene {
       delay: 105,
     });
 
-    const zoneText = this.add.text(layout.centerX, headerTop + (layout.veryCompact ? 50 : 58), `${theme.name} • ${modifierName}`, {
+    const statusText = layout.veryCompact
+      ? `${modifierName} • ${completedRooms}/${totalRooms}`
+      : `${theme.name} • ${modifierName} • ${completedRooms}/${totalRooms} комнат`;
+
+    const zoneText = this.add.text(layout.centerX, headerTop + (layout.veryCompact ? 57 : 64), statusText, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : layout.compact ? '11px' : '12px',
       color: isBossHeader ? '#d49b96' : theme.mutedText,
@@ -369,30 +372,15 @@ export class DungeonScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(7).setAlpha(0);
 
-    const metaText = isAwaitingRoomChoice()
-      ? `Доступно проходов: ${getAvailableNextRooms().length}`
-      : `${completedRooms}/${totalRooms} комнат пройдено`;
-
-    const meta = this.add.text(layout.centerX, headerTop + headerHeight - (layout.veryCompact ? 10 : 12), metaText, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : '10px',
-      color: '#8f877a',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 60,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(7).setAlpha(0);
-
     this.tweens.add({
-      targets: [zoneText, meta],
+      targets: zoneText,
       alpha: 1,
       duration: 240,
       delay: 160,
       ease: 'Sine.easeOut',
     });
 
-    const chipY = headerTop + headerHeight - (layout.veryCompact ? 27 : 31);
+    const chipY = headerTop + headerHeight - (layout.veryCompact ? 25 : 28);
     const chipWidth = Math.min((layout.contentWidth - 62) / 3, 174);
     const chipStartX = layout.centerX - chipWidth - 8;
     const hpColor = player.hp <= Math.max(1, Math.floor(stats.maxHp * 0.3))
@@ -406,18 +394,20 @@ export class DungeonScene extends Phaser.Scene {
     ];
 
     chips.forEach((chip, index) => {
-      const bg = this.add.rectangle(chip.x, chipY, chipWidth, layout.veryCompact ? 18 : 22, 0x050507, 0.72)
-        .setStrokeStyle(1, chip.color, 0.46)
+      const chipHeight = layout.veryCompact ? 22 : 25;
+      const bg = this.add.rectangle(chip.x, chipY, chipWidth, chipHeight, 0x050507, 0.76)
+        .setStrokeStyle(1, chip.color, 0.5)
         .setDepth(6)
         .setAlpha(0);
 
       const text = this.add.text(chip.x, chipY, `${chip.icon} ${chip.label}`, {
         fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '8px' : '10px',
+        fontSize: layout.veryCompact ? '9px' : '10px',
         color: '#d8d2c4',
         align: 'center',
         wordWrap: {
           width: chipWidth - 8,
+          useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(7).setAlpha(0);
@@ -434,7 +424,7 @@ export class DungeonScene extends Phaser.Scene {
     if (isBossHeader) {
       this.tweens.add({
         targets: [glow, rune],
-        alpha: { from: 0.045, to: 0.12 },
+        alpha: { from: 0.04, to: 0.11 },
         duration: 1150,
         yoyo: true,
         repeat: -1,
@@ -983,7 +973,6 @@ export class DungeonScene extends Phaser.Scene {
     rooms.forEach((room: any) => {
       const fromX = layerX(room.branchLayer ?? 0);
       const fromY = this.getBranchNodeY(top, mapHeight, room, layerRooms);
-      const isCompleted = Boolean(room.completed);
 
       (room.nextRoomIds ?? []).forEach((nextRoomId: string) => {
         const nextRoom = rooms.find((candidate: any) => candidate.id === nextRoomId);
@@ -992,34 +981,43 @@ export class DungeonScene extends Phaser.Scene {
           return;
         }
 
+        const connectionState = this.getBranchConnectionState({
+          fromRoom: room,
+          toRoom: nextRoom,
+          currentRoom,
+          availableRooms,
+        });
+
+        if (connectionState === 'hidden') {
+          return;
+        }
+
         const toX = layerX(nextRoom.branchLayer ?? 0);
         const toY = this.getBranchNodeY(top, mapHeight, nextRoom, layerRooms);
-        const isAvailable = availableRooms.some(candidate => candidate.id === nextRoom.id);
-        const isNextBoss = String(nextRoom.type) === 'boss' || String(nextRoom.type) === 'tier_boss';
-        const isPathCompleted = isCompleted && (nextRoom.completed || isAvailable || currentRoom?.id === nextRoom.id);
-        const connectionState = isNextBoss
-          ? 'boss'
-          : isPathCompleted
-            ? 'completed'
-            : isAvailable
-              ? 'available'
-              : 'locked';
+        const isActivePath = connectionState === 'active' || connectionState === 'bossActive';
+        const isBossPath = connectionState === 'bossActive' || connectionState === 'bossCompleted';
+        const color = connectionState === 'bossLocked'
+          ? 0x3a1717
+          : isBossPath
+            ? DUNGEON_DARK.blood
+            : connectionState === 'completed'
+              ? DUNGEON_DARK.green
+              : DUNGEON_DARK.gold;
+        const alpha = connectionState === 'bossLocked'
+          ? 0.13
+          : connectionState === 'completed'
+            ? 0.58
+            : 0.72;
 
         this.drawBranchConnection(
           fromX,
           fromY,
           toX,
           toY,
-          connectionState === 'boss'
-            ? DUNGEON_DARK.blood
-            : connectionState === 'completed'
-              ? DUNGEON_DARK.green
-              : connectionState === 'available'
-                ? DUNGEON_DARK.gold
-                : 0x2a241f,
-          connectionState === 'locked' ? 0.24 : 0.68,
-          connectionState === 'available',
-          connectionState === 'boss'
+          color,
+          alpha,
+          isActivePath,
+          isBossPath
         );
       });
     });
@@ -1141,6 +1139,39 @@ export class DungeonScene extends Phaser.Scene {
     const normalized = Phaser.Math.Clamp(column / Math.max(1, count - 1), 0, 1);
 
     return Phaser.Math.Linear(mapTop, mapBottom, normalized);
+  }
+
+
+  private getBranchConnectionState(config: {
+    fromRoom: any;
+    toRoom: any;
+    currentRoom?: any | null;
+    availableRooms: Array<{ id: string }>;
+  }): 'completed' | 'active' | 'hidden' | 'bossLocked' | 'bossActive' | 'bossCompleted' {
+    const fromCompleted = Boolean(config.fromRoom.completed);
+    const toCompleted = Boolean(config.toRoom.completed);
+    const fromIsCurrent = config.currentRoom?.id === config.fromRoom.id;
+    const toIsCurrent = config.currentRoom?.id === config.toRoom.id;
+    const toIsAvailable = config.availableRooms.some(room => room.id === config.toRoom.id);
+    const toIsBoss = String(config.toRoom.type) === 'boss' || String(config.toRoom.type) === 'tier_boss';
+
+    if (fromCompleted && toCompleted) {
+      return toIsBoss ? 'bossCompleted' : 'completed';
+    }
+
+    if (fromCompleted && toIsCurrent) {
+      return toIsBoss ? 'bossCompleted' : 'completed';
+    }
+
+    if ((fromIsCurrent || fromCompleted) && toIsAvailable) {
+      return toIsBoss ? 'bossActive' : 'active';
+    }
+
+    if (toIsBoss) {
+      return 'bossLocked';
+    }
+
+    return 'hidden';
   }
 
 
@@ -1306,21 +1337,21 @@ export class DungeonScene extends Phaser.Scene {
 
     if (isTierBoss) {
       return {
-        fill: 0x1d0707,
-        stroke: 0xff6b6b,
-        text: '#ffb0a0',
-        glow: 0x8d2f2f,
-        alpha: isLocked ? 0.74 : 1,
+        fill: isLocked ? 0x100809 : 0x1d0707,
+        stroke: isLocked ? 0x4a2424 : 0xff6b6b,
+        text: isLocked ? '#6f5552' : '#ffb0a0',
+        glow: isLocked ? 0x2a1010 : 0x8d2f2f,
+        alpha: isLocked ? 0.54 : 1,
       };
     }
 
     if (isBoss) {
       return {
-        fill: 0x180909,
-        stroke: DUNGEON_DARK.blood,
-        text: '#ff9a9a',
-        glow: DUNGEON_DARK.blood,
-        alpha: isLocked ? 0.72 : 1,
+        fill: isLocked ? 0x0f0808 : 0x180909,
+        stroke: isLocked ? 0x442221 : DUNGEON_DARK.blood,
+        text: isLocked ? '#6a524f' : '#ff9a9a',
+        glow: isLocked ? 0x261010 : DUNGEON_DARK.blood,
+        alpha: isLocked ? 0.56 : 1,
       };
     }
 
@@ -1402,7 +1433,6 @@ export class DungeonScene extends Phaser.Scene {
       isCurrent,
       isAvailable,
       isCompleted,
-      isQuestion,
       isBoss,
       delay,
       onClick,
@@ -1410,7 +1440,7 @@ export class DungeonScene extends Phaser.Scene {
 
     const glowRadius = radius + (isBoss ? 15 : isCurrent ? 14 : isAvailable ? 12 : 8);
 
-    const outerGlow = this.add.circle(x, y, glowRadius, visual.glow, isCurrent || isAvailable || isBoss ? 0.15 : 0.04)
+    const outerGlow = this.add.circle(x, y, glowRadius, visual.glow, isCurrent || isAvailable || (isBoss && isCompleted) ? 0.15 : 0.035)
       .setDepth(6)
       .setAlpha(0)
       .setScale(0.62);
@@ -1421,7 +1451,7 @@ export class DungeonScene extends Phaser.Scene {
       .setScale(0.64);
 
     const ring = this.add.circle(x, y, radius + 4, 0x050506, visual.alpha)
-      .setStrokeStyle(isCurrent || isAvailable || isBoss ? 3 : 2, visual.stroke, isCurrent || isAvailable || isBoss ? 0.92 : 0.48)
+      .setStrokeStyle(isCurrent || isAvailable || (isBoss && isCompleted) ? 3 : 2, visual.stroke, isCurrent || isAvailable || (isBoss && isCompleted) ? 0.92 : 0.42)
       .setDepth(7)
       .setAlpha(0)
       .setScale(0.64);
@@ -1481,18 +1511,18 @@ export class DungeonScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
-    if (isCurrent || isAvailable || isQuestion || isBoss) {
+    if (isCurrent || isAvailable || (isBoss && isCompleted)) {
       this.tweens.add({
         targets: outerGlow,
         alpha: {
-          from: isBoss ? 0.08 : isQuestion ? 0.06 : 0.09,
-          to: isBoss ? 0.26 : isQuestion ? 0.18 : 0.22,
+          from: isBoss ? 0.08 : 0.09,
+          to: isBoss ? 0.24 : 0.22,
         },
         scale: {
           from: 0.96,
-          to: isBoss ? 1.2 : 1.15,
+          to: isBoss ? 1.18 : 1.15,
         },
-        duration: isBoss ? 1450 : isQuestion ? 1200 : 1050,
+        duration: isBoss ? 1450 : 1050,
         yoyo: true,
         repeat: -1,
         delay: delay + 250,
@@ -4504,13 +4534,14 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
     const overlayDepth = 180;
     const safeX = layout.safeX;
-    const top = layout.safeTop + 10;
-    const bottom = height - layout.safeBottom - 10;
     const panelWidth = Math.min(width - safeX * 2, 650);
-    const headerHeight = layout.veryCompact ? 118 : 136;
-    const footerHeight = layout.veryCompact ? 144 : 158;
-    const panelHeight = bottom - top;
-    const panelY = top + panelHeight / 2;
+    const headerHeight = layout.veryCompact ? 112 : 128;
+    const footerHeight = layout.veryCompact ? 138 : 150;
+    const maxPanelHeight = layout.veryCompact ? 572 : layout.compact ? 650 : 700;
+    const panelHeight = Math.min(height - layout.safeTop - layout.safeBottom - 32, maxPanelHeight);
+    const panelY = height / 2;
+    const top = panelY - panelHeight / 2;
+    const bottom = panelY + panelHeight / 2;
 
     this.add.rectangle(centerX, height / 2, width, height, 0x000000, 0.82)
       .setDepth(overlayDepth)
