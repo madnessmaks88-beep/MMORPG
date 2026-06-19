@@ -49,9 +49,21 @@ type ForgeLayout = {
   resourcesTop: number;
   resourcesHeight: number;
 
-  contentTop: number;
-  contentBottom: number;
-  viewportHeight: number;
+  anvilTop: number;
+  anvilHeight: number;
+
+  materialsTop: number;
+  materialsHeight: number;
+
+  tabsTop: number;
+  tabsHeight: number;
+
+  itemsPanelTop: number;
+  itemsPanelHeight: number;
+  itemsListTop: number;
+  itemsListBottom: number;
+  itemsListHeight: number;
+  itemsActionBottom: number;
 
   bottomBarHeight: number;
   bottomButtonY: number;
@@ -114,18 +126,28 @@ const MATERIAL_IDS: MaterialId[] = [
 export class ForgeScene extends Phaser.Scene {
   private contentContainer?: Phaser.GameObjects.Container;
   private contentMaskGraphics?: Phaser.GameObjects.Graphics;
+  private itemsContainer?: Phaser.GameObjects.Container;
+  private itemsMaskGraphics?: Phaser.GameObjects.Graphics;
+  private itemsScrollbarTrack?: Phaser.GameObjects.Rectangle;
+  private itemsScrollbarThumb?: Phaser.GameObjects.Rectangle;
   private modalContainer?: Phaser.GameObjects.Container;
 
   private selectedCategory: ForgeCategory = 'weapon';
 
-  private currentScrollY = 0;
-  private targetScrollY = 0;
-  private maxScrollY = 0;
+  private itemsScrollY = 0;
+  private itemsTargetScrollY = 0;
+  private itemsMaxScrollY = 0;
 
-  private isDraggingContent = false;
-  private didDragContent = false;
-  private dragStartY = 0;
-  private dragStartScrollY = 0;
+  private itemsListTop = 0;
+  private itemsListBottom = 0;
+  private itemsListHeight = 0;
+
+  private itemsLastRenderedScrollY = -1;
+
+  private isDraggingItems = false;
+  private didDragItems = false;
+  private itemsDragStartY = 0;
+  private itemsDragStartScrollY = 0;
 
   private isModalOpen = false;
   private isActionLocked = false;
@@ -140,20 +162,25 @@ export class ForgeScene extends Phaser.Scene {
   }) {
     this.selectedCategory = data?.selectedCategory ?? 'weapon';
 
-    this.currentScrollY = data?.scrollY ?? 0;
-    this.targetScrollY = data?.scrollY ?? 0;
-    this.maxScrollY = 0;
+    this.itemsScrollY = data?.scrollY ?? 0;
+    this.itemsTargetScrollY = data?.scrollY ?? 0;
+    this.itemsMaxScrollY = 0;
+    this.itemsLastRenderedScrollY = -1;
 
-    this.isDraggingContent = false;
-    this.didDragContent = false;
-    this.dragStartY = 0;
-    this.dragStartScrollY = 0;
+    this.isDraggingItems = false;
+    this.didDragItems = false;
+    this.itemsDragStartY = 0;
+    this.itemsDragStartScrollY = 0;
 
     this.isModalOpen = false;
     this.isActionLocked = false;
 
     this.contentContainer = undefined;
     this.contentMaskGraphics = undefined;
+    this.itemsContainer = undefined;
+    this.itemsMaskGraphics = undefined;
+    this.itemsScrollbarTrack = undefined;
+    this.itemsScrollbarThumb = undefined;
     this.modalContainer = undefined;
   }
 
@@ -165,51 +192,66 @@ export class ForgeScene extends Phaser.Scene {
     this.createHeader(layout);
     this.createResourcePanel(layout);
     this.createScrollableContent(layout);
+    this.createItemsViewport(layout);
     this.createBottomBar(layout);
   }
 
   update() {
-    if (!this.contentContainer || this.isModalOpen || this.isDraggingContent) {
+    if (!this.itemsContainer || this.isModalOpen || this.isDraggingItems) {
       return;
     }
 
-    if (Math.abs(this.currentScrollY - this.targetScrollY) < 0.4) {
-      this.currentScrollY = this.targetScrollY;
+    if (Math.abs(this.itemsScrollY - this.itemsTargetScrollY) < 0.4) {
+      this.itemsScrollY = this.itemsTargetScrollY;
     } else {
-      this.currentScrollY = Phaser.Math.Linear(
-        this.currentScrollY,
-        this.targetScrollY,
-        0.2
+      this.itemsScrollY = Phaser.Math.Linear(
+        this.itemsScrollY,
+        this.itemsTargetScrollY,
+        0.22
       );
     }
 
-    this.contentContainer.y = -this.currentScrollY;
+    this.renderVisibleForgeItems(this.getLayout());
+    this.updateItemsScrollbar(this.getLayout());
   }
 
   private getLayout(): ForgeLayout {
     const { width, height } = this.scale;
 
-    const compact = height < 1120;
-    const veryCompact = height < 920;
+    const compact = height < 900;
+    const veryCompact = height < 740;
 
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 32);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.028), 24, 42);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 16, 32);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.02), 12, 28);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.024), 18, 34);
 
     const contentWidth = Math.min(width - safeX * 2, 640);
 
-    const bottomBarHeight = veryCompact ? 88 : 102;
+    const bottomBarHeight = veryCompact ? 76 : compact ? 84 : 94;
     const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + 8;
+    const itemsActionBottom = height - bottomBarHeight - safeBottom - 6;
 
-    const headerTop = safeTop + 6;
-    const headerHeight = veryCompact ? 74 : compact ? 82 : 90;
+    const headerTop = safeTop + 4;
+    const headerHeight = veryCompact ? 64 : compact ? 74 : 84;
 
-    const resourcesTop = headerTop + headerHeight + 10;
-    const resourcesHeight = veryCompact ? 60 : 68;
+    const resourcesTop = headerTop + headerHeight + (veryCompact ? 6 : 8);
+    const resourcesHeight = veryCompact ? 50 : compact ? 58 : 64;
 
-    const contentTop = resourcesTop + resourcesHeight + 12;
-    const contentBottom = height - bottomBarHeight - safeBottom - 6;
-    const viewportHeight = Math.max(280, contentBottom - contentTop);
+    const anvilTop = resourcesTop + resourcesHeight + (veryCompact ? 8 : 10);
+    const anvilHeight = veryCompact ? 86 : compact ? 96 : 108;
+
+    const materialsTop = anvilTop + anvilHeight + (veryCompact ? 8 : 10);
+    const materialsHeight = veryCompact ? 90 : compact ? 104 : 118;
+
+    const tabsTop = materialsTop + materialsHeight + (veryCompact ? 8 : 10);
+    const tabsHeight = veryCompact ? 52 : compact ? 58 : 64;
+
+    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 8 : 10);
+    const minItemsHeight = veryCompact ? 126 : compact ? 170 : 220;
+    const itemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
+    const itemsListTop = itemsPanelTop + (veryCompact ? 58 : 66);
+    const itemsListBottom = itemsPanelTop + itemsPanelHeight - (veryCompact ? 14 : 18);
+    const itemsListHeight = Math.max(90, itemsListBottom - itemsListTop);
 
     return {
       width,
@@ -228,9 +270,21 @@ export class ForgeScene extends Phaser.Scene {
       resourcesTop,
       resourcesHeight,
 
-      contentTop,
-      contentBottom,
-      viewportHeight,
+      anvilTop,
+      anvilHeight,
+
+      materialsTop,
+      materialsHeight,
+
+      tabsTop,
+      tabsHeight,
+
+      itemsPanelTop,
+      itemsPanelHeight,
+      itemsListTop,
+      itemsListBottom,
+      itemsListHeight,
+      itemsActionBottom,
 
       bottomBarHeight,
       bottomButtonY,
@@ -413,42 +467,188 @@ export class ForgeScene extends Phaser.Scene {
 
     this.contentContainer = this.add.container(0, 0).setDepth(10);
 
-    this.contentMaskGraphics = this.add.graphics();
-    this.contentMaskGraphics.setVisible(false);
-    this.contentMaskGraphics.fillStyle(0xffffff, 1);
-    this.contentMaskGraphics.fillRect(
-      layout.safeX,
-      layout.contentTop,
-      layout.width - layout.safeX * 2,
-      layout.viewportHeight
-    );
-
-    this.contentContainer.setMask(this.contentMaskGraphics.createGeometryMask());
-
-    let cursorY = layout.contentTop + 14;
-
-    cursorY = this.createIntroPanel(layout, cursorY);
-    cursorY = this.createAnvilPanel(layout, cursorY + 12);
-    cursorY = this.createMaterialsPanel(layout, cursorY + 12);
-    cursorY = this.createCategoryTabs(layout, cursorY + 12);
-    cursorY = this.createItemsSection(layout, cursorY + 12);
-
-    const contentHeight = cursorY - layout.contentTop + 24;
-
-    this.maxScrollY = Math.max(0, contentHeight - layout.viewportHeight);
-    this.currentScrollY = Phaser.Math.Clamp(this.currentScrollY, 0, this.maxScrollY);
-    this.targetScrollY = Phaser.Math.Clamp(this.targetScrollY, 0, this.maxScrollY);
-
-    this.contentContainer.y = -this.currentScrollY;
-
-    this.createScrollInput(layout);
-
-    if (this.maxScrollY > 0) {
-      this.createScrollHint(layout);
-    }
+    this.createAnvilPanel(layout, layout.anvilTop);
+    this.createMaterialsPanel(layout, layout.materialsTop);
+    this.createCategoryTabs(layout, layout.tabsTop);
   }
 
-  private createScrollInput(layout: ForgeLayout) {
+  private createItemsViewport(layout: ForgeLayout) {
+    this.itemsContainer?.destroy(true);
+    this.itemsMaskGraphics?.destroy();
+    this.itemsScrollbarTrack?.destroy();
+    this.itemsScrollbarThumb?.destroy();
+
+    this.itemsContainer = this.add.container(0, 0).setDepth(48);
+    this.itemsMaskGraphics = this.add.graphics().setVisible(false);
+    this.itemsMaskGraphics.fillStyle(0xffffff, 1);
+    this.itemsMaskGraphics.fillRect(
+      layout.safeX + 10,
+      layout.itemsListTop,
+      layout.width - (layout.safeX + 10) * 2,
+      layout.itemsListHeight
+    );
+    this.itemsContainer.setMask(this.itemsMaskGraphics.createGeometryMask());
+
+    const items = this.getForgeItemsByCategory(this.selectedCategory);
+    const title = this.getCategoryTitle(this.selectedCategory);
+    const icon = this.getCategoryIcon(this.selectedCategory);
+
+    this.createStonePanel({
+      x: layout.centerX,
+      y: layout.itemsPanelTop + layout.itemsPanelHeight / 2,
+      width: layout.contentWidth,
+      height: layout.itemsPanelHeight,
+      radius: layout.veryCompact ? 22 : 28,
+      fill: FORGE.soot,
+      alpha: 0.965,
+      stroke: FORGE.bronze,
+      strokeAlpha: 0.42,
+      glow: FORGE.violet,
+      depth: 34,
+    });
+
+    const left = layout.centerX - layout.contentWidth / 2;
+    const right = layout.centerX + layout.contentWidth / 2;
+    const headerY = layout.itemsPanelTop + (layout.veryCompact ? 28 : 32);
+
+    this.add.circle(left + 34, headerY, layout.veryCompact ? 18 : 21, FORGE.ember, 0.14)
+      .setStrokeStyle(1, FORGE.gold, 0.5)
+      .setDepth(40);
+
+    this.add.text(left + 34, headerY, icon, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '14px' : '17px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(41);
+
+    this.add.text(left + 62, headerY - (layout.veryCompact ? 8 : 10), title, {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '17px' : layout.compact ? '19px' : '22px',
+      color: '#d6c08a',
+      stroke: '#000000',
+      strokeThickness: 4,
+      wordWrap: {
+        width: layout.contentWidth - 170,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(41);
+
+    this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 14), 'Видимые карточки создаются только внутри этого окна.', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '10px' : '11px',
+      color: '#8f8879',
+      wordWrap: {
+        width: layout.contentWidth - 170,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(41);
+
+    this.add.text(right - 24, headerY, `${items.length} шт.`, {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '11px' : '12px',
+      color: '#9f9788',
+      align: 'right',
+      wordWrap: {
+        width: 96,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(1, 0.5).setDepth(41);
+
+    this.itemsListTop = layout.itemsListTop;
+    this.itemsListBottom = layout.itemsListBottom;
+    this.itemsListHeight = layout.itemsListHeight;
+    this.itemsMaxScrollY = Math.max(0, this.getForgeItemsContentHeight(layout) - this.itemsListHeight);
+    this.itemsScrollY = Phaser.Math.Clamp(this.itemsScrollY, 0, this.itemsMaxScrollY);
+    this.itemsTargetScrollY = Phaser.Math.Clamp(this.itemsTargetScrollY, 0, this.itemsMaxScrollY);
+    this.itemsLastRenderedScrollY = -1;
+
+    this.createItemsScrollHandlers(layout);
+    this.createItemsScrollbar(layout);
+    this.renderVisibleForgeItems(layout, true);
+    this.updateItemsScrollbar(layout);
+
+    this.tweens.add({
+      targets: this.itemsContainer,
+      alpha: { from: 0, to: 1 },
+      y: { from: 10, to: 0 },
+      duration: 240,
+      ease: 'Sine.easeOut',
+    });
+  }
+
+  private getForgeItemsContentHeight(layout: ForgeLayout) {
+    const items = this.getForgeItemsByCategory(this.selectedCategory);
+
+    if (items.length === 0) {
+      return this.itemsListHeight;
+    }
+
+    const cardHeight = this.getForgeItemCardHeight(layout);
+    const spacing = this.getForgeItemSpacing(layout);
+
+    return items.length * spacing - (spacing - cardHeight) + 28;
+  }
+
+  private renderVisibleForgeItems(layout: ForgeLayout, force = false) {
+    if (!this.itemsContainer) {
+      return;
+    }
+
+    if (!force && Math.abs(this.itemsScrollY - this.itemsLastRenderedScrollY) < 0.75) {
+      return;
+    }
+
+    const container = this.itemsContainer;
+
+    this.itemsLastRenderedScrollY = this.itemsScrollY;
+    this.clearVisibleForgeItems();
+
+    const items = this.getForgeItemsByCategory(this.selectedCategory);
+
+    if (items.length === 0) {
+      this.createEmptyState(container, layout, this.itemsListTop + this.itemsListHeight / 2);
+      return;
+    }
+
+    const cardHeight = this.getForgeItemCardHeight(layout);
+    const spacing = this.getForgeItemSpacing(layout);
+    const buffer = cardHeight + 56;
+
+    items.forEach((inventoryItem, index) => {
+      const y = this.itemsListTop + cardHeight / 2 + 14 + index * spacing - this.itemsScrollY;
+
+      if (y + cardHeight / 2 < this.itemsListTop - buffer) {
+        return;
+      }
+
+      if (y - cardHeight / 2 > this.itemsListBottom + buffer) {
+        return;
+      }
+
+      this.createItemCard(container, layout, inventoryItem, y, cardHeight);
+    });
+  }
+
+  private clearVisibleForgeItems() {
+    this.itemsContainer?.removeAll(true);
+    this.itemsLastRenderedScrollY = -1;
+  }
+
+  private getForgeItemCardHeight(layout: ForgeLayout) {
+    return layout.veryCompact ? 164 : layout.compact ? 176 : 188;
+  }
+
+  private getForgeItemSpacing(layout: ForgeLayout) {
+    return this.getForgeItemCardHeight(layout) + (layout.veryCompact ? 10 : 12);
+  }
+
+  private createItemsScrollHandlers(layout: ForgeLayout) {
     this.input.off('pointerdown');
     this.input.off('pointermove');
     this.input.off('pointerup');
@@ -456,58 +656,56 @@ export class ForgeScene extends Phaser.Scene {
     this.input.off('wheel');
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.isModalOpen || this.maxScrollY <= 0) {
+      if (this.isModalOpen || this.itemsMaxScrollY <= 0) {
         return;
       }
 
-      if (!this.isPointerInsideContent(pointer, layout)) {
+      if (!this.isPointerInsideItemsList(pointer, layout)) {
         return;
       }
 
-      this.isDraggingContent = true;
-      this.didDragContent = false;
-      this.dragStartY = pointer.y;
-      this.dragStartScrollY = this.targetScrollY;
+      this.isDraggingItems = true;
+      this.didDragItems = false;
+      this.itemsDragStartY = pointer.y;
+      this.itemsDragStartScrollY = this.itemsTargetScrollY;
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isDraggingContent || this.isModalOpen) {
+      if (!this.isDraggingItems || this.isModalOpen) {
         return;
       }
 
-      const distance = pointer.y - this.dragStartY;
+      const distance = pointer.y - this.itemsDragStartY;
 
       if (Math.abs(distance) < 7) {
         return;
       }
 
-      this.didDragContent = true;
-      this.targetScrollY = Phaser.Math.Clamp(
-        this.dragStartScrollY - distance,
+      this.didDragItems = true;
+      this.itemsTargetScrollY = Phaser.Math.Clamp(
+        this.itemsDragStartScrollY - distance,
         0,
-        this.maxScrollY
+        this.itemsMaxScrollY
       );
+      this.itemsScrollY = this.itemsTargetScrollY;
 
-      this.currentScrollY = this.targetScrollY;
-
-      if (this.contentContainer) {
-        this.contentContainer.y = -this.currentScrollY;
-      }
+      this.renderVisibleForgeItems(layout);
+      this.updateItemsScrollbar(layout);
     });
 
     this.input.on('pointerup', () => {
-      this.isDraggingContent = false;
+      this.isDraggingItems = false;
 
-      this.time.delayedCall(0, () => {
-        this.didDragContent = false;
+      this.time.delayedCall(80, () => {
+        this.didDragItems = false;
       });
     });
 
     this.input.on('pointerupoutside', () => {
-      this.isDraggingContent = false;
+      this.isDraggingItems = false;
 
-      this.time.delayedCall(0, () => {
-        this.didDragContent = false;
+      this.time.delayedCall(80, () => {
+        this.didDragItems = false;
       });
     });
 
@@ -519,118 +717,69 @@ export class ForgeScene extends Phaser.Scene {
         _deltaX: number,
         deltaY: number
       ) => {
-        if (this.isModalOpen || this.maxScrollY <= 0) {
+        if (this.isModalOpen || this.itemsMaxScrollY <= 0) {
           return;
         }
 
-        if (!this.isPointerInsideContent(pointer, layout)) {
+        if (!this.isPointerInsideItemsList(pointer, layout)) {
           return;
         }
 
-        this.targetScrollY = Phaser.Math.Clamp(
-          this.targetScrollY + deltaY * 0.55,
+        this.itemsTargetScrollY = Phaser.Math.Clamp(
+          this.itemsTargetScrollY + deltaY * 0.55,
           0,
-          this.maxScrollY
+          this.itemsMaxScrollY
         );
       }
     );
   }
 
-  private isPointerInsideContent(pointer: Phaser.Input.Pointer, layout: ForgeLayout) {
+  private isPointerInsideItemsList(pointer: Phaser.Input.Pointer, layout: ForgeLayout) {
     return (
-      pointer.x >= layout.safeX &&
-      pointer.x <= layout.width - layout.safeX &&
-      pointer.y >= layout.contentTop &&
-      pointer.y <= layout.contentBottom
+      pointer.x >= layout.safeX + 10 &&
+      pointer.x <= layout.width - layout.safeX - 10 &&
+      pointer.y >= this.itemsListTop &&
+      pointer.y <= this.itemsListBottom
     );
   }
 
-  private createScrollHint(layout: ForgeLayout) {
-    const y = layout.contentBottom - 16;
+  private createItemsScrollbar(layout: ForgeLayout) {
+    const trackX = layout.centerX + layout.contentWidth / 2 - 12;
+    const trackHeight = this.itemsListHeight;
+    const trackY = this.itemsListTop + trackHeight / 2;
+    const visible = this.itemsMaxScrollY > 0;
 
-    const bg = this.add.rectangle(layout.centerX, y, 250, 28, 0x000000, 0.5)
-      .setDepth(180);
+    this.itemsScrollbarTrack = this.add.rectangle(trackX, trackY, 4, trackHeight, 0x000000, visible ? 0.28 : 0)
+      .setDepth(70);
 
-    const text = this.add.text(layout.centerX, y, 'Прокручивай кузницу вверх и вниз', {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#9f9788',
-      align: 'center',
-      wordWrap: {
-        width: 232,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(181);
-
-    this.tweens.add({
-      targets: [bg, text],
-      alpha: 0.22,
-      duration: 950,
-      yoyo: true,
-      repeat: -1,
-    });
+    this.itemsScrollbarThumb = this.add.rectangle(trackX, this.itemsListTop + 18, 4, 36, FORGE.gold, visible ? 0.55 : 0)
+      .setDepth(71);
   }
 
-  private createIntroPanel(layout: ForgeLayout, topY: number) {
-    const container = this.requireContentContainer();
+  private updateItemsScrollbar(layout: ForgeLayout) {
+    if (!this.itemsScrollbarTrack || !this.itemsScrollbarThumb) {
+      return;
+    }
 
-    const panelHeight = layout.veryCompact ? 104 : 122;
-    const panelY = topY + panelHeight / 2;
-    const left = layout.centerX - layout.contentWidth / 2 + 24;
+    if (this.itemsMaxScrollY <= 0) {
+      this.itemsScrollbarTrack.setAlpha(0);
+      this.itemsScrollbarThumb.setAlpha(0);
+      return;
+    }
 
-    this.createStonePanel({
-      parent: container,
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: 26,
-      fill: FORGE.graphite,
-      alpha: 0.93,
-      stroke: FORGE.bronze,
-      strokeAlpha: 0.34,
-      glow: FORGE.violet,
-      depth: 2,
-    });
-
-    this.addTo(
-      container,
-      this.add.text(left, topY + 28, 'Что можно улучшать', {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '18px' : '21px',
-        color: '#d6c08a',
-        stroke: '#000000',
-        strokeThickness: 4,
-        wordWrap: {
-          width: layout.contentWidth - 48,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(8)
+    const trackHeight = this.itemsListHeight;
+    const thumbHeight = Phaser.Math.Clamp(
+      trackHeight * (trackHeight / Math.max(trackHeight, this.getForgeItemsContentHeight(layout))),
+      34,
+      Math.max(34, trackHeight - 8)
     );
+    const progress = this.itemsMaxScrollY <= 0 ? 0 : this.itemsScrollY / this.itemsMaxScrollY;
+    const thumbY = this.itemsListTop + thumbHeight / 2 + progress * (trackHeight - thumbHeight);
 
-    this.addTo(
-      container,
-      this.add.text(
-        left,
-        topY + (layout.veryCompact ? 66 : 78),
-        'Выбери вкладку, проверь стоимость и закали предмет. Надетая экипировка показана выше, чтобы её не приходилось искать в длинном списке.',
-        {
-          fontFamily: UI.font.body,
-          fontSize: layout.veryCompact ? '12px' : '14px',
-          color: '#a9a091',
-          lineSpacing: 4,
-          wordWrap: {
-            width: layout.contentWidth - 48,
-            useAdvancedWrap: true,
-          },
-          maxLines: layout.veryCompact ? 3 : 3,
-        }
-      ).setOrigin(0, 0.5).setDepth(8)
-    );
-
-    return topY + panelHeight;
+    this.itemsScrollbarTrack.setAlpha(0.26);
+    this.itemsScrollbarThumb.setAlpha(0.62);
+    this.itemsScrollbarThumb.setDisplaySize(4, thumbHeight);
+    this.itemsScrollbarThumb.setY(thumbY);
   }
 
   private createAnvilPanel(layout: ForgeLayout, topY: number) {
@@ -640,7 +789,7 @@ export class ForgeScene extends Phaser.Scene {
     const canUpgrade = canUpgradeAnvil();
     const anvilCost = getAnvilUpgradeCost();
 
-    const panelHeight = layout.veryCompact ? 148 : 168;
+    const panelHeight = layout.anvilHeight;
     const panelY = topY + panelHeight / 2;
 
     this.createStonePanel({
@@ -663,14 +812,14 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.circle(left + 46, topY + 58, 34, isUpgraded ? 0x132018 : 0x1a110d, 0.96)
+      this.add.circle(left + 42, topY + panelHeight * 0.5, layout.veryCompact ? 25 : 30, isUpgraded ? 0x132018 : 0x1a110d, 0.96)
         .setStrokeStyle(2, isUpgraded ? FORGE.green : FORGE.gold, 0.75)
         .setDepth(7)
     );
 
     this.addTo(
       container,
-      this.add.text(left + 46, topY + 58, '⚒', {
+      this.add.text(left + 42, topY + panelHeight * 0.5, '⚒', {
         fontFamily: UI.font.body,
         fontSize: '26px',
         color: isUpgraded ? '#9fd0a6' : '#d6c08a',
@@ -681,14 +830,14 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(left + 92, topY + 28, `Наковальня ${player.anvilLevel} уровня`, {
+      this.add.text(left + 82, topY + (layout.veryCompact ? 20 : 24), `Наковальня ${player.anvilLevel} уровня`, {
         fontFamily: UI.font.title,
         fontSize: layout.veryCompact ? '18px' : '21px',
         color: '#d6c08a',
         stroke: '#000000',
         strokeThickness: 4,
         wordWrap: {
-          width: layout.contentWidth - 230,
+          width: layout.contentWidth - 210,
           useAdvancedWrap: true,
         },
         maxLines: 1,
@@ -701,33 +850,33 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(left + 92, topY + 70, description, {
+      this.add.text(left + 82, topY + (layout.veryCompact ? 48 : 58), description, {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '12px' : '13px',
         color: '#a9a091',
         lineSpacing: 3,
         wordWrap: {
-          width: layout.contentWidth - 230,
+          width: layout.contentWidth - 212,
           useAdvancedWrap: true,
         },
-        maxLines: 3,
+        maxLines: layout.veryCompact ? 2 : 3,
       }).setOrigin(0, 0.5).setDepth(8)
     );
 
     this.createAnvilProgress(
       container,
-      left + 92,
-      topY + (layout.veryCompact ? 112 : 128),
-      Math.min(layout.contentWidth - 260, 300),
+      left + 82,
+      topY + panelHeight - (layout.veryCompact ? 18 : 22),
+      Math.min(layout.contentWidth - 248, 300),
       8
     );
 
     this.createForgeButton({
       parent: container,
-      x: right - 78,
-      y: topY + (layout.veryCompact ? 74 : 84),
-      width: 128,
-      height: 50,
+      x: right - (layout.veryCompact ? 62 : 72),
+      y: topY + panelHeight / 2,
+      width: layout.veryCompact ? 104 : 124,
+      height: layout.veryCompact ? 42 : 48,
       text: isUpgraded ? 'Готово' : 'Усилить',
       disabled: isUpgraded || !canUpgrade,
       variant: isUpgraded ? 'green' : 'gold',
@@ -744,7 +893,7 @@ export class ForgeScene extends Phaser.Scene {
   private createMaterialsPanel(layout: ForgeLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const panelHeight = layout.veryCompact ? 166 : 184;
+    const panelHeight = layout.materialsHeight;
     const panelY = topY + panelHeight / 2;
 
     this.createStonePanel({
@@ -764,9 +913,9 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + 28, 'Склад материалов', {
+      this.add.text(layout.centerX, topY + (layout.veryCompact ? 18 : 24), 'Склад материалов', {
         fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '19px' : '22px',
+        fontSize: layout.veryCompact ? '16px' : '20px',
         color: '#d6c08a',
         stroke: '#000000',
         strokeThickness: 4,
@@ -783,11 +932,11 @@ export class ForgeScene extends Phaser.Scene {
     const chipWidth = (layout.contentWidth - 56 - chipGap) / 2;
     const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
     const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
-    const rowGap = layout.veryCompact ? 24 : 27;
+    const rowGap = layout.veryCompact ? 19 : 23;
 
     MATERIAL_IDS.forEach((id, index) => {
       const x = index % 2 === 0 ? leftX : rightX;
-      const y = topY + 66 + Math.floor(index / 2) * rowGap;
+      const y = topY + (layout.veryCompact ? 43 : 56) + Math.floor(index / 2) * rowGap;
 
       this.createMaterialLine(container, x, y, chipWidth, id, 8);
     });
@@ -798,7 +947,7 @@ export class ForgeScene extends Phaser.Scene {
   private createCategoryTabs(layout: ForgeLayout, topY: number) {
     const container = this.requireContentContainer();
 
-    const panelHeight = layout.veryCompact ? 74 : 82;
+    const panelHeight = layout.tabsHeight;
     const panelY = topY + panelHeight / 2;
 
     this.createStonePanel({
@@ -839,121 +988,22 @@ export class ForgeScene extends Phaser.Scene {
         x,
         y: panelY,
         width: tabWidth,
-        height: layout.veryCompact ? 44 : 48,
+        height: layout.veryCompact ? 38 : 44,
         text: `${tab.icon} ${tab.label}`,
         variant: isActive ? 'gold' : 'dark',
         small: true,
         depth: 8,
         onClick: () => {
-          if (this.selectedCategory === tab.id || this.didDragContent) {
+          if (this.selectedCategory === tab.id || this.didDragItems) {
             return;
           }
 
-          this.scene.restart({
-            selectedCategory: tab.id,
-            scrollY: 0,
-          });
+          this.switchForgeCategory(tab.id);
         },
       });
     });
 
     return topY + panelHeight;
-  }
-
-  private createItemsSection(layout: ForgeLayout, topY: number) {
-    const container = this.requireContentContainer();
-
-    const items = this.getForgeItemsByCategory(this.selectedCategory);
-    const title = this.getCategoryTitle(this.selectedCategory);
-    const icon = this.getCategoryIcon(this.selectedCategory);
-
-    const sectionHeaderHeight = layout.veryCompact ? 88 : 100;
-    const cardHeight = layout.veryCompact ? 274 : layout.compact ? 292 : 306;
-    const cardGap = 14;
-    const emptyHeight = layout.veryCompact ? 238 : 260;
-
-    const listHeight = items.length === 0
-      ? emptyHeight
-      : sectionHeaderHeight + items.length * cardHeight + Math.max(0, items.length - 1) * cardGap + 26;
-
-    const panelY = topY + listHeight / 2;
-
-    this.createStonePanel({
-      parent: container,
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: listHeight,
-      radius: 30,
-      fill: FORGE.soot,
-      alpha: 0.96,
-      stroke: FORGE.bronze,
-      strokeAlpha: 0.4,
-      glow: FORGE.violet,
-      depth: 2,
-    });
-
-    const left = layout.centerX - layout.contentWidth / 2;
-    const right = layout.centerX + layout.contentWidth / 2;
-
-    this.addTo(
-      container,
-      this.add.text(left + 24, topY + 30, `${icon} ${title}`, {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '19px' : '22px',
-        color: '#d6c08a',
-        stroke: '#000000',
-        strokeThickness: 4,
-        wordWrap: {
-          width: layout.contentWidth - 150,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(8)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(right - 24, topY + 30, `${items.length} шт.`, {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: '#9f9788',
-        align: 'right',
-        wordWrap: {
-          width: 96,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(1, 0.5).setDepth(8)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(left + 24, topY + 64, 'Стоимость подсвечивается: зелёный — хватает ресурсов, красный — не хватает.', {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '11px' : '12px',
-        color: '#8f8879',
-        wordWrap: {
-          width: layout.contentWidth - 48,
-          useAdvancedWrap: true,
-        },
-        maxLines: 2,
-        lineSpacing: 2,
-      }).setOrigin(0, 0.5).setDepth(8)
-    );
-
-    if (items.length === 0) {
-      this.createEmptyState(container, layout, topY + 146);
-      return topY + listHeight;
-    }
-
-    items.forEach((inventoryItem, index) => {
-      const y = topY + sectionHeaderHeight + cardHeight / 2 + index * (cardHeight + cardGap);
-
-      this.createItemCard(container, layout, inventoryItem, y, cardHeight);
-    });
-
-    return topY + listHeight;
   }
 
   private createEmptyState(
@@ -1182,13 +1232,35 @@ export class ForgeScene extends Phaser.Scene {
       small: layout.veryCompact,
       depth: 11,
       onClick: () => {
-        if (this.didDragContent) {
+        if (this.didDragItems) {
           return;
         }
 
         this.showUpgradeConfirm(inventoryItem);
       },
     });
+  }
+
+  private switchForgeCategory(category: ForgeCategory) {
+    this.selectedCategory = category;
+    this.itemsScrollY = 0;
+    this.itemsTargetScrollY = 0;
+    this.itemsLastRenderedScrollY = -1;
+
+    const layout = this.getLayout();
+    this.createScrollableContent(layout);
+    this.createItemsViewport(layout);
+  }
+
+  private refreshForgeView() {
+    const layout = this.getLayout();
+
+    this.itemsScrollY = Phaser.Math.Clamp(this.itemsScrollY, 0, this.itemsMaxScrollY);
+    this.itemsTargetScrollY = Phaser.Math.Clamp(this.itemsTargetScrollY, 0, this.itemsMaxScrollY);
+
+    this.createResourcePanel(layout);
+    this.createScrollableContent(layout);
+    this.createItemsViewport(layout);
   }
 
   private createBottomBar(layout: ForgeLayout) {
@@ -1362,10 +1434,7 @@ export class ForgeScene extends Phaser.Scene {
       confirmText: 'Понятно',
       confirmVariant: 'gold',
       onConfirm: () => {
-        this.scene.restart({
-          selectedCategory: this.selectedCategory,
-          scrollY: this.targetScrollY,
-        });
+        this.refreshForgeView();
       },
     });
   }

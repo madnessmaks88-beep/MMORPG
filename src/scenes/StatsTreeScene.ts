@@ -77,6 +77,12 @@ type SelectedNode = {
   stageLevel: number;
 };
 
+type VirtualBranchCard = {
+  branch: BranchData;
+  top: number;
+  height: number;
+};
+
 const TREE_STYLE = {
   black: 0x030304,
   void: 0x060607,
@@ -290,6 +296,11 @@ export class StatsTreeScene extends Phaser.Scene {
   private modalObjects: Phaser.GameObjects.GameObject[] = [];
   private scrollHintObjects: Phaser.GameObjects.GameObject[] = [];
   private branchCardObjects: Phaser.GameObjects.GameObject[] = [];
+  private renderedBranchCards = new Map<BranchId, Phaser.GameObjects.GameObject[]>();
+  private virtualBranchCards: VirtualBranchCard[] = [];
+  private currentLayout?: TreeLayout;
+  private pointsChipText?: Phaser.GameObjects.Text;
+  private readonly virtualRenderBuffer = 260;
 
   private currentScrollY = 0;
   private targetScrollY = 0;
@@ -325,6 +336,7 @@ export class StatsTreeScene extends Phaser.Scene {
     this.ensureSelectedNode();
 
     const layout = this.getLayout();
+    this.currentLayout = layout;
 
     createSceneBackground(this);
     this.createBackdrop(layout);
@@ -346,6 +358,7 @@ export class StatsTreeScene extends Phaser.Scene {
     }
 
     this.contentContainer.y = -this.currentScrollY;
+    this.updateVirtualizedBranchCards();
   }
 
   private getLayout(): TreeLayout {
@@ -533,6 +546,8 @@ export class StatsTreeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(107);
 
+    this.pointsChipText = text;
+
     return {
       ...panel,
       text,
@@ -540,11 +555,14 @@ export class StatsTreeScene extends Phaser.Scene {
   }
 
   private createScrollableContent(layout: TreeLayout) {
+    this.currentLayout = layout;
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
     this.scrollHintObjects.forEach(object => object.destroy());
     this.scrollHintObjects = [];
+    this.destroyRenderedBranchCards();
     this.branchCardObjects = [];
+    this.virtualBranchCards = [];
 
     this.contentContainer = this.add.container(0, 0).setDepth(5);
 
@@ -565,22 +583,16 @@ export class StatsTreeScene extends Phaser.Scene {
 
     cursorY = this.createIntroPanel(layout, cursorY);
 
-    BRANCHES.forEach((branch, index) => {
+    BRANCHES.forEach(branch => {
       const cardHeight = this.getBranchCardHeight(layout, branch);
-      const objects = this.createBranchCard(layout, branch, cursorY + cardHeight / 2, cardHeight);
-      this.branchCardObjects.push(...objects);
-      cursorY += cardHeight + (layout.compact ? 14 : 16);
 
-      objects.filter(object => this.hasSetAlpha(object)).forEach(object => {
-        object.setAlpha(0);
-        this.tweens.add({
-          targets: object,
-          alpha: 1,
-          duration: 220,
-          delay: 100 + index * 45,
-          ease: 'Sine.easeOut',
-        });
+      this.virtualBranchCards.push({
+        branch,
+        top: cursorY,
+        height: cardHeight,
       });
+
+      cursorY += cardHeight + (layout.compact ? 14 : 16);
     });
 
     cursorY = this.createAdvicePanel(layout, cursorY + 2);
@@ -596,6 +608,105 @@ export class StatsTreeScene extends Phaser.Scene {
     if (this.maxScrollY > 0) {
       this.createScrollHint(layout);
     }
+
+    this.updateVirtualizedBranchCards(true);
+  }
+
+  private updateVirtualizedBranchCards(force = false) {
+    const layout = this.currentLayout;
+
+    if (!layout || !this.contentContainer) {
+      return;
+    }
+
+    const viewportTop = layout.contentTop + this.currentScrollY - this.virtualRenderBuffer;
+    const viewportBottom = layout.contentTop + this.currentScrollY + layout.viewportHeight + this.virtualRenderBuffer;
+
+    this.virtualBranchCards.forEach(entry => {
+      const branchId = entry.branch.id;
+      const rendered = this.renderedBranchCards.has(branchId);
+      const visible = entry.top + entry.height >= viewportTop && entry.top <= viewportBottom;
+
+      if (visible && (!rendered || force)) {
+        if (rendered) {
+          this.destroyRenderedBranchCard(branchId);
+        }
+
+        const objects = this.createBranchCard(layout, entry.branch, entry.top + entry.height / 2, entry.height);
+        this.renderedBranchCards.set(branchId, objects);
+        this.branchCardObjects.push(...objects);
+
+        objects.filter(object => this.hasSetAlpha(object)).forEach(object => {
+          object.setAlpha(0);
+          this.tweens.add({
+            targets: object,
+            alpha: 1,
+            duration: 140,
+            ease: 'Sine.easeOut',
+          });
+        });
+      }
+
+      if (!visible && rendered) {
+        this.destroyRenderedBranchCard(branchId);
+      }
+    });
+  }
+
+  private destroyRenderedBranchCards() {
+    Array.from(this.renderedBranchCards.keys()).forEach(branchId => {
+      this.destroyRenderedBranchCard(branchId);
+    });
+
+    this.renderedBranchCards.clear();
+  }
+
+  private destroyRenderedBranchCard(branchId: BranchId) {
+    const objects = this.renderedBranchCards.get(branchId);
+
+    if (!objects) {
+      return;
+    }
+
+    this.tweens.killTweensOf(objects);
+    objects.forEach(object => {
+      if (object.scene) {
+        object.destroy();
+      }
+    });
+
+    this.renderedBranchCards.delete(branchId);
+    this.branchCardObjects = this.branchCardObjects.filter(object => !objects.includes(object));
+  }
+
+  private refreshBranchCards(branchIds: BranchId[]) {
+    const uniqueBranchIds = Array.from(new Set(branchIds));
+
+    uniqueBranchIds.forEach(branchId => {
+      if (this.renderedBranchCards.has(branchId)) {
+        this.destroyRenderedBranchCard(branchId);
+      }
+    });
+
+    this.updateVirtualizedBranchCards();
+  }
+
+  private refreshVisibleTreeAfterUpgrade(branchId: BranchId) {
+    this.updatePointsChipText();
+    this.ensureSelectedNode();
+    this.refreshBranchCards([branchId]);
+  }
+
+  private updatePointsChipText() {
+    if (!this.pointsChipText) {
+      return;
+    }
+
+    const points = this.getTreePoints();
+    const canSpend = points > 0;
+
+    this.pointsChipText.setText(`Свободные очки: ${points}`);
+    this.pointsChipText.setColor(canSpend ? '#9fd0a6' : '#b8aa91');
   }
 
   private getBranchCardHeight(layout: TreeLayout, branch: BranchData) {
@@ -1107,6 +1218,8 @@ export class StatsTreeScene extends Phaser.Scene {
         return;
       }
 
+      const previousBranchId = this.selectedNode?.branchId;
+
       this.selectedNode = {
         branchId: branch.id,
         stageLevel: stage.level,
@@ -1121,10 +1234,11 @@ export class StatsTreeScene extends Phaser.Scene {
         ease: 'Sine.easeOut',
       });
 
-      this.scene.restart({
-        selectedNode: this.selectedNode,
-        scrollY: this.targetScrollY,
-      });
+      if (previousBranchId && previousBranchId !== branch.id) {
+        this.refreshBranchCards([previousBranchId, branch.id]);
+      } else {
+        this.refreshBranchCards([branch.id]);
+      }
     });
     container.add(zone);
     objects.push(zone);
@@ -1332,6 +1446,8 @@ export class StatsTreeScene extends Phaser.Scene {
       if (this.contentContainer) {
         this.contentContainer.y = -this.currentScrollY;
       }
+
+      this.updateVirtualizedBranchCards();
     });
 
     const resetDrag = () => {
@@ -1355,6 +1471,7 @@ export class StatsTreeScene extends Phaser.Scene {
       }
 
       this.targetScrollY = Phaser.Math.Clamp(this.targetScrollY + deltaY * 0.55, 0, this.maxScrollY);
+      this.updateVirtualizedBranchCards();
     });
   }
 
@@ -1522,10 +1639,7 @@ export class StatsTreeScene extends Phaser.Scene {
     this.modalObjects.forEach(object => object.destroy());
     this.modalObjects = [];
 
-    this.scene.restart({
-      selectedNode: this.selectedNode,
-      scrollY: this.targetScrollY,
-    });
+    this.refreshVisibleTreeAfterUpgrade(branchId);
   }
 
   private showMessage(title: string, message: string) {
