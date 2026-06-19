@@ -21,6 +21,7 @@ import {
   formatCheckpointTimeLeft,
   clearCampfireBattleCheckpoint,
 } from '../systems/CampfireCheckpointSystem';
+import { getMaterialName, type MaterialId } from '../data/materials';
 
 import {
   getQuests,
@@ -68,6 +69,13 @@ type CityCampfireState = {
   flintType: CityFlintType | null;
   startedAt: number;
   expiresAt: number | null;
+};
+
+type CampfirePlayer = typeof player & {
+  rubyFlintUnlocked?: boolean;
+  redRubyFlintUnlocked?: boolean;
+  donorFlintUnlocked?: boolean;
+  premiumFlintUnlocked?: boolean;
 };
 
 export class CampScene extends Phaser.Scene {
@@ -1009,7 +1017,7 @@ export class CampScene extends Phaser.Scene {
 
   private getCityCampfireButtonDescription() {
     if (!this.isCityCampfireActive()) {
-      return 'Выбери огниво, чтобы осветить убежище и открыть отдых.';
+      return 'Скрафти обычное/среднее огниво или используй донатное, чтобы зажечь костёр.';
     }
 
     const state = this.getCityCampfireState();
@@ -1703,7 +1711,21 @@ export class CampScene extends Phaser.Scene {
   }
 
   private igniteCityCampfire(flintType: CityFlintType) {
-    const startedAt = Date.now();
+    if (!this.canSelectCityFlint(flintType)) {
+      this.showMessage(
+        'Огниво недоступно',
+        flintType === 'donate'
+          ? 'Донатное огниво доступно только после покупки/разблокировки. Обычное и редкое можно скрафтить из материалов.'
+          : `Не хватает материалов для крафта: ${this.getCityFlintCostText(flintType)}.`
+      );
+      return;
+    }
+
+    if (flintType !== 'donate') {
+      this.spendMaterials(this.getCityFlintCost(flintType));
+    }
+
+    const now = Date.now();
     const duration = flintType === 'common'
       ? this.CITY_COMMON_FLINT_MS
       : flintType === 'rare'
@@ -1713,22 +1735,27 @@ export class CampScene extends Phaser.Scene {
     const state: CityCampfireState = {
       active: true,
       flintType,
-      startedAt,
-      expiresAt: duration === null ? null : startedAt + duration,
+      startedAt: now,
+      expiresAt: duration === null ? null : now + duration,
     };
 
     this.saveCityCampfireState(state);
+    void saveGameAsync();
+
     this.updateCampfireButtonText();
     this.createCityCampfireVisualState(this.getLayout());
 
     const title = this.getCityFlintTitle(flintType);
     const timeText = flintType === 'donate'
-      ? 'Костёр теперь горит постоянно.'
+      ? 'Костёр будет гореть постоянно.'
       : `Костёр будет гореть ${this.formatCityCampfireTimeLeft(duration ?? 0)}.`;
+    const costText = flintType === 'donate'
+      ? 'Донатное огниво не тратит материалы.'
+      : `Потрачено: ${this.getCityFlintCostText(flintType)}.`;
 
     this.showMessage(
       'Костёр зажжён',
-      `${title} вспыхнуло в очаге.\n${timeText}\n\nУбежище стало теплее, а отдых у костра теперь доступен.`
+      `${title} вспыхнуло в очаге.\n${timeText}\n${costText}\n\nУбежище стало заметно теплее и светлее. Отдых у костра теперь доступен.`
     );
   }
 
@@ -1763,11 +1790,11 @@ export class CampScene extends Phaser.Scene {
     this.cityCampfireIsVisuallyActive = active;
 
     const { width, height, centerX } = layout;
-    const fireY = Phaser.Math.Clamp(height * 0.51, 330, 520);
-    const warmAlpha = active ? 0.1 : 0;
+    const fireY = Phaser.Math.Clamp(layout.actionsTop - (layout.veryCompact ? 16 : 20), 245, height - layout.safeBottom - 170);
+    const warmAlpha = active ? 0.16 : 0.025;
 
-    const overlay = this.add.rectangle(centerX, height / 2, width, height, 0xff9d3a, 0)
-      .setDepth(1.25);
+    const overlay = this.add.rectangle(centerX, height / 2, width, height, 0xffa23d, 0)
+      .setDepth(active ? 30 : 1.25);
 
     this.cityCampfireWarmOverlay = overlay;
     this.cityCampfireGlowObjects.push(overlay);
@@ -1775,85 +1802,97 @@ export class CampScene extends Phaser.Scene {
     this.tweens.add({
       targets: overlay,
       alpha: warmAlpha,
-      duration: active ? 420 : 260,
+      duration: active ? 520 : 260,
       ease: 'Sine.easeOut',
     });
 
-    const outerGlow = this.add.circle(centerX, fireY, active ? 142 : 76, 0xd98a3a, active ? 0.09 : 0.025)
-      .setDepth(2);
-    const midGlow = this.add.circle(centerX, fireY + 8, active ? 96 : 48, 0xf0b35a, active ? 0.15 : 0.045)
-      .setDepth(2);
-    const ember = this.add.circle(centerX, fireY + 18, active ? 34 : 18, active ? 0xffc46b : 0x5b3520, active ? 0.24 : 0.08)
-      .setDepth(3);
+    const backLight = this.add.circle(centerX, fireY + 34, active ? width * 0.72 : width * 0.34, 0xff9d3a, active ? 0.14 : 0.035)
+      .setDepth(active ? 22 : 2);
+    const outerGlow = this.add.circle(centerX, fireY, active ? 178 : 92, 0xd98a3a, active ? 0.18 : 0.045)
+      .setDepth(active ? 31 : 3);
+    const midGlow = this.add.circle(centerX, fireY + 8, active ? 118 : 58, 0xf0b35a, active ? 0.24 : 0.065)
+      .setDepth(active ? 32 : 3);
+    const ember = this.add.circle(centerX, fireY + 16, active ? 42 : 22, active ? 0xffc46b : 0x6d3a20, active ? 0.38 : 0.12)
+      .setDepth(active ? 33 : 3);
+    const flame = this.add.text(centerX, fireY + 6, active ? '♨' : '♨', {
+      fontFamily: UI.font.body,
+      fontSize: active
+        ? layout.veryCompact ? '42px' : layout.compact ? '50px' : '58px'
+        : layout.veryCompact ? '27px' : '34px',
+      color: active ? '#ffd28a' : '#8a5a32',
+      stroke: '#000000',
+      strokeThickness: active ? 6 : 4,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(active ? 34 : 4).setAlpha(active ? 0.95 : 0.38);
 
-    this.cityCampfireGlowObjects.push(outerGlow, midGlow, ember);
+    this.cityCampfireGlowObjects.push(backLight, outerGlow, midGlow, ember, flame);
 
     if (active) {
       this.cityCampfireVisualTweens.push(
         this.tweens.add({
-          targets: [outerGlow, midGlow, ember],
-          alpha: '+=0.06',
-          scale: { from: 0.96, to: 1.08 },
-          duration: 1250,
+          targets: [backLight, outerGlow, midGlow, ember, flame],
+          alpha: '+=0.08',
+          scale: { from: 0.95, to: 1.1 },
+          duration: 1150,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
         })
       );
 
-      for (let i = 0; i < 22; i += 1) {
-        const sparkX = centerX + Phaser.Math.Between(-52, 52);
-        const sparkY = fireY + Phaser.Math.Between(-16, 38);
+      for (let i = 0; i < 34; i += 1) {
+        const sparkX = centerX + Phaser.Math.Between(-76, 76);
+        const sparkY = fireY + Phaser.Math.Between(-10, 42);
         const spark = this.add.circle(
           sparkX,
           sparkY,
           Phaser.Math.Between(1, 3),
-          i % 4 === 0 ? 0xffdf92 : 0xd28a3a,
+          i % 5 === 0 ? 0xffefb0 : i % 3 === 0 ? 0xffb75a : 0xd28a3a,
           0
-        ).setDepth(3);
+        ).setDepth(35);
 
         this.cityCampfireGlowObjects.push(spark);
         this.cityCampfireVisualTweens.push(
           this.tweens.add({
             targets: spark,
-            alpha: { from: 0, to: 0.72 },
-            y: sparkY - Phaser.Math.Between(34, 78),
-            x: sparkX + Phaser.Math.Between(-18, 18),
-            scale: { from: 0.6, to: 1.12 },
-            duration: Phaser.Math.Between(1200, 2300),
+            alpha: { from: 0, to: 0.86 },
+            y: sparkY - Phaser.Math.Between(48, 112),
+            x: sparkX + Phaser.Math.Between(-24, 24),
+            scale: { from: 0.55, to: 1.18 },
+            duration: Phaser.Math.Between(1050, 2200),
             repeat: -1,
-            delay: i * 75,
+            delay: i * 58,
             ease: 'Sine.easeOut',
             onRepeat: () => {
               spark.setPosition(
-                centerX + Phaser.Math.Between(-52, 52),
-                fireY + Phaser.Math.Between(-16, 38)
+                centerX + Phaser.Math.Between(-76, 76),
+                fireY + Phaser.Math.Between(-10, 42)
               );
             },
           })
         );
       }
 
-      const timerText = this.add.text(centerX, fireY + 84, this.getCityCampfireTimerVisualText(), {
+      const timerText = this.add.text(centerX, fireY + (layout.veryCompact ? 72 : 86), this.getCityCampfireTimerVisualText(), {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '11px' : '12px',
-        color: '#e6c184',
+        color: '#ffd696',
         stroke: '#000000',
-        strokeThickness: 3,
+        strokeThickness: 4,
         align: 'center',
         wordWrap: {
-          width: layout.contentWidth - 62,
+          width: layout.contentWidth - 48,
           useAdvancedWrap: true,
         },
         maxLines: 1,
-      }).setOrigin(0.5).setDepth(4).setAlpha(0);
+      }).setOrigin(0.5).setDepth(36).setAlpha(0);
 
       this.cityCampfireTimerText = timerText;
       this.cityCampfireGlowObjects.push(timerText);
 
       this.tweens.add({
         targets: timerText,
-        alpha: 0.86,
+        alpha: 0.94,
         duration: 300,
         ease: 'Sine.easeOut',
       });
@@ -1892,7 +1931,7 @@ export class CampScene extends Phaser.Scene {
     }
 
     if (flintType === 'rare') {
-      return 'Редкое огниво';
+      return 'Среднее огниво';
     }
 
     return 'Донатное огниво';
@@ -1926,7 +1965,7 @@ export class CampScene extends Phaser.Scene {
     const subtitle = this.add.text(
       layout.centerX,
       top + (layout.veryCompact ? 76 : 84),
-      'Огниво зажигает городской костёр. Пока он горит, можно отдыхать без cooldown.',
+      'Обычное и среднее огниво крафтятся из материалов. Донатное доступно только после разблокировки.',
       {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '12px' : '14px',
@@ -1955,7 +1994,7 @@ export class CampScene extends Phaser.Scene {
       height: optionHeight,
       flintType: 'common',
       title: 'Обычное огниво',
-      description: 'Костёр будет гореть 1 час.',
+      description: 'Крафт. Горит 1 час.',
       accentColor: 0xd28a3a,
       closeModal,
     });
@@ -1967,9 +2006,9 @@ export class CampScene extends Phaser.Scene {
       width: optionWidth,
       height: optionHeight,
       flintType: 'rare',
-      title: 'Редкое огниво',
-      description: 'Костёр будет гореть 24 часа.',
-      accentColor: 0xb89a5e,
+      title: 'Среднее огниво',
+      description: 'Крафт. Горит 24 часа.',
+      accentColor: 0x70a6ff,
       closeModal,
     });
 
@@ -1981,7 +2020,7 @@ export class CampScene extends Phaser.Scene {
       height: optionHeight,
       flintType: 'donate',
       title: 'Донатное огниво',
-      description: 'Костёр будет гореть постоянно.',
+      description: 'Только за донат. Горит постоянно.',
       accentColor: 0xc084fc,
       closeModal,
     });
@@ -2019,67 +2058,87 @@ export class CampScene extends Phaser.Scene {
     const left = config.x - config.width / 2;
     const iconX = left + 42;
     const textX = left + 82;
+    const canSelect = this.canSelectCityFlint(config.flintType);
+    const costText = this.getCityFlintCostText(config.flintType);
+    const buttonText = canSelect
+      ? 'Зажечь'
+      : config.flintType === 'donate'
+        ? 'Донат'
+        : 'Нет рес.';
 
     const shadow = this.add.graphics().setDepth(1002);
     shadow.fillStyle(0x000000, 0.35);
     shadow.fillRoundedRect(left, config.y - config.height / 2 + 5, config.width, config.height, radius);
 
     const bg = this.add.graphics().setDepth(1003);
-    const drawBg = (fillColor: number, strokeAlpha: number) => {
+    const drawBg = (fillColor: number, strokeAlpha: number, fillAlpha = 0.96) => {
       bg.clear();
-      bg.fillStyle(fillColor, 0.96);
+      bg.fillStyle(fillColor, canSelect ? fillAlpha : 0.68);
       bg.fillRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
-      bg.lineStyle(2, config.accentColor, strokeAlpha);
+      bg.lineStyle(2, config.accentColor, canSelect ? strokeAlpha : 0.28);
       bg.strokeRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
     };
 
-    drawBg(0x120d0a, 0.72);
+    drawBg(canSelect ? 0x120d0a : 0x0a0a0c, 0.72);
 
-    const iconGlow = this.add.circle(iconX, config.y, 25, config.accentColor, 0.15)
-      .setStrokeStyle(1, config.accentColor, 0.55)
+    const iconGlow = this.add.circle(iconX, config.y, 25, config.accentColor, canSelect ? 0.15 : 0.05)
+      .setStrokeStyle(1, config.accentColor, canSelect ? 0.55 : 0.22)
       .setDepth(1004);
 
-    const icon = this.add.text(iconX, config.y, config.flintType === 'donate' ? '✦' : '♨', {
+    const icon = this.add.text(iconX, config.y, config.flintType === 'donate' ? '✦' : config.flintType === 'rare' ? '◆' : '◇', {
       fontFamily: UI.font.body,
       fontSize: '20px',
-      color: config.flintType === 'donate' ? '#d7b7ff' : '#f0c17d',
+      color: canSelect
+        ? config.flintType === 'donate' ? '#d7b7ff' : '#f0c17d'
+        : '#6b6258',
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(1005);
 
-    const title = this.add.text(textX, config.y - 16, config.title, {
+    const title = this.add.text(textX, config.y - 25, config.title, {
       fontFamily: UI.font.title,
       fontSize: '17px',
-      color: '#d8c088',
+      color: canSelect ? '#d8c088' : '#766d62',
       stroke: '#000000',
       strokeThickness: 3,
       wordWrap: {
-        width: config.width - 146,
+        width: config.width - 168,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(1005);
 
-    const description = this.add.text(textX, config.y + 16, config.description, {
+    const description = this.add.text(textX, config.y + 1, config.description, {
       fontFamily: UI.font.body,
       fontSize: '12px',
-      color: '#b8aa91',
+      color: canSelect ? '#b8aa91' : '#6f665b',
       wordWrap: {
-        width: config.width - 146,
+        width: config.width - 168,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(1005);
 
-    const action = this.add.text(left + config.width - 48, config.y, 'Зажечь', {
+    const cost = this.add.text(textX, config.y + 25, costText, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: canSelect ? '#8f877a' : '#c4877f',
+      wordWrap: {
+        width: config.width - 168,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(1005);
+
+    const action = this.add.text(left + config.width - 50, config.y, buttonText, {
       fontFamily: UI.font.title,
-      fontSize: '13px',
-      color: '#f0d58a',
+      fontSize: '12px',
+      color: canSelect ? '#f0d58a' : '#7d6860',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
       wordWrap: {
-        width: 76,
+        width: 78,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(1005);
@@ -2089,34 +2148,117 @@ export class CampScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
 
     zone.on('pointerover', () => {
-      drawBg(0x21150f, 0.96);
-      title.setColor('#ffffff');
-      action.setColor('#ffffff');
+      drawBg(canSelect ? 0x21150f : 0x101010, canSelect ? 0.96 : 0.32);
+      if (canSelect) {
+        title.setColor('#ffffff');
+        action.setColor('#ffffff');
+      }
     });
 
     zone.on('pointerout', () => {
-      drawBg(0x120d0a, 0.72);
-      title.setColor('#d8c088');
-      action.setColor('#f0d58a');
+      drawBg(canSelect ? 0x120d0a : 0x0a0a0c, 0.72);
+      title.setColor(canSelect ? '#d8c088' : '#766d62');
+      action.setColor(canSelect ? '#f0d58a' : '#7d6860');
+      config.modal.setScale(1);
     });
 
     zone.on('pointerdown', () => {
-      drawBg(0x2a1a10, 1);
+      drawBg(canSelect ? 0x2a1a10 : 0x101010, 1);
       config.modal.setScale(0.99);
     });
 
     zone.on('pointerup', () => {
       config.modal.setScale(1);
+
+      if (!canSelect) {
+        this.showMessage(
+          'Огниво недоступно',
+          config.flintType === 'donate'
+            ? 'Донатное огниво можно зажечь только после покупки/разблокировки.'
+            : `Не хватает материалов для крафта. Нужно: ${costText}.`
+        );
+        return;
+      }
+
       config.closeModal();
       this.igniteCityCampfire(config.flintType);
     });
 
     zone.on('pointerupoutside', () => {
       config.modal.setScale(1);
-      drawBg(0x120d0a, 0.72);
+      drawBg(canSelect ? 0x120d0a : 0x0a0a0c, 0.72);
     });
 
-    config.modal.add([shadow, bg, iconGlow, icon, title, description, action, zone]);
+    config.modal.add([shadow, bg, iconGlow, icon, title, description, cost, action, zone]);
+  }
+
+  private canSelectCityFlint(flintType: CityFlintType) {
+    if (flintType === 'donate') {
+      return this.hasDonateCityFlintUnlocked();
+    }
+
+    return this.hasMaterials(this.getCityFlintCost(flintType));
+  }
+
+  private getCityFlintCost(flintType: CityFlintType): Array<{ id: MaterialId; amount: number }> {
+    if (flintType === 'common') {
+      return [
+        { id: 'darkened_bone', amount: 2 },
+        { id: 'dim_gem', amount: 1 },
+        { id: 'old_leather', amount: 1 },
+      ];
+    }
+
+    if (flintType === 'rare') {
+      return [
+        { id: 'darkened_bone', amount: 3 },
+        { id: 'dim_gem', amount: 2 },
+        { id: 'black_gem', amount: 1 },
+        { id: 'cursed_seal', amount: 1 },
+      ];
+    }
+
+    return [];
+  }
+
+  private getCityFlintCostText(flintType: CityFlintType) {
+    if (flintType === 'donate') {
+      return this.hasDonateCityFlintUnlocked()
+        ? 'Донатное огниво разблокировано'
+        : 'Только после доната';
+    }
+
+    const cost = this.getCityFlintCost(flintType);
+
+    return cost
+      .map(material => `${getMaterialName(material.id)} x${material.amount}`)
+      .join(' • ');
+  }
+
+  private hasDonateCityFlintUnlocked() {
+    const campfirePlayer = player as CampfirePlayer;
+
+    return Boolean(
+      campfirePlayer.rubyFlintUnlocked ||
+      campfirePlayer.redRubyFlintUnlocked ||
+      campfirePlayer.donorFlintUnlocked ||
+      campfirePlayer.premiumFlintUnlocked
+    );
+  }
+
+  private hasMaterials(cost: Array<{ id: MaterialId; amount: number }>) {
+    return cost.every(material => {
+      return (player.materials[material.id] ?? 0) >= material.amount;
+    });
+  }
+
+  private spendMaterials(cost: Array<{ id: MaterialId; amount: number }>) {
+    cost.forEach(material => {
+      player.materials[material.id] = Math.max(
+        0,
+        (player.materials[material.id] ?? 0) - material.amount
+      );
+    });
   }
 
   private restAtCampfire() {
