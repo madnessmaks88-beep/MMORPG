@@ -2964,6 +2964,9 @@ export class InventoryScene extends Phaser.Scene {
       Math.max(0, this.inventoryMaxScrollY)
     );
 
+    const selectedCategory = this.selectedCategory;
+    const returnScene = this.returnScene;
+
     this.isRestartingInventory = true;
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
@@ -2975,51 +2978,19 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.setInventoryListModalMode(false);
-    this.rebuildInventorySceneImmediately(scrollY);
-  }
 
-  private rebuildInventorySceneImmediately(scrollY: number): void {
-    const selectedCategory = this.selectedCategory;
-    const returnScene = this.returnScene;
-
-    this.cleanupInventoryViewport();
-    this.tweens.killAll();
-    this.children.removeAll(true);
-
-    this.initialInventoryScrollY = Phaser.Math.Clamp(scrollY, 0, Math.max(0, this.inventoryMaxScrollY));
-    this.selectedCategory = selectedCategory;
-    this.returnScene = returnScene;
-
-    this.isItemInfoOpen = false;
-    this.isDraggingInventory = false;
-    this.didDragInventory = false;
-    this.itemInfoContainer = undefined;
-    this.inventoryListObjects = [];
-
-    const layout = this.getLayout();
-
-    createSceneBackground(this);
-    this.createInventoryBackdrop(layout);
-
-    this.createInventoryHeader(layout);
-    this.createQuickStatsPanel(layout);
-    this.createEquipmentPanel(layout);
-    this.createCategoryTabs(layout);
-    this.createInventoryList(layout);
-
-    if (this.returnScene === 'DungeonScene') {
-      this.createReturnButton(layout);
-    } else {
-      createBottomNav(this, {
-        activeScene: 'InventoryScene',
+    // Важно: не пересобираем сцену вручную через children.removeAll(true).
+    // При ручной пересборке у Phaser оставались старые камеры/интерактивные зоны,
+    // из-за чего список исчезал, а кнопки и вкладки переставали нажиматься.
+    // Делаем штатный restart сцены на следующий тик: Phaser сам выполнит SHUTDOWN,
+    // а cleanupInventoryViewport() удалит камеру списка и scroll-handlers.
+    this.time.delayedCall(0, () => {
+      this.scene.restart({
+        inventoryScrollY: scrollY,
+        selectedCategory,
+        returnScene,
       });
-    }
-
-    if (this.inventoryListCamera) {
-      this.inventoryListCamera.visible = true;
-    }
-
-    this.isRestartingInventory = false;
+    });
   }
 
   private getTotalMaterialsCount() {
