@@ -212,8 +212,10 @@ export class ForgeScene extends Phaser.Scene {
       );
     }
 
-    this.renderVisibleForgeItems(this.getLayout());
-    this.updateItemsScrollbar(this.getLayout());
+    const layout = this.getLayout();
+
+    this.renderVisibleForgeItems(layout);
+    this.updateItemsScrollbar(layout);
   }
 
   private getLayout(): ForgeLayout {
@@ -247,12 +249,16 @@ export class ForgeScene extends Phaser.Scene {
     const tabsTop = materialsTop + materialsHeight + (veryCompact ? 5 : 8);
     const tabsHeight = veryCompact ? 44 : compact ? 54 : 62;
 
-    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 5 : 8);
+    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 8 : 12);
     const minItemsHeight = veryCompact ? 178 : compact ? 230 : 280;
-    const itemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
-    const itemsListTop = itemsPanelTop + (veryCompact ? 42 : 60);
-    const itemsListBottom = itemsPanelTop + itemsPanelHeight - (veryCompact ? 10 : 16);
-    const itemsListHeight = Math.max(150, itemsListBottom - itemsListTop);
+    const availableItemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
+    const itemsPanelHeight = availableItemsPanelHeight;
+    const itemsListTop = itemsPanelTop + (veryCompact ? 50 : compact ? 62 : 68);
+    const itemsListBottom = Math.min(
+      itemsPanelTop + itemsPanelHeight - (veryCompact ? 18 : 24),
+      itemsActionBottom - (veryCompact ? 16 : 20)
+    );
+    const itemsListHeight = Math.max(140, itemsListBottom - itemsListTop);
     const itemsPanelBottom = itemsPanelTop + itemsPanelHeight;
 
     return {
@@ -486,10 +492,13 @@ export class ForgeScene extends Phaser.Scene {
 
     maskGraphics.setVisible(false);
     maskGraphics.fillStyle(0xffffff, 1);
+    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
+    const listWidth = layout.contentWidth - 36;
+
     maskGraphics.fillRect(
-      layout.safeX + 10,
+      listLeft,
       layout.itemsListTop,
-      layout.width - (layout.safeX + 10) * 2,
+      listWidth,
       layout.itemsListHeight
     );
     itemsContainer.setMask(maskGraphics.createGeometryMask());
@@ -608,7 +617,7 @@ export class ForgeScene extends Phaser.Scene {
         topGuardHeight,
         guardColor,
         0.97
-      ).setDepth(46);
+      ).setDepth(188);
     }
 
     if (bottomGuardHeight > 0) {
@@ -619,7 +628,7 @@ export class ForgeScene extends Phaser.Scene {
         bottomGuardHeight,
         guardColor,
         0.97
-      ).setDepth(46);
+      ).setDepth(188);
     }
 
     this.add.rectangle(
@@ -629,7 +638,7 @@ export class ForgeScene extends Phaser.Scene {
       layout.itemsListHeight,
       0x000000,
       0.18
-    ).setDepth(46);
+    ).setDepth(188);
   }
 
   private getForgeItemsContentHeight(layout: ForgeLayout) {
@@ -668,8 +677,8 @@ export class ForgeScene extends Phaser.Scene {
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const fadeZone = layout.veryCompact ? 48 : 64;
-    const buffer = fadeZone + 10;
+    const fadeZone = this.getItemsEdgeFadeZone();
+    const buffer = fadeZone + 28;
 
     items.forEach((inventoryItem, index) => {
       const y = this.itemsListTop + cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
@@ -692,20 +701,41 @@ export class ForgeScene extends Phaser.Scene {
     });
   }
 
+  private getItemsEdgeFadeZone() {
+    if (this.scale.height < 740) {
+      return 88;
+    }
+
+    if (this.scale.height < 900) {
+      return 104;
+    }
+
+    return 112;
+  }
+
   private getItemCardEdgeAlpha(y: number, cardHeight: number) {
-    const fadeZone = this.scale.height < 740 ? 48 : 64;
+    const fadeZone = this.getItemsEdgeFadeZone();
     const half = cardHeight / 2;
 
     let alpha = 1;
 
-    if (y - half < this.itemsListTop + fadeZone) {
-      const distance = y + half - this.itemsListTop;
-      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
+    const topFadeStart = this.itemsListTop + fadeZone;
+    const bottomFadeStart = this.itemsListBottom - fadeZone;
+
+    if (y - half < topFadeStart) {
+      const visibleDistance = y + half - this.itemsListTop;
+      alpha = Math.min(
+        alpha,
+        Phaser.Math.Clamp(visibleDistance / fadeZone, 0, 1)
+      );
     }
 
-    if (y + half > this.itemsListBottom - fadeZone) {
-      const distance = this.itemsListBottom - (y - half);
-      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
+    if (y + half > bottomFadeStart) {
+      const visibleDistance = this.itemsListBottom - (y - half);
+      alpha = Math.min(
+        alpha,
+        Phaser.Math.Clamp(visibleDistance / fadeZone, 0, 1)
+      );
     }
 
     return Phaser.Math.Clamp(alpha, 0, 1);
@@ -720,50 +750,49 @@ export class ForgeScene extends Phaser.Scene {
 
       target.setAlpha?.(alpha);
 
-      if (alpha < 0.35) {
+      if (alpha < 0.55) {
         target.disableInteractive?.();
       }
     });
   }
 
   private createItemsFadeCovers(layout: ForgeLayout) {
-    const left = layout.centerX - layout.contentWidth / 2 + 12;
-    const width = layout.contentWidth - 24;
-    const steps = layout.veryCompact ? 5 : 6;
-    const totalHeight = layout.veryCompact ? 42 : 54;
-    const stepHeight = totalHeight / steps;
+    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
+    const listWidth = layout.contentWidth - 36;
+    const steps = layout.veryCompact ? 8 : 9;
+    const stepHeight = layout.veryCompact ? 9 : 10;
+    const maxAlpha = layout.veryCompact ? 0.46 : 0.5;
 
     for (let i = 0; i < steps; i += 1) {
-      const topAlpha = 0.36 * (1 - i / steps);
-      const bottomAlpha = 0.38 * (1 - i / steps);
+      const alpha = maxAlpha * (1 - i / steps);
 
       this.add.rectangle(
         layout.centerX,
         this.itemsListTop + i * stepHeight + stepHeight / 2,
-        width,
+        listWidth,
         stepHeight + 1,
         FORGE.soot,
-        topAlpha
-      ).setDepth(80);
+        alpha
+      ).setDepth(190);
 
       this.add.rectangle(
         layout.centerX,
         this.itemsListBottom - i * stepHeight - stepHeight / 2,
-        width,
+        listWidth,
         stepHeight + 1,
         FORGE.soot,
-        bottomAlpha
-      ).setDepth(80);
+        alpha
+      ).setDepth(190);
     }
 
     this.add.rectangle(
-      left + width - 8,
+      listLeft + listWidth - 8,
       this.itemsListTop + this.itemsListHeight / 2,
       2,
       this.itemsListHeight,
       0x000000,
-      0.22
-    ).setDepth(81);
+      0.24
+    ).setDepth(191);
   }
 
   private clearVisibleForgeItems() {
@@ -865,9 +894,12 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private isPointerInsideItemsList(pointer: Phaser.Input.Pointer, layout: ForgeLayout) {
+    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
+    const listRight = layout.centerX + layout.contentWidth / 2 - 18;
+
     return (
-      pointer.x >= layout.safeX + 10 &&
-      pointer.x <= layout.width - layout.safeX - 10 &&
+      pointer.x >= listLeft &&
+      pointer.x <= listRight &&
       pointer.y >= this.itemsListTop &&
       pointer.y <= this.itemsListBottom
     );
@@ -880,10 +912,10 @@ export class ForgeScene extends Phaser.Scene {
     const visible = this.itemsMaxScrollY > 0;
 
     this.itemsScrollbarTrack = this.add.rectangle(trackX, trackY, 4, trackHeight, 0x000000, visible ? 0.28 : 0)
-      .setDepth(70);
+      .setDepth(200);
 
     this.itemsScrollbarThumb = this.add.rectangle(trackX, this.itemsListTop + 18, 4, 36, FORGE.gold, visible ? 0.55 : 0)
-      .setDepth(71);
+      .setDepth(201);
   }
 
   private updateItemsScrollbar(layout: ForgeLayout) {
