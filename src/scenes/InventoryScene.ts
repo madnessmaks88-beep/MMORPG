@@ -61,6 +61,7 @@ type InventoryLayout = {
 
   contentWidth: number;
   compact: boolean;
+  veryCompact: boolean;
 
   headerY: number;
 
@@ -84,13 +85,12 @@ type InventoryLayout = {
   listBottom: number;
   listHeight: number;
 
-  massSellButtonY: number;
+  hasMassSellButton: boolean;
   massSellButtonHeight: number;
-  bottomNavSafeTop: number;
+  massSellButtonY: number;
 
   actionButtonY: number;
 };
-
 export class InventoryScene extends Phaser.Scene {
   private isItemInfoOpen = false;
 
@@ -98,9 +98,11 @@ export class InventoryScene extends Phaser.Scene {
 
   private itemInfoContainer?: Phaser.GameObjects.Container;
 
+  // Настоящий masked viewport: этот слой содержит только карточки списка.
+  private inventoryItemsLayer?: Phaser.GameObjects.Container;
+  // Старое имя оставлено как alias, чтобы не ломать вспомогательную структуру сцены.
   private inventoryContainer?: Phaser.GameObjects.Container;
   private inventoryMaskGraphics?: Phaser.GameObjects.Graphics;
-  private inventoryGeometryMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
   private inventoryTopCover?: Phaser.GameObjects.Rectangle;
@@ -110,9 +112,9 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryTargetScrollY = 0;
   private inventoryMaxScrollY = 0;
 
-  private inventoryListTop = 0;
-  private inventoryListHeight = 0;
-  private inventoryListBottom = 0;
+  private inventoryViewportTop = 0;
+  private inventoryViewportBottom = 0;
+  private inventoryViewportHeight = 0;
 
   private inventoryLastRenderedScrollY = -1;
 
@@ -143,9 +145,10 @@ export class InventoryScene extends Phaser.Scene {
     this.isDraggingInventory = false;
     this.didDragInventory = false;
     this.itemInfoContainer = undefined;
+    this.inventoryItemsLayer = undefined;
+    this.inventoryContainer = undefined;
     this.inventoryTopCover = undefined;
     this.inventoryBottomCover = undefined;
-    this.inventoryGeometryMask = undefined;
   }
 
   create(data?: {
@@ -189,15 +192,9 @@ export class InventoryScene extends Phaser.Scene {
 
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 12, 24);
-
-    const bottomNavSafeTop = this.returnScene === 'DungeonScene'
-      ? height - 92
-      : height - 118;
-    const safeBottom = height - bottomNavSafeTop;
+    const safeBottom = this.returnScene === 'DungeonScene' ? 84 : 112;
 
     const contentWidth = Math.min(width - safeX * 2, 640);
-
-    // Верхний большой header убран: экран сразу начинается с полезной информации.
     const headerY = safeTop;
 
     const statsHeight = veryCompact ? 92 : compact ? 104 : 112;
@@ -209,25 +206,25 @@ export class InventoryScene extends Phaser.Scene {
     const tabHeight = veryCompact ? 60 : compact ? 66 : 70;
     const tabsY = equipmentY + equipmentHeight / 2 + (veryCompact ? 8 : 10) + tabHeight / 2;
 
+    const hasMassSellButton = this.selectedCategory !== 'potions' && this.selectedCategory !== 'materials';
+    const massSellButtonHeight = veryCompact ? 38 : 42;
+    const massSellButtonGap = veryCompact ? 9 : 12;
+
     const listPanelTop = tabsY + tabHeight / 2 + (veryCompact ? 8 : 10);
-    const listPanelBottom = bottomNavSafeTop - (veryCompact ? 8 : 12);
+    const listPanelBottom = height - safeBottom - (veryCompact ? 8 : 12);
     const listPanelHeight = Math.max(156, listPanelBottom - listPanelTop);
 
-    const listHeaderTop = listPanelTop + 8;
-    const listHeaderHeight = veryCompact ? 50 : 56;
-
-    const showMassSellButton = this.selectedCategory !== 'potions' && this.selectedCategory !== 'materials';
-    const massSellButtonHeight = showMassSellButton ? (veryCompact ? 38 : 42) : 0;
-    const massSellButtonGap = showMassSellButton ? (veryCompact ? 10 : 12) : 0;
-    const massSellButtonY = showMassSellButton
-      ? listPanelBottom - massSellButtonHeight / 2 - (veryCompact ? 9 : 10)
-      : listPanelBottom + 1000;
+    const listHeaderTop = listPanelTop;
+    const listHeaderHeight = veryCompact ? 48 : compact ? 54 : 58;
 
     const listTop = listHeaderTop + listHeaderHeight + (veryCompact ? 6 : 8);
-    const listBottom = showMassSellButton
-      ? massSellButtonY - massSellButtonHeight / 2 - massSellButtonGap
-      : listPanelBottom - (veryCompact ? 12 : 14);
+    const actionAreaHeight = hasMassSellButton ? massSellButtonHeight + massSellButtonGap + (veryCompact ? 10 : 12) : (veryCompact ? 8 : 12);
+    const listBottom = Math.max(listTop + 84, listPanelBottom - actionAreaHeight);
     const listHeight = Math.max(84, listBottom - listTop);
+
+    const massSellButtonY = hasMassSellButton
+      ? listPanelBottom - massSellButtonHeight / 2 - (veryCompact ? 7 : 10)
+      : listPanelBottom + 1000;
 
     return {
       width,
@@ -240,6 +237,7 @@ export class InventoryScene extends Phaser.Scene {
 
       contentWidth,
       compact,
+      veryCompact,
 
       headerY,
 
@@ -263,9 +261,9 @@ export class InventoryScene extends Phaser.Scene {
       listBottom,
       listHeight,
 
-      massSellButtonY,
+      hasMassSellButton,
       massSellButtonHeight,
-      bottomNavSafeTop,
+      massSellButtonY,
 
       actionButtonY: massSellButtonY,
     };
@@ -807,18 +805,21 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private createInventoryList(layout: InventoryLayout) {
-    this.inventoryContainer?.destroy(true);
+    this.inventoryItemsLayer?.destroy(true);
+    if (this.inventoryContainer && this.inventoryContainer !== this.inventoryItemsLayer) {
+      this.inventoryContainer.destroy(true);
+    }
+    this.inventoryItemsLayer = undefined;
+    this.inventoryContainer = undefined;
     this.inventoryMaskGraphics?.destroy();
-    this.inventoryGeometryMask?.destroy();
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
     this.inventoryTopCover?.destroy();
     this.inventoryBottomCover?.destroy();
 
-    this.inventoryGeometryMask = undefined;
-    this.inventoryListTop = layout.listTop;
-    this.inventoryListHeight = layout.listHeight;
-    this.inventoryListBottom = layout.listBottom;
+    this.inventoryViewportTop = layout.listTop;
+    this.inventoryViewportBottom = layout.listBottom;
+    this.inventoryViewportHeight = Math.max(1, layout.listBottom - layout.listTop);
 
     this.createRoundedPanel({
       x: layout.centerX,
@@ -830,17 +831,17 @@ export class InventoryScene extends Phaser.Scene {
       alpha: 0.96,
       strokeColor: INVENTORY_DARK.bronze,
       strokeAlpha: 0.58,
-      depth: 18,
+      depth: 20,
     });
 
     const title = this.getCategoryTitle();
     const counter = this.getCategoryCounter();
     const listHeaderDepth = 92;
-    const headerCenterY = layout.listHeaderTop + layout.listHeaderHeight / 2;
+    const headerY = layout.listHeaderTop + layout.listHeaderHeight / 2;
 
-    this.add.text(layout.centerX - layout.contentWidth / 2 + 24, headerCenterY - 10, title, {
+    this.add.text(layout.centerX - layout.contentWidth / 2 + 24, headerY - 8, title, {
       fontFamily: UI.font.title,
-      fontSize: layout.compact ? '21px' : '25px',
+      fontSize: layout.veryCompact ? '19px' : layout.compact ? '21px' : '24px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 5,
@@ -851,9 +852,9 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(listHeaderDepth);
 
-    this.add.text(layout.centerX + layout.contentWidth / 2 - 24, headerCenterY - 10, counter, {
+    this.add.text(layout.centerX + layout.contentWidth / 2 - 24, headerY - 8, counter, {
       fontFamily: UI.font.body,
-      fontSize: '13px',
+      fontSize: layout.veryCompact ? '12px' : '14px',
       color: INVENTORY_DARK.muted,
       align: 'right',
       wordWrap: {
@@ -862,9 +863,9 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(listHeaderDepth);
 
-    this.add.text(layout.centerX, headerCenterY + 15, 'Редкость сортируется сверху вниз: божественная → обычная', {
+    this.add.text(layout.centerX, headerY + 15, 'Редкость сортируется сверху вниз: божественная → обычная', {
       fontFamily: UI.font.body,
-      fontSize: layout.height < 920 ? '10px' : '11px',
+      fontSize: layout.veryCompact ? '9px' : '11px',
       color: '#716a60',
       align: 'center',
       wordWrap: {
@@ -874,57 +875,42 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(listHeaderDepth);
 
-    const inventoryContainer = this.add.container(0, 0).setDepth(30);
-    this.inventoryContainer = inventoryContainer;
-
-    const maskLeft = layout.centerX - layout.contentWidth / 2 + 18;
-    const maskWidth = layout.contentWidth - 36;
+    const viewportLeft = layout.centerX - layout.contentWidth / 2 + 18;
+    const viewportWidth = layout.contentWidth - 36;
 
     const maskGraphics = this.add.graphics();
     this.inventoryMaskGraphics = maskGraphics;
     maskGraphics.setVisible(false);
     maskGraphics.fillStyle(0xffffff, 1);
     maskGraphics.fillRect(
-      maskLeft,
-      this.inventoryListTop,
-      maskWidth,
-      this.inventoryListHeight
+      viewportLeft,
+      this.inventoryViewportTop,
+      viewportWidth,
+      this.inventoryViewportHeight
     );
 
-    this.inventoryGeometryMask = maskGraphics.createGeometryMask();
-    inventoryContainer.setMask(this.inventoryGeometryMask);
+    const inventoryItemsLayer = this.add.container(0, this.inventoryViewportTop).setDepth(40);
+    this.inventoryItemsLayer = inventoryItemsLayer;
+    this.inventoryContainer = inventoryItemsLayer;
+    inventoryItemsLayer.setMask(maskGraphics.createGeometryMask());
 
     this.inventoryScrollY = this.initialInventoryScrollY;
     this.inventoryTargetScrollY = this.initialInventoryScrollY;
     this.inventoryLastRenderedScrollY = -1;
 
     const contentHeight = this.getInventoryContentHeight(layout);
+    this.inventoryMaxScrollY = Math.max(0, contentHeight - this.inventoryViewportHeight);
 
-    this.inventoryMaxScrollY = Math.max(
-      0,
-      contentHeight - this.inventoryListHeight
-    );
-
-    this.inventoryScrollY = Phaser.Math.Clamp(
-      this.inventoryScrollY,
-      0,
-      this.inventoryMaxScrollY
-    );
-
-    this.inventoryTargetScrollY = Phaser.Math.Clamp(
-      this.inventoryTargetScrollY,
-      0,
-      this.inventoryMaxScrollY
-    );
+    this.inventoryScrollY = Phaser.Math.Clamp(this.inventoryScrollY, 0, this.inventoryMaxScrollY);
+    this.inventoryTargetScrollY = Phaser.Math.Clamp(this.inventoryTargetScrollY, 0, this.inventoryMaxScrollY);
+    this.updateInventoryLayerPosition();
 
     this.createInventoryScrollbar(layout);
     this.updateInventoryScrollbar(layout);
-
     this.renderInventoryContent(layout);
     this.createInventoryTouchScrollHandlers(layout);
 
     this.input.off('wheel');
-
     this.input.on(
       'wheel',
       (
@@ -951,10 +937,7 @@ export class InventoryScene extends Phaser.Scene {
       }
     );
 
-    if (
-      this.selectedCategory !== 'potions' &&
-      this.selectedCategory !== 'materials'
-    ) {
+    if (layout.hasMassSellButton) {
       this.createMassSellButton(layout);
     }
   }
@@ -1051,27 +1034,34 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private getInventoryContentHeight(layout: InventoryLayout) {
+    const topPadding = layout.veryCompact ? 12 : 16;
+    const bottomPadding = layout.veryCompact ? 14 : 18;
+
     if (this.selectedCategory === 'potions') {
-      return 230;
+      const potionCardHeight = layout.veryCompact ? 156 : 170;
+      return topPadding + potionCardHeight + bottomPadding;
     }
 
     if (this.selectedCategory === 'materials') {
       const count = Math.max(1, this.getVisibleMaterials().length);
-      return 28 + count * 92 + 20;
+      const cardHeight = layout.veryCompact ? 72 : 78;
+      const spacing = layout.veryCompact ? 84 : 92;
+      return topPadding + count * spacing - (spacing - cardHeight) + bottomPadding;
     }
 
     const count = Math.max(1, this.getFilteredInventoryItems().length);
+    const cardHeight = layout.compact ? 96 : 104;
     const itemSpacing = layout.compact ? 108 : 116;
-
-    return 20 + count * itemSpacing + 20;
+    return topPadding + count * itemSpacing - (itemSpacing - cardHeight) + bottomPadding;
   }
 
   private renderInventoryContent(layout: InventoryLayout) {
-    if (!this.inventoryContainer) {
+    if (!this.inventoryItemsLayer) {
       return;
     }
 
-    this.inventoryContainer.removeAll(true);
+    this.inventoryItemsLayer.removeAll(true);
+    this.updateInventoryLayerPosition();
 
     if (this.selectedCategory === 'potions') {
       this.renderPotionCategory(layout);
@@ -1095,7 +1085,7 @@ export class InventoryScene extends Phaser.Scene {
     if (player.inventory.length === 0) {
       this.createEmptyState(
         layout.centerX,
-        this.inventoryListTop + this.inventoryListHeight / 2,
+        this.inventoryViewportHeight / 2,
         layout.contentWidth - 80,
         'В сумке пока нет предметов.\nИх можно найти в катакомбах или купить в лавке.'
       );
@@ -1105,7 +1095,7 @@ export class InventoryScene extends Phaser.Scene {
     if (filteredItems.length === 0) {
       this.createEmptyState(
         layout.centerX,
-        this.inventoryListTop + this.inventoryListHeight / 2,
+        this.inventoryViewportHeight / 2,
         layout.contentWidth - 80,
         'В этой категории пока нет предметов.'
       );
@@ -1115,57 +1105,55 @@ export class InventoryScene extends Phaser.Scene {
     const itemSpacing = layout.compact ? 108 : 116;
     const cardHeight = layout.compact ? 96 : 104;
     const cardHalfHeight = cardHeight / 2;
-    const topPadding = 24;
-    const renderBuffer = 110;
+    const topPadding = layout.veryCompact ? 12 : 16;
+    const renderBuffer = 120;
 
     filteredItems.forEach((inventoryItem, index) => {
-      const y =
-        this.inventoryListTop +
-        topPadding +
-        cardHalfHeight +
-        index * itemSpacing -
-        this.inventoryScrollY;
+      const localY = topPadding + cardHalfHeight + index * itemSpacing;
+      const worldY = this.inventoryViewportTop + localY - this.inventoryScrollY;
 
-      if (y + cardHalfHeight < this.inventoryListTop - renderBuffer) {
+      if (worldY + cardHalfHeight < this.inventoryViewportTop - renderBuffer) {
         return;
       }
 
-      if (y - cardHalfHeight > this.inventoryListBottom + renderBuffer) {
+      if (worldY - cardHalfHeight > this.inventoryViewportBottom + renderBuffer) {
         return;
       }
 
-      const alpha = this.getInventoryCardEdgeAlpha(y, cardHeight);
-
-      this.createInventoryItemCard(layout, inventoryItem, y, cardHeight, alpha);
+      const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
+      this.createInventoryItemCard(layout, inventoryItem, localY, cardHeight, alpha);
     });
   }
 
   private renderPotionCategory(layout: InventoryLayout) {
-    const stats = getPlayerStats(player);
+    if (!this.inventoryItemsLayer) {
+      return;
+    }
 
+    const stats = getPlayerStats(player);
     const canUsePotion = player.potions > 0 && player.hp < stats.maxHp;
 
     const cardWidth = layout.contentWidth - 70;
-    const cardHeight = 170;
-    const cardX = layout.centerX;
-    const cardY = this.inventoryListTop + 95 - this.inventoryScrollY;
+    const cardHeight = layout.veryCompact ? 156 : 170;
+    const localY = (layout.veryCompact ? 12 : 16) + cardHeight / 2;
+    const worldY = this.inventoryViewportTop + localY - this.inventoryScrollY;
 
-    if (cardY + cardHeight / 2 < this.inventoryListTop - 110) {
+    if (worldY + cardHeight / 2 < this.inventoryViewportTop - 120) {
       return;
     }
 
-    if (cardY - cardHeight / 2 > this.inventoryListBottom + 110) {
+    if (worldY - cardHeight / 2 > this.inventoryViewportBottom + 120) {
       return;
     }
 
-    const alpha = this.getInventoryCardEdgeAlpha(cardY, cardHeight);
-
+    const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
+    const card = this.add.container(layout.centerX, localY);
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      ...this.createRoundedPanelAsObjects({
-        x: cardX,
-        y: cardY,
+      ...this.createLocalRoundedPanelAsObjects({
+        x: 0,
+        y: 0,
         width: cardWidth,
         height: cardHeight,
         radius: 26,
@@ -1174,30 +1162,28 @@ export class InventoryScene extends Phaser.Scene {
         strokeColor: UI.colors.goldDark,
         strokeAlpha: 0.65,
         strokeWidth: 2,
-        depth: 20,
       })
     );
 
-    const left = cardX - cardWidth / 2;
+    const left = -cardWidth / 2;
 
     objects.push(
-      this.add.circle(left + 50, cardY - 37, 34, 0x2a1d13, 1)
+      this.add.circle(left + 50, -37, 34, 0x2a1d13, 1)
         .setStrokeStyle(2, UI.colors.goldDark, 0.75)
-        .setDepth(24)
     );
 
     objects.push(
-      this.add.text(left + 50, cardY - 37, '✚', {
+      this.add.text(left + 50, -37, '✚', {
         fontFamily: UI.font.body,
         fontSize: '28px',
         color: UI.colors.goldText,
-      }).setOrigin(0.5).setDepth(25)
+      }).setOrigin(0.5)
     );
 
     objects.push(
-      this.add.text(left + 96, cardY - 58, 'Зелье здоровья', {
+      this.add.text(left + 96, -58, 'Зелье здоровья', {
         fontFamily: UI.font.title,
-        fontSize: '22px',
+        fontSize: layout.veryCompact ? '19px' : '22px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 3,
@@ -1205,23 +1191,23 @@ export class InventoryScene extends Phaser.Scene {
           width: cardWidth - 120,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
     objects.push(
-      this.add.text(left + 96, cardY - 25, `Количество: ${player.potions}`, {
+      this.add.text(left + 96, -25, `Количество: ${player.potions}`, {
         fontFamily: UI.font.body,
-        fontSize: '16px',
+        fontSize: layout.veryCompact ? '14px' : '16px',
         color: UI.colors.text,
         wordWrap: {
           width: cardWidth - 120,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
     objects.push(
-      this.add.text(left + 96, cardY + 5, 'Восстанавливает 35% максимального HP.', {
+      this.add.text(left + 96, 5, 'Восстанавливает 35% максимального HP.', {
         fontFamily: UI.font.body,
         fontSize: '13px',
         color: UI.colors.textMuted,
@@ -1229,11 +1215,11 @@ export class InventoryScene extends Phaser.Scene {
           width: cardWidth - 120,
         },
         maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
     objects.push(
-      this.add.text(left + 96, cardY + 34, `HP: ${player.hp}/${stats.maxHp}`, {
+      this.add.text(left + 96, 34, `HP: ${player.hp}/${stats.maxHp}`, {
         fontFamily: UI.font.body,
         fontSize: '13px',
         color: canUsePotion ? UI.colors.green : UI.colors.textMuted,
@@ -1241,17 +1227,18 @@ export class InventoryScene extends Phaser.Scene {
           width: cardWidth - 120,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
-    const button = this.createUiButton({
-      x: cardX,
-      y: cardY + 72,
+    const button = this.createLocalUiButton({
+      x: 0,
+      y: cardHeight / 2 - 26,
       width: Math.min(cardWidth - 58, 430),
       height: 46,
       text: canUsePotion ? 'Выпить зелье' : 'Нельзя использовать',
       accentColor: INVENTORY_DARK.cold,
       disabled: !canUsePotion,
+      small: layout.veryCompact,
       onClick: () => {
         if (this.didDragInventory || alpha < 0.45) {
           return;
@@ -1259,18 +1246,17 @@ export class InventoryScene extends Phaser.Scene {
 
         this.usePotionOutsideBattle();
       },
-      depth: 26,
     });
 
     objects.push(...button.objects);
-
     this.setObjectsAlpha(objects, alpha);
 
     if (alpha < 0.45) {
       button.zone?.disableInteractive();
     }
 
-    this.inventoryContainer?.add(objects);
+    card.add(objects);
+    this.inventoryItemsLayer.add(card);
   }
 
   private renderMaterialsCategory(layout: InventoryLayout) {
@@ -1279,58 +1265,54 @@ export class InventoryScene extends Phaser.Scene {
     if (visibleMaterials.length === 0) {
       this.createEmptyState(
         layout.centerX,
-        this.inventoryListTop + this.inventoryListHeight / 2,
+        this.inventoryViewportHeight / 2,
         layout.contentWidth - 80,
         'Материалов пока нет.\nИх можно получить с монстров, элиты, мини-боссов и Морвеина.'
       );
       return;
     }
 
-    const cardHeight = 78;
+    const cardHeight = layout.veryCompact ? 72 : 78;
     const cardHalfHeight = cardHeight / 2;
-    const spacing = 92;
-    const topPadding = 24;
-    const renderBuffer = 110;
+    const spacing = layout.veryCompact ? 84 : 92;
+    const topPadding = layout.veryCompact ? 12 : 16;
+    const renderBuffer = 120;
 
     visibleMaterials.forEach((material, index) => {
-      const y =
-        this.inventoryListTop +
-        topPadding +
-        cardHalfHeight +
-        index * spacing -
-        this.inventoryScrollY;
+      const localY = topPadding + cardHalfHeight + index * spacing;
+      const worldY = this.inventoryViewportTop + localY - this.inventoryScrollY;
 
-      if (y + cardHalfHeight < this.inventoryListTop - renderBuffer) {
+      if (worldY + cardHalfHeight < this.inventoryViewportTop - renderBuffer) {
         return;
       }
 
-      if (y - cardHalfHeight > this.inventoryListBottom + renderBuffer) {
+      if (worldY - cardHalfHeight > this.inventoryViewportBottom + renderBuffer) {
         return;
       }
 
-      const alpha = this.getInventoryCardEdgeAlpha(y, cardHeight);
-
-      this.createMaterialCard(layout, material.id, y, alpha);
+      const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
+      this.createMaterialCard(layout, material.id, localY, alpha);
     });
   }
 
   private createEmptyState(
     x: number,
-    y: number,
+    localY: number,
     width: number,
     text: string
   ) {
-    if (!this.inventoryContainer) {
+    if (!this.inventoryItemsLayer) {
       return;
     }
 
-    const icon = this.add.text(x, y - 42, '◇', {
+    const empty = this.add.container(x, localY);
+    const icon = this.add.text(0, -42, '◇', {
       fontFamily: UI.font.body,
       fontSize: '34px',
       color: UI.colors.textMuted,
-    }).setOrigin(0.5).setDepth(25);
+    }).setOrigin(0.5);
 
-    const label = this.add.text(x, y + 20, text, {
+    const label = this.add.text(0, 20, text, {
       fontFamily: UI.font.body,
       fontSize: '18px',
       color: UI.colors.textMuted,
@@ -1339,28 +1321,27 @@ export class InventoryScene extends Phaser.Scene {
       wordWrap: {
         width,
       },
-    }).setOrigin(0.5).setDepth(25);
+    }).setOrigin(0.5);
 
-    this.addObjectsToInventoryContainer([icon, label]);
+    empty.add([icon, label]);
+    this.inventoryItemsLayer.add(empty);
   }
 
   private createMaterialCard(
     layout: InventoryLayout,
     materialId: string,
-    y: number,
+    localY: number,
     alpha = 1
   ) {
     const material = materials.find(item => item.id === materialId);
 
-    if (!material || !this.inventoryContainer) {
+    if (!material || !this.inventoryItemsLayer) {
       return;
     }
 
     const amount = player.materials?.[material.id] ?? 0;
-
-    const cardX = layout.centerX;
     const cardWidth = layout.contentWidth - 70;
-    const cardHeight = 78;
+    const cardHeight = layout.veryCompact ? 72 : 78;
 
     const color =
       material.tier === 'forge_core'
@@ -1371,10 +1352,11 @@ export class InventoryScene extends Phaser.Scene {
             ? 0xc084fc
             : 0xd8c7a3;
 
+    const card = this.add.container(layout.centerX, localY);
     const objects: Phaser.GameObjects.GameObject[] = [
-      ...this.createRoundedPanelAsObjects({
-        x: cardX,
-        y,
+      ...this.createLocalRoundedPanelAsObjects({
+        x: 0,
+        y: 0,
         width: cardWidth,
         height: cardHeight,
         radius: 20,
@@ -1383,33 +1365,31 @@ export class InventoryScene extends Phaser.Scene {
         strokeColor: color,
         strokeAlpha: 0.55,
         strokeWidth: 2,
-        depth: 20,
       }),
     ];
 
-    const left = cardX - cardWidth / 2;
-    const right = cardX + cardWidth / 2;
+    const left = -cardWidth / 2;
+    const right = cardWidth / 2;
 
     objects.push(
-      this.add.circle(left + 36, y, 24, color, 0.16)
+      this.add.circle(left + 36, 0, 24, color, 0.16)
         .setStrokeStyle(1, color, 0.65)
-        .setDepth(24)
     );
 
     objects.push(
-      this.add.text(left + 36, y, this.getMaterialIcon(material.tier), {
+      this.add.text(left + 36, 0, this.getMaterialIcon(material.tier), {
         fontFamily: UI.font.body,
         fontSize: '19px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(25)
+      }).setOrigin(0.5)
     );
 
     objects.push(
-      this.add.text(left + 74, y - 16, material.name, {
+      this.add.text(left + 74, -16, material.name, {
         fontFamily: UI.font.title,
-        fontSize: '17px',
+        fontSize: layout.veryCompact ? '15px' : '17px',
         color: UI.colors.goldText,
         stroke: '#000000',
         strokeThickness: 3,
@@ -1417,25 +1397,25 @@ export class InventoryScene extends Phaser.Scene {
           width: cardWidth - 150,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
     objects.push(
-      this.add.text(left + 74, y + 13, this.getMaterialTierText(material.tier), {
+      this.add.text(left + 74, 13, this.getMaterialTierText(material.tier), {
         fontFamily: UI.font.body,
-        fontSize: '12px',
+        fontSize: layout.veryCompact ? '11px' : '12px',
         color: UI.colors.textMuted,
         wordWrap: {
           width: cardWidth - 150,
         },
         maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(25)
+      }).setOrigin(0, 0.5)
     );
 
     objects.push(
-      this.add.text(right - 22, y, `x${amount}`, {
+      this.add.text(right - 22, 0, `x${amount}`, {
         fontFamily: UI.font.title,
-        fontSize: '23px',
+        fontSize: layout.veryCompact ? '20px' : '23px',
         color: UI.colors.text,
         stroke: '#000000',
         strokeThickness: 3,
@@ -1444,24 +1424,24 @@ export class InventoryScene extends Phaser.Scene {
           width: 70,
         },
         maxLines: 1,
-      }).setOrigin(1, 0.5).setDepth(25)
+      }).setOrigin(1, 0.5)
     );
 
     this.setObjectsAlpha(objects, alpha);
-
-    this.addObjectsToInventoryContainer(objects);
+    card.add(objects);
+    this.inventoryItemsLayer.add(card);
   }
 
   private createInventoryItemCard(
     layout: InventoryLayout,
     inventoryItem: InventoryItem,
-    y: number,
+    localY: number,
     cardHeight: number,
     alpha = 1
   ) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
-    if (!item || !this.inventoryContainer) {
+    if (!item || !this.inventoryItemsLayer) {
       return;
     }
 
@@ -1471,17 +1451,15 @@ export class InventoryScene extends Phaser.Scene {
         : '';
 
     const isEquipped = isItemEquipped(player, inventoryItem.instanceId);
-
     const rarityColor = getRarityColorHex(item);
     const rarityStrokeColor = getRarityStrokeColor(item);
 
-    const cardX = layout.centerX;
     const cardWidth = layout.contentWidth - 70;
-
+    const card = this.add.container(layout.centerX, localY);
     const cardObjects: Phaser.GameObjects.GameObject[] = [
-      ...this.createRoundedPanelAsObjects({
-        x: cardX,
-        y,
+      ...this.createLocalRoundedPanelAsObjects({
+        x: 0,
+        y: 0,
         width: cardWidth,
         height: cardHeight,
         radius: 20,
@@ -1490,21 +1468,20 @@ export class InventoryScene extends Phaser.Scene {
         strokeColor: isEquipped ? UI.colors.gold : rarityStrokeColor,
         strokeAlpha: isEquipped ? 0.95 : 0.68,
         strokeWidth: isEquipped ? 2 : 1,
-        depth: 10,
       }),
     ];
 
-    const left = cardX - cardWidth / 2;
+    const left = -cardWidth / 2;
+    const right = cardWidth / 2;
     const iconX = left + 39;
     const textX = left + 76;
     const buttonWidth = Math.min(94, Math.max(76, cardWidth * 0.18));
-    const buttonX = cardX + cardWidth / 2 - buttonWidth / 2 - 16;
+    const buttonX = right - buttonWidth / 2 - 16;
     const textWidth = Math.max(120, cardWidth - 76 - buttonWidth - 34);
 
     let actionButtonPressed = false;
 
-    const cardZone = this.add.zone(cardX, y, cardWidth, cardHeight)
-      .setDepth(17)
+    const cardZone = this.add.zone(0, 0, cardWidth, cardHeight)
       .setInteractive({
         useHandCursor: true,
       });
@@ -1524,33 +1501,36 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
+      if (alpha < 0.45) {
+        return;
+      }
+
       this.showItemInfo(inventoryItem);
     });
 
     cardObjects.push(cardZone);
 
     cardObjects.push(
-      this.add.circle(iconX, y, 27, rarityColor, 0.18).setDepth(12)
+      this.add.circle(iconX, 0, 27, rarityColor, 0.18)
     );
 
     cardObjects.push(
-      this.add.circle(iconX, y, 22, rarityColor, 0.92)
+      this.add.circle(iconX, 0, 22, rarityColor, 0.92)
         .setStrokeStyle(2, rarityStrokeColor, 0.85)
-        .setDepth(13)
     );
 
     cardObjects.push(
-      this.add.text(iconX, y, getSlotIcon(item.slot), {
+      this.add.text(iconX, 0, getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
         fontSize: '18px',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(14)
+      }).setOrigin(0.5)
     );
 
     cardObjects.push(
-      this.add.text(textX, y - 28, `${item.name}${upgrade}`, {
+      this.add.text(textX, -28, `${item.name}${upgrade}`, {
         fontFamily: UI.font.title,
         fontSize: '15px',
         color: isEquipped ? UI.colors.goldText : UI.colors.text,
@@ -1560,13 +1540,13 @@ export class InventoryScene extends Phaser.Scene {
           width: textWidth,
         },
         maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(14)
+      }).setOrigin(0, 0.5)
     );
 
     cardObjects.push(
       this.add.text(
         textX,
-        y + 1,
+        1,
         `${item.slot === 'weapon' ? getWeaponTypeText(item.weaponType) : getSlotText(item.slot)} • ${getRarityText(item)}`,
         {
           fontFamily: UI.font.body,
@@ -1577,11 +1557,11 @@ export class InventoryScene extends Phaser.Scene {
           },
           maxLines: 1,
         }
-      ).setOrigin(0, 0.5).setDepth(14)
+      ).setOrigin(0, 0.5)
     );
 
     cardObjects.push(
-      this.add.text(textX, y + 24, createItemStatsText(inventoryItem) || 'Без бонусов', {
+      this.add.text(textX, 24, createItemStatsText(inventoryItem) || 'Без бонусов', {
         fontFamily: UI.font.body,
         fontSize: '11px',
         color: UI.colors.textMuted,
@@ -1589,17 +1569,18 @@ export class InventoryScene extends Phaser.Scene {
           width: textWidth,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(14)
+      }).setOrigin(0, 0.5)
     );
 
-    const equipButton = this.createUiButton({
+    const equipButton = this.createLocalUiButton({
       x: buttonX,
-      y: y - 22,
+      y: -22,
       width: buttonWidth,
       height: 38,
       text: isEquipped ? 'Надето' : 'Надеть',
       accentColor: INVENTORY_DARK.cold,
       disabled: isEquipped,
+      small: true,
       onClick: () => {
         actionButtonPressed = true;
 
@@ -1616,19 +1597,18 @@ export class InventoryScene extends Phaser.Scene {
           returnScene: this.returnScene,
         });
       },
-      depth: 18,
-      small: true,
     });
 
-    const sellButton = this.createUiButton({
+    const sellButton = this.createLocalUiButton({
       x: buttonX,
-      y: y + 24,
+      y: 24,
       width: buttonWidth,
       height: 38,
       text: 'Продать',
       accentColor: UI.colors.redHex,
       danger: true,
       disabled: isEquipped,
+      small: true,
       onClick: () => {
         actionButtonPressed = true;
 
@@ -1638,8 +1618,6 @@ export class InventoryScene extends Phaser.Scene {
 
         this.showSellConfirm(inventoryItem);
       },
-      depth: 18,
-      small: true,
     });
 
     cardObjects.push(...equipButton.objects, ...sellButton.objects);
@@ -1652,19 +1630,20 @@ export class InventoryScene extends Phaser.Scene {
       sellButton.zone?.disableInteractive();
     }
 
-    this.addObjectsToInventoryContainer(cardObjects);
+    card.add(cardObjects);
+    this.inventoryItemsLayer.add(card);
   }
 
   private createMassSellButton(layout: InventoryLayout) {
-    if (this.selectedCategory === 'potions' || this.selectedCategory === 'materials') {
+    if (!layout.hasMassSellButton) {
       return;
     }
 
-    const button = this.createUiButton({
+    this.createUiButton({
       x: layout.centerX,
       y: layout.massSellButtonY,
       width: Math.min(layout.contentWidth - 92, 420),
-      height: layout.massSellButtonHeight || (layout.compact ? 38 : 42),
+      height: layout.massSellButtonHeight,
       text: 'Сдать обычный хлам',
       accentColor: UI.colors.redHex,
       danger: true,
@@ -1673,9 +1652,6 @@ export class InventoryScene extends Phaser.Scene {
       },
       depth: 120,
     });
-
-    // Кнопка фиксированная: она не входит в inventoryContainer и не участвует в прокрутке.
-    void button;
   }
 
   private createReturnButton(layout: InventoryLayout) {
@@ -1704,13 +1680,13 @@ export class InventoryScene extends Phaser.Scene {
 
     let alpha = 1;
 
-    if (y - half < this.inventoryListTop + fadeZone) {
-      const distance = y + half - this.inventoryListTop;
+    if (y - half < this.inventoryViewportTop + fadeZone) {
+      const distance = y + half - this.inventoryViewportTop;
       alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
     }
 
-    if (y + half > this.inventoryListBottom - fadeZone) {
-      const distance = this.inventoryListBottom - (y - half);
+    if (y + half > this.inventoryViewportBottom - fadeZone) {
+      const distance = this.inventoryViewportBottom - (y - half);
       alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
     }
 
@@ -1721,9 +1697,9 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
 
-    const trackTop = this.inventoryListTop + 6;
-    const trackBottom = this.inventoryListBottom - 6;
-    const trackHeight = Math.max(34, trackBottom - trackTop);
+    const trackTop = this.inventoryViewportTop + 6;
+    const trackBottom = this.inventoryViewportBottom - 6;
+    const trackHeight = Math.max(36, trackBottom - trackTop);
     const x = layout.centerX + layout.contentWidth / 2 - 13;
     const y = trackTop + trackHeight / 2;
 
@@ -1760,19 +1736,18 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryScrollbarTrack.setVisible(true);
     this.inventoryScrollbarThumb.setVisible(true);
 
-    const trackTop = this.inventoryListTop + 6;
-    const trackBottom = this.inventoryListBottom - 6;
-    const trackHeight = Math.max(34, trackBottom - trackTop);
-    const contentHeight = this.inventoryListHeight + this.inventoryMaxScrollY;
+    const trackTop = this.inventoryViewportTop + 6;
+    const trackBottom = this.inventoryViewportBottom - 6;
+    const trackHeight = Math.max(36, trackBottom - trackTop);
+    const contentHeight = this.inventoryViewportHeight + this.inventoryMaxScrollY;
     const thumbHeight = Phaser.Math.Clamp(
-      (this.inventoryListHeight / Math.max(1, contentHeight)) * trackHeight,
+      (this.inventoryViewportHeight / Math.max(1, contentHeight)) * trackHeight,
       22,
       trackHeight
     );
 
-    const progress = this.inventoryTargetScrollY / Math.max(1, this.inventoryMaxScrollY);
+    const progress = this.inventoryScrollY / Math.max(1, this.inventoryMaxScrollY);
     const y = trackTop + thumbHeight / 2 + (trackHeight - thumbHeight) * progress;
-
     const x = layout.centerX + layout.contentWidth / 2 - 13;
 
     this.inventoryScrollbarTrack.setPosition(x, trackTop + trackHeight / 2);
@@ -1814,7 +1789,6 @@ export class InventoryScene extends Phaser.Scene {
       }
 
       this.didDragInventory = true;
-
       this.inventoryTargetScrollY = Phaser.Math.Clamp(
         this.dragStartScrollY - dragDistance,
         0,
@@ -1822,6 +1796,7 @@ export class InventoryScene extends Phaser.Scene {
       );
 
       this.inventoryScrollY = this.inventoryTargetScrollY;
+      this.updateInventoryLayerPosition();
       this.renderInventoryContent(layout);
       this.updateInventoryScrollbar(layout);
     });
@@ -1853,15 +1828,15 @@ export class InventoryScene extends Phaser.Scene {
     return (
       pointer.x >= left &&
       pointer.x <= right &&
-      pointer.y >= this.inventoryListTop &&
-      pointer.y <= this.inventoryListBottom
+      pointer.y >= this.inventoryViewportTop &&
+      pointer.y <= this.inventoryViewportBottom
     );
   }
 
   update() {
     const layout = this.getLayout();
 
-    if (!this.inventoryContainer || this.isItemInfoOpen || this.isDraggingInventory) {
+    if (!this.inventoryItemsLayer || this.isItemInfoOpen || this.isDraggingInventory) {
       return;
     }
 
@@ -1877,6 +1852,8 @@ export class InventoryScene extends Phaser.Scene {
       );
     }
 
+    this.updateInventoryLayerPosition();
+
     const scrollChanged = Math.abs(oldScrollY - this.inventoryScrollY) > 0.25;
     const renderChanged =
       Math.abs(this.inventoryLastRenderedScrollY - this.inventoryScrollY) > 0.75;
@@ -1884,9 +1861,10 @@ export class InventoryScene extends Phaser.Scene {
     if (scrollChanged && renderChanged) {
       this.renderInventoryContent(layout);
       this.updateInventoryScrollbar(layout);
+      return;
     }
 
-    if (scrollChanged && !renderChanged) {
+    if (scrollChanged) {
       this.updateInventoryScrollbar(layout);
     }
   }
@@ -2633,6 +2611,186 @@ export class InventoryScene extends Phaser.Scene {
     return 'Материал';
   }
 
+  private updateInventoryLayerPosition() {
+    if (!this.inventoryItemsLayer) {
+      return;
+    }
+
+    this.inventoryItemsLayer.setY(this.inventoryViewportTop - this.inventoryScrollY);
+  }
+
+  private createLocalRoundedPanelAsObjects(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius?: number;
+    color?: number;
+    alpha?: number;
+    strokeColor?: number;
+    strokeAlpha?: number;
+    strokeWidth?: number;
+  }) {
+    const radius = config.radius ?? 22;
+    const color = config.color ?? INVENTORY_DARK.stone;
+    const alpha = config.alpha ?? 0.9;
+    const strokeColor = config.strokeColor ?? INVENTORY_DARK.bronze;
+    const strokeAlpha = config.strokeAlpha ?? 0.45;
+    const strokeWidth = config.strokeWidth ?? 2;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.34);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 6,
+      config.width,
+      config.height,
+      radius
+    );
+
+    const panel = this.add.graphics();
+    panel.fillStyle(color, alpha);
+    panel.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+
+    panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+    panel.strokeRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2,
+      config.width,
+      config.height,
+      radius
+    );
+
+    return [shadow, panel];
+  }
+
+  private createLocalUiButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    accentColor: number;
+    onClick: () => void;
+    danger?: boolean;
+    disabled?: boolean;
+    small?: boolean;
+  }) {
+    const radius = Math.min(18, config.height / 2);
+    const danger = config.danger ?? false;
+    const disabled = config.disabled ?? false;
+
+    const bgColor = disabled
+      ? 0x101114
+      : danger
+        ? 0x211013
+        : INVENTORY_DARK.stone;
+
+    const hoverColor = disabled
+      ? bgColor
+      : danger
+        ? 0x32151a
+        : 0x221a13;
+
+    const textColor = disabled
+      ? '#5f5b53'
+      : danger
+        ? '#d8a5a0'
+        : UI.colors.goldText;
+
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.36);
+    shadow.fillRoundedRect(
+      config.x - config.width / 2,
+      config.y - config.height / 2 + 4,
+      config.width,
+      config.height,
+      radius
+    );
+
+    const bg = this.add.graphics();
+    const drawBg = (color: number, alpha: number, strokeAlpha: number) => {
+      bg.clear();
+      bg.fillStyle(color, alpha);
+      bg.fillRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+      bg.lineStyle(2, config.accentColor, strokeAlpha);
+      bg.strokeRoundedRect(
+        config.x - config.width / 2,
+        config.y - config.height / 2,
+        config.width,
+        config.height,
+        radius
+      );
+    };
+
+    drawBg(bgColor, disabled ? 0.68 : 0.96, disabled ? 0.28 : 0.74);
+
+    const label = this.add.text(config.x, config.y, config.text, {
+      fontFamily: UI.font.body,
+      fontSize: config.small ? '12px' : '16px',
+      color: textColor,
+      align: 'center',
+      wordWrap: {
+        width: config.width - 16,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const zone = this.add.zone(config.x, config.y, config.width, config.height);
+
+    if (!disabled) {
+      zone.setInteractive({
+        useHandCursor: true,
+      });
+
+      zone.on('pointerover', () => {
+        drawBg(hoverColor, 1, 0.95);
+        label.setColor(danger ? '#efd0cc' : '#ffffff');
+      });
+
+      zone.on('pointerout', () => {
+        drawBg(bgColor, 0.96, 0.74);
+        label.setColor(textColor);
+        bg.setAlpha(1);
+        label.setY(config.y);
+      });
+
+      zone.on('pointerdown', () => {
+        bg.setAlpha(0.78);
+        label.setY(config.y + 1);
+      });
+
+      zone.on('pointerup', () => {
+        bg.setAlpha(1);
+        label.setY(config.y);
+        config.onClick();
+      });
+
+      zone.on('pointerupoutside', () => {
+        bg.setAlpha(1);
+        label.setY(config.y);
+      });
+    }
+
+    return {
+      objects: [shadow, bg, label, zone],
+      zone,
+    };
+  }
+
   private createUiButton(config: {
     x: number;
     y: number;
@@ -2876,39 +3034,6 @@ export class InventoryScene extends Phaser.Scene {
       bg: objects[1],
       zone,
     };
-  }
-
-  private addObjectsToInventoryContainer(objects: Phaser.GameObjects.GameObject[]) {
-    if (!this.inventoryContainer) {
-      objects.forEach(object => object.destroy());
-      return;
-    }
-
-    const mask = this.inventoryGeometryMask;
-
-    objects.forEach(object => {
-      if (mask && this.hasSetMask(object)) {
-        object.setMask(mask);
-      }
-
-      const depthTarget = object as Phaser.GameObjects.GameObject & {
-        setDepth?: (depth: number) => unknown;
-        depth?: number;
-      };
-
-      // Внутри контейнера карточки не должны быть выше фиксированных вкладок / навигации.
-      if (typeof depthTarget.depth === 'number' && depthTarget.depth > 58 && depthTarget.setDepth) {
-        depthTarget.setDepth(58);
-      }
-    });
-
-    this.inventoryContainer.add(objects);
-  }
-
-  private hasSetMask(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
-    setMask: (mask: Phaser.Display.Masks.GeometryMask) => unknown;
-  } {
-    return typeof (object as { setMask?: unknown }).setMask === 'function';
   }
 
   private setObjectsAlpha(objects: Phaser.GameObjects.GameObject[], alpha: number) {
