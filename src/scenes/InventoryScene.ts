@@ -93,6 +93,7 @@ export class InventoryScene extends Phaser.Scene {
 
   private inventoryContainer?: Phaser.GameObjects.Container;
   private inventoryMaskGraphics?: Phaser.GameObjects.Graphics;
+  private inventoryGeometryMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
   private inventoryTopCover?: Phaser.GameObjects.Rectangle;
@@ -137,6 +138,7 @@ export class InventoryScene extends Phaser.Scene {
     this.itemInfoContainer = undefined;
     this.inventoryTopCover = undefined;
     this.inventoryBottomCover = undefined;
+    this.inventoryGeometryMask = undefined;
   }
 
   create(data?: {
@@ -775,7 +777,10 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private createInventoryList(layout: InventoryLayout) {
+    this.inventoryContainer?.clearMask(true);
     this.inventoryContainer?.destroy(true);
+    this.inventoryGeometryMask?.destroy();
+    this.inventoryGeometryMask = undefined;
     this.inventoryMaskGraphics?.destroy();
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
@@ -856,7 +861,9 @@ export class InventoryScene extends Phaser.Scene {
       this.inventoryListHeight
     );
 
-    inventoryContainer.setMask(maskGraphics.createGeometryMask());
+    const geometryMask = maskGraphics.createGeometryMask();
+    this.inventoryGeometryMask = geometryMask;
+    inventoryContainer.setMask(geometryMask);
 
     this.inventoryScrollY = this.initialInventoryScrollY;
     this.inventoryTargetScrollY = this.initialInventoryScrollY;
@@ -1306,7 +1313,7 @@ export class InventoryScene extends Phaser.Scene {
       },
     }).setOrigin(0.5).setDepth(25);
 
-    this.inventoryContainer.add([icon, label]);
+    this.addObjectsToInventoryContainer([icon, label], 1);
   }
 
   private createMaterialCard(
@@ -1412,9 +1419,7 @@ export class InventoryScene extends Phaser.Scene {
       }).setOrigin(1, 0.5).setDepth(25)
     );
 
-    this.setObjectsAlpha(objects, alpha);
-
-    this.inventoryContainer.add(objects);
+    this.addObjectsToInventoryContainer(objects, alpha);
   }
 
   private createInventoryItemCard(
@@ -1609,15 +1614,13 @@ export class InventoryScene extends Phaser.Scene {
 
     cardObjects.push(...equipButton.objects, ...sellButton.objects);
 
-    this.setObjectsAlpha(cardObjects, alpha);
-
     if (alpha < 0.45) {
       cardZone.disableInteractive();
       equipButton.zone?.disableInteractive();
       sellButton.zone?.disableInteractive();
     }
 
-    this.inventoryContainer.add(cardObjects);
+    this.addObjectsToInventoryContainer(cardObjects, alpha);
   }
 
   private createMassSellButton(layout: InventoryLayout) {
@@ -1660,36 +1663,69 @@ export class InventoryScene extends Phaser.Scene {
   }
 
 
+  private hasSetMask(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
+    setMask: (mask: Phaser.Display.Masks.GeometryMask) => unknown;
+  } {
+    return typeof (object as { setMask?: unknown }).setMask === 'function';
+  }
+
+  private addObjectsToInventoryContainer(
+    objects: Phaser.GameObjects.GameObject[],
+    alpha = 1
+  ) {
+    if (!this.inventoryContainer) {
+      objects.forEach(object => object.destroy());
+      return;
+    }
+
+    const mask = this.inventoryGeometryMask;
+
+    objects.forEach(object => {
+      // Важный фикс: маска ставится не только на общий container,
+      // но и на каждый объект карточки. Так даже кнопки/Text/Graphics,
+      // созданные через this.add.*, не смогут быть видны вне viewport.
+      if (mask && this.hasSetMask(object)) {
+        object.setMask(mask);
+      }
+    });
+
+    this.setObjectsAlpha(objects, alpha);
+    this.inventoryContainer.add(objects);
+  }
+
   private createInventoryCovers(layout: InventoryLayout) {
+    // Это не основной фикс, а защитные fixed-слои над и под viewport.
+    // Реальное скрытие карточек делает GeometryMask на inventoryContainer
+    // и персональная mask на каждом объекте карточки.
     const coverColor = INVENTORY_DARK.black;
     const coverWidth = layout.contentWidth;
-    const topCoverHeight = 36;
-    const bottomCoverHeight = 44;
+    const topCoverHeight = 140;
+    const bottomCoverHeight = 160;
 
     this.inventoryTopCover?.destroy();
     this.inventoryBottomCover?.destroy();
 
     this.inventoryTopCover = this.add.rectangle(
       layout.centerX,
-      this.inventoryListTop + topCoverHeight / 2,
+      this.inventoryListTop - topCoverHeight / 2,
       coverWidth,
       topCoverHeight,
       coverColor,
-      0.62
+      0.98
     ).setDepth(88);
 
     this.inventoryBottomCover = this.add.rectangle(
       layout.centerX,
-      this.inventoryListBottom - bottomCoverHeight / 2,
+      this.inventoryListBottom + bottomCoverHeight / 2,
       coverWidth,
       bottomCoverHeight,
       coverColor,
-      0.72
+      0.98
     ).setDepth(88);
   }
 
   private getInventoryCardEdgeAlpha(y: number, cardHeight: number): number {
-    const fadeZone = 72;
+    const fadeZone = 64;
     const half = cardHeight / 2;
 
     let alpha = 1;
