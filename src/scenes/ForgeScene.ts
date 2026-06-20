@@ -61,11 +61,13 @@ type ForgeLayout = {
   itemsPanelTop: number;
   itemsPanelHeight: number;
   itemsListTop: number;
+  itemsCardsTop: number;
   itemsListBottom: number;
   itemsListHeight: number;
   itemsPanelBottom: number;
   itemsActionBottom: number;
 
+  bottomBarTop: number;
   bottomBarHeight: number;
   bottomButtonY: number;
 
@@ -143,7 +145,7 @@ export class ForgeScene extends Phaser.Scene {
   private itemsTargetScrollY = 0;
   private itemsMaxScrollY = 0;
 
-  private itemsListTop = 0;
+  private itemsCardsTop = 0;
   private itemsListBottom = 0;
   private itemsListHeight = 0;
 
@@ -170,6 +172,7 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsScrollY = data?.scrollY ?? 0;
     this.itemsTargetScrollY = data?.scrollY ?? 0;
     this.itemsMaxScrollY = 0;
+    this.itemsCardsTop = 0;
     this.itemsLastRenderedScrollY = -1;
 
     this.isDraggingItems = false;
@@ -199,7 +202,6 @@ export class ForgeScene extends Phaser.Scene {
     createSceneBackground(this);
     this.createForgeBackdrop(layout);
     this.createHeader(layout);
-    this.createResourcePanel(layout);
     this.createScrollableContent(layout);
     this.createItemsViewport(layout);
     this.createBottomBar(layout);
@@ -239,36 +241,43 @@ export class ForgeScene extends Phaser.Scene {
     const contentWidth = Math.min(width - safeX * 2, 640);
 
     const bottomBarHeight = veryCompact ? 60 : compact ? 68 : 78;
-    const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + (veryCompact ? 3 : 5);
-    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 14 : compact ? 18 : 22);
+    const bottomBarTop = height - bottomBarHeight - safeBottom;
+    const bottomButtonY = bottomBarTop + bottomBarHeight / 2;
+    const itemsActionBottom = bottomBarTop - (veryCompact ? 18 : compact ? 22 : 26);
 
     const gapTiny = veryCompact ? 4 : compact ? 5 : 7;
     const gap = veryCompact ? 5 : compact ? 7 : 8;
 
     const headerTop = safeTop;
-    const headerHeight = veryCompact ? 42 : compact ? 52 : 60;
+    const headerHeight = veryCompact ? 42 : compact ? 50 : 58;
 
-    const resourcesTop = headerTop + headerHeight + gapTiny;
-    const resourcesHeight = veryCompact ? 38 : compact ? 44 : 50;
+    // Верхняя панель ресурсов больше не используется визуально.
+    const resourcesTop = headerTop + headerHeight;
+    const resourcesHeight = 0;
 
-    const anvilTop = resourcesTop + resourcesHeight + gap;
-    const anvilHeight = veryCompact ? 68 : compact ? 78 : 88;
+    const anvilTop = headerTop + headerHeight + gapTiny;
+    const anvilHeight = veryCompact ? 72 : compact ? 82 : 94;
 
     const materialsTop = anvilTop + anvilHeight + gap;
-    const materialsHeight = veryCompact ? 48 : compact ? 70 : 84;
+    const materialsHeight = veryCompact ? 50 : compact ? 72 : 86;
 
     const tabsTop = materialsTop + materialsHeight + gap;
     const tabsHeight = veryCompact ? 40 : compact ? 46 : 50;
 
     const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 12 : 14);
-    const minItemsHeight = veryCompact ? 174 : compact ? 224 : 274;
-    const itemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
-    const itemsListTop = itemsPanelTop + (veryCompact ? 46 : compact ? 54 : 58);
-    const itemsListBottom = Math.min(
-      itemsPanelTop + itemsPanelHeight - (veryCompact ? 22 : compact ? 26 : 30),
-      itemsActionBottom - (veryCompact ? 24 : compact ? 28 : 32)
+    const itemsPanelHeight = Math.max(156, itemsActionBottom - itemsPanelTop);
+    const listHeaderHeight = veryCompact ? 54 : compact ? 60 : 64;
+    const itemsCardsTop = itemsPanelTop + listHeaderHeight + (veryCompact ? 10 : 12);
+    const itemsListTop = itemsCardsTop;
+    const itemsListBottom = Math.max(
+      itemsCardsTop + 120,
+      itemsPanelTop + itemsPanelHeight - (veryCompact ? 14 : compact ? 16 : 18)
     );
-    const itemsListHeight = Math.max(132, itemsListBottom - itemsListTop);
+    const safeItemsListBottom = Math.min(
+      itemsListBottom,
+      bottomBarTop - (veryCompact ? 18 : compact ? 20 : 24)
+    );
+    const itemsListHeight = Math.max(120, safeItemsListBottom - itemsCardsTop);
     const itemsPanelBottom = itemsPanelTop + itemsPanelHeight;
 
     return {
@@ -300,11 +309,13 @@ export class ForgeScene extends Phaser.Scene {
       itemsPanelTop,
       itemsPanelHeight,
       itemsListTop,
-      itemsListBottom,
+      itemsCardsTop,
+      itemsListBottom: safeItemsListBottom,
       itemsListHeight,
       itemsPanelBottom,
       itemsActionBottom,
 
+      bottomBarTop,
       bottomBarHeight,
       bottomButtonY,
 
@@ -470,63 +481,6 @@ export class ForgeScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(127);
   }
 
-  private createResourcePanel(layout: ForgeLayout) {
-    const panelY = layout.resourcesTop + layout.resourcesHeight / 2;
-
-    this.createStonePanel({
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: layout.resourcesHeight,
-      radius: 22,
-      fill: FORGE.soot,
-      alpha: 0.96,
-      stroke: FORGE.bronze,
-      strokeAlpha: 0.4,
-      glow: FORGE.gold,
-      depth: 110,
-    });
-
-    const gap = layout.veryCompact ? 6 : 9;
-    const chipWidth = Math.floor((layout.contentWidth - 36 - gap * 2) / 3);
-    const startX = layout.centerX - chipWidth - gap;
-
-    this.createResourceChip({
-      x: startX,
-      y: panelY,
-      width: chipWidth,
-      height: layout.veryCompact ? 44 : 50,
-      icon: '◆',
-      label: 'Золото',
-      value: `${player.gold}`,
-      color: FORGE.gold,
-      compact: layout.veryCompact,
-    });
-
-    this.createResourceChip({
-      x: layout.centerX,
-      y: panelY,
-      width: chipWidth,
-      height: layout.veryCompact ? 44 : 50,
-      icon: '◇',
-      label: 'Материалы',
-      value: `${this.getTotalMaterialCount()}`,
-      color: FORGE.cold,
-      compact: layout.veryCompact,
-    });
-
-    this.createResourceChip({
-      x: layout.centerX + chipWidth + gap,
-      y: panelY,
-      width: chipWidth,
-      height: layout.veryCompact ? 44 : 50,
-      icon: '⚒',
-      label: 'Наковальня',
-      value: `Ур. ${player.anvilLevel}`,
-      color: player.anvilLevel >= 2 ? FORGE.green : FORGE.ember,
-      compact: layout.veryCompact,
-    });
-  }
 
   private createScrollableContent(layout: ForgeLayout) {
     this.contentContainer?.destroy(true);
@@ -546,7 +500,7 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsScrollbarThumb?.destroy();
     this.clearItemsViewportCovers();
 
-    this.itemsListTop = layout.itemsListTop;
+    this.itemsCardsTop = layout.itemsCardsTop;
     this.itemsListBottom = layout.itemsListBottom;
     this.itemsListHeight = layout.itemsListHeight;
 
@@ -560,7 +514,7 @@ export class ForgeScene extends Phaser.Scene {
 
     maskGraphics.fillRect(
       listLeft,
-      this.itemsListTop,
+      this.itemsCardsTop,
       listWidth,
       this.itemsListHeight
     );
@@ -592,7 +546,7 @@ export class ForgeScene extends Phaser.Scene {
 
     const left = layout.centerX - layout.contentWidth / 2;
     const right = layout.centerX + layout.contentWidth / 2;
-    const headerY = layout.itemsPanelTop + (layout.veryCompact ? 28 : 32);
+    const headerY = layout.itemsPanelTop + (layout.veryCompact ? 27 : layout.compact ? 30 : 32);
 
     this.add.circle(left + 34, headerY, layout.veryCompact ? 18 : 21, FORGE.ember, 0.14)
       .setStrokeStyle(1, FORGE.gold, 0.5)
@@ -682,7 +636,7 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsTopCover?.destroy();
     this.itemsBottomCover?.destroy();
 
-    const topCoverHeight = Math.max(0, this.itemsListTop);
+    const topCoverHeight = Math.max(0, this.itemsCardsTop);
     const bottomCoverHeight = Math.max(0, layout.height - this.itemsListBottom);
 
     if (topCoverHeight > 0) {
@@ -716,7 +670,7 @@ export class ForgeScene extends Phaser.Scene {
     const sideShadeWidth = 22;
     const leftShade = this.add.rectangle(
       layout.centerX - layout.contentWidth / 2 + sideShadeWidth / 2,
-      this.itemsListTop + this.itemsListHeight / 2,
+      this.itemsCardsTop + this.itemsListHeight / 2,
       sideShadeWidth,
       this.itemsListHeight,
       coverColor,
@@ -725,7 +679,7 @@ export class ForgeScene extends Phaser.Scene {
 
     const rightShade = this.add.rectangle(
       layout.centerX + layout.contentWidth / 2 - sideShadeWidth / 2,
-      this.itemsListTop + this.itemsListHeight / 2,
+      this.itemsCardsTop + this.itemsListHeight / 2,
       sideShadeWidth,
       this.itemsListHeight,
       coverColor,
@@ -765,19 +719,19 @@ export class ForgeScene extends Phaser.Scene {
     const items = this.getForgeItemsByCategory(this.selectedCategory);
 
     if (items.length === 0) {
-      this.createEmptyState(container, layout, this.itemsListTop + this.itemsListHeight / 2);
+      this.createEmptyState(container, layout, this.itemsCardsTop + this.itemsListHeight / 2);
       return;
     }
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const renderBuffer = 100;
-    const topPadding = layout.veryCompact ? 8 : 10;
+    const renderBuffer = 140;
+    const topPadding = layout.veryCompact ? 10 : 12;
 
     items.forEach((inventoryItem, index) => {
-      const y = this.itemsListTop + topPadding + cardHeight / 2 + index * spacing - this.itemsScrollY;
+      const y = this.itemsCardsTop + topPadding + cardHeight / 2 + index * spacing - this.itemsScrollY;
 
-      if (y + cardHeight / 2 < this.itemsListTop - renderBuffer) {
+      if (y + cardHeight / 2 < this.itemsCardsTop - renderBuffer) {
         return;
       }
 
@@ -805,11 +759,11 @@ export class ForgeScene extends Phaser.Scene {
 
     let alpha = 1;
 
-    const topFadeStart = this.itemsListTop + fadeZone;
+    const topFadeStart = this.itemsCardsTop + fadeZone;
     const bottomFadeStart = this.itemsListBottom - fadeZone;
 
     if (y - half < topFadeStart) {
-      const visibleDistance = y + half - this.itemsListTop;
+      const visibleDistance = y + half - this.itemsCardsTop;
       alpha = Math.min(
         alpha,
         Phaser.Math.Clamp(visibleDistance / fadeZone, 0, 1)
@@ -875,7 +829,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private getForgeItemCardHeight(layout: ForgeLayout) {
-    return layout.veryCompact ? 164 : layout.compact ? 176 : 188;
+    return layout.veryCompact ? 178 : layout.compact ? 188 : 202;
   }
 
   private getForgeItemSpacing(layout: ForgeLayout) {
@@ -894,7 +848,7 @@ export class ForgeScene extends Phaser.Scene {
 
       const topCover = this.add.rectangle(
         layout.centerX,
-        this.itemsListTop + i * stepHeight + stepHeight / 2,
+        this.itemsCardsTop + i * stepHeight + stepHeight / 2,
         listWidth,
         stepHeight + 1,
         FORGE.soot,
@@ -1007,7 +961,7 @@ export class ForgeScene extends Phaser.Scene {
     return (
       pointer.x >= listLeft &&
       pointer.x <= listRight &&
-      pointer.y >= this.itemsListTop &&
+      pointer.y >= this.itemsCardsTop &&
       pointer.y <= this.itemsListBottom
     );
   }
@@ -1015,13 +969,13 @@ export class ForgeScene extends Phaser.Scene {
   private createItemsScrollbar(layout: ForgeLayout) {
     const trackX = layout.centerX + layout.contentWidth / 2 - 12;
     const trackHeight = this.itemsListHeight;
-    const trackY = this.itemsListTop + trackHeight / 2;
+    const trackY = this.itemsCardsTop + trackHeight / 2;
     const visible = this.itemsMaxScrollY > 0;
 
     this.itemsScrollbarTrack = this.add.rectangle(trackX, trackY, 4, trackHeight, 0x000000, visible ? 0.28 : 0)
       .setDepth(108);
 
-    this.itemsScrollbarThumb = this.add.rectangle(trackX, this.itemsListTop + 18, 4, 36, FORGE.gold, visible ? 0.55 : 0)
+    this.itemsScrollbarThumb = this.add.rectangle(trackX, this.itemsCardsTop + 18, 4, 36, FORGE.gold, visible ? 0.55 : 0)
       .setDepth(109);
   }
 
@@ -1043,7 +997,7 @@ export class ForgeScene extends Phaser.Scene {
       Math.max(34, trackHeight - 8)
     );
     const progress = this.itemsMaxScrollY <= 0 ? 0 : this.itemsScrollY / this.itemsMaxScrollY;
-    const thumbY = this.itemsListTop + thumbHeight / 2 + progress * (trackHeight - thumbHeight);
+    const thumbY = this.itemsCardsTop + thumbHeight / 2 + progress * (trackHeight - thumbHeight);
 
     this.itemsScrollbarTrack.setAlpha(0.26);
     this.itemsScrollbarThumb.setAlpha(0.62);
@@ -1439,13 +1393,13 @@ export class ForgeScene extends Phaser.Scene {
     const textX = left + 78;
     const innerLeft = left + 22;
     const innerWidth = cardWidth - 44;
-    const buttonHeight = layout.veryCompact ? 42 : 46;
-    const buttonY = bottom - (layout.veryCompact ? 28 : 31);
-    const costY = buttonY - buttonHeight / 2 - (layout.veryCompact ? 8 : 10) - 20;
-    const statsY = Math.min(top + (layout.veryCompact ? 82 : 88), costY - 38);
-    const progressY = Math.min(top + (layout.veryCompact ? 66 : 70), statsY - 17);
-    const metaY = Math.min(top + (layout.veryCompact ? 47 : 50), progressY - 18);
-    const titleWidth = equipped ? cardWidth - 184 : cardWidth - 108;
+    const buttonHeight = layout.veryCompact ? 40 : 44;
+    const buttonY = bottom - (layout.veryCompact ? 28 : 30);
+    const costY = buttonY - buttonHeight / 2 - (layout.veryCompact ? 22 : 24);
+    const progressY = costY - (layout.veryCompact ? 31 : 34);
+    const statsY = progressY - (layout.veryCompact ? 19 : 21);
+    const metaY = statsY - (layout.veryCompact ? 20 : 22);
+    const titleWidth = equipped ? cardWidth - 190 : cardWidth - 112;
 
     this.addTo(
       cardContainer,
@@ -1598,18 +1552,18 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsScrollY = Phaser.Math.Clamp(this.itemsScrollY, 0, this.itemsMaxScrollY);
     this.itemsTargetScrollY = Phaser.Math.Clamp(this.itemsTargetScrollY, 0, this.itemsMaxScrollY);
 
-    this.createResourcePanel(layout);
     this.createScrollableContent(layout);
     this.createItemsViewport(layout);
   }
 
   private createBottomBar(layout: ForgeLayout) {
-    const y = layout.height - layout.bottomBarHeight / 2;
+    const dockHeight = layout.bottomBarHeight + layout.safeBottom + 18;
+    const dockY = layout.bottomBarTop + dockHeight / 2 - 6;
 
-    this.add.rectangle(layout.centerX, y, layout.width, layout.bottomBarHeight + 22, 0x020202, 0.78)
+    this.add.rectangle(layout.centerX, dockY, layout.width, dockHeight, 0x020202, 0.86)
       .setDepth(300);
 
-    this.add.rectangle(layout.centerX, y - layout.bottomBarHeight / 2 + 5, layout.contentWidth, 1, FORGE.bronze, 0.28)
+    this.add.rectangle(layout.centerX, layout.bottomBarTop + 4, layout.contentWidth, 1, FORGE.bronze, 0.34)
       .setDepth(301);
 
     this.createForgeButton({
@@ -2057,7 +2011,7 @@ export class ForgeScene extends Phaser.Scene {
     canUpgrade: boolean,
     depth: number
   ) {
-    const panelHeight = 40;
+    const panelHeight = 38;
 
     this.createStonePanel({
       parent: container,
@@ -2131,7 +2085,7 @@ export class ForgeScene extends Phaser.Scene {
       x: x + width / 2,
       y,
       width,
-      height: 40,
+      height: 38,
       radius: 15,
       fill: success ? 0x0f1711 : 0x17100c,
       alpha: 0.84,
@@ -2173,6 +2127,7 @@ export class ForgeScene extends Phaser.Scene {
     return lines.join('\n');
   }
 
+
   private getShortMaterialName(id: MaterialId) {
     if (id === 'darkened_bone') return 'Кость';
     if (id === 'dim_gem') return 'Самоцв.';
@@ -2183,12 +2138,6 @@ export class ForgeScene extends Phaser.Scene {
     if (id === 'black_sarcophagus_shard') return 'Оскол.';
 
     return getMaterialName(id);
-  }
-
-  private getTotalMaterialCount() {
-    return MATERIAL_IDS.reduce((sum, id) => {
-      return sum + (player.materials[id] ?? 0);
-    }, 0);
   }
 
   private getItemTypeText(item: ItemData) {
@@ -2233,69 +2182,6 @@ export class ForgeScene extends Phaser.Scene {
     return UI.colors.textMuted;
   }
 
-  private createResourceChip(config: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    icon: string;
-    label: string;
-    value: string;
-    color: number;
-    compact: boolean;
-  }) {
-    this.createStonePanel({
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      radius: 16,
-      fill: 0x15100d,
-      alpha: 0.95,
-      stroke: config.color,
-      strokeAlpha: 0.3,
-      glow: config.color,
-      depth: 114,
-    });
-
-    const left = config.x - config.width / 2;
-
-    this.add.circle(left + 24, config.y, config.compact ? 13 : 15, config.color, 0.18)
-      .setStrokeStyle(1, config.color, 0.48)
-      .setDepth(118);
-
-    this.add.text(left + 24, config.y, config.icon, {
-      fontFamily: UI.font.body,
-      fontSize: config.compact ? '11px' : '13px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(119);
-
-    this.add.text(left + 44, config.y - (config.compact ? 8 : 9), config.label, {
-      fontFamily: UI.font.body,
-      fontSize: config.compact ? '9px' : '10px',
-      color: UI.colors.textMuted,
-      wordWrap: {
-        width: config.width - 48,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(119);
-
-    this.add.text(left + 44, config.y + (config.compact ? 9 : 11), config.value, {
-      fontFamily: UI.font.title,
-      fontSize: config.compact ? '13px' : '16px',
-      color: UI.colors.text,
-      stroke: '#000000',
-      strokeThickness: 2,
-      wordWrap: {
-        width: config.width - 48,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(119);
-  }
 
   private createMaterialLine(
     container: Phaser.GameObjects.Container,
