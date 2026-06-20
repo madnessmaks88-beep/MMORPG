@@ -109,9 +109,6 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryItemsContainer?: Phaser.GameObjects.Container;
   private inventoryItemsMaskGraphics?: Phaser.GameObjects.Graphics;
   private inventoryItemsMask?: Phaser.Display.Masks.GeometryMask;
-  private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
-  private inventoryListObjects: Phaser.GameObjects.GameObject[] = [];
-  private inventoryMassSellButtonObjects: Phaser.GameObjects.GameObject[] = [];
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
@@ -166,8 +163,6 @@ export class InventoryScene extends Phaser.Scene {
     this.didDragInventory = false;
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
-    this.inventoryListObjects = [];
-    this.inventoryMassSellButtonObjects = [];
   }
 
   create(data?: {
@@ -976,57 +971,38 @@ export class InventoryScene extends Phaser.Scene {
   private createInventoryItemsViewport(layout: InventoryLayout): void {
     this.inventoryItemsContainer?.clearMask(true);
     this.inventoryItemsContainer?.destroy(true);
+    this.inventoryItemsContainer = undefined;
+
     this.inventoryItemsMask?.destroy();
     this.inventoryItemsMask = undefined;
-    this.inventoryItemsMaskGraphics?.destroy();
-    this.inventoryListCamera?.destroy();
-    this.inventoryListObjects = [];
 
-    const viewportLeft = layout.inventoryViewportLeft;
-    const viewportWidth = layout.inventoryViewportWidth;
+    this.inventoryItemsMaskGraphics?.destroy();
+    this.inventoryItemsMaskGraphics = undefined;
 
     this.inventoryViewportTop = layout.inventoryViewportTop;
     this.inventoryViewportBottom = layout.inventoryViewportBottom;
     this.inventoryViewportHeight = layout.inventoryViewportHeight;
-    this.inventoryViewportLeft = viewportLeft;
-    this.inventoryViewportWidth = viewportWidth;
+    this.inventoryViewportLeft = layout.inventoryViewportLeft;
+    this.inventoryViewportWidth = layout.inventoryViewportWidth;
 
-    const fixedObjectsBeforeList = this.children.list.slice();
-    this.inventoryListCamera = this.cameras.add(
+    const inventoryItemsContainer = this.add.container(0, this.inventoryViewportTop).setDepth(40);
+    this.inventoryItemsContainer = inventoryItemsContainer;
+
+    const inventoryItemsMaskGraphics = this.add.graphics();
+    this.inventoryItemsMaskGraphics = inventoryItemsMaskGraphics;
+
+    inventoryItemsMaskGraphics.setVisible(false);
+    inventoryItemsMaskGraphics.fillStyle(0xffffff, 1);
+    inventoryItemsMaskGraphics.fillRect(
       this.inventoryViewportLeft,
       this.inventoryViewportTop,
       this.inventoryViewportWidth,
       this.inventoryViewportHeight
     );
 
-    // ВАЖНО: viewport камеры находится в screen-координатах,
-    // а карточки остаются в world-координатах сцены.
-    // Без setScroll(viewportLeft, viewportTop) Phaser добавляет смещение viewport
-    // второй раз, из-за чего карточки уезжают вправо/вниз и режутся не там.
-    this.inventoryListCamera.setScroll(
-      this.inventoryViewportLeft,
-      this.inventoryViewportTop
-    );
-    this.inventoryListCamera.setBackgroundColor('rgba(0,0,0,0)');
-    this.inventoryListCamera.ignore(fixedObjectsBeforeList);
-
-    const itemsContainer = this.add.container(0, this.inventoryViewportTop).setDepth(40);
-    this.inventoryItemsContainer = itemsContainer;
-
-    const maskGraphics = this.add.graphics();
-    this.inventoryItemsMaskGraphics = maskGraphics;
-    maskGraphics.setVisible(false);
-    maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRect(
-      viewportLeft,
-      this.inventoryViewportTop,
-      viewportWidth,
-      this.inventoryViewportHeight
-    );
-
-    const itemsMask = maskGraphics.createGeometryMask();
-    this.inventoryItemsMask = itemsMask;
-    itemsContainer.setMask(itemsMask);
+    const inventoryItemsMask = inventoryItemsMaskGraphics.createGeometryMask();
+    this.inventoryItemsMask = inventoryItemsMask;
+    inventoryItemsContainer.setMask(inventoryItemsMask);
   }
 
   private getCategoryTitle() {
@@ -1142,7 +1118,6 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.inventoryItemsContainer.removeAll(true);
-    this.inventoryListObjects = [];
 
     if (this.selectedCategory === 'potions') {
       this.renderPotionCategory(layout);
@@ -1732,57 +1707,28 @@ export class InventoryScene extends Phaser.Scene {
       depth: 130,
     });
 
-    this.inventoryMassSellButtonObjects = [...button.objects];
-    this.inventoryListCamera?.ignore(button.objects);
-  }
-
-  private setObjectsVisible(
-    objects: Phaser.GameObjects.GameObject[],
-    visible: boolean
-  ): void {
-    objects.forEach(object => {
-      const target = object as Phaser.GameObjects.GameObject & {
-        setVisible?: (value: boolean) => Phaser.GameObjects.GameObject;
-      };
-
-      target.setVisible?.(visible);
-    });
+    void button;
   }
 
   private setInventoryListModalMode(isModalOpen: boolean): void {
-    const visible = !isModalOpen;
-    const shouldShowScrollbar = visible && this.inventoryMaxScrollY > 0;
+    this.isDraggingInventory = false;
 
-    if (this.inventoryListCamera) {
-      this.inventoryListCamera.visible = visible;
+    if (isModalOpen) {
+      this.didDragInventory = false;
     }
-
-    if (this.inventoryItemsContainer) {
-      this.inventoryItemsContainer.setVisible(visible);
-    }
-
-    this.setObjectsVisible(this.inventoryListObjects, visible);
-    this.setObjectsVisible(this.inventoryMassSellButtonObjects, visible);
 
     if (this.inventoryScrollbarTrack) {
-      this.inventoryScrollbarTrack.setVisible(shouldShowScrollbar);
+      this.inventoryScrollbarTrack.setVisible(this.inventoryMaxScrollY > 0);
     }
 
     if (this.inventoryScrollbarThumb) {
-      this.inventoryScrollbarThumb.setVisible(shouldShowScrollbar);
+      this.inventoryScrollbarThumb.setVisible(this.inventoryMaxScrollY > 0);
     }
-
-    this.isDraggingInventory = false;
-    this.didDragInventory = false;
   }
 
-  private registerInventoryListObjects(objects: Phaser.GameObjects.GameObject[]): void {
-    if (objects.length === 0) {
-      return;
-    }
-
-    this.inventoryListObjects.push(...objects);
-    this.cameras.main.ignore(objects);
+  private registerInventoryListObjects(_objects: Phaser.GameObjects.GameObject[]): void {
+    // Карточки остаются обычными объектами основной камеры.
+    // Их видимость ограничивает GeometryMask на inventoryItemsContainer.
   }
 
   private hasSetMask(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
@@ -2001,10 +1947,6 @@ export class InventoryScene extends Phaser.Scene {
       0.92
     ).setDepth(101);
 
-    this.inventoryListCamera?.ignore([
-      this.inventoryScrollbarTrack,
-      this.inventoryScrollbarThumb,
-    ]);
   }
 
   private updateInventoryScrollbar(layout: InventoryLayout) {
@@ -2448,7 +2390,6 @@ export class InventoryScene extends Phaser.Scene {
       ...closeButton.objects,
     ]);
 
-    this.inventoryListCamera?.ignore(modal);
   }
 
   private getEquippedInventoryItemForSlot(slot: EquipmentSlot) {
@@ -2870,7 +2811,6 @@ export class InventoryScene extends Phaser.Scene {
 
     modal.add(objects);
 
-    this.inventoryListCamera?.ignore(modal);
   }
 
   private closeItemInfo(restoreInventoryList = true) {
@@ -2920,10 +2860,6 @@ export class InventoryScene extends Phaser.Scene {
   private cleanupInventoryViewport(): void {
     this.removeInventoryScrollHandlers();
 
-    if (this.inventoryListCamera) {
-      this.inventoryListCamera.destroy();
-      this.inventoryListCamera = undefined;
-    }
 
     if (this.inventoryItemsContainer) {
       this.inventoryItemsContainer.clearMask(true);
@@ -2946,8 +2882,6 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryScrollbarThumb?.destroy();
     this.inventoryScrollbarThumb = undefined;
 
-    this.inventoryListObjects = [];
-    this.inventoryMassSellButtonObjects = [];
     this.isDraggingInventory = false;
     this.didDragInventory = false;
   }
