@@ -105,8 +105,6 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryMaskGraphics?: Phaser.GameObjects.Graphics;
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
-  private inventoryTopCover?: Phaser.GameObjects.Rectangle;
-  private inventoryBottomCover?: Phaser.GameObjects.Rectangle;
 
   private inventoryScrollY = 0;
   private inventoryTargetScrollY = 0;
@@ -147,8 +145,6 @@ export class InventoryScene extends Phaser.Scene {
     this.itemInfoContainer = undefined;
     this.inventoryItemsLayer = undefined;
     this.inventoryContainer = undefined;
-    this.inventoryTopCover = undefined;
-    this.inventoryBottomCover = undefined;
   }
 
   create(data?: {
@@ -814,8 +810,6 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryMaskGraphics?.destroy();
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
-    this.inventoryTopCover?.destroy();
-    this.inventoryBottomCover?.destroy();
 
     this.inventoryViewportTop = layout.listTop;
     this.inventoryViewportBottom = layout.listBottom;
@@ -1120,8 +1114,7 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
-      const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
-      this.createInventoryItemCard(layout, inventoryItem, localY, cardHeight, alpha);
+      this.createInventoryItemCard(layout, inventoryItem, localY, cardHeight);
     });
   }
 
@@ -1146,7 +1139,6 @@ export class InventoryScene extends Phaser.Scene {
       return;
     }
 
-    const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
     const card = this.add.container(layout.centerX, localY);
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -1240,7 +1232,7 @@ export class InventoryScene extends Phaser.Scene {
       disabled: !canUsePotion,
       small: layout.veryCompact,
       onClick: () => {
-        if (this.didDragInventory || alpha < 0.45) {
+        if (this.didDragInventory) {
           return;
         }
 
@@ -1249,11 +1241,6 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     objects.push(...button.objects);
-    this.setObjectsAlpha(objects, alpha);
-
-    if (alpha < 0.45) {
-      button.zone?.disableInteractive();
-    }
 
     card.add(objects);
     this.inventoryItemsLayer.add(card);
@@ -1290,8 +1277,7 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
-      const alpha = this.getInventoryCardEdgeAlpha(worldY, cardHeight);
-      this.createMaterialCard(layout, material.id, localY, alpha);
+      this.createMaterialCard(layout, material.id, localY);
     });
   }
 
@@ -1330,8 +1316,7 @@ export class InventoryScene extends Phaser.Scene {
   private createMaterialCard(
     layout: InventoryLayout,
     materialId: string,
-    localY: number,
-    alpha = 1
+    localY: number
   ) {
     const material = materials.find(item => item.id === materialId);
 
@@ -1427,7 +1412,6 @@ export class InventoryScene extends Phaser.Scene {
       }).setOrigin(1, 0.5)
     );
 
-    this.setObjectsAlpha(objects, alpha);
     card.add(objects);
     this.inventoryItemsLayer.add(card);
   }
@@ -1436,8 +1420,7 @@ export class InventoryScene extends Phaser.Scene {
     layout: InventoryLayout,
     inventoryItem: InventoryItem,
     localY: number,
-    cardHeight: number,
-    alpha = 1
+    cardHeight: number
   ) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
@@ -1498,10 +1481,6 @@ export class InventoryScene extends Phaser.Scene {
 
       if (actionButtonPressed) {
         actionButtonPressed = false;
-        return;
-      }
-
-      if (alpha < 0.45) {
         return;
       }
 
@@ -1584,7 +1563,7 @@ export class InventoryScene extends Phaser.Scene {
       onClick: () => {
         actionButtonPressed = true;
 
-        if (this.isItemInfoOpen || isEquipped || this.didDragInventory || alpha < 0.45) {
+        if (this.isItemInfoOpen || isEquipped || this.didDragInventory) {
           return;
         }
 
@@ -1612,7 +1591,7 @@ export class InventoryScene extends Phaser.Scene {
       onClick: () => {
         actionButtonPressed = true;
 
-        if (this.isItemInfoOpen || isEquipped || this.didDragInventory || alpha < 0.45) {
+        if (this.isItemInfoOpen || isEquipped || this.didDragInventory) {
           return;
         }
 
@@ -1621,14 +1600,6 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     cardObjects.push(...equipButton.objects, ...sellButton.objects);
-
-    this.setObjectsAlpha(cardObjects, alpha);
-
-    if (alpha < 0.45) {
-      cardZone.disableInteractive();
-      equipButton.zone?.disableInteractive();
-      sellButton.zone?.disableInteractive();
-    }
 
     card.add(cardObjects);
     this.inventoryItemsLayer.add(card);
@@ -1674,24 +1645,7 @@ export class InventoryScene extends Phaser.Scene {
     });
   }
 
-  private getInventoryCardEdgeAlpha(y: number, cardHeight: number): number {
-    const fadeZone = 56;
-    const half = cardHeight / 2;
 
-    let alpha = 1;
-
-    if (y - half < this.inventoryViewportTop + fadeZone) {
-      const distance = y + half - this.inventoryViewportTop;
-      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
-    }
-
-    if (y + half > this.inventoryViewportBottom - fadeZone) {
-      const distance = this.inventoryViewportBottom - (y - half);
-      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
-    }
-
-    return Phaser.Math.Clamp(alpha, 0, 1);
-  }
 
   private createInventoryScrollbar(layout: InventoryLayout) {
     this.inventoryScrollbarTrack?.destroy();
@@ -3040,14 +2994,9 @@ export class InventoryScene extends Phaser.Scene {
     objects.forEach(object => {
       const target = object as Phaser.GameObjects.GameObject & {
         setAlpha?: (alpha: number) => void;
-        disableInteractive?: () => void;
       };
 
       target.setAlpha?.(alpha);
-
-      if (alpha < 0.45) {
-        target.disableInteractive?.();
-      }
     });
   }
 }
