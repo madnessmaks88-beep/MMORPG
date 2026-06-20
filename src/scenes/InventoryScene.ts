@@ -136,6 +136,8 @@ export class InventoryScene extends Phaser.Scene {
   private isRestartingInventory = false;
 
   private shouldPlayInventoryIntroAnimation = true;
+  private shouldAnimateInventoryListItems = true;
+
 
   private inventoryPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
   private inventoryPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
@@ -164,6 +166,7 @@ export class InventoryScene extends Phaser.Scene {
     this.selectedCategory = data?.selectedCategory ?? 'all';
     this.returnScene = data?.returnScene ?? 'CampScene';
     this.shouldPlayInventoryIntroAnimation = !data?.skipIntroAnimation;
+    this.shouldAnimateInventoryListItems = !data?.skipIntroAnimation;
 
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
@@ -189,6 +192,7 @@ export class InventoryScene extends Phaser.Scene {
 
     if (data?.skipIntroAnimation) {
       this.shouldPlayInventoryIntroAnimation = false;
+      this.shouldAnimateInventoryListItems = false;
     }
 
     this.cleanupInventoryScene();
@@ -893,6 +897,7 @@ export class InventoryScene extends Phaser.Scene {
         this.isDraggingInventory = false;
         this.didDragInventory = false;
         this.setInventoryListModalMode(false);
+        this.shouldAnimateInventoryListItems = true;
 
         this.rebuildCategoryTabsOnly();
         this.rebuildInventoryListOnly();
@@ -1208,23 +1213,28 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryItemsContainer.removeAll(true);
     this.inventoryListObjects = [];
 
+    const animateListItems = this.shouldAnimateInventoryListItems;
+
     if (this.selectedCategory === 'potions') {
-      this.renderPotionCategory(layout);
+      this.renderPotionCategory(layout, animateListItems);
       this.inventoryLastRenderedScrollY = this.inventoryScrollY;
+      this.shouldAnimateInventoryListItems = false;
       return;
     }
 
     if (this.selectedCategory === 'materials') {
-      this.renderMaterialsCategory(layout);
+      this.renderMaterialsCategory(layout, animateListItems);
       this.inventoryLastRenderedScrollY = this.inventoryScrollY;
+      this.shouldAnimateInventoryListItems = false;
       return;
     }
 
-    this.renderItemCategory(layout);
+    this.renderItemCategory(layout, animateListItems);
     this.inventoryLastRenderedScrollY = this.inventoryScrollY;
+    this.shouldAnimateInventoryListItems = false;
   }
 
-  private renderItemCategory(layout: InventoryLayout) {
+  private renderItemCategory(layout: InventoryLayout, animateListItems = false) {
     const filteredItems = this.getFilteredInventoryItems();
 
     if (player.inventory.length === 0) {
@@ -1253,6 +1263,8 @@ export class InventoryScene extends Phaser.Scene {
     const topPadding = 14;
     const renderBuffer = 120;
 
+    let animationIndex = 0;
+
     filteredItems.forEach((inventoryItem, index) => {
       const localY = topPadding + cardHalfHeight + index * itemSpacing;
       const worldY = this.inventoryViewportTop + localY - this.inventoryScrollY;
@@ -1265,11 +1277,19 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
-      this.createInventoryItemCard(layout, inventoryItem, localY, cardHeight);
+      this.createInventoryItemCard(
+        layout,
+        inventoryItem,
+        localY,
+        cardHeight,
+        animateListItems ? animationIndex : undefined
+      );
+
+      animationIndex += 1;
     });
   }
 
-  private renderPotionCategory(layout: InventoryLayout) {
+  private renderPotionCategory(layout: InventoryLayout, animateListItems = false) {
     const stats = getPlayerStats(player);
     const canUsePotion = player.potions > 0 && player.hp < stats.maxHp;
 
@@ -1393,9 +1413,13 @@ export class InventoryScene extends Phaser.Scene {
     card.add(cardObjects);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...cardObjects]);
+
+    if (animateListItems) {
+      this.animateInventoryListCard(card, 0);
+    }
   }
 
-  private renderMaterialsCategory(layout: InventoryLayout) {
+  private renderMaterialsCategory(layout: InventoryLayout, animateListItems = false) {
     const visibleMaterials = this.getVisibleMaterials();
 
     if (visibleMaterials.length === 0) {
@@ -1414,6 +1438,8 @@ export class InventoryScene extends Phaser.Scene {
     const topPadding = 14;
     const renderBuffer = 120;
 
+    let animationIndex = 0;
+
     visibleMaterials.forEach((material, index) => {
       const localY = topPadding + cardHalfHeight + index * spacing;
       const worldY = this.inventoryViewportTop + localY - this.inventoryScrollY;
@@ -1426,7 +1452,14 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
-      this.createMaterialCard(layout, material.id, localY);
+      this.createMaterialCard(
+        layout,
+        material.id,
+        localY,
+        animateListItems ? animationIndex : undefined
+      );
+
+      animationIndex += 1;
     });
   }
 
@@ -1473,7 +1506,8 @@ export class InventoryScene extends Phaser.Scene {
   private createMaterialCard(
     layout: InventoryLayout,
     materialId: string,
-    localY: number
+    localY: number,
+    animationIndex?: number
   ) {
     const material = materials.find(item => item.id === materialId);
 
@@ -1569,13 +1603,18 @@ export class InventoryScene extends Phaser.Scene {
     card.add(objects);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...objects]);
+
+    if (animationIndex !== undefined) {
+      this.animateInventoryListCard(card, animationIndex);
+    }
   }
 
   private createInventoryItemCard(
     layout: InventoryLayout,
     inventoryItem: InventoryItem,
     localY: number,
-    cardHeight: number
+    cardHeight: number,
+    animationIndex?: number
   ) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
@@ -1772,6 +1811,33 @@ export class InventoryScene extends Phaser.Scene {
     card.add(cardObjects);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...cardObjects]);
+
+    if (animationIndex !== undefined) {
+      this.animateInventoryListCard(card, animationIndex);
+    }
+  }
+
+
+  private animateInventoryListCard(
+    card: Phaser.GameObjects.Container,
+    animationIndex = 0
+  ): void {
+    const finalX = card.x;
+    const delay = Math.min(animationIndex, 7) * 38;
+
+    card.setAlpha(0);
+    card.setX(finalX + 18);
+    card.setScale(0.985);
+
+    this.tweens.add({
+      targets: card,
+      alpha: 1,
+      x: finalX,
+      scale: 1,
+      duration: 210,
+      delay,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private createMassSellButton(layout: InventoryLayout) {
