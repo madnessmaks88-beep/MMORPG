@@ -152,6 +152,7 @@ export class InventoryScene extends Phaser.Scene {
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
+    this.setInventoryListModalMode(false);
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
@@ -2120,6 +2121,16 @@ export class InventoryScene extends Phaser.Scene {
   }
 
 
+  private setInventoryListModalMode(isModalOpen: boolean): void {
+    if (this.inventoryListCamera) {
+      this.inventoryListCamera.visible = !isModalOpen;
+    }
+
+    if (this.inventoryItemsContainer) {
+      this.inventoryItemsContainer.setVisible(!isModalOpen);
+    }
+  }
+
   private showUnequipConfirm(slot: EquipmentSlot, inventoryItem: InventoryItem) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
@@ -2162,6 +2173,7 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.isItemInfoOpen = true;
+    this.setInventoryListModalMode(true);
 
     const layout = this.getLayout();
 
@@ -2707,6 +2719,7 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.isItemInfoOpen = true;
+    this.setInventoryListModalMode(true);
 
     const layout = this.getLayout();
 
@@ -2824,12 +2837,14 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.isItemInfoOpen = false;
+    this.setInventoryListModalMode(false);
   }
 
   private restartInventory() {
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
+    this.setInventoryListModalMode(false);
 
     if (this.itemInfoContainer) {
       this.itemInfoContainer.destroy(true);
