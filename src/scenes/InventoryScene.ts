@@ -111,7 +111,6 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryItemsMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
   private inventoryListObjects: Phaser.GameObjects.GameObject[] = [];
-  private inventoryMassSellButtonObjects: Phaser.GameObjects.GameObject[] = [];
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
@@ -169,7 +168,6 @@ export class InventoryScene extends Phaser.Scene {
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
-    this.inventoryMassSellButtonObjects = [];
   }
 
   create(data?: {
@@ -1740,37 +1738,21 @@ export class InventoryScene extends Phaser.Scene {
       depth: 130,
     });
 
-    this.inventoryMassSellButtonObjects = [...button.objects];
     this.inventoryListCamera?.ignore(button.objects);
   }
 
-  private setObjectsVisible(
-    objects: Phaser.GameObjects.GameObject[],
-    visible: boolean
-  ): void {
-    objects.forEach(object => {
-      const target = object as Phaser.GameObjects.GameObject & {
-        setVisible?: (value: boolean) => Phaser.GameObjects.GameObject;
-      };
-
-      target.setVisible?.(visible);
-    });
-  }
 
   private setInventoryListModalMode(isModalOpen: boolean): void {
     const visible = !isModalOpen;
-    const shouldShowScrollbar = visible && this.inventoryMaxScrollY > 0;
 
+    // Важно: список рисуется отдельной камерой. Чтобы модалка была поверх,
+    // выключаем только камеру списка. Не трогаем visible у самих карточек:
+    // из-за этого раньше список мог остаться скрытым навсегда.
     if (this.inventoryListCamera) {
       this.inventoryListCamera.visible = visible;
     }
 
-    if (this.inventoryItemsContainer) {
-      this.inventoryItemsContainer.setVisible(visible);
-    }
-
-    this.setObjectsVisible(this.inventoryListObjects, visible);
-    this.setObjectsVisible(this.inventoryMassSellButtonObjects, visible);
+    const shouldShowScrollbar = visible && this.inventoryMaxScrollY > 0;
 
     if (this.inventoryScrollbarTrack) {
       this.inventoryScrollbarTrack.setVisible(shouldShowScrollbar);
@@ -2967,7 +2949,6 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryScrollbarThumb = undefined;
 
     this.inventoryListObjects = [];
-    this.inventoryMassSellButtonObjects = [];
     this.isDraggingInventory = false;
     this.didDragInventory = false;
   }
@@ -2977,14 +2958,13 @@ export class InventoryScene extends Phaser.Scene {
       return;
     }
 
-    this.isRestartingInventory = true;
-
     const scrollY = Phaser.Math.Clamp(
       this.inventoryTargetScrollY,
       0,
       Math.max(0, this.inventoryMaxScrollY)
     );
 
+    this.isRestartingInventory = true;
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
@@ -2995,15 +2975,51 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.setInventoryListModalMode(false);
-    this.cleanupInventoryViewport();
+    this.rebuildInventorySceneImmediately(scrollY);
+  }
 
-    this.time.delayedCall(0, () => {
-      this.scene.restart({
-        inventoryScrollY: scrollY,
-        selectedCategory: this.selectedCategory,
-        returnScene: this.returnScene,
+  private rebuildInventorySceneImmediately(scrollY: number): void {
+    const selectedCategory = this.selectedCategory;
+    const returnScene = this.returnScene;
+
+    this.cleanupInventoryViewport();
+    this.tweens.killAll();
+    this.children.removeAll(true);
+
+    this.initialInventoryScrollY = Phaser.Math.Clamp(scrollY, 0, Math.max(0, this.inventoryMaxScrollY));
+    this.selectedCategory = selectedCategory;
+    this.returnScene = returnScene;
+
+    this.isItemInfoOpen = false;
+    this.isDraggingInventory = false;
+    this.didDragInventory = false;
+    this.itemInfoContainer = undefined;
+    this.inventoryListObjects = [];
+
+    const layout = this.getLayout();
+
+    createSceneBackground(this);
+    this.createInventoryBackdrop(layout);
+
+    this.createInventoryHeader(layout);
+    this.createQuickStatsPanel(layout);
+    this.createEquipmentPanel(layout);
+    this.createCategoryTabs(layout);
+    this.createInventoryList(layout);
+
+    if (this.returnScene === 'DungeonScene') {
+      this.createReturnButton(layout);
+    } else {
+      createBottomNav(this, {
+        activeScene: 'InventoryScene',
       });
-    });
+    }
+
+    if (this.inventoryListCamera) {
+      this.inventoryListCamera.visible = true;
+    }
+
+    this.isRestartingInventory = false;
   }
 
   private getTotalMaterialsCount() {
