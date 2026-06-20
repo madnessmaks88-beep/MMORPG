@@ -103,6 +103,7 @@ export class InventoryScene extends Phaser.Scene {
   // Старое имя оставлено как alias, чтобы не ломать вспомогательную структуру сцены.
   private inventoryContainer?: Phaser.GameObjects.Container;
   private inventoryMaskGraphics?: Phaser.GameObjects.Graphics;
+  private inventoryGeometryMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
@@ -807,6 +808,7 @@ export class InventoryScene extends Phaser.Scene {
     }
     this.inventoryItemsLayer = undefined;
     this.inventoryContainer = undefined;
+    this.inventoryGeometryMask = undefined;
     this.inventoryMaskGraphics?.destroy();
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
@@ -886,7 +888,10 @@ export class InventoryScene extends Phaser.Scene {
     const inventoryItemsLayer = this.add.container(0, this.inventoryViewportTop).setDepth(40);
     this.inventoryItemsLayer = inventoryItemsLayer;
     this.inventoryContainer = inventoryItemsLayer;
-    inventoryItemsLayer.setMask(maskGraphics.createGeometryMask());
+
+    const geometryMask = maskGraphics.createGeometryMask();
+    this.inventoryGeometryMask = geometryMask;
+    inventoryItemsLayer.setMask(geometryMask);
 
     this.inventoryScrollY = this.initialInventoryScrollY;
     this.inventoryTargetScrollY = this.initialInventoryScrollY;
@@ -1242,8 +1247,7 @@ export class InventoryScene extends Phaser.Scene {
 
     objects.push(...button.objects);
 
-    card.add(objects);
-    this.inventoryItemsLayer.add(card);
+    this.addMaskedInventoryCard(card, objects);
   }
 
   private renderMaterialsCategory(layout: InventoryLayout) {
@@ -1309,8 +1313,7 @@ export class InventoryScene extends Phaser.Scene {
       },
     }).setOrigin(0.5);
 
-    empty.add([icon, label]);
-    this.inventoryItemsLayer.add(empty);
+    this.addMaskedInventoryCard(empty, [icon, label]);
   }
 
   private createMaterialCard(
@@ -1412,8 +1415,7 @@ export class InventoryScene extends Phaser.Scene {
       }).setOrigin(1, 0.5)
     );
 
-    card.add(objects);
-    this.inventoryItemsLayer.add(card);
+    this.addMaskedInventoryCard(card, objects);
   }
 
   private createInventoryItemCard(
@@ -1601,8 +1603,7 @@ export class InventoryScene extends Phaser.Scene {
 
     cardObjects.push(...equipButton.objects, ...sellButton.objects);
 
-    card.add(cardObjects);
-    this.inventoryItemsLayer.add(card);
+    this.addMaskedInventoryCard(card, cardObjects);
   }
 
   private createMassSellButton(layout: InventoryLayout) {
@@ -2563,6 +2564,41 @@ export class InventoryScene extends Phaser.Scene {
     if (tier === 'crystal') return 'Кристалл усиления';
 
     return 'Материал';
+  }
+
+
+  private addMaskedInventoryCard(
+    card: Phaser.GameObjects.Container,
+    objects: Phaser.GameObjects.GameObject[]
+  ) {
+    if (!this.inventoryItemsLayer) {
+      card.destroy(true);
+      return;
+    }
+
+    card.add(objects);
+    this.applyInventoryMask([card, ...objects]);
+    this.inventoryItemsLayer.add(card);
+  }
+
+  private applyInventoryMask(objects: Phaser.GameObjects.GameObject[]) {
+    const mask = this.inventoryGeometryMask;
+
+    if (!mask) {
+      return;
+    }
+
+    objects.forEach(object => {
+      if (this.hasSetMask(object)) {
+        object.setMask(mask);
+      }
+    });
+  }
+
+  private hasSetMask(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
+    setMask: (mask: Phaser.Display.Masks.GeometryMask) => unknown;
+  } {
+    return typeof (object as { setMask?: unknown }).setMask === 'function';
   }
 
   private updateInventoryLayerPosition() {
