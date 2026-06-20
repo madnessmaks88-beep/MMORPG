@@ -129,8 +129,10 @@ export class ForgeScene extends Phaser.Scene {
   private contentMaskGraphics?: Phaser.GameObjects.Graphics;
   private itemsContainer?: Phaser.GameObjects.Container;
   private itemsMaskGraphics?: Phaser.GameObjects.Graphics;
+  private itemsGeometryMask?: ReturnType<Phaser.GameObjects.Graphics['createGeometryMask']>;
   private itemsScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private itemsScrollbarThumb?: Phaser.GameObjects.Rectangle;
+  private itemsViewportCoverObjects: Phaser.GameObjects.GameObject[] = [];
   private modalContainer?: Phaser.GameObjects.Container;
 
   private selectedCategory: ForgeCategory = 'weapon';
@@ -180,8 +182,10 @@ export class ForgeScene extends Phaser.Scene {
     this.contentMaskGraphics = undefined;
     this.itemsContainer = undefined;
     this.itemsMaskGraphics = undefined;
+    this.itemsGeometryMask = undefined;
     this.itemsScrollbarTrack = undefined;
     this.itemsScrollbarThumb = undefined;
+    this.itemsViewportCoverObjects = [];
     this.modalContainer = undefined;
   }
 
@@ -232,7 +236,7 @@ export class ForgeScene extends Phaser.Scene {
 
     const bottomBarHeight = veryCompact ? 64 : compact ? 74 : 88;
     const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + (veryCompact ? 4 : 6);
-    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 2 : 6);
+    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 18 : compact ? 22 : 26);
 
     const headerTop = safeTop + 2;
     const headerHeight = veryCompact ? 54 : compact ? 66 : 80;
@@ -249,16 +253,16 @@ export class ForgeScene extends Phaser.Scene {
     const tabsTop = materialsTop + materialsHeight + (veryCompact ? 5 : 8);
     const tabsHeight = veryCompact ? 44 : compact ? 54 : 62;
 
-    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 8 : 12);
-    const minItemsHeight = veryCompact ? 178 : compact ? 230 : 280;
+    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 12 : compact ? 14 : 16);
+    const minItemsHeight = veryCompact ? 176 : compact ? 226 : 276;
     const availableItemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
     const itemsPanelHeight = availableItemsPanelHeight;
-    const itemsListTop = itemsPanelTop + (veryCompact ? 50 : compact ? 62 : 68);
+    const itemsListTop = itemsPanelTop + (veryCompact ? 56 : compact ? 68 : 74);
     const itemsListBottom = Math.min(
-      itemsPanelTop + itemsPanelHeight - (veryCompact ? 18 : 24),
-      itemsActionBottom - (veryCompact ? 16 : 20)
+      itemsPanelTop + itemsPanelHeight - (veryCompact ? 28 : compact ? 32 : 36),
+      itemsActionBottom - (veryCompact ? 24 : compact ? 28 : 32)
     );
-    const itemsListHeight = Math.max(140, itemsListBottom - itemsListTop);
+    const itemsListHeight = Math.max(132, itemsListBottom - itemsListTop);
     const itemsPanelBottom = itemsPanelTop + itemsPanelHeight;
 
     return {
@@ -474,7 +478,7 @@ export class ForgeScene extends Phaser.Scene {
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
 
-    this.contentContainer = this.add.container(0, 0).setDepth(86);
+    this.contentContainer = this.add.container(0, 0).setDepth(250);
 
     this.createAnvilPanel(layout, layout.anvilTop);
     this.createMaterialsPanel(layout, layout.materialsTop);
@@ -486,25 +490,33 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsMaskGraphics?.destroy();
     this.itemsScrollbarTrack?.destroy();
     this.itemsScrollbarThumb?.destroy();
+    this.clearItemsViewportCovers();
 
-    const itemsContainer = this.add.container(0, 0).setDepth(44);
-    const maskGraphics = this.add.graphics().setDepth(43);
+    this.itemsListTop = layout.itemsListTop;
+    this.itemsListBottom = layout.itemsListBottom;
+    this.itemsListHeight = layout.itemsListHeight;
+
+    const itemsContainer = this.add.container(0, 0).setDepth(110);
+    const maskGraphics = this.add.graphics().setDepth(109);
 
     maskGraphics.setVisible(false);
     maskGraphics.fillStyle(0xffffff, 1);
-    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
-    const listWidth = layout.contentWidth - 36;
+    const listLeft = layout.centerX - layout.contentWidth / 2 + 22;
+    const listWidth = layout.contentWidth - 44;
 
     maskGraphics.fillRect(
       listLeft,
-      layout.itemsListTop,
+      this.itemsListTop,
       listWidth,
-      layout.itemsListHeight
+      this.itemsListHeight
     );
-    itemsContainer.setMask(maskGraphics.createGeometryMask());
+
+    const geometryMask = maskGraphics.createGeometryMask();
+    itemsContainer.setMask(geometryMask);
 
     this.itemsContainer = itemsContainer;
     this.itemsMaskGraphics = maskGraphics;
+    this.itemsGeometryMask = geometryMask;
 
     const items = this.getForgeItemsByCategory(this.selectedCategory);
     const title = this.getCategoryTitle(this.selectedCategory);
@@ -521,7 +533,7 @@ export class ForgeScene extends Phaser.Scene {
       stroke: FORGE.bronze,
       strokeAlpha: 0.42,
       glow: FORGE.violet,
-      depth: 34,
+      depth: 62,
     });
 
     const left = layout.centerX - layout.contentWidth / 2;
@@ -530,7 +542,7 @@ export class ForgeScene extends Phaser.Scene {
 
     this.add.circle(left + 34, headerY, layout.veryCompact ? 18 : 21, FORGE.ember, 0.14)
       .setStrokeStyle(1, FORGE.gold, 0.5)
-      .setDepth(40);
+      .setDepth(230);
 
     this.add.text(left + 34, headerY, icon, {
       fontFamily: UI.font.body,
@@ -539,7 +551,7 @@ export class ForgeScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
-    }).setOrigin(0.5).setDepth(41);
+    }).setOrigin(0.5).setDepth(231);
 
     this.add.text(left + 62, headerY - (layout.veryCompact ? 8 : 10), title, {
       fontFamily: UI.font.title,
@@ -552,7 +564,7 @@ export class ForgeScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(41);
+    }).setOrigin(0, 0.5).setDepth(231);
 
     this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 14), 'Выбери трофей и закали его у горна.', {
       fontFamily: UI.font.body,
@@ -563,7 +575,7 @@ export class ForgeScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(41);
+    }).setOrigin(0, 0.5).setDepth(231);
 
     this.add.text(right - 24, headerY, `${items.length} шт.`, {
       fontFamily: UI.font.body,
@@ -575,11 +587,7 @@ export class ForgeScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(1, 0.5).setDepth(41);
-
-    this.itemsListTop = layout.itemsListTop;
-    this.itemsListBottom = layout.itemsListBottom;
-    this.itemsListHeight = layout.itemsListHeight;
+    }).setOrigin(1, 0.5).setDepth(231);
 
     this.createItemsViewportGuards(layout);
     this.createItemsFadeCovers(layout);
@@ -602,43 +610,67 @@ export class ForgeScene extends Phaser.Scene {
   }
 
 
+  private clearItemsViewportCovers() {
+    this.itemsViewportCoverObjects.forEach(object => {
+      object.destroy();
+    });
+
+    this.itemsViewportCoverObjects = [];
+  }
+
   private createItemsViewportGuards(layout: ForgeLayout) {
     const guardColor = FORGE.soot;
-    const left = layout.centerX - layout.contentWidth / 2 + 2;
     const width = layout.contentWidth - 4;
-    const topGuardHeight = Math.max(0, layout.itemsListTop - layout.itemsPanelTop - 2);
-    const bottomGuardHeight = Math.max(0, layout.itemsPanelBottom - layout.itemsListBottom - 2);
+    const topGuardHeight = Math.max(0, this.itemsListTop - layout.itemsPanelTop);
+    const bottomGuardEnd = layout.height - layout.bottomBarHeight - 6;
+    const bottomGuardHeight = Math.max(0, bottomGuardEnd - this.itemsListBottom);
 
     if (topGuardHeight > 0) {
-      this.add.rectangle(
+      const topGuard = this.add.rectangle(
         layout.centerX,
-        layout.itemsPanelTop + topGuardHeight / 2 + 1,
+        layout.itemsPanelTop + topGuardHeight / 2,
         width,
         topGuardHeight,
         guardColor,
-        0.97
-      ).setDepth(188);
+        0.985
+      ).setDepth(214);
+
+      this.itemsViewportCoverObjects.push(topGuard);
     }
 
     if (bottomGuardHeight > 0) {
-      this.add.rectangle(
+      const bottomGuard = this.add.rectangle(
         layout.centerX,
-        layout.itemsListBottom + bottomGuardHeight / 2 + 1,
+        this.itemsListBottom + bottomGuardHeight / 2,
         width,
         bottomGuardHeight,
         guardColor,
-        0.97
-      ).setDepth(188);
+        0.985
+      ).setDepth(214);
+
+      this.itemsViewportCoverObjects.push(bottomGuard);
     }
 
-    this.add.rectangle(
-      left + width - 10,
-      layout.itemsListTop + layout.itemsListHeight / 2,
-      2,
-      layout.itemsListHeight,
-      0x000000,
-      0.18
-    ).setDepth(188);
+    const sideShadeWidth = 22;
+    const leftShade = this.add.rectangle(
+      layout.centerX - layout.contentWidth / 2 + sideShadeWidth / 2,
+      this.itemsListTop + this.itemsListHeight / 2,
+      sideShadeWidth,
+      this.itemsListHeight,
+      guardColor,
+      0.76
+    ).setDepth(214);
+
+    const rightShade = this.add.rectangle(
+      layout.centerX + layout.contentWidth / 2 - sideShadeWidth / 2,
+      this.itemsListTop + this.itemsListHeight / 2,
+      sideShadeWidth,
+      this.itemsListHeight,
+      guardColor,
+      0.76
+    ).setDepth(214);
+
+    this.itemsViewportCoverObjects.push(leftShade, rightShade);
   }
 
   private getForgeItemsContentHeight(layout: ForgeLayout) {
@@ -677,17 +709,17 @@ export class ForgeScene extends Phaser.Scene {
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const fadeZone = this.getItemsEdgeFadeZone();
-    const buffer = fadeZone + 28;
+    const renderBuffer = 140;
+    const topPadding = layout.veryCompact ? 8 : 10;
 
     items.forEach((inventoryItem, index) => {
-      const y = this.itemsListTop + cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
+      const y = this.itemsListTop + topPadding + cardHeight / 2 + index * spacing - this.itemsScrollY;
 
-      if (y + cardHeight / 2 < this.itemsListTop - buffer) {
+      if (y + cardHeight / 2 < this.itemsListTop - renderBuffer) {
         return;
       }
 
-      if (y - cardHeight / 2 > this.itemsListBottom + buffer) {
+      if (y - cardHeight / 2 > this.itemsListBottom + renderBuffer) {
         return;
       }
 
@@ -702,15 +734,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private getItemsEdgeFadeZone() {
-    if (this.scale.height < 740) {
-      return 88;
-    }
-
-    if (this.scale.height < 900) {
-      return 104;
-    }
-
-    return 112;
+    return 110;
   }
 
   private getItemCardEdgeAlpha(y: number, cardHeight: number) {
@@ -750,49 +774,38 @@ export class ForgeScene extends Phaser.Scene {
 
       target.setAlpha?.(alpha);
 
-      if (alpha < 0.55) {
+      if (alpha < 0.45) {
         target.disableInteractive?.();
       }
     });
   }
 
-  private createItemsFadeCovers(layout: ForgeLayout) {
-    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
-    const listWidth = layout.contentWidth - 36;
-    const steps = layout.veryCompact ? 8 : 9;
-    const stepHeight = layout.veryCompact ? 9 : 10;
-    const maxAlpha = layout.veryCompact ? 0.46 : 0.5;
-
-    for (let i = 0; i < steps; i += 1) {
-      const alpha = maxAlpha * (1 - i / steps);
-
-      this.add.rectangle(
-        layout.centerX,
-        this.itemsListTop + i * stepHeight + stepHeight / 2,
-        listWidth,
-        stepHeight + 1,
-        FORGE.soot,
-        alpha
-      ).setDepth(190);
-
-      this.add.rectangle(
-        layout.centerX,
-        this.itemsListBottom - i * stepHeight - stepHeight / 2,
-        listWidth,
-        stepHeight + 1,
-        FORGE.soot,
-        alpha
-      ).setDepth(190);
+  private applyItemsMask(object: Phaser.GameObjects.GameObject) {
+    if (!this.itemsGeometryMask) {
+      return;
     }
 
-    this.add.rectangle(
-      listLeft + listWidth - 8,
-      this.itemsListTop + this.itemsListHeight / 2,
-      2,
-      this.itemsListHeight,
-      0x000000,
-      0.24
-    ).setDepth(191);
+    const target = object as Phaser.GameObjects.GameObject & {
+      setMask?: (mask: ReturnType<Phaser.GameObjects.Graphics['createGeometryMask']>) => unknown;
+    };
+
+    target.setMask?.(this.itemsGeometryMask);
+  }
+
+  private applyItemsMaskToContainer(container: Phaser.GameObjects.Container) {
+    this.applyItemsMask(container);
+
+    const children = (container as Phaser.GameObjects.Container & {
+      list?: Phaser.GameObjects.GameObject[];
+    }).list ?? [];
+
+    children.forEach(child => {
+      this.applyItemsMask(child);
+
+      if (child instanceof Phaser.GameObjects.Container) {
+        this.applyItemsMaskToContainer(child);
+      }
+    });
   }
 
   private clearVisibleForgeItems() {
@@ -800,11 +813,42 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private getForgeItemCardHeight(layout: ForgeLayout) {
-    return layout.veryCompact ? 190 : layout.compact ? 202 : 214;
+    return layout.veryCompact ? 164 : layout.compact ? 176 : 188;
   }
 
   private getForgeItemSpacing(layout: ForgeLayout) {
     return this.getForgeItemCardHeight(layout) + (layout.veryCompact ? 10 : 12);
+  }
+
+  private createItemsFadeCovers(layout: ForgeLayout) {
+    const listWidth = layout.contentWidth - 44;
+    const steps = 8;
+    const stepHeight = 10;
+    const maxAlpha = 0.54;
+
+    for (let i = 0; i < steps; i += 1) {
+      const alpha = maxAlpha * (1 - i / steps);
+
+      const topCover = this.add.rectangle(
+        layout.centerX,
+        this.itemsListTop + i * stepHeight + stepHeight / 2,
+        listWidth,
+        stepHeight + 1,
+        FORGE.soot,
+        alpha
+      ).setDepth(218);
+
+      const bottomCover = this.add.rectangle(
+        layout.centerX,
+        this.itemsListBottom - i * stepHeight - stepHeight / 2,
+        listWidth,
+        stepHeight + 1,
+        FORGE.soot,
+        alpha
+      ).setDepth(218);
+
+      this.itemsViewportCoverObjects.push(topCover, bottomCover);
+    }
   }
 
   private createItemsScrollHandlers(layout: ForgeLayout) {
@@ -894,8 +938,8 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private isPointerInsideItemsList(pointer: Phaser.Input.Pointer, layout: ForgeLayout) {
-    const listLeft = layout.centerX - layout.contentWidth / 2 + 18;
-    const listRight = layout.centerX + layout.contentWidth / 2 - 18;
+    const listLeft = layout.centerX - layout.contentWidth / 2 + 22;
+    const listRight = layout.centerX + layout.contentWidth / 2 - 22;
 
     return (
       pointer.x >= listLeft &&
@@ -912,10 +956,10 @@ export class ForgeScene extends Phaser.Scene {
     const visible = this.itemsMaxScrollY > 0;
 
     this.itemsScrollbarTrack = this.add.rectangle(trackX, trackY, 4, trackHeight, 0x000000, visible ? 0.28 : 0)
-      .setDepth(200);
+      .setDepth(238);
 
     this.itemsScrollbarThumb = this.add.rectangle(trackX, this.itemsListTop + 18, 4, 36, FORGE.gold, visible ? 0.55 : 0)
-      .setDepth(201);
+      .setDepth(239);
   }
 
   private updateItemsScrollbar(layout: ForgeLayout) {
@@ -1433,6 +1477,7 @@ export class ForgeScene extends Phaser.Scene {
       },
     });
 
+    this.applyItemsMaskToContainer(cardContainer);
     cardContainer.setAlpha(alpha);
     this.setCardObjectsAlpha([cardContainer, upgradeButton.zone], alpha);
   }
@@ -1463,10 +1508,10 @@ export class ForgeScene extends Phaser.Scene {
     const y = layout.height - layout.bottomBarHeight / 2;
 
     this.add.rectangle(layout.centerX, y, layout.width, layout.bottomBarHeight + 22, 0x020202, 0.78)
-      .setDepth(220);
+      .setDepth(300);
 
     this.add.rectangle(layout.centerX, y - layout.bottomBarHeight / 2 + 5, layout.contentWidth, 1, FORGE.bronze, 0.28)
-      .setDepth(221);
+      .setDepth(301);
 
     this.createForgeButton({
       x: layout.centerX,
@@ -1475,7 +1520,7 @@ export class ForgeScene extends Phaser.Scene {
       height: layout.veryCompact ? 50 : 56,
       text: 'Вернуться в лагерь',
       variant: 'gold',
-      depth: 230,
+      depth: 310,
       onClick: () => {
         this.scene.start('CampScene');
       },
