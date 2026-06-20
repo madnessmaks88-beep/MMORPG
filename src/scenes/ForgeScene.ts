@@ -232,39 +232,41 @@ export class ForgeScene extends Phaser.Scene {
     const compact = height < 900;
     const veryCompact = height < 740;
 
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 16, 32);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 10, 26);
-    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.02), 14, 30);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 16, 30);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.014), 8, 20);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.018), 12, 26);
 
     const contentWidth = Math.min(width - safeX * 2, 640);
 
-    const bottomBarHeight = veryCompact ? 64 : compact ? 74 : 88;
-    const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + (veryCompact ? 4 : 6);
-    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 18 : compact ? 22 : 26);
+    const bottomBarHeight = veryCompact ? 60 : compact ? 68 : 78;
+    const bottomButtonY = height - safeBottom - bottomBarHeight / 2 + (veryCompact ? 3 : 5);
+    const itemsActionBottom = height - bottomBarHeight - safeBottom - (veryCompact ? 14 : compact ? 18 : 22);
 
-    const headerTop = safeTop + 2;
-    const headerHeight = veryCompact ? 54 : compact ? 66 : 80;
+    const gapTiny = veryCompact ? 4 : compact ? 5 : 7;
+    const gap = veryCompact ? 5 : compact ? 7 : 8;
 
-    const resourcesTop = headerTop + headerHeight + (veryCompact ? 4 : 7);
-    const resourcesHeight = veryCompact ? 42 : compact ? 52 : 62;
+    const headerTop = safeTop;
+    const headerHeight = veryCompact ? 42 : compact ? 52 : 60;
 
-    const anvilTop = resourcesTop + resourcesHeight + (veryCompact ? 5 : 8);
-    const anvilHeight = veryCompact ? 74 : compact ? 88 : 104;
+    const resourcesTop = headerTop + headerHeight + gapTiny;
+    const resourcesHeight = veryCompact ? 38 : compact ? 44 : 50;
 
-    const materialsTop = anvilTop + anvilHeight + (veryCompact ? 5 : 8);
-    const materialsHeight = veryCompact ? 54 : compact ? 86 : 112;
+    const anvilTop = resourcesTop + resourcesHeight + gap;
+    const anvilHeight = veryCompact ? 68 : compact ? 78 : 88;
 
-    const tabsTop = materialsTop + materialsHeight + (veryCompact ? 5 : 8);
-    const tabsHeight = veryCompact ? 44 : compact ? 54 : 62;
+    const materialsTop = anvilTop + anvilHeight + gap;
+    const materialsHeight = veryCompact ? 48 : compact ? 70 : 84;
 
-    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 14 : compact ? 16 : 18);
-    const minItemsHeight = veryCompact ? 176 : compact ? 226 : 276;
-    const availableItemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
-    const itemsPanelHeight = availableItemsPanelHeight;
-    const itemsListTop = itemsPanelTop + (veryCompact ? 58 : compact ? 70 : 76);
+    const tabsTop = materialsTop + materialsHeight + gap;
+    const tabsHeight = veryCompact ? 40 : compact ? 46 : 50;
+
+    const itemsPanelTop = tabsTop + tabsHeight + (veryCompact ? 12 : 14);
+    const minItemsHeight = veryCompact ? 174 : compact ? 224 : 274;
+    const itemsPanelHeight = Math.max(minItemsHeight, itemsActionBottom - itemsPanelTop);
+    const itemsListTop = itemsPanelTop + (veryCompact ? 46 : compact ? 54 : 58);
     const itemsListBottom = Math.min(
-      itemsPanelTop + itemsPanelHeight - (veryCompact ? 28 : compact ? 32 : 36),
-      itemsActionBottom - (veryCompact ? 30 : compact ? 34 : 38)
+      itemsPanelTop + itemsPanelHeight - (veryCompact ? 22 : compact ? 26 : 30),
+      itemsActionBottom - (veryCompact ? 24 : compact ? 28 : 32)
     );
     const itemsListHeight = Math.max(132, itemsListBottom - itemsListTop);
     const itemsPanelBottom = itemsPanelTop + itemsPanelHeight;
@@ -314,65 +316,108 @@ export class ForgeScene extends Phaser.Scene {
   private createForgeBackdrop(layout: ForgeLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.rectangle(centerX, height / 2, width, height, FORGE.black, 0.98).setDepth(0);
-    this.add.rectangle(centerX, height * 0.42, width, height * 0.82, FORGE.void, 0.72).setDepth(0);
-    this.add.rectangle(centerX, height - 180, width, 360, 0x020202, 0.7).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, 0x020203, 1).setDepth(0);
 
-    const forgeY = layout.safeTop + (layout.veryCompact ? 132 : layout.compact ? 154 : 170);
+    const wall = this.add.graphics().setDepth(1);
+    wall.fillStyle(0x06070a, 0.94);
+    wall.fillRect(0, 0, width, height);
 
-    this.add.circle(centerX, forgeY, width * 0.54, FORGE.violet, 0.105).setDepth(0);
-    this.add.circle(centerX, forgeY + 20, width * 0.38, FORGE.ember, 0.105).setDepth(0);
-    this.add.circle(centerX, forgeY + 34, width * 0.19, FORGE.gold, 0.045).setDepth(0);
-
-    const archWidth = Math.min(layout.contentWidth * 0.86, 520);
-    const archHeight = layout.veryCompact ? 132 : layout.compact ? 154 : 178;
-    const archTop = forgeY - archHeight / 2 + 48;
-
-    this.add.rectangle(centerX, archTop + archHeight / 2, archWidth, archHeight, 0x070708, 0.62)
-      .setStrokeStyle(2, FORGE.bronze, 0.28)
-      .setDepth(1);
-
-    this.add.ellipse(centerX, archTop + 8, archWidth * 0.72, 112, 0x100909, 0.7)
-      .setStrokeStyle(2, FORGE.bronze, 0.34)
-      .setDepth(1);
-
-    this.add.rectangle(centerX, archTop + archHeight - 26, archWidth + 56, 28, 0x100c0a, 0.9)
-      .setStrokeStyle(2, FORGE.bronze, 0.24)
-      .setDepth(2);
-
-    this.add.circle(centerX, archTop + archHeight - 66, 44, FORGE.ember, 0.16).setDepth(1);
-    this.add.circle(centerX, archTop + archHeight - 66, 24, FORGE.gold, 0.055).setDepth(1);
-
-    this.add.text(centerX, archTop + archHeight - 72, '⚒', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '42px' : '58px',
-      color: '#b9985b',
-      stroke: '#000000',
-      strokeThickness: 6,
-    }).setOrigin(0.5).setAlpha(0.2).setDepth(2);
-
-    for (let i = 0; i < 42; i += 1) {
-      const x = layout.safeX + 10 + (i * 53) % Math.max(1, width - layout.safeX * 2 - 20);
-      const y = layout.safeTop + 76 + (i * 89) % Math.max(1, height - layout.safeTop - layout.safeBottom - 160);
-      const color = i % 5 === 0 ? FORGE.ember : i % 3 === 0 ? FORGE.cold : FORGE.ash;
-      const alpha = 0.018 + (i % 6) * 0.006;
-
-      this.add.circle(x, y, 1 + (i % 3), color, alpha).setDepth(1);
+    for (let i = 0; i < 9; i += 1) {
+      const y = layout.safeTop + 72 + i * Math.max(42, height * 0.065);
+      wall.lineStyle(1, 0x1b1714, 0.2);
+      wall.beginPath();
+      wall.moveTo(layout.safeX, y);
+      wall.lineTo(width - layout.safeX, y + (i % 2 === 0 ? 7 : -5));
+      wall.strokePath();
     }
 
-    for (let i = 0; i < 7; i += 1) {
-      const y = height - 310 + i * 44;
+    const forgeY = layout.safeTop + (layout.veryCompact ? 96 : layout.compact ? 116 : 132);
+    const archWidth = Math.min(layout.contentWidth * 0.86, 520);
+    const archHeight = layout.veryCompact ? 92 : layout.compact ? 112 : 134;
 
-      this.add.line(
-        0,
-        0,
-        layout.safeX + 12,
-        y,
-        width - layout.safeX - 12,
-        y + (i % 2 === 0 ? 8 : -5),
-        0x1f1a15,
-        0.18
-      ).setOrigin(0, 0).setDepth(1);
+    this.add.ellipse(centerX, forgeY + 18, archWidth, archHeight, 0x0b0807, 0.86)
+      .setStrokeStyle(2, FORGE.bronzeDark, 0.54)
+      .setDepth(2);
+
+    this.add.rectangle(centerX, forgeY + archHeight * 0.34, archWidth + 54, layout.veryCompact ? 16 : 22, 0x120c08, 0.92)
+      .setStrokeStyle(1, FORGE.bronze, 0.26)
+      .setDepth(3);
+
+    const emberGlow = this.add.circle(centerX, forgeY + archHeight * 0.42, width * 0.44, FORGE.ember, 0.075)
+      .setDepth(2);
+    const hotCore = this.add.circle(centerX, forgeY + archHeight * 0.44, width * 0.17, FORGE.gold, 0.06)
+      .setDepth(2);
+    const violetBack = this.add.circle(centerX, forgeY + archHeight * 0.18, width * 0.5, FORGE.violet, 0.045)
+      .setDepth(1);
+
+    this.tweens.add({
+      targets: [emberGlow, hotCore],
+      alpha: { from: 0.045, to: 0.12 },
+      scaleX: { from: 0.96, to: 1.04 },
+      scaleY: { from: 0.96, to: 1.04 },
+      duration: 1650,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.tweens.add({
+      targets: violetBack,
+      alpha: { from: 0.026, to: 0.055 },
+      duration: 2400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const runeY = forgeY - archHeight * 0.22;
+    ['ᚱ', 'ᚨ', 'ᚾ', 'ᛟ', 'ᛉ'].forEach((rune, index) => {
+      this.add.text(centerX - 84 + index * 42, runeY + (index % 2 === 0 ? 0 : 7), rune, {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '15px' : '18px',
+        color: '#6f5434',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setAlpha(0.22).setDepth(3);
+    });
+
+    const sparkCount = layout.veryCompact ? 13 : 18;
+    for (let i = 0; i < sparkCount; i += 1) {
+      const x = centerX - archWidth * 0.36 + (i * 37) % Math.max(1, Math.floor(archWidth * 0.72));
+      const y = forgeY + archHeight * 0.36 + (i % 5) * 7;
+      const spark = this.add.circle(x, y, i % 3 === 0 ? 2 : 1.25, i % 2 === 0 ? FORGE.gold : FORGE.ember, 0.44)
+        .setDepth(4);
+
+      this.tweens.add({
+        targets: spark,
+        y: y - Phaser.Math.Clamp(34 + (i % 4) * 10, 30, 74),
+        x: x + (i % 2 === 0 ? 9 : -7),
+        alpha: { from: 0.5, to: 0 },
+        duration: 1550 + i * 80,
+        delay: i * 110,
+        repeat: -1,
+        ease: 'Sine.easeOut',
+      });
+    }
+
+    const dustCount = layout.veryCompact ? 18 : 26;
+    for (let i = 0; i < dustCount; i += 1) {
+      const x = layout.safeX + 10 + (i * 71) % Math.max(1, width - layout.safeX * 2 - 20);
+      const y = layout.safeTop + 62 + (i * 97) % Math.max(1, height - layout.safeTop - layout.safeBottom - 130);
+      const dust = this.add.circle(x, y, 1 + (i % 2), i % 4 === 0 ? FORGE.cold : FORGE.ash, 0.026)
+        .setDepth(2);
+
+      if (i < 12) {
+        this.tweens.add({
+          targets: dust,
+          y: y - 14 - (i % 3) * 6,
+          alpha: { from: 0.018, to: 0.05 },
+          duration: 2600 + i * 70,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
     }
   }
 
@@ -384,40 +429,45 @@ export class ForgeScene extends Phaser.Scene {
       y: panelY,
       width: layout.contentWidth,
       height: layout.headerHeight,
-      radius: 26,
+      radius: 24,
       fill: FORGE.graphite,
-      alpha: 0.93,
+      alpha: 0.94,
       stroke: FORGE.bronze,
-      strokeAlpha: 0.5,
+      strokeAlpha: 0.52,
       glow: FORGE.ember,
       depth: 120,
     });
 
-    this.add.text(layout.centerX, panelY - (layout.veryCompact ? 14 : 18), 'Кузница Пепельного Молота', {
+    this.add.circle(
+      layout.centerX - layout.contentWidth / 2 + 34,
+      panelY,
+      layout.veryCompact ? 15 : 18,
+      FORGE.ember,
+      0.18
+    ).setStrokeStyle(1, FORGE.gold, 0.44).setDepth(126);
+
+    this.add.text(layout.centerX - layout.contentWidth / 2 + 34, panelY, '⚒', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '14px' : '17px',
+      color: '#d6c08a',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(127);
+
+    this.add.text(layout.centerX + 10, panelY, 'Кузница Пепельного Молота', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '23px' : layout.compact ? '26px' : '30px',
+      fontSize: layout.veryCompact ? '21px' : layout.compact ? '24px' : '27px',
       color: '#d6c08a',
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 48,
+        width: layout.contentWidth - 92,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(126);
-
-    this.add.text(layout.centerX, panelY + (layout.veryCompact ? 17 : 22), 'Тихий жар, чёрный металл и вещи, пережившие склеп', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '12px' : '14px',
-      color: '#9f9788',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 64,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(126);
+    }).setOrigin(0.5).setDepth(127);
   }
 
   private createResourcePanel(layout: ForgeLayout) {
@@ -570,7 +620,7 @@ export class ForgeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(231);
 
-    this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 14), 'Выбери трофей и закали его у горна.', {
+    this.add.text(left + 62, headerY + (layout.veryCompact ? 11 : 13), 'Закалка выбранной добычи.', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: '#8f8879',
@@ -1007,6 +1057,11 @@ export class ForgeScene extends Phaser.Scene {
     const isUpgraded = player.anvilLevel >= 2;
     const canUpgrade = canUpgradeAnvil();
     const anvilCost = getAnvilUpgradeCost();
+    const anvilMaterialId = anvilCost.materialId as MaterialId;
+    const materialOwned = player.materials[anvilMaterialId] ?? 0;
+    const enoughMaterials = materialOwned >= anvilCost.amount;
+    const enoughGold = player.gold >= anvilCost.gold;
+    const costReady = enoughMaterials && enoughGold;
 
     const panelHeight = layout.anvilHeight;
     const panelY = topY + panelHeight / 2;
@@ -1017,88 +1072,114 @@ export class ForgeScene extends Phaser.Scene {
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 28,
-      fill: isUpgraded ? 0x0c1510 : FORGE.soot,
-      alpha: 0.96,
-      stroke: isUpgraded ? FORGE.green : FORGE.bronze,
-      strokeAlpha: isUpgraded ? 0.64 : 0.42,
+      radius: 24,
+      fill: isUpgraded ? 0x0b1710 : 0x120b08,
+      alpha: 0.965,
+      stroke: isUpgraded ? FORGE.green : FORGE.gold,
+      strokeAlpha: isUpgraded ? 0.56 : 0.44,
       glow: isUpgraded ? FORGE.green : FORGE.ember,
       depth: 2,
     });
 
     const left = layout.centerX - layout.contentWidth / 2;
     const right = layout.centerX + layout.contentWidth / 2;
+    const iconX = left + (layout.veryCompact ? 34 : 40);
+    const iconRadius = layout.veryCompact ? 22 : 26;
 
     this.addTo(
       container,
-      this.add.circle(left + 42, topY + panelHeight * 0.5, layout.veryCompact ? 25 : 30, isUpgraded ? 0x132018 : 0x1a110d, 0.96)
-        .setStrokeStyle(2, isUpgraded ? FORGE.green : FORGE.gold, 0.75)
+      this.add.circle(iconX, panelY, iconRadius, isUpgraded ? 0x132019 : 0x24120b, 0.98)
+        .setStrokeStyle(2, isUpgraded ? FORGE.green : FORGE.gold, 0.76)
         .setDepth(7)
     );
 
     this.addTo(
       container,
-      this.add.text(left + 42, topY + panelHeight * 0.5, '⚒', {
+      this.add.text(iconX, panelY, '⚒', {
         fontFamily: UI.font.body,
-        fontSize: '26px',
+        fontSize: layout.veryCompact ? '22px' : '26px',
         color: isUpgraded ? '#9fd0a6' : '#d6c08a',
         stroke: '#000000',
         strokeThickness: 3,
       }).setOrigin(0.5).setDepth(8)
     );
 
+    const textX = left + (layout.veryCompact ? 66 : 78);
+    const buttonWidth = layout.veryCompact ? 96 : 116;
+    const textWidth = Math.max(140, layout.contentWidth - buttonWidth - (layout.veryCompact ? 104 : 128));
+
     this.addTo(
       container,
-      this.add.text(left + 82, topY + (layout.veryCompact ? 20 : 24), `Наковальня ${player.anvilLevel} уровня`, {
+      this.add.text(textX, topY + (layout.veryCompact ? 17 : 20), `Наковальня ${player.anvilLevel >= 2 ? 'II' : 'I'} уровня`, {
         fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '18px' : '21px',
-        color: '#d6c08a',
+        fontSize: layout.veryCompact ? '16px' : '19px',
+        color: isUpgraded ? '#9fd0a6' : '#d6c08a',
         stroke: '#000000',
         strokeThickness: 4,
         wordWrap: {
-          width: layout.contentWidth - 210,
+          width: textWidth,
           useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(8)
     );
 
-    const description = isUpgraded
-      ? 'Высокая закалка открыта. Легендарные и эпические трофеи можно вести до предела.'
-      : `Для улучшений выше +5 нужна наковальня II. ${this.createAnvilCostNeedText(anvilCost)}`;
+    const stateText = isUpgraded
+      ? 'Закалка высокого ранга открыта.'
+      : 'Для улучшений выше +5 нужна II ступень.';
 
     this.addTo(
       container,
-      this.add.text(left + 82, topY + (layout.veryCompact ? 48 : 58), description, {
+      this.add.text(textX, topY + (layout.veryCompact ? 38 : 44), stateText, {
         fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '12px' : '13px',
+        fontSize: layout.veryCompact ? '11px' : '12px',
         color: '#a9a091',
-        lineSpacing: 3,
         wordWrap: {
-          width: layout.contentWidth - 212,
+          width: textWidth,
           useAdvancedWrap: true,
         },
-        maxLines: layout.veryCompact ? 2 : 3,
+        maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(8)
     );
 
     this.createAnvilProgress(
       container,
-      left + 82,
-      topY + panelHeight - (layout.veryCompact ? 18 : 22),
-      Math.min(layout.contentWidth - 248, 300),
+      textX,
+      topY + panelHeight - (layout.veryCompact ? 13 : 16),
+      Math.min(textWidth - 34, 260),
       8
     );
 
+    if (!isUpgraded) {
+      const costText = `${enoughGold ? '✓' : '!'} ${player.gold}/${anvilCost.gold} зол.  ${enoughMaterials ? '✓' : '!'} ${this.getShortMaterialName(anvilMaterialId)} ${materialOwned}/${anvilCost.amount}`;
+
+      this.addTo(
+        container,
+        this.add.text(right - buttonWidth - 20, topY + panelHeight - (layout.veryCompact ? 14 : 17), costText, {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '9px' : '10px',
+          color: costReady ? '#9fd0a6' : '#d28f85',
+          stroke: '#000000',
+          strokeThickness: 1,
+          align: 'right',
+          wordWrap: {
+            width: buttonWidth + 36,
+            useAdvancedWrap: true,
+          },
+          maxLines: 1,
+        }).setOrigin(1, 0.5).setDepth(8)
+      );
+    }
+
     this.createForgeButton({
       parent: container,
-      x: right - (layout.veryCompact ? 62 : 72),
-      y: topY + panelHeight / 2,
-      width: layout.veryCompact ? 104 : 124,
-      height: layout.veryCompact ? 42 : 48,
+      x: right - buttonWidth / 2 - 18,
+      y: panelY - (isUpgraded ? 0 : layout.veryCompact ? 7 : 9),
+      width: buttonWidth,
+      height: layout.veryCompact ? 38 : 42,
       text: isUpgraded ? 'Готово' : 'Усилить',
       disabled: isUpgraded || !canUpgrade,
-      variant: isUpgraded ? 'green' : 'gold',
+      variant: isUpgraded ? 'green' : costReady ? 'gold' : 'dark',
       small: true,
       depth: 8,
       onClick: () => {
@@ -1121,62 +1202,67 @@ export class ForgeScene extends Phaser.Scene {
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: 28,
+      radius: 24,
       fill: FORGE.graphite,
-      alpha: 0.93,
-      stroke: FORGE.bronze,
+      alpha: 0.945,
+      stroke: FORGE.cold,
       strokeAlpha: 0.34,
       glow: FORGE.cold,
       depth: 2,
     });
 
+    const left = layout.centerX - layout.contentWidth / 2;
+
     this.addTo(
       container,
-      this.add.text(layout.centerX, topY + (layout.veryCompact ? 18 : 24), 'Склад материалов', {
+      this.add.text(left + 20, topY + (layout.veryCompact ? 13 : 16), 'Склад материалов', {
         fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '16px' : '20px',
+        fontSize: layout.veryCompact ? '14px' : '17px',
         color: '#d6c08a',
         stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center',
+        strokeThickness: 3,
+        align: 'left',
         wordWrap: {
-          width: layout.contentWidth - 56,
+          width: layout.contentWidth - 40,
           useAdvancedWrap: true,
         },
         maxLines: 1,
-      }).setOrigin(0.5).setDepth(8)
+      }).setOrigin(0, 0.5).setDepth(8)
     );
 
     if (layout.veryCompact) {
-      const summary = MATERIAL_IDS.map(id => `${this.getShortMaterialName(id)} ${player.materials[id] ?? 0}`).join('  •  ');
+      const summary = MATERIAL_IDS
+        .map(id => `${this.getMaterialIcon(id)} ${this.getShortMaterialName(id)} ${player.materials[id] ?? 0}`)
+        .join('   ');
 
       this.addTo(
         container,
-        this.add.text(layout.centerX, topY + 40, summary, {
+        this.add.text(left + 20, topY + 34, summary, {
           fontFamily: UI.font.body,
-          fontSize: '10px',
+          fontSize: '9px',
           color: '#a9a091',
-          align: 'center',
+          align: 'left',
           wordWrap: {
-            width: layout.contentWidth - 34,
+            width: layout.contentWidth - 40,
             useAdvancedWrap: true,
           },
           maxLines: 1,
-        }).setOrigin(0.5).setDepth(8)
+        }).setOrigin(0, 0.5).setDepth(8)
       );
 
       return topY + panelHeight;
     }
 
-    const chipGap = 10;
-    const chipWidth = (layout.contentWidth - 56 - chipGap) / 2;
+    const chipGap = 7;
+    const chipWidth = (layout.contentWidth - 44 - chipGap) / 2;
     const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
     const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
-    const rowGap = 23;
+    const rowGap = layout.compact ? 15 : 17;
+    const firstRowY = topY + (layout.compact ? 34 : 38);
 
     MATERIAL_IDS.forEach((id, index) => {
       const x = index % 2 === 0 ? leftX : rightX;
-      const y = topY + 56 + Math.floor(index / 2) * rowGap;
+      const y = firstRowY + Math.floor(index / 2) * rowGap;
 
       this.createMaterialLine(container, x, y, chipWidth, id, 8);
     });
@@ -2087,21 +2173,6 @@ export class ForgeScene extends Phaser.Scene {
     return lines.join('\n');
   }
 
-  private createAnvilCostNeedText(cost: {
-    materialId: MaterialId;
-    amount: number;
-    gold: number;
-  }) {
-    const materialOwned = player.materials[cost.materialId] ?? 0;
-    const materialEnough = materialOwned >= cost.amount;
-    const goldEnough = player.gold >= cost.gold;
-
-    return [
-      `${materialEnough ? '✓' : '!'} ${this.getShortMaterialName(cost.materialId)}: ${materialOwned}/${cost.amount}`,
-      `${goldEnough ? '✓' : '!'} золото: ${player.gold}/${cost.gold}`,
-    ].join(' • ');
-  }
-
   private getShortMaterialName(id: MaterialId) {
     if (id === 'darkened_bone') return 'Кость';
     if (id === 'dim_gem') return 'Самоцв.';
@@ -2235,21 +2306,55 @@ export class ForgeScene extends Phaser.Scene {
     depth: number
   ) {
     const amount = player.materials[id] ?? 0;
+    const hasMaterial = amount > 0;
+    const accent = id === 'dark_flame_heart'
+      ? FORGE.ember
+      : id === 'black_gem' || id === 'dim_gem'
+        ? FORGE.cold
+        : id === 'cursed_seal' || id === 'black_sarcophagus_shard'
+          ? FORGE.violet
+          : FORGE.bronze;
+
+    const chipHeight = 14;
+    const bg = this.add.graphics();
+    bg.fillStyle(hasMaterial ? 0x11151b : 0x080808, hasMaterial ? 0.82 : 0.5);
+    bg.fillRoundedRect(x - width / 2, y - chipHeight / 2, width, chipHeight, 7);
+    bg.lineStyle(1, accent, hasMaterial ? 0.34 : 0.12);
+    bg.strokeRoundedRect(x - width / 2, y - chipHeight / 2, width, chipHeight, 7);
+    bg.setDepth(depth);
+    container.add(bg);
 
     this.addTo(
       container,
-      this.add.text(x - width / 2 + 6, y, `${this.getMaterialIcon(id)} ${getMaterialName(id)}: ${amount}`, {
+      this.add.text(x - width / 2 + 7, y, `${this.getMaterialIcon(id)} ${this.getShortMaterialName(id)}`, {
         fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: amount > 0 ? UI.colors.text : UI.colors.textMuted,
+        fontSize: '9px',
+        color: hasMaterial ? '#c6bdad' : '#69645d',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 1,
         wordWrap: {
-          width: width - 10,
+          width: width - 48,
           useAdvancedWrap: true,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(depth)
+      }).setOrigin(0, 0.5).setDepth(depth + 2)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(x + width / 2 - 8, y, `${amount}`, {
+        fontFamily: UI.font.title,
+        fontSize: '10px',
+        color: hasMaterial ? '#d6c08a' : '#77706a',
+        stroke: '#000000',
+        strokeThickness: 1,
+        align: 'right',
+        wordWrap: {
+          width: 36,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(1, 0.5).setDepth(depth + 2)
     );
   }
 
