@@ -78,6 +78,9 @@ type ExpandedShopItemData = ItemData & {
   bonusIntelligence?: number;
 };
 
+const SHOP_MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+const SHOP_DAY_MS = 24 * 60 * 60 * 1000;
+
 const SHOP_COLORS = {
   ink: 0x050608,
   panel: 0x0a0b0d,
@@ -114,6 +117,10 @@ export class ShopScene extends Phaser.Scene {
 
   private isModalOpen = false;
 
+  private refreshTimerText?: Phaser.GameObjects.Text;
+  private lastRefreshTimerSecond = -1;
+  private isRefreshingByDailyTimer = false;
+
   constructor() {
     super('ShopScene');
   }
@@ -136,6 +143,13 @@ export class ShopScene extends Phaser.Scene {
   }
 
   update() {
+    this.updateShopRefreshTimerText();
+
+    if (this.assortment && this.isAssortmentExpired(this.assortment)) {
+      this.refreshShopAssortmentByDailyTimer();
+      return;
+    }
+
     if (!this.contentContainer) {
       return;
     }
@@ -166,7 +180,7 @@ export class ShopScene extends Phaser.Scene {
     const safeBottom = height < 760 ? 142 : 154;
 
     const contentWidth = Math.min(width - safeX * 2, 640);
-    const headerHeight = compact ? 206 : 224;
+    const headerHeight = compact ? 244 : 266;
     const contentTop = safeTop + headerHeight;
     const contentBottom = height - safeBottom;
 
@@ -350,8 +364,8 @@ export class ShopScene extends Phaser.Scene {
     });
   }
   private createResourcePanel(layout: ShopLayout) {
-    const panelHeight = layout.compact ? 118 : 128;
-    const panelY = layout.safeTop + (layout.compact ? 140 : 154);
+    const panelHeight = layout.compact ? 154 : 166;
+    const panelY = layout.safeTop + (layout.compact ? 158 : 174);
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -379,11 +393,11 @@ export class ShopScene extends Phaser.Scene {
       ease: 'Sine.easeOut',
     });
 
-    const chipGap = 10;
+    const chipGap = layout.contentWidth < 390 ? 8 : 10;
     const chipWidth = Math.min((layout.contentWidth - 44 - chipGap) / 2, 250);
     const leftX = layout.centerX - chipWidth / 2 - chipGap / 2;
     const rightX = layout.centerX + chipWidth / 2 + chipGap / 2;
-    const chipY = panelY - (layout.compact ? 29 : 32);
+    const chipY = panelY - (layout.compact ? 55 : 59);
 
     this.createResourceChip({
       x: leftX,
@@ -405,11 +419,18 @@ export class ShopScene extends Phaser.Scene {
       color: SHOP_COLORS.blue,
     });
 
+    this.createRefreshTimerChip({
+      x: layout.centerX,
+      y: panelY - (layout.compact ? 8 : 9),
+      width: layout.contentWidth - 44,
+      height: layout.compact ? 34 : 36,
+    });
+
     this.createCouponBanner({
       x: layout.centerX,
-      y: panelY + (layout.compact ? 32 : 36),
+      y: panelY + (layout.compact ? 47 : 51),
       width: layout.contentWidth - 44,
-      height: layout.compact ? 50 : 56,
+      height: layout.compact ? 42 : 46,
     });
   }
   private createScrollableContent(layout: ShopLayout) {
@@ -431,8 +452,7 @@ export class ShopScene extends Phaser.Scene {
 
     let cursorY = layout.contentTop + 12;
 
-    cursorY = this.createInfoSection(layout, cursorY + 10);
-    cursorY = this.createItemSection(layout, cursorY + 14, 'weapons', 'Оружие', '⚔');
+    cursorY = this.createItemSection(layout, cursorY + 4, 'weapons', 'Оружие', '⚔');
     cursorY = this.createItemSection(layout, cursorY + 14, 'armors', 'Броня', '▣');
     cursorY = this.createItemSection(layout, cursorY + 14, 'trinkets', 'Талисманы', '☥');
 
@@ -872,68 +892,6 @@ export class ShopScene extends Phaser.Scene {
       small: true,
     });
   }
-  private createInfoSection(layout: ShopLayout, topY: number) {
-    const container = this.requireContentContainer();
-
-    const panelHeight = layout.compact ? 116 : 128;
-    const panelY = topY + panelHeight / 2;
-
-    this.createRoundedPanel({
-      parent: container,
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: 28,
-      color: 0x0b0908,
-      alpha: 0.93,
-      strokeColor: 0x4d3a25,
-      strokeAlpha: 0.54,
-      strokeWidth: 1,
-      depth: 2,
-      glowColor: SHOP_COLORS.gold,
-    });
-
-    this.addTo(
-      container,
-      this.add.text(layout.centerX, topY + 30, 'Прилавок у катакомб', {
-        fontFamily: UI.font.title,
-        fontSize: layout.compact ? '20px' : '22px',
-        color: '#c9a86a',
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'center',
-        wordWrap: {
-          width: layout.contentWidth - 60,
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(7)
-    );
-
-    this.addTo(
-      container,
-      this.add.text(
-        layout.centerX,
-        topY + 78,
-        'Торговец меняет ассортимент за купоны лавки. Купленные товары отмечаются до следующего обновления. Чем выше редкость — тем дороже и реже предмет.',
-        {
-          fontFamily: UI.font.body,
-          fontSize: layout.compact ? '12px' : '13px',
-          color: '#9b9386',
-          align: 'center',
-          wordWrap: {
-            width: layout.contentWidth - 64,
-            useAdvancedWrap: true,
-          },
-          maxLines: 4,
-          lineSpacing: 4,
-        }
-      ).setOrigin(0.5).setDepth(7)
-    );
-
-    return topY + panelHeight;
-  }
   private createBottomActions(layout: ShopLayout) {
     const dockY = layout.height - 112;
     const panelHeight = 58;
@@ -1114,6 +1072,81 @@ export class ShopScene extends Phaser.Scene {
     zone.on('pointerupoutside', () => {
       bg.setScale(1);
       title.setY(config.y - 11);
+    });
+  }
+
+
+  private createRefreshTimerChip(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) {
+    const radius = Math.min(18, config.height / 2);
+    const left = config.x - config.width / 2;
+    const compact = this.scale.height < 1120;
+
+    const shadow = this.add.graphics().setDepth(17);
+    shadow.fillStyle(0x000000, 0.28);
+    shadow.fillRoundedRect(left, config.y - config.height / 2 + 4, config.width, config.height, radius);
+
+    const bg = this.add.graphics().setDepth(18);
+    bg.fillStyle(0x0c0d11, 0.96);
+    bg.fillRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+    bg.lineStyle(1, SHOP_COLORS.gold, 0.42);
+    bg.strokeRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+    bg.lineStyle(1, 0xffffff, 0.035);
+    bg.strokeRoundedRect(left + 3, config.y - config.height / 2 + 3, config.width - 6, config.height - 6, Math.max(1, radius - 3));
+
+    const iconX = left + Math.min(26, config.height * 0.78);
+    const labelWidth = Math.max(90, config.width * 0.48);
+    const timeWidth = Math.max(86, config.width - labelWidth - 54);
+
+    const iconGlow = this.add.circle(iconX, config.y, Math.min(14, config.height * 0.36), SHOP_COLORS.gold, 0.14)
+      .setStrokeStyle(1, SHOP_COLORS.gold, 0.42)
+      .setDepth(19);
+
+    const icon = this.add.text(iconX, config.y, '⏳', {
+      fontFamily: UI.font.body,
+      fontSize: compact ? '11px' : '12px',
+      color: '#d2b87a',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(20);
+
+    const label = this.add.text(left + 46, config.y, compact ? 'Обновл. через' : 'Новый товар через', {
+      fontFamily: UI.font.body,
+      fontSize: compact ? '10px' : '11px',
+      color: '#9b9386',
+      wordWrap: {
+        width: labelWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(20);
+
+    this.refreshTimerText = this.add.text(left + config.width - 16, config.y, this.formatShopRefreshTimer(this.getShopRefreshTimeLeft()), {
+      fontFamily: UI.font.title,
+      fontSize: compact ? '15px' : '16px',
+      color: '#d2b87a',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'right',
+      wordWrap: {
+        width: timeWidth,
+      },
+      maxLines: 1,
+    }).setOrigin(1, 0.5).setDepth(20);
+
+    const objects = [shadow, bg, iconGlow, icon, label, this.refreshTimerText];
+    objects.forEach(object => object.setAlpha(0));
+
+    this.tweens.add({
+      targets: objects,
+      alpha: 1,
+      duration: 240,
+      delay: 165,
+      ease: 'Sine.easeOut',
     });
   }
 
@@ -1769,13 +1802,14 @@ export class ShopScene extends Phaser.Scene {
 
       const parsed = JSON.parse(raw) as ShopAssortment;
 
-      if (!this.isValidAssortment(parsed)) {
+      if (!this.isValidAssortment(parsed) || this.isAssortmentExpired(parsed)) {
         const generated = this.generateAssortment();
         this.assortment = generated;
         this.saveAssortment();
         return generated;
       }
 
+      this.assortment = parsed;
       return parsed;
     } catch {
       const generated = this.generateAssortment();
@@ -1790,7 +1824,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private isValidAssortment(assortment: ShopAssortment) {
-    if (!assortment || assortment.version !== 3) {
+    if (!assortment || assortment.version !== 3 || typeof assortment.generatedAt !== 'number') {
       return false;
     }
 
@@ -1808,6 +1842,77 @@ export class ShopScene extends Phaser.Scene {
       const item = items.find(item => item.id === offer.itemId);
       return Boolean(item && this.isItemAvailableInShop(item));
     });
+  }
+
+
+  private refreshShopAssortmentByDailyTimer() {
+    if (this.isRefreshingByDailyTimer) {
+      return;
+    }
+
+    this.isRefreshingByDailyTimer = true;
+    this.isModalOpen = false;
+    this.assortment = this.generateAssortment();
+    this.saveAssortment();
+    this.scene.restart();
+  }
+
+  private updateShopRefreshTimerText() {
+    if (!this.refreshTimerText) {
+      return;
+    }
+
+    const timeLeft = this.getShopRefreshTimeLeft();
+    const currentSecond = Math.floor(timeLeft / 1000);
+
+    if (currentSecond === this.lastRefreshTimerSecond) {
+      return;
+    }
+
+    this.lastRefreshTimerSecond = currentSecond;
+    this.refreshTimerText.setText(this.formatShopRefreshTimer(timeLeft));
+  }
+
+  private getShopRefreshTimeLeft(now = Date.now()) {
+    return Math.max(0, this.getNextShopRefreshAt(now) - now);
+  }
+
+  private isAssortmentExpired(assortment: ShopAssortment, now = Date.now()) {
+    if (!assortment || typeof assortment.generatedAt !== 'number') {
+      return true;
+    }
+
+    return this.getNextShopRefreshAt(assortment.generatedAt) <= now;
+  }
+
+  private getNextShopRefreshAt(now = Date.now()) {
+    return this.getDailyShopRefreshPeriodStartMs(now) + SHOP_DAY_MS;
+  }
+
+  private getDailyShopRefreshPeriodStartMs(timestamp = Date.now()) {
+    const mskDate = new Date(timestamp + SHOP_MSK_OFFSET_MS);
+    const year = mskDate.getUTCFullYear();
+    const month = mskDate.getUTCMonth();
+    const date = mskDate.getUTCDate();
+
+    let startMs = Date.UTC(year, month, date, 12, 0, 0, 0) - SHOP_MSK_OFFSET_MS;
+
+    if (timestamp < startMs) {
+      startMs -= SHOP_DAY_MS;
+    }
+
+    return startMs;
+  }
+
+  private formatShopRefreshTimer(ms: number) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (value: number) => value.toString().padStart(2, '0');
+
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   }
 
   private generateAssortment(): ShopAssortment {
