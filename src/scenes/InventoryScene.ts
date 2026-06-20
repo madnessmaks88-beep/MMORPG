@@ -117,6 +117,7 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryTargetScrollY = 0;
   private inventoryMaxScrollY = 0;
 
+
   private inventoryLastRenderedScrollY = -1;
 
   private initialInventoryScrollY = 0;
@@ -193,9 +194,13 @@ export class InventoryScene extends Phaser.Scene {
 
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 10, 24);
+
+    // Реальная нижняя граница фиксированной зоны:
+    // - в городе createBottomNav занимает 96px снизу, поэтому список должен закончиться выше height - 96;
+    // - в подземелье кнопка возврата стоит около нижней части, поэтому оставляем ещё больший запас.
     const bottomNavSafeTop = this.returnScene === 'DungeonScene'
-      ? height - 82
-      : height - 106;
+      ? height - 84
+      : height - 104;
     const safeBottom = height - bottomNavSafeTop;
 
     const contentWidth = Math.min(width - safeX * 2, 640);
@@ -209,28 +214,33 @@ export class InventoryScene extends Phaser.Scene {
     const equipmentHeight = ultraCompact ? 118 : veryCompact ? 136 : compact ? 158 : 174;
     const equipmentY = statsY + statsHeight / 2 + equipmentGap + equipmentHeight / 2;
 
-    const tabsGap = ultraCompact ? 7 : veryCompact ? 9 : 10;
+    const tabsGap = ultraCompact ? 8 : veryCompact ? 10 : 12;
     const tabHeight = ultraCompact ? 52 : veryCompact ? 56 : compact ? 62 : 68;
     const tabsY = equipmentY + equipmentHeight / 2 + tabsGap + tabHeight / 2;
 
     const tabsBottom = tabsY + tabHeight / 2;
-    const listGap = ultraCompact ? 10 : 12;
-    const listPanelTop = tabsBottom + listGap;
-    const listPanelBottom = bottomNavSafeTop - (ultraCompact ? 6 : 8);
-    const listPanelHeight = Math.max(150, listPanelBottom - listPanelTop);
+    const listPanelTop = tabsBottom + (ultraCompact ? 12 : 14);
 
     const showMassSellButton = this.selectedCategory !== 'potions' && this.selectedCategory !== 'materials';
     const massSellButtonHeight = ultraCompact ? 36 : compact ? 40 : 42;
-    const massSellBottomPadding = ultraCompact ? 8 : 10;
-    const massSellButtonY = listPanelBottom - massSellButtonHeight / 2 - massSellBottomPadding;
+    const massSellBottomGap = ultraCompact ? 12 : 14;
+    const massSellButtonY = showMassSellButton
+      ? bottomNavSafeTop - massSellBottomGap - massSellButtonHeight / 2
+      : bottomNavSafeTop + 999;
+    const massSellButtonTop = massSellButtonY - massSellButtonHeight / 2;
 
     const listHeaderTop = listPanelTop;
-    const listHeaderHeight = ultraCompact ? 48 : veryCompact ? 52 : 58;
-    const itemsViewportTop = listPanelTop + listHeaderHeight + (ultraCompact ? 8 : 10);
+    const listHeaderHeight = ultraCompact ? 50 : veryCompact ? 54 : 58;
+    const itemsViewportTop = listHeaderTop + listHeaderHeight + (ultraCompact ? 12 : 14);
     const itemsViewportBottom = showMassSellButton
-      ? massSellButtonY - massSellButtonHeight / 2 - (ultraCompact ? 10 : 14)
-      : listPanelBottom - (ultraCompact ? 10 : 14);
-    const itemsViewportHeight = Math.max(88, itemsViewportBottom - itemsViewportTop);
+      ? massSellButtonTop - (ultraCompact ? 16 : 18)
+      : bottomNavSafeTop - (ultraCompact ? 18 : 20);
+    const itemsViewportHeight = Math.max(72, itemsViewportBottom - itemsViewportTop);
+
+    const listPanelBottom = showMassSellButton
+      ? Math.min(bottomNavSafeTop - 6, massSellButtonY + massSellButtonHeight / 2 + (ultraCompact ? 8 : 10))
+      : bottomNavSafeTop - 8;
+    const listPanelHeight = Math.max(150, listPanelBottom - listPanelTop);
 
     return {
       width,
@@ -824,7 +834,6 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryViewportTop = layout.itemsViewportTop;
     this.inventoryViewportBottom = layout.itemsViewportBottom;
     this.inventoryViewportHeight = Math.max(1, layout.itemsViewportHeight);
-
     this.createRoundedPanel({
       x: layout.centerX,
       y: layout.listPanelTop + layout.listPanelHeight / 2,
