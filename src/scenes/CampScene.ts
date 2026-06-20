@@ -141,7 +141,9 @@ export class CampScene extends Phaser.Scene {
       this.campfireTimerEvent = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
-      this.actionViewportCamera?.destroy();
+      // Важно: не вызываем destroy() у дополнительной камеры на SHUTDOWN.
+      // В Phaser 4 WebGL это может падать с customViewports = null;
+      // Phaser сам очищает камеры при остановке сцены.
       this.actionViewportCamera = undefined;
     });
   }
@@ -164,7 +166,7 @@ export class CampScene extends Phaser.Scene {
   }
 
   private resetScrollState() {
-    this.actionViewportCamera?.destroy();
+    // Не destroy(): после перезапуска сцены ссылка может указывать на уже очищенную камеру.
     this.actionViewportCamera = undefined;
     this.actionContainer = undefined;
     this.currentScrollY = 0;
@@ -960,7 +962,10 @@ export class CampScene extends Phaser.Scene {
     // Phaser 4 + WebGL ругается на GameObject.setMask()/GeometryMask.
     // Для прокручиваемого городского списка используем отдельную камеру:
     // её viewport сам обрезает контент, как окно списка в мессенджерах.
-    this.actionViewportCamera?.destroy();
+    // Не destroy(): метод destroy() у дополнительной камеры в Phaser 4 WebGL
+    // иногда падает при смене сцен. При создании сцены камера создаётся заново,
+    // а старые камеры очищаются менеджером сцены.
+    this.actionViewportCamera = undefined;
 
     const camera = this.cameras.add(
       layout.safeX,

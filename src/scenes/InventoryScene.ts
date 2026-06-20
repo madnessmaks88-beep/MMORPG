@@ -867,7 +867,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private createInventoryList(layout: InventoryLayout) {
-    this.cleanupInventoryListOnly();
+    this.cleanupInventoryListOnly(true);
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -998,8 +998,9 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryItemsContainer?.destroy(true);
     this.inventoryItemsContainer = undefined;
 
-    this.inventoryListCamera?.destroy();
-    this.inventoryListCamera = undefined;
+    // Не вызываем destroy() у дополнительной камеры: в Phaser 4 WebGL
+    // при смене/перезапуске сцены это может падать с customViewports = null.
+    // Камеру переиспользуем внутри активной сцены, а на SHUTDOWN просто забываем ссылку.
     this.inventoryListObjects = [];
 
     const viewportLeft = layout.inventoryViewportLeft;
@@ -1020,12 +1021,22 @@ export class InventoryScene extends Phaser.Scene {
     // Для инвентаря маска не нужна: отдельная камера уже имеет viewport
     // ровно по области списка и сама отсекает всё, что выходит за границы,
     // как прокручиваемая область в VK/Telegram.
-    this.inventoryListCamera = this.cameras.add(
-      this.inventoryViewportLeft,
-      this.inventoryViewportTop,
-      this.inventoryViewportWidth,
-      this.inventoryViewportHeight
-    );
+    if (!this.inventoryListCamera) {
+      this.inventoryListCamera = this.cameras.add(
+        this.inventoryViewportLeft,
+        this.inventoryViewportTop,
+        this.inventoryViewportWidth,
+        this.inventoryViewportHeight
+      );
+    } else {
+      this.inventoryListCamera.setViewport(
+        this.inventoryViewportLeft,
+        this.inventoryViewportTop,
+        this.inventoryViewportWidth,
+        this.inventoryViewportHeight
+      );
+      this.inventoryListCamera.visible = true;
+    }
 
     this.inventoryListCamera.setScroll(
       this.inventoryViewportLeft,
@@ -2954,11 +2965,16 @@ export class InventoryScene extends Phaser.Scene {
     });
   }
 
-  private cleanupInventoryListOnly(): void {
+  private cleanupInventoryListOnly(keepCamera = false): void {
     this.removeInventoryScrollHandlers();
 
-    this.inventoryListCamera?.destroy();
-    this.inventoryListCamera = undefined;
+    // Не destroy(): в Phaser 4 WebGL ручное уничтожение дополнительной камеры
+    // при shutdown/restart может падать с customViewports = null.
+    // При перестройке вкладок камеру оставляем и переиспользуем,
+    // при полном shutdown просто забываем ссылку — Phaser очистит её сам.
+    if (!keepCamera) {
+      this.inventoryListCamera = undefined;
+    }
 
     this.inventoryItemsContainer?.destroy(true);
     this.inventoryItemsContainer = undefined;
