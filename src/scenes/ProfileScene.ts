@@ -1057,19 +1057,26 @@ export class ProfileScene extends Phaser.Scene {
     );
 
     this.addTo(container, this.add.rectangle(x, y + 7, width, 12, 0x030303, 0.92).setDepth(6));
-    const expFillWidth = Math.max(2, width * progress);
-    const expFill = this.add.rectangle(x - width / 2 + expFillWidth / 2, y + 7, expFillWidth, 12, PROFILE.gold, 0.92)
-      .setDepth(7)
-      .setScale(0.01, 1);
-    this.addTo(container, expFill);
 
-    this.tweens.add({
-      targets: expFill,
-      scaleX: 1,
-      duration: 520,
-      delay: 220,
-      ease: 'Cubic.easeOut',
-    });
+    const expFillWidth = Math.max(0, width * progress);
+    const expFillLeft = x - width / 2;
+
+    if (expFillWidth > 0) {
+      const expFill = this.add.rectangle(expFillLeft, y + 7, expFillWidth, 12, PROFILE.gold, 0.92)
+        .setOrigin(0, 0.5)
+        .setDepth(7)
+        .setScale(0.01, 1);
+      this.addTo(container, expFill);
+
+      this.tweens.add({
+        targets: expFill,
+        scaleX: 1,
+        duration: 520,
+        delay: 220,
+        ease: 'Cubic.easeOut',
+      });
+    }
+
     this.addTo(container, this.add.rectangle(x, y + 7, width, 12).setStrokeStyle(1, PROFILE.bronze, 0.55).setDepth(8));
   }
 
@@ -1100,20 +1107,27 @@ export class ProfileScene extends Phaser.Scene {
 
     const barX = left + labelWidth + barWidth / 2;
     this.addTo(container, this.add.rectangle(barX, y, barWidth, 13, 0x030303, 0.92).setDepth(6));
-    const fillWidth = Math.max(2, barWidth * clamped);
-    const fill = this.add.rectangle(barX - barWidth / 2 + fillWidth / 2, y, fillWidth, 13, color, 0.92)
-      .setDepth(7)
-      .setScale(0.01, 1);
-    this.addTo(container, fill);
-    this.addTo(container, this.add.rectangle(barX, y, barWidth, 13).setStrokeStyle(1, PROFILE.bronze, 0.55).setDepth(8));
 
-    this.tweens.add({
-      targets: fill,
-      scaleX: 1,
-      duration: 460,
-      delay: 260,
-      ease: 'Cubic.easeOut',
-    });
+    const fillWidth = Math.max(0, barWidth * clamped);
+    const fillLeft = barX - barWidth / 2;
+
+    if (fillWidth > 0) {
+      const fill = this.add.rectangle(fillLeft, y, fillWidth, 13, color, 0.92)
+        .setOrigin(0, 0.5)
+        .setDepth(7)
+        .setScale(0.01, 1);
+      this.addTo(container, fill);
+
+      this.tweens.add({
+        targets: fill,
+        scaleX: 1,
+        duration: 460,
+        delay: 260,
+        ease: 'Cubic.easeOut',
+      });
+    }
+
+    this.addTo(container, this.add.rectangle(barX, y, barWidth, 13).setStrokeStyle(1, PROFILE.bronze, 0.55).setDepth(8));
 
     this.addTo(container, this.add.text(barX + barWidth / 2 - 4, y - 18, value, {
       fontFamily: UI.font.body,
