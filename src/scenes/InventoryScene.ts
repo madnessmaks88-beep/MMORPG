@@ -111,6 +111,8 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryItemsMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
   private inventoryListObjects: Phaser.GameObjects.GameObject[] = [];
+  private inventoryListUiObjects: Phaser.GameObjects.GameObject[] = [];
+  private inventoryTabObjects: Phaser.GameObjects.GameObject[] = [];
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
@@ -168,6 +170,8 @@ export class InventoryScene extends Phaser.Scene {
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
+    this.inventoryListUiObjects = [];
+    this.inventoryTabObjects = [];
   }
 
   create(data?: {
@@ -181,9 +185,9 @@ export class InventoryScene extends Phaser.Scene {
       this.returnScene = 'CampScene';
     }
 
-    this.cleanupInventoryViewport();
-    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryViewport, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryViewport, this);
+    this.cleanupInventoryScene();
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryScene, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryScene, this);
 
     const layout = this.getLayout();
 
@@ -711,6 +715,9 @@ export class InventoryScene extends Phaser.Scene {
 
 
   private createCategoryTabs(layout: InventoryLayout) {
+    this.destroyObjects(this.inventoryTabObjects);
+    this.inventoryTabObjects = [];
+
     const tabs: {
       id: InventoryCategory;
       label: string;
@@ -776,6 +783,17 @@ export class InventoryScene extends Phaser.Scene {
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(83).setAlpha(0);
 
+      const tabObjects: Phaser.GameObjects.GameObject[] = [
+        tabBg.shadow,
+        tabBg.bg,
+        tabBg.zone,
+        icon,
+        label,
+      ];
+
+      this.inventoryTabObjects.push(...tabObjects);
+      this.inventoryListCamera?.ignore(tabObjects);
+
       this.tweens.add({
         targets: [tabBg.shadow, tabBg.bg, icon, label],
         alpha: 1,
@@ -799,7 +817,7 @@ export class InventoryScene extends Phaser.Scene {
       }
 
       tabBg.zone.on('pointerover', () => {
-        if (isActive) {
+        if (this.selectedCategory === tab.id) {
           return;
         }
 
@@ -809,7 +827,7 @@ export class InventoryScene extends Phaser.Scene {
       });
 
       tabBg.zone.on('pointerout', () => {
-        if (isActive) {
+        if (this.selectedCategory === tab.id) {
           return;
         }
 
@@ -823,7 +841,7 @@ export class InventoryScene extends Phaser.Scene {
       });
 
       tabBg.zone.on('pointerup', () => {
-        tabBg.bg.setAlpha(isActive ? 1 : 0.95);
+        tabBg.bg.setAlpha(this.selectedCategory === tab.id ? 1 : 0.95);
 
         if (this.isItemInfoOpen || this.isRestartingInventory) {
           return;
@@ -839,24 +857,20 @@ export class InventoryScene extends Phaser.Scene {
         this.initialInventoryScrollY = 0;
         this.isDraggingInventory = false;
         this.didDragInventory = false;
+        this.setInventoryListModalMode(false);
 
-        this.rebuildInventoryList();
+        this.rebuildCategoryTabsOnly();
+        this.rebuildInventoryListOnly();
       });
 
       tabBg.zone.on('pointerupoutside', () => {
-        tabBg.bg.setAlpha(isActive ? 1 : 0.76);
+        tabBg.bg.setAlpha(this.selectedCategory === tab.id ? 1 : 0.76);
       });
     });
   }
 
   private createInventoryList(layout: InventoryLayout) {
-    this.inventoryItemsContainer?.clearMask(true);
-    this.inventoryItemsContainer?.destroy(true);
-    this.inventoryItemsMask?.destroy();
-    this.inventoryItemsMask = undefined;
-    this.inventoryItemsMaskGraphics?.destroy();
-    this.inventoryScrollbarTrack?.destroy();
-    this.inventoryScrollbarThumb?.destroy();
+    this.cleanupInventoryListOnly();
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -871,6 +885,8 @@ export class InventoryScene extends Phaser.Scene {
       strokeWidth: 2,
       depth: 20,
     });
+
+    this.inventoryListUiObjects.push(panel.shadow, panel.panel);
 
     panel.shadow.setAlpha(0);
     panel.panel.setAlpha(0);
@@ -888,7 +904,7 @@ export class InventoryScene extends Phaser.Scene {
     const headerY = layout.listHeaderTop + (layout.veryCompact ? 22 : 26);
     const listHeaderDepth = 92;
 
-    this.add.text(layout.centerX - layout.contentWidth / 2 + 22, headerY, title, {
+    const titleText = this.add.text(layout.centerX - layout.contentWidth / 2 + 22, headerY, title, {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '19px' : layout.compact ? '21px' : '24px',
       color: UI.colors.goldText,
@@ -901,7 +917,7 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(listHeaderDepth);
 
-    this.add.text(layout.centerX + layout.contentWidth / 2 - 24, headerY, counter, {
+    const counterText = this.add.text(layout.centerX + layout.contentWidth / 2 - 24, headerY, counter, {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '12px' : '14px',
       color: INVENTORY_DARK.muted,
@@ -912,8 +928,10 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(listHeaderDepth);
 
+    this.inventoryListUiObjects.push(titleText, counterText);
+
     if (!layout.veryCompact) {
-      this.add.text(layout.centerX, layout.listHeaderTop + 50, 'Редкость: божественная → обычная', {
+      const sortText = this.add.text(layout.centerX, layout.listHeaderTop + 50, 'Редкость: божественная → обычная', {
         fontFamily: UI.font.body,
         fontSize: '10px',
         color: '#716a60',
@@ -924,6 +942,8 @@ export class InventoryScene extends Phaser.Scene {
         },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(listHeaderDepth);
+
+      this.inventoryListUiObjects.push(sortText);
     }
 
     this.createInventoryItemsViewport(layout);
@@ -953,7 +973,7 @@ export class InventoryScene extends Phaser.Scene {
       deltaY: number,
       _deltaZ: number
     ) => {
-      if (this.inventoryMaxScrollY <= 0 || this.isItemInfoOpen) {
+      if (this.inventoryMaxScrollY <= 0 || this.isItemInfoOpen || this.isRestartingInventory) {
         return;
       }
 
@@ -980,10 +1000,16 @@ export class InventoryScene extends Phaser.Scene {
   private createInventoryItemsViewport(layout: InventoryLayout): void {
     this.inventoryItemsContainer?.clearMask(true);
     this.inventoryItemsContainer?.destroy(true);
+    this.inventoryItemsContainer = undefined;
+
     this.inventoryItemsMask?.destroy();
     this.inventoryItemsMask = undefined;
+
     this.inventoryItemsMaskGraphics?.destroy();
+    this.inventoryItemsMaskGraphics = undefined;
+
     this.inventoryListCamera?.destroy();
+    this.inventoryListCamera = undefined;
     this.inventoryListObjects = [];
 
     const viewportLeft = layout.inventoryViewportLeft;
@@ -1003,10 +1029,6 @@ export class InventoryScene extends Phaser.Scene {
       this.inventoryViewportHeight
     );
 
-    // ВАЖНО: viewport камеры находится в screen-координатах,
-    // а карточки остаются в world-координатах сцены.
-    // Без setScroll(viewportLeft, viewportTop) Phaser добавляет смещение viewport
-    // второй раз, из-за чего карточки уезжают вправо/вниз и режутся не там.
     this.inventoryListCamera.setScroll(
       this.inventoryViewportLeft,
       this.inventoryViewportTop
@@ -1565,7 +1587,7 @@ export class InventoryScene extends Phaser.Scene {
       });
 
     cardZone.on('pointerup', () => {
-      if (this.isItemInfoOpen || !this.isPointerInsideInventoryList(this.input.activePointer, layout)) {
+      if (this.isItemInfoOpen || this.isRestartingInventory || !this.isPointerInsideInventoryList(this.input.activePointer, layout)) {
         return;
       }
 
@@ -1671,10 +1693,13 @@ export class InventoryScene extends Phaser.Scene {
         }
 
         actionButtonPressed = false;
+        this.isDraggingInventory = false;
+        this.didDragInventory = false;
+
         equipItem(player, inventoryItem.instanceId);
         void saveGameAsync();
 
-        this.refreshInventorySceneSafely();
+        this.refreshInventoryAfterAction();
       },
     });
 
@@ -1739,17 +1764,19 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     this.inventoryListCamera?.ignore(button.objects);
+    this.inventoryListUiObjects.push(...button.objects);
   }
 
 
   private setInventoryListModalMode(isModalOpen: boolean): void {
     const visible = !isModalOpen;
 
-    // Важно: список рисуется отдельной камерой. Чтобы модалка была поверх,
-    // выключаем только камеру списка. Не трогаем visible у самих карточек:
-    // из-за этого раньше список мог остаться скрытым навсегда.
     if (this.inventoryListCamera) {
       this.inventoryListCamera.visible = visible;
+    }
+
+    if (this.inventoryItemsContainer) {
+      this.inventoryItemsContainer.setVisible(visible);
     }
 
     const shouldShowScrollbar = visible && this.inventoryMaxScrollY > 0;
@@ -1763,7 +1790,10 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.isDraggingInventory = false;
-    this.didDragInventory = false;
+
+    if (isModalOpen) {
+      this.didDragInventory = false;
+    }
   }
 
   private registerInventoryListObjects(objects: Phaser.GameObjects.GameObject[]): void {
@@ -2193,7 +2223,8 @@ export class InventoryScene extends Phaser.Scene {
       onConfirm: () => {
         unequipItem(player, slot);
         void saveGameAsync();
-        this.restartInventory();
+        this.closeConfirmModalSafely();
+        this.refreshInventoryAfterAction();
       },
     });
   }
@@ -2386,11 +2417,14 @@ export class InventoryScene extends Phaser.Scene {
           return;
         }
 
+        this.isDraggingInventory = false;
+        this.didDragInventory = false;
+
         equipItem(player, inventoryItem.instanceId);
         void saveGameAsync();
 
         this.closeItemInfo(false);
-        this.refreshInventorySceneSafely();
+        this.refreshInventoryAfterAction();
       },
       depth: 1010,
     });
@@ -2615,7 +2649,8 @@ export class InventoryScene extends Phaser.Scene {
         }
 
         void saveGameAsync();
-        this.restartInventory();
+        this.closeConfirmModalSafely();
+        this.refreshInventoryAfterAction();
       },
     });
   }
@@ -2697,7 +2732,8 @@ export class InventoryScene extends Phaser.Scene {
         });
 
         void saveGameAsync();
-        this.restartInventory();
+        this.closeConfirmModalSafely();
+        this.refreshInventoryAfterAction();
       },
     });
   }
@@ -2732,8 +2768,8 @@ export class InventoryScene extends Phaser.Scene {
       confirmText: 'Понятно',
       hideCancel: true,
       onConfirm: () => {
-        this.isItemInfoOpen = false;
-        this.refreshInventorySceneSafely();
+        this.closeConfirmModalSafely();
+        this.refreshInventoryAfterAction();
       },
     });
   }
@@ -2831,12 +2867,11 @@ export class InventoryScene extends Phaser.Scene {
       danger: config.danger,
       onClick: () => {
         const callback = config.onConfirm;
-        this.closeItemInfo(true);
+        this.closeConfirmModalSafely();
         try {
           callback();
         } catch (error) {
-          this.isItemInfoOpen = false;
-          this.setInventoryListModalMode(false);
+          this.closeConfirmModalSafely();
           throw error;
         }
       },
@@ -2860,7 +2895,7 @@ export class InventoryScene extends Phaser.Scene {
         text: config.cancelText ?? 'Отмена',
         accentColor: UI.colors.goldDark,
         onClick: () => {
-          this.closeItemInfo();
+          this.closeConfirmModalSafely();
         },
         depth: 1010,
       });
@@ -2888,11 +2923,40 @@ export class InventoryScene extends Phaser.Scene {
     }
   }
 
-  private rebuildInventoryList(): void {
-    this.restartInventory();
+  private closeConfirmModalSafely(): void {
+    this.closeItemInfo(true);
   }
 
-  private refreshInventorySceneSafely(): void {
+  private rebuildCategoryTabsOnly(): void {
+    const layout = this.getLayout();
+    this.createCategoryTabs(layout);
+  }
+
+  private rebuildInventoryListOnly(): void {
+    const layout = this.getLayout();
+
+    this.initialInventoryScrollY = Phaser.Math.Clamp(
+      this.inventoryTargetScrollY,
+      0,
+      Math.max(0, this.inventoryMaxScrollY)
+    );
+
+    this.isItemInfoOpen = false;
+    this.isDraggingInventory = false;
+    this.didDragInventory = false;
+    this.setInventoryListModalMode(false);
+
+    this.createInventoryList(layout);
+  }
+
+  private refreshInventoryAfterAction(): void {
+    if (this.isRestartingInventory) {
+      return;
+    }
+
+    this.closeConfirmModalSafely();
+    this.setInventoryListModalMode(false);
+
     this.restartInventory();
   }
 
@@ -2919,38 +2983,53 @@ export class InventoryScene extends Phaser.Scene {
     }
   }
 
-  private cleanupInventoryViewport(): void {
+  private destroyObjects(objects: Phaser.GameObjects.GameObject[]): void {
+    objects.forEach(object => {
+      if (!object) {
+        return;
+      }
+
+      this.tweens.killTweensOf(object);
+      object.destroy();
+    });
+  }
+
+  private cleanupInventoryListOnly(): void {
     this.removeInventoryScrollHandlers();
 
-    if (this.inventoryListCamera) {
-      this.inventoryListCamera.destroy();
-      this.inventoryListCamera = undefined;
-    }
+    this.inventoryListCamera?.destroy();
+    this.inventoryListCamera = undefined;
 
-    if (this.inventoryItemsContainer) {
-      this.inventoryItemsContainer.clearMask(true);
-      this.inventoryItemsContainer.destroy(true);
-      this.inventoryItemsContainer = undefined;
-    }
+    this.inventoryItemsContainer?.clearMask(true);
+    this.inventoryItemsContainer?.destroy(true);
+    this.inventoryItemsContainer = undefined;
 
-    if (this.inventoryItemsMask) {
-      this.inventoryItemsMask.destroy();
-      this.inventoryItemsMask = undefined;
-    }
+    this.inventoryItemsMask?.destroy();
+    this.inventoryItemsMask = undefined;
 
-    if (this.inventoryItemsMaskGraphics) {
-      this.inventoryItemsMaskGraphics.destroy();
-      this.inventoryItemsMaskGraphics = undefined;
-    }
+    this.inventoryItemsMaskGraphics?.destroy();
+    this.inventoryItemsMaskGraphics = undefined;
 
     this.inventoryScrollbarTrack?.destroy();
-    this.inventoryScrollbarTrack = undefined;
     this.inventoryScrollbarThumb?.destroy();
+    this.inventoryScrollbarTrack = undefined;
     this.inventoryScrollbarThumb = undefined;
 
+    this.destroyObjects(this.inventoryListUiObjects);
+    this.inventoryListUiObjects = [];
     this.inventoryListObjects = [];
+  }
+
+  private cleanupInventoryScene(): void {
+    this.closeItemInfo(false);
+    this.cleanupInventoryListOnly();
+    this.destroyObjects(this.inventoryTabObjects);
+    this.inventoryTabObjects = [];
+
+    this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
+    this.isRestartingInventory = false;
   }
 
   private restartInventory() {
@@ -2979,11 +3058,6 @@ export class InventoryScene extends Phaser.Scene {
 
     this.setInventoryListModalMode(false);
 
-    // Важно: не пересобираем сцену вручную через children.removeAll(true).
-    // При ручной пересборке у Phaser оставались старые камеры/интерактивные зоны,
-    // из-за чего список исчезал, а кнопки и вкладки переставали нажиматься.
-    // Делаем штатный restart сцены на следующий тик: Phaser сам выполнит SHUTDOWN,
-    // а cleanupInventoryViewport() удалит камеру списка и scroll-handlers.
     this.time.delayedCall(0, () => {
       this.scene.restart({
         inventoryScrollY: scrollY,
