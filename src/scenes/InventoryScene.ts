@@ -117,6 +117,7 @@ type EquipmentBonusLine = {
   label: string;
   value: string;
   color: string;
+  accentColor: number;
 };
 
 export class InventoryScene extends Phaser.Scene {
@@ -268,7 +269,7 @@ export class InventoryScene extends Phaser.Scene {
     const statsHeight = tiny ? 92 : veryCompact ? 98 : compact ? 104 : 112;
     const statsY = safeTop + statsHeight / 2;
 
-    const equipmentHeight = tiny ? 118 : veryCompact ? 122 : compact ? 128 : 136;
+    const equipmentHeight = tiny ? 142 : veryCompact ? 150 : compact ? 158 : 166;
     const equipmentGap = tiny ? 6 : 8;
     const equipmentY = statsY + statsHeight / 2 + equipmentGap + equipmentHeight / 2;
 
@@ -582,6 +583,7 @@ export class InventoryScene extends Phaser.Scene {
   private createEquipmentPanel(layout: InventoryLayout) {
     const veryCompact = layout.height < 920;
     const panelTop = layout.equipmentY - layout.equipmentHeight / 2;
+    const metrics = this.getEquipmentPanelMetrics(layout);
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
@@ -614,44 +616,64 @@ export class InventoryScene extends Phaser.Scene {
       panel.panel.setAlpha(1);
     }
 
-    this.add.text(layout.centerX - layout.contentWidth / 2 + 18, panelTop + (veryCompact ? 18 : 21), 'Снаряжение', {
+    this.add.text(layout.centerX - layout.contentWidth / 2 + 18, panelTop + (veryCompact ? 19 : 22), 'Снаряжение', {
       fontFamily: UI.font.title,
-      fontSize: veryCompact ? '16px' : layout.compact ? '18px' : '20px',
+      fontSize: veryCompact ? '17px' : layout.compact ? '19px' : '21px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'left',
       wordWrap: {
-        width: layout.contentWidth * 0.44,
+        width: Math.max(120, metrics.dividerX - metrics.panelLeft - 34),
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(10);
 
-    this.add.text(layout.centerX + layout.contentWidth / 2 - 18, panelTop + (veryCompact ? 18 : 21), 'удержи слот', {
+    this.add.text(layout.centerX + layout.contentWidth / 2 - 18, panelTop + (veryCompact ? 19 : 22), 'удержи слот', {
       fontFamily: UI.font.body,
       fontSize: veryCompact ? '8px' : '9px',
       color: INVENTORY_DARK.muted,
       align: 'right',
       wordWrap: {
-        width: layout.contentWidth * 0.42,
+        width: Math.max(92, metrics.bonusWidth),
       },
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(10);
 
+    this.createEquipmentSectionDivider(layout);
     this.createEquipmentIconSlots(layout);
     this.createEquipmentSummaryPanel(layout);
+  }
+
+  private createEquipmentSectionDivider(layout: InventoryLayout): void {
+    const metrics = this.getEquipmentPanelMetrics(layout);
+    const dividerHeight = Math.max(46, metrics.bonusHeight - 10);
+    const objects: Phaser.GameObjects.GameObject[] = [
+      this.add.rectangle(metrics.dividerX, metrics.bonusY, 1, dividerHeight, 0x000000, 0.5).setDepth(6),
+      this.add.rectangle(metrics.dividerX + 1, metrics.bonusY, 1, dividerHeight, INVENTORY_DARK.bronze, 0.34).setDepth(7),
+      this.add.rectangle(metrics.dividerX + 3, metrics.bonusY, 1, dividerHeight * 0.82, INVENTORY_DARK.gold, 0.12).setDepth(7),
+    ];
+
+    if (this.shouldPlayInventoryIntroAnimation) {
+      this.setObjectsAlpha(objects, 0);
+      this.tweens.add({
+        targets: objects,
+        alpha: 1,
+        duration: 180,
+        delay: 180,
+        ease: 'Sine.easeOut',
+      });
+    }
   }
 
   private createEquipmentIconSlots(layout: InventoryLayout): void {
     const metrics = this.getEquipmentPanelMetrics(layout);
     const radius = metrics.slotRadius;
-    const iconGapX = metrics.slotGapX;
-    const iconGapY = metrics.slotGapY;
-    const firstX = metrics.slotAreaLeft + radius + 4;
-    const secondX = firstX + radius * 2 + iconGapX;
-    const firstY = metrics.slotAreaTop + radius;
-    const secondY = firstY + radius * 2 + iconGapY;
+    const firstX = metrics.slotFirstX;
+    const secondX = metrics.slotSecondX;
+    const firstY = metrics.slotFirstY;
+    const secondY = metrics.slotSecondY;
 
     this.createEquipmentIconSlot('weapon', firstX, firstY, radius, 0);
     this.createEquipmentIconSlot('armor', secondX, firstY, radius, 1);
@@ -667,35 +689,55 @@ export class InventoryScene extends Phaser.Scene {
     const item = inventoryItem ? getBaseItemFromInventoryItem(inventoryItem) : undefined;
     const rarityFillColor = item ? getRarityColorHex(item) : INVENTORY_DARK.graphite;
     const rarityStrokeColor = item ? getRarityStrokeColor(item) : UI.colors.goldDark;
-    const strokeAlpha = item ? 0.92 : 0.24;
-    const fillAlpha = item ? 0.72 : 0.62;
+    const strokeAlpha = item ? 0.98 : 0.26;
+    const fillAlpha = item ? 0.74 : 0.58;
+    const label = this.getCompactSlotText(slot);
+    const labelFontSize = Math.max(8, Math.min(10, Math.floor(radius * 0.44)));
+    const labelY = y + radius + labelFontSize + 5;
 
-    const shadow = this.add.circle(x, y + 4, radius + 2, 0x000000, 0.28).setDepth(5);
+    const shadow = this.add.circle(x, y + 5, radius + 5, 0x000000, 0.3).setDepth(5);
+    const outerGlow = this.add.circle(x, y, radius + 4, item ? rarityStrokeColor : 0x050506, item ? 0.18 : 0.22)
+      .setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 0.84 : 0.22)
+      .setDepth(6);
     const bg = this.add.circle(x, y, radius, rarityFillColor, fillAlpha)
       .setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha)
-      .setDepth(6);
+      .setDepth(7);
+    const innerShade = this.add.circle(x, y + radius * 0.18, radius * 0.72, 0x000000, item ? 0.16 : 0.26)
+      .setDepth(8);
 
-    const icon = this.add.text(x, y - (item ? 0 : radius * 0.12), getSlotIcon(slot), {
+    const icon = this.add.text(x, y - (item ? 0 : radius * 0.08), getSlotIcon(slot), {
       fontFamily: UI.font.body,
-      fontSize: `${Math.max(13, Math.floor(radius * 0.78))}px`,
+      fontSize: `${Math.max(15, Math.floor(radius * 0.82))}px`,
       color: item ? '#ffffff' : UI.colors.textMuted,
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(7);
+    }).setOrigin(0.5).setDepth(9);
 
     const emptyHint = item
       ? undefined
-      : this.add.text(x, y + radius * 0.43, 'пусто', {
+      : this.add.text(x, y + radius * 0.44, 'пусто', {
         fontFamily: UI.font.body,
-        fontSize: `${Math.max(6, Math.floor(radius * 0.26))}px`,
+        fontSize: `${Math.max(7, Math.floor(radius * 0.28))}px`,
         color: '#665d50',
         wordWrap: {
-          width: radius * 1.6,
+          width: radius * 1.55,
         },
         maxLines: 1,
-      }).setOrigin(0.5).setDepth(7);
+      }).setOrigin(0.5).setDepth(9);
 
-    const objects = [shadow, bg, icon];
+    const labelText = this.add.text(x, labelY, label, {
+      fontFamily: UI.font.body,
+      fontSize: `${labelFontSize}px`,
+      color: item ? UI.colors.text : UI.colors.textMuted,
+      stroke: '#000000',
+      strokeThickness: item ? 2 : 1,
+      wordWrap: {
+        width: radius * 2.45,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(9);
+
+    const objects: Phaser.GameObjects.GameObject[] = [shadow, outerGlow, bg, innerShade, icon, labelText];
 
     if (emptyHint) {
       objects.push(emptyHint);
@@ -714,10 +756,10 @@ export class InventoryScene extends Phaser.Scene {
 
     if (item) {
       this.tweens.add({
-        targets: bg,
+        targets: outerGlow,
         alpha: {
-          from: Math.max(0.48, fillAlpha - 0.14),
-          to: Math.min(0.92, fillAlpha + 0.12),
+          from: 0.2,
+          to: 0.34,
         },
         duration: 1450,
         yoyo: true,
@@ -727,7 +769,8 @@ export class InventoryScene extends Phaser.Scene {
       });
     }
 
-    const zone = this.add.zone(x, y, radius * 2.4, radius * 2.4)
+    const zoneHeight = radius * 2 + labelFontSize + 13;
+    const zone = this.add.zone(x, y + (labelY - y) / 2, radius * 2.7, zoneHeight)
       .setDepth(32)
       .setInteractive({ useHandCursor: true });
 
@@ -739,11 +782,14 @@ export class InventoryScene extends Phaser.Scene {
       }
 
       bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, item ? 1 : 0.48);
+      outerGlow.setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 1 : 0.36);
       this.showEquipmentTooltip(slot, inventoryItem, x, y);
     });
 
     zone.on('pointerout', () => {
       bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha);
+      outerGlow.setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 0.84 : 0.22);
+      holdOpenedTooltip = false;
       this.cancelEquipmentTooltipHold();
       this.hideEquipmentTooltip();
     });
@@ -753,9 +799,11 @@ export class InventoryScene extends Phaser.Scene {
         return;
       }
 
+      bg.setAlpha(Math.max(0.46, fillAlpha - 0.14));
+      innerShade.setAlpha(item ? 0.28 : 0.38);
       holdOpenedTooltip = false;
-      bg.setAlpha(Math.min(1, fillAlpha + 0.16));
       this.cancelEquipmentTooltipHold();
+
       this.equipmentTooltipHoldTimer = this.time.delayedCall(430, () => {
         holdOpenedTooltip = true;
         this.showEquipmentTooltip(slot, inventoryItem, x, y);
@@ -764,6 +812,7 @@ export class InventoryScene extends Phaser.Scene {
 
     zone.on('pointerup', () => {
       bg.setAlpha(fillAlpha);
+      innerShade.setAlpha(item ? 0.16 : 0.26);
       this.cancelEquipmentTooltipHold();
 
       if (this.isItemInfoOpen) {
@@ -786,6 +835,7 @@ export class InventoryScene extends Phaser.Scene {
 
     zone.on('pointerupoutside', () => {
       bg.setAlpha(fillAlpha);
+      innerShade.setAlpha(item ? 0.16 : 0.26);
       holdOpenedTooltip = false;
       this.cancelEquipmentTooltipHold();
       this.hideEquipmentTooltip();
@@ -796,8 +846,23 @@ export class InventoryScene extends Phaser.Scene {
     const metrics = this.getEquipmentPanelMetrics(layout);
     const summary = this.getEquippedItemsBonusSummary();
     const lines = this.formatEquipmentBonus(summary);
-    const titleFontSize = layout.veryCompact ? '11px' : '12px';
-    const lineFontSize = layout.veryCompact ? '9px' : '10px';
+    const titleFontSize = layout.veryCompact ? '12px' : layout.compact ? '13px' : '14px';
+    const chipFontSize = layout.veryCompact ? '9px' : layout.compact ? '10px' : '11px';
+    const paddingX = layout.veryCompact ? 8 : 10;
+    const chipGapX = layout.veryCompact ? 5 : 6;
+    const chipGapY = layout.veryCompact ? 5 : 6;
+    const columns = metrics.bonusWidth >= 172 ? 2 : 1;
+    const titleY = metrics.bonusTop + (layout.veryCompact ? 13 : 15);
+    const chipAreaTop = metrics.bonusTop + (layout.veryCompact ? 31 : 35);
+    const chipBottom = metrics.bonusTop + metrics.bonusHeight - 8;
+    const chipHeight = layout.veryCompact ? 19 : layout.compact ? 21 : 22;
+    const rows = Math.max(1, Math.floor((chipBottom - chipAreaTop + chipGapY) / (chipHeight + chipGapY)));
+    const maxVisibleChips = Math.max(columns, rows * columns);
+    const needsMoreChip = lines.length > maxVisibleChips;
+    const visibleCount = needsMoreChip ? Math.max(1, maxVisibleChips - 1) : maxVisibleChips;
+    const visibleLines = lines.slice(0, visibleCount);
+    const hiddenCount = Math.max(0, lines.length - visibleLines.length);
+    const chipWidth = (metrics.bonusWidth - paddingX * 2 - chipGapX * (columns - 1)) / columns;
 
     const bgObjects = this.createRoundedPanelAsObjects({
       x: metrics.bonusX,
@@ -806,21 +871,22 @@ export class InventoryScene extends Phaser.Scene {
       height: metrics.bonusHeight,
       radius: 16,
       color: 0x0b0d11,
-      alpha: 0.82,
+      alpha: 0.86,
       strokeColor: INVENTORY_DARK.bronze,
-      strokeAlpha: 0.34,
+      strokeAlpha: 0.42,
       strokeWidth: 1,
       depth: 5,
     });
 
-    const title = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 11, 'Бонусы экипировки', {
+    const title = this.add.text(metrics.bonusLeft + paddingX, titleY, 'Бонусы экипировки', {
       fontFamily: UI.font.title,
       fontSize: titleFontSize,
       color: UI.colors.goldText,
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
       wordWrap: {
-        width: metrics.bonusWidth - 20,
+        width: metrics.bonusWidth - paddingX * 2,
+        useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(8);
@@ -828,63 +894,78 @@ export class InventoryScene extends Phaser.Scene {
     const objects: Phaser.GameObjects.GameObject[] = [...bgObjects, title];
 
     if (lines.length === 0) {
-      const emptyTitle = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 36, 'Нет бонусов', {
-        fontFamily: UI.font.body,
-        fontSize: lineFontSize,
+      const emptyTitle = this.add.text(metrics.bonusX, metrics.bonusY - (layout.veryCompact ? 2 : 4), 'Нет бонусов', {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '12px' : '13px',
         color: UI.colors.textMuted,
+        stroke: '#000000',
+        strokeThickness: 2,
         wordWrap: {
-          width: metrics.bonusWidth - 20,
+          width: metrics.bonusWidth - paddingX * 2,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(8);
+      }).setOrigin(0.5).setDepth(8);
 
-      const emptyHint = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 55, 'Надень предметы, чтобы усилить героя', {
+      const emptyHint = this.add.text(metrics.bonusX, metrics.bonusY + (layout.veryCompact ? 16 : 18), 'Надень предметы, чтобы усилить героя', {
         fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '8px' : '9px',
+        fontSize: layout.veryCompact ? '9px' : '10px',
         color: '#756b5c',
+        align: 'center',
         wordWrap: {
-          width: metrics.bonusWidth - 20,
+          width: metrics.bonusWidth - paddingX * 2,
           useAdvancedWrap: true,
         },
         maxLines: 2,
-      }).setOrigin(0, 0.5).setDepth(8);
+      }).setOrigin(0.5).setDepth(8);
 
       objects.push(emptyTitle, emptyHint);
     } else {
-      const maxLines = layout.veryCompact ? 4 : 5;
-      const visibleLines = lines.slice(0, maxLines);
-      const hiddenCount = Math.max(0, lines.length - visibleLines.length);
-      const lineGap = layout.veryCompact ? 13 : 15;
+      const chipLines = hiddenCount > 0
+        ? [
+            ...visibleLines,
+            {
+              label: 'ещё',
+              value: `+${hiddenCount}`,
+              color: UI.colors.textMuted,
+              accentColor: INVENTORY_DARK.bronze,
+            },
+          ]
+        : visibleLines;
 
-      visibleLines.forEach((line, index) => {
-        const row = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 34 + index * lineGap, `${line.value} ${line.label}`, {
+      chipLines.forEach((line, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const chipX = metrics.bonusLeft + paddingX + chipWidth / 2 + column * (chipWidth + chipGapX);
+        const chipY = chipAreaTop + chipHeight / 2 + row * (chipHeight + chipGapY);
+        const chipBg = this.createRoundedPanelAsObjects({
+          x: chipX,
+          y: chipY,
+          width: chipWidth,
+          height: chipHeight,
+          radius: Math.min(10, chipHeight / 2),
+          color: 0x101219,
+          alpha: 0.92,
+          strokeColor: line.accentColor,
+          strokeAlpha: 0.34,
+          strokeWidth: 1,
+          depth: 7,
+        });
+        const text = this.add.text(chipX, chipY, `${line.value} ${line.label}`, {
           fontFamily: UI.font.body,
-          fontSize: lineFontSize,
+          fontSize: chipFontSize,
           color: line.color,
           stroke: '#000000',
           strokeThickness: 1,
+          align: 'center',
           wordWrap: {
-            width: metrics.bonusWidth - 20,
+            width: chipWidth - 8,
+            useAdvancedWrap: true,
           },
           maxLines: 1,
-        }).setOrigin(0, 0.5).setDepth(8);
+        }).setOrigin(0.5).setDepth(9);
 
-        objects.push(row);
+        objects.push(...chipBg, text);
       });
-
-      if (hiddenCount > 0) {
-        const moreText = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 34 + visibleLines.length * lineGap, `ещё +${hiddenCount}`, {
-          fontFamily: UI.font.body,
-          fontSize: layout.veryCompact ? '8px' : '9px',
-          color: UI.colors.textMuted,
-          wordWrap: {
-            width: metrics.bonusWidth - 20,
-          },
-          maxLines: 1,
-        }).setOrigin(0, 0.5).setDepth(8);
-
-        objects.push(moreText);
-      }
     }
 
     if (this.shouldPlayInventoryIntroAnimation) {
@@ -896,25 +977,47 @@ export class InventoryScene extends Phaser.Scene {
         delay: 210,
         ease: 'Sine.easeOut',
       });
+    } else {
+      this.setObjectsAlpha(objects, 1);
     }
   }
 
   private getEquipmentPanelMetrics(layout: InventoryLayout) {
     const panelLeft = layout.centerX - layout.contentWidth / 2;
     const panelTop = layout.equipmentY - layout.equipmentHeight / 2;
-    const innerLeft = panelLeft + 16;
-    const innerRight = panelLeft + layout.contentWidth - 16;
-    const contentTop = panelTop + (layout.veryCompact ? 36 : 42);
-    const contentBottom = panelTop + layout.equipmentHeight - 12;
-    const contentHeight = Math.max(54, contentBottom - contentTop);
-    const slotAreaWidth = Math.min(layout.contentWidth * 0.42, layout.veryCompact ? 140 : 156);
-    const slotRadius = Math.max(13, Math.min(layout.veryCompact ? 17 : 20, (contentHeight - 6) / 4));
-    const slotGapX = Math.max(7, Math.min(13, slotAreaWidth - slotRadius * 4 - 8));
-    const slotGapY = Math.max(4, Math.min(10, contentHeight - slotRadius * 4));
+    const innerPadding = layout.contentWidth < 390 ? 12 : 16;
+    const innerLeft = panelLeft + innerPadding;
+    const innerRight = panelLeft + layout.contentWidth - innerPadding;
+    const contentTop = panelTop + (layout.veryCompact ? 36 : layout.compact ? 40 : 44);
+    const contentBottom = panelTop + layout.equipmentHeight - (layout.veryCompact ? 10 : 12);
+    const contentHeight = Math.max(72, contentBottom - contentTop);
+    const slotAreaWidth = Math.min(Math.max(124, layout.contentWidth * 0.36), layout.veryCompact ? 144 : 166);
+    const labelHeight = layout.veryCompact ? 9 : 10;
+    const slotGapY = layout.veryCompact ? 7 : 9;
+    const slotRadiusByHeight = (contentHeight - slotGapY - labelHeight * 2 - 8) / 4;
+    const slotGapX = layout.veryCompact ? 10 : 12;
+    const slotRadiusByWidth = (slotAreaWidth - slotGapX - 16) / 4;
+    const maxRadius = layout.veryCompact ? 20 : 23;
+    const minRadius = layout.veryCompact ? 15 : 17;
+    const slotRadius = Phaser.Math.Clamp(
+      Math.floor(Math.min(slotRadiusByHeight, slotRadiusByWidth)),
+      minRadius,
+      maxRadius
+    );
+    const rowHeight = slotRadius * 2 + labelHeight + 5;
+    const gridHeight = rowHeight * 2 + slotGapY;
     const slotAreaLeft = innerLeft;
-    const slotAreaTop = contentTop + Math.max(0, (contentHeight - (slotRadius * 4 + slotGapY)) / 2);
-    const bonusLeft = slotAreaLeft + slotRadius * 4 + slotGapX + 18;
-    const bonusWidth = Math.max(122, innerRight - bonusLeft);
+    const slotAreaTop = contentTop + Math.max(0, (contentHeight - gridHeight) / 2);
+    const slotFirstX = slotAreaLeft + slotRadius + 6;
+    const slotSecondX = slotFirstX + slotRadius * 2 + slotGapX;
+    const slotFirstY = slotAreaTop + slotRadius;
+    const slotSecondY = slotFirstY + rowHeight + slotGapY;
+    const dividerX = Math.min(
+      innerRight - 122,
+      Math.max(slotSecondX + slotRadius + 10, innerLeft + slotAreaWidth + 4)
+    );
+    const bonusLeft = dividerX + 12;
+    const bonusWidth = Math.max(112, innerRight - bonusLeft);
     const bonusHeight = contentHeight;
     const bonusTop = contentTop;
 
@@ -924,8 +1027,11 @@ export class InventoryScene extends Phaser.Scene {
       slotAreaLeft,
       slotAreaTop,
       slotRadius,
-      slotGapX,
-      slotGapY,
+      slotFirstX,
+      slotSecondX,
+      slotFirstY,
+      slotSecondY,
+      dividerX,
       bonusLeft,
       bonusTop,
       bonusWidth,
@@ -933,6 +1039,14 @@ export class InventoryScene extends Phaser.Scene {
       bonusX: bonusLeft + bonusWidth / 2,
       bonusY: bonusTop + bonusHeight / 2,
     };
+  }
+
+  private getCompactSlotText(slot: EquipmentSlot): string {
+    if (slot === 'weapon') return 'оруж.';
+    if (slot === 'armor') return 'броня';
+    if (slot === 'trinket') return 'амул.';
+
+    return 'кольцо';
   }
 
   private getEquippedItemsBonusSummary(): EquipmentBonusSummary {
@@ -976,7 +1090,7 @@ export class InventoryScene extends Phaser.Scene {
   private formatEquipmentBonus(summary: EquipmentBonusSummary): EquipmentBonusLine[] {
     const lines: EquipmentBonusLine[] = [];
 
-    const pushNumber = (value: number, label: string, color: string) => {
+    const pushNumber = (value: number, label: string, color: string, accentColor: number) => {
       if (!value) {
         return;
       }
@@ -985,17 +1099,18 @@ export class InventoryScene extends Phaser.Scene {
         label,
         value: value > 0 ? `+${value}` : `${value}`,
         color,
+        accentColor,
       });
     };
 
-    pushNumber(summary.hp, 'HP', UI.colors.green);
-    pushNumber(summary.energy, 'энергия', UI.colors.blue);
-    pushNumber(summary.attack, 'атака', UI.colors.goldText);
-    pushNumber(summary.defense, 'защита', UI.colors.blue);
-    pushNumber(summary.strength, 'сила', UI.colors.text);
-    pushNumber(summary.intelligence, 'инт', UI.colors.blue);
-    pushNumber(summary.agility, 'ловк.', UI.colors.green);
-    pushNumber(summary.luck, 'удача', UI.colors.goldText);
+    pushNumber(summary.hp, 'HP', UI.colors.green, INVENTORY_DARK.red);
+    pushNumber(summary.energy, 'энерг.', UI.colors.blue, INVENTORY_DARK.cold);
+    pushNumber(summary.attack, 'атака', UI.colors.goldText, INVENTORY_DARK.gold);
+    pushNumber(summary.defense, 'защ.', UI.colors.blue, INVENTORY_DARK.cold);
+    pushNumber(summary.strength, 'сила', UI.colors.text, INVENTORY_DARK.bronze);
+    pushNumber(summary.intelligence, 'инт', UI.colors.blue, INVENTORY_DARK.cold);
+    pushNumber(summary.agility, 'ловк.', UI.colors.green, 0x4f8f5d);
+    pushNumber(summary.luck, 'удача', UI.colors.goldText, INVENTORY_DARK.gold);
 
     if (summary.critChance) {
       lines.push({
@@ -1004,6 +1119,7 @@ export class InventoryScene extends Phaser.Scene {
           ? `+${this.formatPercentStat(summary.critChance)}`
           : `-${this.formatPercentStat(Math.abs(summary.critChance))}`,
         color: '#c9a4ff',
+        accentColor: INVENTORY_DARK.violet,
       });
     }
 
@@ -1156,7 +1272,6 @@ export class InventoryScene extends Phaser.Scene {
       this.equipmentTooltipHoldTimer = undefined;
     }
   }
-
 
 
   private createCategoryTabs(layout: InventoryLayout) {
