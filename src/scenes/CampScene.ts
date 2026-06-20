@@ -83,6 +83,7 @@ export class CampScene extends Phaser.Scene {
   private static startupPromise?: Promise<void>;
 
   private actionContainer?: Phaser.GameObjects.Container;
+  private actionViewportCamera?: Phaser.Cameras.Scene2D.Camera;
   private currentScrollY = 0;
   private targetScrollY = 0;
   private maxScrollY = 0;
@@ -140,6 +141,8 @@ export class CampScene extends Phaser.Scene {
       this.campfireTimerEvent = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
+      this.actionViewportCamera?.destroy();
+      this.actionViewportCamera = undefined;
     });
   }
 
@@ -161,6 +164,8 @@ export class CampScene extends Phaser.Scene {
   }
 
   private resetScrollState() {
+    this.actionViewportCamera?.destroy();
+    this.actionViewportCamera = undefined;
     this.actionContainer = undefined;
     this.currentScrollY = 0;
     this.targetScrollY = 0;
@@ -615,18 +620,7 @@ export class CampScene extends Phaser.Scene {
 
     const actionContainer = this.add.container(0, 0).setDepth(7);
     this.actionContainer = actionContainer;
-
-    const maskGraphics = this.add.graphics();
-    maskGraphics.setVisible(false);
-    maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRect(
-      layout.safeX,
-      layout.actionsTop,
-      layout.width - layout.safeX * 2,
-      layout.actionsViewportHeight
-    );
-
-    actionContainer.setMask(maskGraphics.createGeometryMask());
+    this.createActionViewportCamera(layout, actionContainer);
 
     const gap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
     const mainHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 104;
@@ -959,6 +953,35 @@ export class CampScene extends Phaser.Scene {
     }
   }
 
+  private createActionViewportCamera(
+    layout: CampLayout,
+    actionContainer: Phaser.GameObjects.Container
+  ) {
+    // Phaser 4 + WebGL ругается на GameObject.setMask()/GeometryMask.
+    // Для прокручиваемого городского списка используем отдельную камеру:
+    // её viewport сам обрезает контент, как окно списка в мессенджерах.
+    this.actionViewportCamera?.destroy();
+
+    const camera = this.cameras.add(
+      layout.safeX,
+      layout.actionsTop,
+      layout.width - layout.safeX * 2,
+      layout.actionsViewportHeight
+    );
+
+    camera.setScroll(layout.safeX, layout.actionsTop);
+    camera.setBackgroundColor('rgba(0,0,0,0)');
+
+    const objectsOutsideActionList = this.children.list.filter(
+      object => object !== actionContainer
+    );
+
+    camera.ignore(objectsOutsideActionList);
+    this.cameras.main.ignore(actionContainer);
+
+    this.actionViewportCamera = camera;
+  }
+
   private createActionScrollInput(layout: CampLayout) {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.isPointerInsideActions(pointer, layout) || this.maxScrollY <= 0) {
@@ -1035,6 +1058,11 @@ export class CampScene extends Phaser.Scene {
       .setDepth(19)
       .setVisible(this.maxScrollY > 0);
 
+    this.actionViewportCamera?.ignore([
+      this.actionScrollTrack,
+      this.actionScrollThumb,
+    ]);
+
     this.updateActionScrollbar();
   }
 
@@ -1084,6 +1112,8 @@ export class CampScene extends Phaser.Scene {
       color: '#8e887b',
       align: 'center',
     }).setOrigin(0.5).setDepth(251);
+
+    this.actionViewportCamera?.ignore([bg, text]);
 
     this.tweens.add({
       targets: [bg, text],
@@ -1456,7 +1486,20 @@ export class CampScene extends Phaser.Scene {
       config.parent.add(zone);
     }
 
-    zone.on('pointerover', () => {
+    const isActionZone = config.parent === this.actionContainer;
+    const isActionPointerAllowed = (pointer: Phaser.Input.Pointer) => {
+      if (!isActionZone) {
+        return true;
+      }
+
+      return this.isPointerInsideActions(pointer, this.getLayout());
+    };
+
+    zone.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      if (!isActionPointerAllowed(pointer)) {
+        return;
+      }
+
       config.titleText?.setColor('#eee1c6');
     });
 
@@ -1464,8 +1507,8 @@ export class CampScene extends Phaser.Scene {
       config.titleText?.setColor(normalColor);
     });
 
-    zone.on('pointerdown', () => {
-      if (this.didDrag) {
+    zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.didDrag || !isActionPointerAllowed(pointer)) {
         return;
       }
 
@@ -1478,7 +1521,7 @@ export class CampScene extends Phaser.Scene {
       });
     });
 
-    zone.on('pointerup', () => {
+    zone.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       this.tweens.add({
         targets: config.titleText,
         scaleX: 1,
@@ -1487,7 +1530,7 @@ export class CampScene extends Phaser.Scene {
         ease: 'Back.easeOut',
       });
 
-      if (this.didDrag) {
+      if (this.didDrag || !isActionPointerAllowed(pointer)) {
         return;
       }
 
