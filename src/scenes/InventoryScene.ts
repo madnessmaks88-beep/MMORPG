@@ -111,6 +111,7 @@ export class InventoryScene extends Phaser.Scene {
   private inventoryItemsMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
   private inventoryListObjects: Phaser.GameObjects.GameObject[] = [];
+  private inventoryMassSellButtonObjects: Phaser.GameObjects.GameObject[] = [];
   private inventoryScrollbarTrack?: Phaser.GameObjects.Rectangle;
   private inventoryScrollbarThumb?: Phaser.GameObjects.Rectangle;
 
@@ -152,10 +153,10 @@ export class InventoryScene extends Phaser.Scene {
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
-    this.setInventoryListModalMode(false);
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
+    this.inventoryMassSellButtonObjects = [];
   }
 
   create(data?: {
@@ -1708,12 +1709,57 @@ export class InventoryScene extends Phaser.Scene {
       accentColor: UI.colors.redHex,
       danger: true,
       onClick: () => {
+        if (this.isItemInfoOpen) {
+          return;
+        }
+
         this.showMassSellConfirm();
       },
       depth: 130,
     });
 
+    this.inventoryMassSellButtonObjects = [...button.objects];
     this.inventoryListCamera?.ignore(button.objects);
+  }
+
+  private setObjectsVisible(
+    objects: Phaser.GameObjects.GameObject[],
+    visible: boolean
+  ): void {
+    objects.forEach(object => {
+      const target = object as Phaser.GameObjects.GameObject & {
+        setVisible?: (value: boolean) => Phaser.GameObjects.GameObject;
+      };
+
+      target.setVisible?.(visible);
+    });
+  }
+
+  private setInventoryListModalMode(isModalOpen: boolean): void {
+    const visible = !isModalOpen;
+    const shouldShowScrollbar = visible && this.inventoryMaxScrollY > 0;
+
+    if (this.inventoryListCamera) {
+      this.inventoryListCamera.visible = visible;
+    }
+
+    if (this.inventoryItemsContainer) {
+      this.inventoryItemsContainer.setVisible(visible);
+    }
+
+    this.setObjectsVisible(this.inventoryListObjects, visible);
+    this.setObjectsVisible(this.inventoryMassSellButtonObjects, visible);
+
+    if (this.inventoryScrollbarTrack) {
+      this.inventoryScrollbarTrack.setVisible(shouldShowScrollbar);
+    }
+
+    if (this.inventoryScrollbarThumb) {
+      this.inventoryScrollbarThumb.setVisible(shouldShowScrollbar);
+    }
+
+    this.isDraggingInventory = false;
+    this.didDragInventory = false;
   }
 
   private registerInventoryListObjects(objects: Phaser.GameObjects.GameObject[]): void {
@@ -2121,16 +2167,6 @@ export class InventoryScene extends Phaser.Scene {
   }
 
 
-  private setInventoryListModalMode(isModalOpen: boolean): void {
-    if (this.inventoryListCamera) {
-      this.inventoryListCamera.visible = !isModalOpen;
-    }
-
-    if (this.inventoryItemsContainer) {
-      this.inventoryItemsContainer.setVisible(!isModalOpen);
-    }
-  }
-
   private showUnequipConfirm(slot: EquipmentSlot, inventoryItem: InventoryItem) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
@@ -2373,7 +2409,7 @@ export class InventoryScene extends Phaser.Scene {
       danger: true,
       disabled: equipped,
       onClick: () => {
-        this.closeItemInfo();
+        this.closeItemInfo(false);
         this.showSellConfirm(inventoryItem);
       },
       depth: 1010,
@@ -2830,14 +2866,17 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryListCamera?.ignore(modal);
   }
 
-  private closeItemInfo() {
+  private closeItemInfo(restoreInventoryList = true) {
     if (this.itemInfoContainer) {
       this.itemInfoContainer.destroy(true);
       this.itemInfoContainer = undefined;
     }
 
     this.isItemInfoOpen = false;
-    this.setInventoryListModalMode(false);
+
+    if (restoreInventoryList) {
+      this.setInventoryListModalMode(false);
+    }
   }
 
   private restartInventory() {
