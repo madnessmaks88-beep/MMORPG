@@ -135,6 +135,17 @@ export class InventoryScene extends Phaser.Scene {
 
   private didDragInventory = false;
 
+  private inventoryPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private inventoryPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private inventoryPointerUpHandler?: () => void;
+  private inventoryWheelHandler?: (
+    pointer: Phaser.Input.Pointer,
+    gameObjects: Phaser.GameObjects.GameObject[],
+    deltaX: number,
+    deltaY: number,
+    deltaZ: number
+  ) => void;
+
   private selectedCategory: InventoryCategory = 'all';
 
   constructor() {
@@ -169,6 +180,10 @@ export class InventoryScene extends Phaser.Scene {
     if (!data?.returnScene && this.returnScene !== 'DungeonScene') {
       this.returnScene = 'CampScene';
     }
+
+    this.cleanupInventoryViewport();
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryViewport, this);
 
     const layout = this.getLayout();
 
@@ -818,12 +833,10 @@ export class InventoryScene extends Phaser.Scene {
         this.inventoryScrollY = 0;
         this.inventoryTargetScrollY = 0;
         this.initialInventoryScrollY = 0;
+        this.isDraggingInventory = false;
+        this.didDragInventory = false;
 
-        this.scene.restart({
-          returnScene: this.returnScene,
-          selectedCategory: tab.id,
-          inventoryScrollY: 0,
-        });
+        this.rebuildInventoryList();
       });
 
       tabBg.zone.on('pointerupoutside', () => {
@@ -925,34 +938,35 @@ export class InventoryScene extends Phaser.Scene {
     this.updateInventoryScrollbar(layout);
     this.updateInventoryItemsContainerPosition();
     this.renderInventoryContent(layout);
+
+    this.removeInventoryScrollHandlers();
     this.createInventoryTouchScrollHandlers(layout);
 
-    this.input.off('wheel');
-    this.input.on(
-      'wheel',
-      (
-        pointer: Phaser.Input.Pointer,
-        _gameObjects: Phaser.GameObjects.GameObject[],
-        _deltaX: number,
-        deltaY: number
-      ) => {
-        if (this.inventoryMaxScrollY <= 0 || this.isItemInfoOpen) {
-          return;
-        }
-
-        if (!this.isPointerInsideInventoryList(pointer, layout)) {
-          return;
-        }
-
-        this.inventoryTargetScrollY = Phaser.Math.Clamp(
-          this.inventoryTargetScrollY + deltaY * 0.45,
-          0,
-          this.inventoryMaxScrollY
-        );
-
-        this.updateInventoryScrollbar(layout);
+    this.inventoryWheelHandler = (
+      pointer: Phaser.Input.Pointer,
+      _gameObjects: Phaser.GameObjects.GameObject[],
+      _deltaX: number,
+      deltaY: number,
+      _deltaZ: number
+    ) => {
+      if (this.inventoryMaxScrollY <= 0 || this.isItemInfoOpen) {
+        return;
       }
-    );
+
+      if (!this.isPointerInsideInventoryList(pointer, layout)) {
+        return;
+      }
+
+      this.inventoryTargetScrollY = Phaser.Math.Clamp(
+        this.inventoryTargetScrollY + deltaY * 0.45,
+        0,
+        this.inventoryMaxScrollY
+      );
+
+      this.updateInventoryScrollbar(layout);
+    };
+
+    this.input.on('wheel', this.inventoryWheelHandler);
 
     if (layout.hasMassSellButton) {
       this.createMassSellButton(layout);
@@ -1647,17 +1661,15 @@ export class InventoryScene extends Phaser.Scene {
           this.didDragInventory ||
           !this.isPointerInsideInventoryList(this.input.activePointer, layout)
         ) {
+          actionButtonPressed = false;
           return;
         }
 
+        actionButtonPressed = false;
         equipItem(player, inventoryItem.instanceId);
         void saveGameAsync();
 
-        this.scene.restart({
-          inventoryScrollY: this.inventoryTargetScrollY,
-          selectedCategory: this.selectedCategory,
-          returnScene: this.returnScene,
-        });
+        this.refreshInventorySceneSafely();
       },
     });
 
@@ -1680,9 +1692,11 @@ export class InventoryScene extends Phaser.Scene {
           this.didDragInventory ||
           !this.isPointerInsideInventoryList(this.input.activePointer, layout)
         ) {
+          actionButtonPressed = false;
           return;
         }
 
+        actionButtonPressed = false;
         this.showSellConfirm(inventoryItem);
       },
     });
@@ -2028,12 +2042,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private createInventoryTouchScrollHandlers(layout: InventoryLayout) {
-    this.input.off('pointerdown');
-    this.input.off('pointermove');
-    this.input.off('pointerup');
-    this.input.off('pointerupoutside');
-
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.inventoryPointerDownHandler = (pointer: Phaser.Input.Pointer) => {
       if (this.inventoryMaxScrollY <= 0 || this.isItemInfoOpen) {
         return;
       }
@@ -2046,9 +2055,9 @@ export class InventoryScene extends Phaser.Scene {
       this.didDragInventory = false;
       this.dragStartY = pointer.y;
       this.dragStartScrollY = this.inventoryTargetScrollY;
-    });
+    };
 
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+    this.inventoryPointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
       if (!this.isDraggingInventory || this.isItemInfoOpen) {
         return;
       }
@@ -2071,9 +2080,9 @@ export class InventoryScene extends Phaser.Scene {
       this.updateInventoryItemsContainerPosition();
       this.renderInventoryContent(layout);
       this.updateInventoryScrollbar(layout);
-    });
+    };
 
-    const stopDrag = () => {
+    this.inventoryPointerUpHandler = () => {
       this.isDraggingInventory = false;
 
       this.time.delayedCall(80, () => {
@@ -2081,8 +2090,10 @@ export class InventoryScene extends Phaser.Scene {
       });
     };
 
-    this.input.on('pointerup', stopDrag);
-    this.input.on('pointerupoutside', stopDrag);
+    this.input.on('pointerdown', this.inventoryPointerDownHandler);
+    this.input.on('pointermove', this.inventoryPointerMoveHandler);
+    this.input.on('pointerup', this.inventoryPointerUpHandler);
+    this.input.on('pointerupoutside', this.inventoryPointerUpHandler);
   }
 
   private isPointerInsideInventoryList(
@@ -2388,13 +2399,8 @@ export class InventoryScene extends Phaser.Scene {
         equipItem(player, inventoryItem.instanceId);
         void saveGameAsync();
 
-        this.closeItemInfo();
-
-        this.scene.restart({
-          inventoryScrollY: this.inventoryTargetScrollY,
-          selectedCategory: this.selectedCategory,
-          returnScene: this.returnScene,
-        });
+        this.closeItemInfo(false);
+        this.refreshInventorySceneSafely();
       },
       depth: 1010,
     });
@@ -2692,6 +2698,7 @@ export class InventoryScene extends Phaser.Scene {
       onConfirm: () => {
         if (itemsToSell.length === 0) {
           this.isItemInfoOpen = false;
+          this.setInventoryListModalMode(false);
           return;
         }
 
@@ -2736,7 +2743,7 @@ export class InventoryScene extends Phaser.Scene {
       hideCancel: true,
       onConfirm: () => {
         this.isItemInfoOpen = false;
-        this.restartInventory();
+        this.refreshInventorySceneSafely();
       },
     });
   }
@@ -2830,7 +2837,7 @@ export class InventoryScene extends Phaser.Scene {
       danger: config.danger,
       onClick: () => {
         const callback = config.onConfirm;
-        this.closeItemInfo();
+        this.closeItemInfo(false);
         callback();
       },
       depth: 1010,
@@ -2879,21 +2886,97 @@ export class InventoryScene extends Phaser.Scene {
     }
   }
 
+  private rebuildInventoryList(): void {
+    this.restartInventory();
+  }
+
+  private refreshInventorySceneSafely(): void {
+    this.restartInventory();
+  }
+
+  private removeInventoryScrollHandlers(): void {
+    if (this.inventoryPointerDownHandler) {
+      this.input.off('pointerdown', this.inventoryPointerDownHandler);
+      this.inventoryPointerDownHandler = undefined;
+    }
+
+    if (this.inventoryPointerMoveHandler) {
+      this.input.off('pointermove', this.inventoryPointerMoveHandler);
+      this.inventoryPointerMoveHandler = undefined;
+    }
+
+    if (this.inventoryPointerUpHandler) {
+      this.input.off('pointerup', this.inventoryPointerUpHandler);
+      this.input.off('pointerupoutside', this.inventoryPointerUpHandler);
+      this.inventoryPointerUpHandler = undefined;
+    }
+
+    if (this.inventoryWheelHandler) {
+      this.input.off('wheel', this.inventoryWheelHandler);
+      this.inventoryWheelHandler = undefined;
+    }
+  }
+
+  private cleanupInventoryViewport(): void {
+    this.removeInventoryScrollHandlers();
+
+    if (this.inventoryListCamera) {
+      this.inventoryListCamera.destroy();
+      this.inventoryListCamera = undefined;
+    }
+
+    if (this.inventoryItemsContainer) {
+      this.inventoryItemsContainer.clearMask(true);
+      this.inventoryItemsContainer.destroy(true);
+      this.inventoryItemsContainer = undefined;
+    }
+
+    if (this.inventoryItemsMask) {
+      this.inventoryItemsMask.destroy();
+      this.inventoryItemsMask = undefined;
+    }
+
+    if (this.inventoryItemsMaskGraphics) {
+      this.inventoryItemsMaskGraphics.destroy();
+      this.inventoryItemsMaskGraphics = undefined;
+    }
+
+    this.inventoryScrollbarTrack?.destroy();
+    this.inventoryScrollbarTrack = undefined;
+    this.inventoryScrollbarThumb?.destroy();
+    this.inventoryScrollbarThumb = undefined;
+
+    this.inventoryListObjects = [];
+    this.inventoryMassSellButtonObjects = [];
+    this.isDraggingInventory = false;
+    this.didDragInventory = false;
+  }
+
   private restartInventory() {
+    const scrollY = Phaser.Math.Clamp(
+      this.inventoryTargetScrollY,
+      0,
+      Math.max(0, this.inventoryMaxScrollY)
+    );
+
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
-    this.setInventoryListModalMode(false);
 
     if (this.itemInfoContainer) {
       this.itemInfoContainer.destroy(true);
       this.itemInfoContainer = undefined;
     }
 
-    this.scene.restart({
-      inventoryScrollY: this.inventoryTargetScrollY,
-      selectedCategory: this.selectedCategory,
-      returnScene: this.returnScene,
+    this.setInventoryListModalMode(false);
+    this.cleanupInventoryViewport();
+
+    this.time.delayedCall(0, () => {
+      this.scene.restart({
+        inventoryScrollY: scrollY,
+        selectedCategory: this.selectedCategory,
+        returnScene: this.returnScene,
+      });
     });
   }
 
