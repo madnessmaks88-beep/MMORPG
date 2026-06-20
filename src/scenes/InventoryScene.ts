@@ -982,6 +982,15 @@ export class InventoryScene extends Phaser.Scene {
       this.inventoryViewportWidth,
       this.inventoryViewportHeight
     );
+
+    // ВАЖНО: viewport камеры находится в screen-координатах,
+    // а карточки остаются в world-координатах сцены.
+    // Без setScroll(viewportLeft, viewportTop) Phaser добавляет смещение viewport
+    // второй раз, из-за чего карточки уезжают вправо/вниз и режутся не там.
+    this.inventoryListCamera.setScroll(
+      this.inventoryViewportLeft,
+      this.inventoryViewportTop
+    );
     this.inventoryListCamera.setBackgroundColor('rgba(0,0,0,0)');
     this.inventoryListCamera.ignore(fixedObjectsBeforeList);
 
