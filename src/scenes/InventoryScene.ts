@@ -11,6 +11,7 @@ import {
   equipItem,
   getBaseItemFromInventoryItem,
   getItemSellPrice,
+  getItemBonusWithUpgrade,
   getPlayerStats,
   getRarityColorHex,
   getRarityStrokeColor,
@@ -99,12 +100,34 @@ type InventoryLayout = {
 
   bottomNavTop: number;
 };
+
+type EquipmentBonusSummary = {
+  hp: number;
+  energy: number;
+  attack: number;
+  defense: number;
+  critChance: number;
+  agility: number;
+  luck: number;
+  strength: number;
+  intelligence: number;
+};
+
+type EquipmentBonusLine = {
+  label: string;
+  value: string;
+  color: string;
+};
+
 export class InventoryScene extends Phaser.Scene {
   private isItemInfoOpen = false;
 
   private returnScene = 'CampScene';
 
   private itemInfoContainer?: Phaser.GameObjects.Container;
+  private equipmentTooltipContainer?: Phaser.GameObjects.Container;
+  private equipmentTooltipOutsideHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private equipmentTooltipHoldTimer?: Phaser.Time.TimerEvent;
 
   private inventoryItemsContainer?: Phaser.GameObjects.Container;
   private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
@@ -242,10 +265,10 @@ export class InventoryScene extends Phaser.Scene {
 
     const headerY = safeTop;
 
-    const statsHeight = tiny ? 74 : veryCompact ? 82 : compact ? 96 : 104;
+    const statsHeight = tiny ? 92 : veryCompact ? 98 : compact ? 104 : 112;
     const statsY = safeTop + statsHeight / 2;
 
-    const equipmentHeight = tiny ? 118 : veryCompact ? 136 : compact ? 156 : 168;
+    const equipmentHeight = tiny ? 118 : veryCompact ? 122 : compact ? 128 : 136;
     const equipmentGap = tiny ? 6 : 8;
     const equipmentY = statsY + statsHeight / 2 + equipmentGap + equipmentHeight / 2;
 
@@ -387,7 +410,7 @@ export class InventoryScene extends Phaser.Scene {
       y: layout.statsY,
       width: layout.contentWidth,
       height: layout.statsHeight,
-      radius: veryCompact ? 22 : 26,
+      radius: veryCompact ? 20 : 24,
       color: INVENTORY_DARK.stone,
       alpha: 0.94,
       strokeColor: INVENTORY_DARK.bronze,
@@ -414,23 +437,29 @@ export class InventoryScene extends Phaser.Scene {
 
     const left = layout.centerX - layout.contentWidth / 2;
     const top = layout.statsY - layout.statsHeight / 2;
-    const paddingX = veryCompact ? 12 : 14;
-    const paddingY = veryCompact ? 10 : 12;
-    const gapX = veryCompact ? 8 : 10;
-    const gapY = veryCompact ? 8 : 10;
-    const chipWidth = (layout.contentWidth - paddingX * 2 - gapX) / 2;
-    const chipHeight = (layout.statsHeight - paddingY * 2 - gapY) / 2;
+    const paddingX = veryCompact ? 8 : 10;
+    const paddingY = veryCompact ? 9 : 10;
+    const gapX = veryCompact ? 5 : 7;
+    const gapY = veryCompact ? 6 : 8;
+    const columns = 4;
+    const rows = 2;
+    const chipWidth = (layout.contentWidth - paddingX * 2 - gapX * (columns - 1)) / columns;
+    const chipHeight = (layout.statsHeight - paddingY * 2 - gapY * (rows - 1)) / rows;
 
     const chips = [
       { label: 'HP', value: `${player.hp}/${stats.maxHp}`, icon: '♥', color: INVENTORY_DARK.red },
-      { label: 'Урон', value: `${stats.attack}`, icon: '⚔', color: INVENTORY_DARK.gold },
-      { label: 'Броня', value: `${stats.defense}`, icon: '▣', color: INVENTORY_DARK.cold },
+      { label: 'Атака', value: `${stats.attack}`, icon: '⚔', color: INVENTORY_DARK.gold },
+      { label: 'Защ.', value: `${stats.defense}`, icon: '▣', color: INVENTORY_DARK.cold },
       { label: 'Золото', value: `${player.gold}`, icon: '◆', color: INVENTORY_DARK.gold },
+      { label: 'Крит', value: this.formatPercentStat(stats.critChance), icon: '✦', color: INVENTORY_DARK.violet },
+      { label: 'Крит ур.', value: this.formatPercentMultiplier(this.getCriticalDamageMultiplier()), icon: '✷', color: INVENTORY_DARK.violet },
+      { label: 'Инт', value: `${stats.intelligence}`, icon: '☥', color: INVENTORY_DARK.cold },
+      { label: 'Удача', value: `${stats.luck}`, icon: '◇', color: INVENTORY_DARK.gold },
     ];
 
     chips.forEach((chip, index) => {
-      const column = index % 2;
-      const row = Math.floor(index / 2);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
       const x = left + paddingX + chipWidth / 2 + column * (chipWidth + gapX);
       const y = top + paddingY + chipHeight / 2 + row * (chipHeight + gapY);
 
@@ -459,7 +488,7 @@ export class InventoryScene extends Phaser.Scene {
     accentColor: number,
     index = 0
   ) {
-    const radius = Math.min(18, height / 2);
+    const radius = Math.min(15, height / 2);
     const objects = this.createRoundedPanelAsObjects({
       x,
       y,
@@ -469,30 +498,26 @@ export class InventoryScene extends Phaser.Scene {
       color: 0x0b0d11,
       alpha: 0.96,
       strokeColor: accentColor,
-      strokeAlpha: 0.38,
+      strokeAlpha: 0.34,
       strokeWidth: 1,
       depth: 4,
     });
 
-    const iconX = x - width / 2 + Math.min(30, height * 0.58);
-    const textX = x - width / 2 + Math.min(55, height * 0.96);
-    const textWidth = Math.max(42, width - (textX - (x - width / 2)) - 8);
-
-    const glow = this.add.circle(iconX, y, Math.min(17, height * 0.34), accentColor, 0.18)
-      .setStrokeStyle(1, accentColor, 0.58)
-      .setDepth(6);
+    const iconX = x - width / 2 + Math.min(14, width * 0.18);
+    const textX = x - width / 2 + Math.min(26, width * 0.31);
+    const textWidth = Math.max(34, width - (textX - (x - width / 2)) - 4);
 
     const iconText = this.add.text(iconX, y, icon, {
       fontFamily: UI.font.body,
-      fontSize: height < 40 ? '12px' : '14px',
-      color: UI.colors.text,
+      fontSize: height < 38 ? '9px' : '10px',
+      color: UI.colors.textMuted,
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(7);
 
-    const labelText = this.add.text(textX, y - height * 0.18, label, {
+    const labelText = this.add.text(textX, y - height * 0.2, label, {
       fontFamily: UI.font.body,
-      fontSize: height < 42 ? '9px' : '10px',
+      fontSize: height < 38 ? '7px' : '8px',
       color: UI.colors.textMuted,
       wordWrap: {
         width: textWidth,
@@ -502,7 +527,7 @@ export class InventoryScene extends Phaser.Scene {
 
     const valueText = this.add.text(textX, y + height * 0.18, value, {
       fontFamily: UI.font.title,
-      fontSize: height < 42 ? '15px' : '17px',
+      fontSize: height < 38 ? '10px' : '12px',
       color: UI.colors.text,
       stroke: '#000000',
       strokeThickness: 2,
@@ -512,7 +537,7 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const animatedObjects = [...objects, glow, iconText, labelText, valueText];
+    const animatedObjects = [...objects, iconText, labelText, valueText];
 
     if (this.shouldPlayInventoryIntroAnimation) {
       this.setObjectsAlpha(animatedObjects, 0);
@@ -521,13 +546,35 @@ export class InventoryScene extends Phaser.Scene {
         targets: animatedObjects,
         alpha: 1,
         y: '+=0',
-        duration: 210,
-        delay: 100 + index * 45,
+        duration: 185,
+        delay: 80 + index * 26,
         ease: 'Sine.easeOut',
       });
     } else {
       this.setObjectsAlpha(animatedObjects, 1);
     }
+  }
+
+  private getCriticalDamageMultiplier(): number {
+    const critTreeLevel = Math.max(0, player.characterTree?.crit ?? 0);
+
+    return critTreeLevel >= 2 ? 1.6 : 1.5;
+  }
+
+  private formatPercentStat(value: number): string {
+    const normalized = Math.abs(value) <= 1
+      ? value * 100
+      : value;
+
+    return `${Math.round(normalized)}%`;
+  }
+
+  private formatPercentMultiplier(value: number): string {
+    const normalized = Math.abs(value) <= 2
+      ? value * 100
+      : value;
+
+    return `${Math.round(normalized)}%`;
   }
 
 
@@ -541,7 +588,7 @@ export class InventoryScene extends Phaser.Scene {
       y: layout.equipmentY,
       width: layout.contentWidth,
       height: layout.equipmentHeight,
-      radius: veryCompact ? 24 : 28,
+      radius: veryCompact ? 22 : 26,
       color: INVENTORY_DARK.brown,
       alpha: 0.94,
       strokeColor: INVENTORY_DARK.bronze,
@@ -567,182 +614,547 @@ export class InventoryScene extends Phaser.Scene {
       panel.panel.setAlpha(1);
     }
 
-    this.add.text(layout.centerX - layout.contentWidth / 2 + 22, panelTop + (veryCompact ? 20 : 24), 'Снаряжение', {
+    this.add.text(layout.centerX - layout.contentWidth / 2 + 18, panelTop + (veryCompact ? 18 : 21), 'Снаряжение', {
       fontFamily: UI.font.title,
-      fontSize: veryCompact ? '18px' : layout.compact ? '20px' : '22px',
+      fontSize: veryCompact ? '16px' : layout.compact ? '18px' : '20px',
       color: UI.colors.goldText,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'left',
       wordWrap: {
-        width: layout.contentWidth - 44,
+        width: layout.contentWidth * 0.44,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(10);
 
-    this.add.text(layout.centerX + layout.contentWidth / 2 - 22, panelTop + (veryCompact ? 20 : 24), 'нажми слот', {
+    this.add.text(layout.centerX + layout.contentWidth / 2 - 18, panelTop + (veryCompact ? 18 : 21), 'удержи слот', {
       fontFamily: UI.font.body,
-      fontSize: veryCompact ? '9px' : '10px',
+      fontSize: veryCompact ? '8px' : '9px',
       color: INVENTORY_DARK.muted,
       align: 'right',
       wordWrap: {
-        width: 110,
+        width: layout.contentWidth * 0.42,
       },
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(10);
 
-    const slotGap = veryCompact ? 8 : 10;
-    const slotWidth = (layout.contentWidth - 44 - slotGap) / 2;
-    const startX = layout.centerX - slotWidth / 2 - slotGap / 2;
-    const endX = layout.centerX + slotWidth / 2 + slotGap / 2;
-    const slotHeight = veryCompact ? 46 : layout.compact ? 50 : 54;
-    const rowGap = veryCompact ? 50 : 56;
-    const firstRowY = panelTop + (veryCompact ? 66 : 74);
-    const secondRowY = firstRowY + rowGap;
-
-    this.createEquipmentSlotCard('weapon', startX, firstRowY, slotWidth, slotHeight, 0);
-    this.createEquipmentSlotCard('armor', endX, firstRowY, slotWidth, slotHeight, 1);
-    this.createEquipmentSlotCard('trinket', startX, secondRowY, slotWidth, slotHeight, 2);
-    this.createEquipmentSlotCard('ring', endX, secondRowY, slotWidth, slotHeight, 3);
+    this.createEquipmentIconSlots(layout);
+    this.createEquipmentSummaryPanel(layout);
   }
 
-  private createEquipmentSlotCard(slot: EquipmentSlot, x: number, y: number, width: number, height?: number, index = 0) {
-    const instanceId = player.equipment[slot];
+  private createEquipmentIconSlots(layout: InventoryLayout): void {
+    const metrics = this.getEquipmentPanelMetrics(layout);
+    const radius = metrics.slotRadius;
+    const iconGapX = metrics.slotGapX;
+    const iconGapY = metrics.slotGapY;
+    const firstX = metrics.slotAreaLeft + radius + 4;
+    const secondX = firstX + radius * 2 + iconGapX;
+    const firstY = metrics.slotAreaTop + radius;
+    const secondY = firstY + radius * 2 + iconGapY;
 
+    this.createEquipmentIconSlot('weapon', firstX, firstY, radius, 0);
+    this.createEquipmentIconSlot('armor', secondX, firstY, radius, 1);
+    this.createEquipmentIconSlot('trinket', firstX, secondY, radius, 2);
+    this.createEquipmentIconSlot('ring', secondX, secondY, radius, 3);
+  }
+
+  private createEquipmentIconSlot(slot: EquipmentSlot, x: number, y: number, radius: number, index = 0): void {
+    const instanceId = player.equipment[slot];
     const inventoryItem = instanceId
       ? player.inventory.find((item: InventoryItem) => item.instanceId === instanceId)
       : undefined;
-
-    const item = inventoryItem
-      ? getBaseItemFromInventoryItem(inventoryItem)
-      : undefined;
-
-    const slotName = getSlotText(slot);
-
-    const rarityColor = item ? getRarityColorHex(item) : UI.colors.goldDark;
+    const item = inventoryItem ? getBaseItemFromInventoryItem(inventoryItem) : undefined;
+    const rarityFillColor = item ? getRarityColorHex(item) : INVENTORY_DARK.graphite;
     const rarityStrokeColor = item ? getRarityStrokeColor(item) : UI.colors.goldDark;
+    const strokeAlpha = item ? 0.92 : 0.24;
+    const fillAlpha = item ? 0.72 : 0.62;
 
-    const cardHeight = height ?? (this.scale.height < 1120 ? 52 : 56);
-
-    const objects = this.createRoundedPanelAsObjects({
-      x,
-      y,
-      width,
-      height: cardHeight,
-      radius: Math.min(18, cardHeight / 2),
-      color: item ? INVENTORY_DARK.stoneLight : INVENTORY_DARK.graphite,
-      alpha: item ? 0.98 : 0.78,
-      strokeColor: item ? rarityStrokeColor : UI.colors.goldDark,
-      strokeAlpha: item ? 0.82 : 0.26,
-      strokeWidth: item ? 2 : 1,
-      depth: 4,
-    });
-
-    const left = x - width / 2;
-    const iconX = left + Math.min(28, cardHeight * 0.58);
-    const nameX = left + Math.min(54, cardHeight + 8);
-    const nameWidth = Math.max(44, width - (nameX - left) - 10);
-
-    const glow = this.add.circle(iconX, y, Math.min(17, cardHeight * 0.34), item ? rarityColor : 0x17100c, item ? 0.88 : 0.56)
-      .setStrokeStyle(2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 0.72 : 0.32)
+    const shadow = this.add.circle(x, y + 4, radius + 2, 0x000000, 0.28).setDepth(5);
+    const bg = this.add.circle(x, y, radius, rarityFillColor, fillAlpha)
+      .setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha)
       .setDepth(6);
 
-    const icon = this.add.text(iconX, y, getSlotIcon(slot), {
+    const icon = this.add.text(x, y - (item ? 0 : radius * 0.12), getSlotIcon(slot), {
       fontFamily: UI.font.body,
-      fontSize: cardHeight < 50 ? '13px' : '15px',
+      fontSize: `${Math.max(13, Math.floor(radius * 0.78))}px`,
       color: item ? '#ffffff' : UI.colors.textMuted,
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(7);
 
-    const slotText = this.add.text(nameX, y - cardHeight * 0.18, slotName, {
-      fontFamily: UI.font.body,
-      fontSize: cardHeight < 50 ? '9px' : '10px',
-      color: UI.colors.textMuted,
-      align: 'left',
-      wordWrap: {
-        width: nameWidth,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(7);
+    const emptyHint = item
+      ? undefined
+      : this.add.text(x, y + radius * 0.43, 'пусто', {
+        fontFamily: UI.font.body,
+        fontSize: `${Math.max(6, Math.floor(radius * 0.26))}px`,
+        color: '#665d50',
+        wordWrap: {
+          width: radius * 1.6,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(7);
 
-    const itemText = item && inventoryItem
-      ? `${item.name}${inventoryItem.upgradeLevel > 0 ? ` +${inventoryItem.upgradeLevel}` : ''}`
-      : 'Пусто';
+    const objects = [shadow, bg, icon];
 
-    const itemLabel = this.add.text(nameX, y + cardHeight * 0.18, itemText, {
-      fontFamily: UI.font.title,
-      fontSize: item ? (cardHeight < 50 ? '10px' : '11px') : '12px',
-      color: item ? UI.colors.goldText : UI.colors.textMuted,
-      align: 'left',
-      wordWrap: {
-        width: nameWidth,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-      stroke: '#000000',
-      strokeThickness: item ? 2 : 0,
-    }).setOrigin(0, 0.5).setDepth(7);
-
-    const animatedObjects = [...objects, glow, icon, slotText, itemLabel];
+    if (emptyHint) {
+      objects.push(emptyHint);
+    }
 
     if (this.shouldPlayInventoryIntroAnimation) {
-      this.setObjectsAlpha(animatedObjects, 0);
-
+      this.setObjectsAlpha(objects, 0);
       this.tweens.add({
-        targets: animatedObjects,
+        targets: objects,
         alpha: 1,
-        duration: 230,
-        delay: 150 + index * 45,
+        duration: 190,
+        delay: 160 + index * 40,
         ease: 'Sine.easeOut',
       });
-
-      if (item) {
-        this.tweens.add({
-          targets: glow,
-          alpha: {
-            from: 0.58,
-            to: 0.95,
-          },
-          duration: 1500,
-          yoyo: true,
-          repeat: -1,
-          delay: 420 + index * 90,
-          ease: 'Sine.easeInOut',
-        });
-      }
-    } else {
-      this.setObjectsAlpha(animatedObjects, 1);
     }
 
-    if (!item || !inventoryItem) {
-      return;
-    }
-
-    const zone = this.add.zone(x, y, width, cardHeight)
-      .setDepth(30)
-      .setInteractive({
-        useHandCursor: true,
+    if (item) {
+      this.tweens.add({
+        targets: bg,
+        alpha: {
+          from: Math.max(0.48, fillAlpha - 0.14),
+          to: Math.min(0.92, fillAlpha + 0.12),
+        },
+        duration: 1450,
+        yoyo: true,
+        repeat: -1,
+        delay: 360 + index * 80,
+        ease: 'Sine.easeInOut',
       });
+    }
+
+    const zone = this.add.zone(x, y, radius * 2.4, radius * 2.4)
+      .setDepth(32)
+      .setInteractive({ useHandCursor: true });
+
+    let holdOpenedTooltip = false;
+
+    zone.on('pointerover', () => {
+      if (this.isItemInfoOpen) {
+        return;
+      }
+
+      bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, item ? 1 : 0.48);
+      this.showEquipmentTooltip(slot, inventoryItem, x, y);
+    });
+
+    zone.on('pointerout', () => {
+      bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha);
+      this.cancelEquipmentTooltipHold();
+      this.hideEquipmentTooltip();
+    });
 
     zone.on('pointerdown', () => {
-      objects[1].setAlpha(0.78);
+      if (this.isItemInfoOpen) {
+        return;
+      }
+
+      holdOpenedTooltip = false;
+      bg.setAlpha(Math.min(1, fillAlpha + 0.16));
+      this.cancelEquipmentTooltipHold();
+      this.equipmentTooltipHoldTimer = this.time.delayedCall(430, () => {
+        holdOpenedTooltip = true;
+        this.showEquipmentTooltip(slot, inventoryItem, x, y);
+      });
     });
 
     zone.on('pointerup', () => {
-      objects[1].setAlpha(1);
+      bg.setAlpha(fillAlpha);
+      this.cancelEquipmentTooltipHold();
 
       if (this.isItemInfoOpen) {
         return;
       }
 
-      this.showUnequipConfirm(slot, inventoryItem);
+      if (holdOpenedTooltip) {
+        holdOpenedTooltip = false;
+        return;
+      }
+
+      this.hideEquipmentTooltip();
+
+      if (inventoryItem) {
+        this.showUnequipConfirm(slot, inventoryItem);
+      } else {
+        this.showEquipmentTooltip(slot, undefined, x, y);
+      }
     });
 
-    zone.on('pointerout', () => {
-      objects[1].setAlpha(1);
+    zone.on('pointerupoutside', () => {
+      bg.setAlpha(fillAlpha);
+      holdOpenedTooltip = false;
+      this.cancelEquipmentTooltipHold();
+      this.hideEquipmentTooltip();
     });
+  }
+
+  private createEquipmentSummaryPanel(layout: InventoryLayout): void {
+    const metrics = this.getEquipmentPanelMetrics(layout);
+    const summary = this.getEquippedItemsBonusSummary();
+    const lines = this.formatEquipmentBonus(summary);
+    const titleFontSize = layout.veryCompact ? '11px' : '12px';
+    const lineFontSize = layout.veryCompact ? '9px' : '10px';
+
+    const bgObjects = this.createRoundedPanelAsObjects({
+      x: metrics.bonusX,
+      y: metrics.bonusY,
+      width: metrics.bonusWidth,
+      height: metrics.bonusHeight,
+      radius: 16,
+      color: 0x0b0d11,
+      alpha: 0.82,
+      strokeColor: INVENTORY_DARK.bronze,
+      strokeAlpha: 0.34,
+      strokeWidth: 1,
+      depth: 5,
+    });
+
+    const title = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 11, 'Бонусы экипировки', {
+      fontFamily: UI.font.title,
+      fontSize: titleFontSize,
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: metrics.bonusWidth - 20,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(8);
+
+    const objects: Phaser.GameObjects.GameObject[] = [...bgObjects, title];
+
+    if (lines.length === 0) {
+      const emptyTitle = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 36, 'Нет бонусов', {
+        fontFamily: UI.font.body,
+        fontSize: lineFontSize,
+        color: UI.colors.textMuted,
+        wordWrap: {
+          width: metrics.bonusWidth - 20,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(8);
+
+      const emptyHint = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 55, 'Надень предметы, чтобы усилить героя', {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '8px' : '9px',
+        color: '#756b5c',
+        wordWrap: {
+          width: metrics.bonusWidth - 20,
+          useAdvancedWrap: true,
+        },
+        maxLines: 2,
+      }).setOrigin(0, 0.5).setDepth(8);
+
+      objects.push(emptyTitle, emptyHint);
+    } else {
+      const maxLines = layout.veryCompact ? 4 : 5;
+      const visibleLines = lines.slice(0, maxLines);
+      const hiddenCount = Math.max(0, lines.length - visibleLines.length);
+      const lineGap = layout.veryCompact ? 13 : 15;
+
+      visibleLines.forEach((line, index) => {
+        const row = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 34 + index * lineGap, `${line.value} ${line.label}`, {
+          fontFamily: UI.font.body,
+          fontSize: lineFontSize,
+          color: line.color,
+          stroke: '#000000',
+          strokeThickness: 1,
+          wordWrap: {
+            width: metrics.bonusWidth - 20,
+          },
+          maxLines: 1,
+        }).setOrigin(0, 0.5).setDepth(8);
+
+        objects.push(row);
+      });
+
+      if (hiddenCount > 0) {
+        const moreText = this.add.text(metrics.bonusLeft + 10, metrics.bonusTop + 34 + visibleLines.length * lineGap, `ещё +${hiddenCount}`, {
+          fontFamily: UI.font.body,
+          fontSize: layout.veryCompact ? '8px' : '9px',
+          color: UI.colors.textMuted,
+          wordWrap: {
+            width: metrics.bonusWidth - 20,
+          },
+          maxLines: 1,
+        }).setOrigin(0, 0.5).setDepth(8);
+
+        objects.push(moreText);
+      }
+    }
+
+    if (this.shouldPlayInventoryIntroAnimation) {
+      this.setObjectsAlpha(objects, 0);
+      this.tweens.add({
+        targets: objects,
+        alpha: 1,
+        duration: 210,
+        delay: 210,
+        ease: 'Sine.easeOut',
+      });
+    }
+  }
+
+  private getEquipmentPanelMetrics(layout: InventoryLayout) {
+    const panelLeft = layout.centerX - layout.contentWidth / 2;
+    const panelTop = layout.equipmentY - layout.equipmentHeight / 2;
+    const innerLeft = panelLeft + 16;
+    const innerRight = panelLeft + layout.contentWidth - 16;
+    const contentTop = panelTop + (layout.veryCompact ? 36 : 42);
+    const contentBottom = panelTop + layout.equipmentHeight - 12;
+    const contentHeight = Math.max(54, contentBottom - contentTop);
+    const slotAreaWidth = Math.min(layout.contentWidth * 0.42, layout.veryCompact ? 140 : 156);
+    const slotRadius = Math.max(13, Math.min(layout.veryCompact ? 17 : 20, (contentHeight - 6) / 4));
+    const slotGapX = Math.max(7, Math.min(13, slotAreaWidth - slotRadius * 4 - 8));
+    const slotGapY = Math.max(4, Math.min(10, contentHeight - slotRadius * 4));
+    const slotAreaLeft = innerLeft;
+    const slotAreaTop = contentTop + Math.max(0, (contentHeight - (slotRadius * 4 + slotGapY)) / 2);
+    const bonusLeft = slotAreaLeft + slotRadius * 4 + slotGapX + 18;
+    const bonusWidth = Math.max(122, innerRight - bonusLeft);
+    const bonusHeight = contentHeight;
+    const bonusTop = contentTop;
+
+    return {
+      panelLeft,
+      panelTop,
+      slotAreaLeft,
+      slotAreaTop,
+      slotRadius,
+      slotGapX,
+      slotGapY,
+      bonusLeft,
+      bonusTop,
+      bonusWidth,
+      bonusHeight,
+      bonusX: bonusLeft + bonusWidth / 2,
+      bonusY: bonusTop + bonusHeight / 2,
+    };
+  }
+
+  private getEquippedItemsBonusSummary(): EquipmentBonusSummary {
+    const summary: EquipmentBonusSummary = {
+      hp: 0,
+      energy: 0,
+      attack: 0,
+      defense: 0,
+      critChance: 0,
+      agility: 0,
+      luck: 0,
+      strength: 0,
+      intelligence: 0,
+    };
+
+    const slots: EquipmentSlot[] = ['weapon', 'armor', 'trinket', 'ring'];
+
+    slots.forEach(slot => {
+      const inventoryItem = this.getEquippedInventoryItemForSlot(slot);
+
+      if (!inventoryItem) {
+        return;
+      }
+
+      const bonus = getItemBonusWithUpgrade(inventoryItem);
+
+      summary.hp += bonus.bonusHp;
+      summary.energy += bonus.bonusEnergy;
+      summary.attack += bonus.bonusAttack;
+      summary.defense += bonus.bonusDefense;
+      summary.critChance += bonus.bonusCritChance;
+      summary.agility += bonus.bonusAgility;
+      summary.luck += bonus.bonusLuck;
+      summary.strength += bonus.bonusStrength;
+      summary.intelligence += bonus.bonusIntelligence;
+    });
+
+    return summary;
+  }
+
+  private formatEquipmentBonus(summary: EquipmentBonusSummary): EquipmentBonusLine[] {
+    const lines: EquipmentBonusLine[] = [];
+
+    const pushNumber = (value: number, label: string, color: string) => {
+      if (!value) {
+        return;
+      }
+
+      lines.push({
+        label,
+        value: value > 0 ? `+${value}` : `${value}`,
+        color,
+      });
+    };
+
+    pushNumber(summary.hp, 'HP', UI.colors.green);
+    pushNumber(summary.energy, 'энергия', UI.colors.blue);
+    pushNumber(summary.attack, 'атака', UI.colors.goldText);
+    pushNumber(summary.defense, 'защита', UI.colors.blue);
+    pushNumber(summary.strength, 'сила', UI.colors.text);
+    pushNumber(summary.intelligence, 'инт', UI.colors.blue);
+    pushNumber(summary.agility, 'ловк.', UI.colors.green);
+    pushNumber(summary.luck, 'удача', UI.colors.goldText);
+
+    if (summary.critChance) {
+      lines.push({
+        label: 'крит',
+        value: summary.critChance > 0
+          ? `+${this.formatPercentStat(summary.critChance)}`
+          : `-${this.formatPercentStat(Math.abs(summary.critChance))}`,
+        color: '#c9a4ff',
+      });
+    }
+
+    return lines;
+  }
+
+  private showEquipmentTooltip(slot: EquipmentSlot, inventoryItem: InventoryItem | undefined, x: number, y: number): void {
+    if (this.isItemInfoOpen) {
+      return;
+    }
+
+    this.hideEquipmentTooltip();
+
+    const layout = this.getLayout();
+    const item = inventoryItem ? getBaseItemFromInventoryItem(inventoryItem) : undefined;
+    const panelWidth = Math.min(286, Math.max(220, layout.contentWidth - 54));
+    const hasItem = Boolean(item && inventoryItem);
+    const statsText = inventoryItem ? createItemStatsText(inventoryItem) : '';
+    const panelHeight = hasItem ? Math.min(194, statsText.length > 74 ? 194 : 174) : 118;
+    const openLeft = x > layout.centerX;
+    const preferredX = openLeft
+      ? x - panelWidth / 2 - 20
+      : x + panelWidth / 2 + 20;
+    const preferredY = y + panelHeight + 24 > layout.bottomNavTop
+      ? y - panelHeight / 2 - 22
+      : y + panelHeight / 2 + 22;
+    const tooltipX = Phaser.Math.Clamp(
+      preferredX,
+      layout.safeX + panelWidth / 2,
+      layout.width - layout.safeX - panelWidth / 2
+    );
+    const tooltipY = Phaser.Math.Clamp(
+      preferredY,
+      layout.safeTop + panelHeight / 2,
+      layout.bottomNavTop - panelHeight / 2 - 8
+    );
+    const left = tooltipX - panelWidth / 2;
+    const top = tooltipY - panelHeight / 2;
+
+    const tooltip = this.add.container(0, 0).setDepth(1500);
+    this.equipmentTooltipContainer = tooltip;
+
+    const panelObjects = this.createRoundedPanelAsObjects({
+      x: tooltipX,
+      y: tooltipY,
+      width: panelWidth,
+      height: panelHeight,
+      radius: 18,
+      color: INVENTORY_DARK.stone,
+      alpha: 0.985,
+      strokeColor: item ? getRarityStrokeColor(item) : UI.colors.goldDark,
+      strokeAlpha: item ? 0.92 : 0.62,
+      strokeWidth: 2,
+      depth: 1501,
+    });
+
+    const title = this.add.text(left + 16, top + 20, item ? item.name : `${getSlotText(slot)} пусто`, {
+      fontFamily: UI.font.title,
+      fontSize: hasItem ? '15px' : '14px',
+      color: item ? UI.colors.goldText : UI.colors.textMuted,
+      stroke: '#000000',
+      strokeThickness: 3,
+      wordWrap: {
+        width: panelWidth - 32,
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+    }).setOrigin(0, 0.5).setDepth(1503);
+
+    const subtitle = this.add.text(left + 16, top + (hasItem ? 51 : 49), item
+      ? `${item.slot === 'weapon' ? getWeaponTypeText(item.weaponType) : getSlotText(item.slot)} • ${getRarityText(item)}${inventoryItem && inventoryItem.upgradeLevel > 0 ? ` • +${inventoryItem.upgradeLevel}` : ''}`
+      : 'Надень предмет подходящего типа', {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: item ? '#cbb895' : '#7b7164',
+        wordWrap: {
+          width: panelWidth - 32,
+          useAdvancedWrap: true,
+        },
+        maxLines: 2,
+      }).setOrigin(0, 0.5).setDepth(1503);
+
+    const objects: Phaser.GameObjects.GameObject[] = [
+      ...panelObjects,
+      title,
+      subtitle,
+    ];
+
+    if (hasItem && inventoryItem) {
+      const stats = this.add.text(left + 16, top + 82, statsText || 'Без бонусов', {
+        fontFamily: UI.font.body,
+        fontSize: '11px',
+        color: statsText ? UI.colors.text : UI.colors.textMuted,
+        lineSpacing: 3,
+        wordWrap: {
+          width: panelWidth - 32,
+          useAdvancedWrap: true,
+        },
+        maxLines: 4,
+      }).setOrigin(0, 0).setDepth(1503);
+
+      const hint = this.add.text(left + 16, top + panelHeight - 18, 'Короткое нажатие — снять предмет', {
+        fontFamily: UI.font.body,
+        fontSize: '9px',
+        color: '#756b5c',
+        wordWrap: {
+          width: panelWidth - 32,
+        },
+        maxLines: 1,
+      }).setOrigin(0, 0.5).setDepth(1503);
+
+      objects.push(stats, hint);
+    }
+
+    tooltip.add(objects);
+    this.inventoryListCamera?.ignore(tooltip);
+
+    this.setObjectsAlpha(objects, 0);
+    this.tweens.add({
+      targets: objects,
+      alpha: 1,
+      duration: 120,
+      ease: 'Sine.easeOut',
+    });
+
+    this.equipmentTooltipOutsideHandler = () => {
+      this.hideEquipmentTooltip();
+    };
+
+    this.input.once('pointerdown', this.equipmentTooltipOutsideHandler);
+  }
+
+  private hideEquipmentTooltip(): void {
+    this.cancelEquipmentTooltipHold();
+
+    if (this.equipmentTooltipOutsideHandler) {
+      this.input.off('pointerdown', this.equipmentTooltipOutsideHandler);
+      this.equipmentTooltipOutsideHandler = undefined;
+    }
+
+    if (this.equipmentTooltipContainer) {
+      this.equipmentTooltipContainer.destroy(true);
+      this.equipmentTooltipContainer = undefined;
+    }
+  }
+
+  private cancelEquipmentTooltipHold(): void {
+    if (this.equipmentTooltipHoldTimer) {
+      this.equipmentTooltipHoldTimer.remove(false);
+      this.equipmentTooltipHoldTimer = undefined;
+    }
   }
 
 
@@ -2350,6 +2762,7 @@ export class InventoryScene extends Phaser.Scene {
       return;
     }
 
+    this.hideEquipmentTooltip();
     this.isItemInfoOpen = true;
     this.setInventoryListModalMode(true);
 
@@ -3035,6 +3448,8 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private closeItemInfo(restoreInventoryList = true) {
+    this.hideEquipmentTooltip();
+
     if (this.itemInfoContainer) {
       this.itemInfoContainer.destroy(true);
       this.itemInfoContainer = undefined;
@@ -3149,6 +3564,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private cleanupInventoryScene(): void {
+    this.hideEquipmentTooltip();
     this.closeItemInfo(false);
     this.cleanupInventoryListOnly();
     this.destroyObjects(this.inventoryTabObjects);
@@ -3161,6 +3577,8 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private restartInventory() {
+    this.hideEquipmentTooltip();
+
     if (this.isRestartingInventory) {
       return;
     }
