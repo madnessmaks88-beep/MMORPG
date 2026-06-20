@@ -135,6 +135,8 @@ export class InventoryScene extends Phaser.Scene {
   private didDragInventory = false;
   private isRestartingInventory = false;
 
+  private shouldPlayInventoryIntroAnimation = true;
+
   private inventoryPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
   private inventoryPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
   private inventoryPointerUpHandler?: () => void;
@@ -156,10 +158,12 @@ export class InventoryScene extends Phaser.Scene {
     inventoryScrollY?: number;
     selectedCategory?: InventoryCategory;
     returnScene?: string;
+    skipIntroAnimation?: boolean;
   }) {
     this.initialInventoryScrollY = data?.inventoryScrollY ?? 0;
     this.selectedCategory = data?.selectedCategory ?? 'all';
     this.returnScene = data?.returnScene ?? 'CampScene';
+    this.shouldPlayInventoryIntroAnimation = !data?.skipIntroAnimation;
 
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
@@ -173,6 +177,7 @@ export class InventoryScene extends Phaser.Scene {
 
   create(data?: {
     returnScene?: string;
+    skipIntroAnimation?: boolean;
   }) {
     if (data?.returnScene) {
       this.returnScene = data.returnScene;
@@ -182,13 +187,19 @@ export class InventoryScene extends Phaser.Scene {
       this.returnScene = 'CampScene';
     }
 
+    if (data?.skipIntroAnimation) {
+      this.shouldPlayInventoryIntroAnimation = false;
+    }
+
     this.cleanupInventoryScene();
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupInventoryScene, this);
 
     const layout = this.getLayout();
 
-    this.cameras.main.fadeIn(260, 0, 0, 0);
+    if (this.shouldPlayInventoryIntroAnimation) {
+      this.cameras.main.fadeIn(260, 0, 0, 0);
+    }
 
     createSceneBackground(this);
     this.createInventoryBackdrop(layout);
@@ -380,16 +391,21 @@ export class InventoryScene extends Phaser.Scene {
       depth: 2,
     });
 
-    panel.shadow.setAlpha(0);
-    panel.panel.setAlpha(0);
+    if (this.shouldPlayInventoryIntroAnimation) {
+      panel.shadow.setAlpha(0);
+      panel.panel.setAlpha(0);
 
-    this.tweens.add({
-      targets: [panel.shadow, panel.panel],
-      alpha: 1,
-      duration: 230,
-      delay: 60,
-      ease: 'Sine.easeOut',
-    });
+      this.tweens.add({
+        targets: [panel.shadow, panel.panel],
+        alpha: 1,
+        duration: 230,
+        delay: 60,
+        ease: 'Sine.easeOut',
+      });
+    } else {
+      panel.shadow.setAlpha(1);
+      panel.panel.setAlpha(1);
+    }
 
     const left = layout.centerX - layout.contentWidth / 2;
     const top = layout.statsY - layout.statsHeight / 2;
@@ -492,16 +508,21 @@ export class InventoryScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(7);
 
     const animatedObjects = [...objects, glow, iconText, labelText, valueText];
-    this.setObjectsAlpha(animatedObjects, 0);
 
-    this.tweens.add({
-      targets: animatedObjects,
-      alpha: 1,
-      y: '+=0',
-      duration: 210,
-      delay: 100 + index * 45,
-      ease: 'Sine.easeOut',
-    });
+    if (this.shouldPlayInventoryIntroAnimation) {
+      this.setObjectsAlpha(animatedObjects, 0);
+
+      this.tweens.add({
+        targets: animatedObjects,
+        alpha: 1,
+        y: '+=0',
+        duration: 210,
+        delay: 100 + index * 45,
+        ease: 'Sine.easeOut',
+      });
+    } else {
+      this.setObjectsAlpha(animatedObjects, 1);
+    }
   }
 
 
@@ -524,17 +545,22 @@ export class InventoryScene extends Phaser.Scene {
       depth: 2,
     });
 
-    panel.shadow.setAlpha(0);
-    panel.panel.setAlpha(0);
+    if (this.shouldPlayInventoryIntroAnimation) {
+      panel.shadow.setAlpha(0);
+      panel.panel.setAlpha(0);
 
-    this.tweens.add({
-      targets: [panel.shadow, panel.panel],
-      alpha: 1,
-      scale: { from: 0.985, to: 1 },
-      duration: 240,
-      delay: 120,
-      ease: 'Back.easeOut',
-    });
+      this.tweens.add({
+        targets: [panel.shadow, panel.panel],
+        alpha: 1,
+        scale: { from: 0.985, to: 1 },
+        duration: 240,
+        delay: 120,
+        ease: 'Back.easeOut',
+      });
+    } else {
+      panel.shadow.setAlpha(1);
+      panel.panel.setAlpha(1);
+    }
 
     this.add.text(layout.centerX - layout.contentWidth / 2 + 22, panelTop + (veryCompact ? 20 : 24), 'Снаряжение', {
       fontFamily: UI.font.title,
@@ -655,29 +681,34 @@ export class InventoryScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(7);
 
     const animatedObjects = [...objects, glow, icon, slotText, itemLabel];
-    this.setObjectsAlpha(animatedObjects, 0);
 
-    this.tweens.add({
-      targets: animatedObjects,
-      alpha: 1,
-      duration: 230,
-      delay: 150 + index * 45,
-      ease: 'Sine.easeOut',
-    });
+    if (this.shouldPlayInventoryIntroAnimation) {
+      this.setObjectsAlpha(animatedObjects, 0);
 
-    if (item) {
       this.tweens.add({
-        targets: glow,
-        alpha: {
-          from: 0.58,
-          to: 0.95,
-        },
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        delay: 420 + index * 90,
-        ease: 'Sine.easeInOut',
+        targets: animatedObjects,
+        alpha: 1,
+        duration: 230,
+        delay: 150 + index * 45,
+        ease: 'Sine.easeOut',
       });
+
+      if (item) {
+        this.tweens.add({
+          targets: glow,
+          alpha: {
+            from: 0.58,
+            to: 0.95,
+          },
+          duration: 1500,
+          yoyo: true,
+          repeat: -1,
+          delay: 420 + index * 90,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      this.setObjectsAlpha(animatedObjects, 1);
     }
 
     if (!item || !inventoryItem) {
@@ -758,8 +789,13 @@ export class InventoryScene extends Phaser.Scene {
         depth: 80,
       });
 
-      tabBg.shadow.setAlpha(0);
-      tabBg.bg.setAlpha(0);
+      if (this.shouldPlayInventoryIntroAnimation) {
+        tabBg.shadow.setAlpha(0);
+        tabBg.bg.setAlpha(0);
+      } else {
+        tabBg.shadow.setAlpha(1);
+        tabBg.bg.setAlpha(1);
+      }
 
       const icon = this.add.text(x - tabWidth * 0.27, y, tab.icon, {
         fontFamily: UI.font.body,
@@ -767,7 +803,7 @@ export class InventoryScene extends Phaser.Scene {
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
         stroke: '#000000',
         strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(83).setAlpha(0);
+      }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
 
       const label = this.add.text(x - tabWidth * 0.08, y, tab.label, {
         fontFamily: UI.font.body,
@@ -778,7 +814,7 @@ export class InventoryScene extends Phaser.Scene {
           width: tabWidth * 0.68,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(83).setAlpha(0);
+      }).setOrigin(0, 0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
 
       const tabObjects: Phaser.GameObjects.GameObject[] = [
         tabBg.shadow,
@@ -791,26 +827,28 @@ export class InventoryScene extends Phaser.Scene {
       this.inventoryTabObjects.push(...tabObjects);
       this.inventoryListCamera?.ignore(tabObjects);
 
-      this.tweens.add({
-        targets: [tabBg.shadow, tabBg.bg, icon, label],
-        alpha: 1,
-        duration: 180,
-        delay: 200 + index * 25,
-        ease: 'Sine.easeOut',
-      });
-
-      if (isActive) {
+      if (this.shouldPlayInventoryIntroAnimation) {
         this.tweens.add({
-          targets: tabBg.bg,
-          alpha: {
-            from: 0.82,
-            to: 1,
-          },
-          duration: 1200,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
+          targets: [tabBg.shadow, tabBg.bg, icon, label],
+          alpha: 1,
+          duration: 180,
+          delay: 200 + index * 25,
+          ease: 'Sine.easeOut',
         });
+
+        if (isActive) {
+          this.tweens.add({
+            targets: tabBg.bg,
+            alpha: {
+              from: 0.82,
+              to: 1,
+            },
+            duration: 1200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+        }
       }
 
       tabBg.zone.on('pointerover', () => {
@@ -885,16 +923,21 @@ export class InventoryScene extends Phaser.Scene {
 
     this.inventoryListUiObjects.push(panel.shadow, panel.panel);
 
-    panel.shadow.setAlpha(0);
-    panel.panel.setAlpha(0);
-    this.tweens.add({
-      targets: [panel.shadow, panel.panel],
-      alpha: 1,
-      y: '+=0',
-      duration: 220,
-      delay: 210,
-      ease: 'Sine.easeOut',
-    });
+    if (this.shouldPlayInventoryIntroAnimation) {
+      panel.shadow.setAlpha(0);
+      panel.panel.setAlpha(0);
+      this.tweens.add({
+        targets: [panel.shadow, panel.panel],
+        alpha: 1,
+        y: '+=0',
+        duration: 220,
+        delay: 210,
+        ease: 'Sine.easeOut',
+      });
+    } else {
+      panel.shadow.setAlpha(1);
+      panel.panel.setAlpha(1);
+    }
 
     const title = this.getCategoryTitle();
     const counter = this.getCategoryCounter();
@@ -2899,11 +2942,15 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private rebuildCategoryTabsOnly(): void {
+    this.shouldPlayInventoryIntroAnimation = false;
+
     const layout = this.getLayout();
     this.createCategoryTabs(layout);
   }
 
   private rebuildInventoryListOnly(): void {
+    this.shouldPlayInventoryIntroAnimation = false;
+
     const layout = this.getLayout();
 
     this.initialInventoryScrollY = Phaser.Math.Clamp(
@@ -3032,6 +3079,7 @@ export class InventoryScene extends Phaser.Scene {
         inventoryScrollY: scrollY,
         selectedCategory,
         returnScene,
+        skipIntroAnimation: true,
       });
     });
   }
