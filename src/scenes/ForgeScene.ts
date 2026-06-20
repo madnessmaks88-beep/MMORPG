@@ -568,12 +568,12 @@ export class ForgeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(41);
 
-    this.createItemsViewportGuards(layout);
-
-
     this.itemsListTop = layout.itemsListTop;
     this.itemsListBottom = layout.itemsListBottom;
     this.itemsListHeight = layout.itemsListHeight;
+
+    this.createItemsViewportGuards(layout);
+    this.createItemsFadeCovers(layout);
     this.itemsMaxScrollY = Math.max(0, this.getForgeItemsContentHeight(layout) - this.itemsListHeight);
     this.itemsScrollY = Phaser.Math.Clamp(this.itemsScrollY, 0, this.itemsMaxScrollY);
     this.itemsTargetScrollY = Phaser.Math.Clamp(this.itemsTargetScrollY, 0, this.itemsMaxScrollY);
@@ -668,7 +668,8 @@ export class ForgeScene extends Phaser.Scene {
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const buffer = layout.veryCompact ? 18 : 28;
+    const fadeZone = layout.veryCompact ? 48 : 64;
+    const buffer = fadeZone + 10;
 
     items.forEach((inventoryItem, index) => {
       const y = this.itemsListTop + cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
@@ -681,8 +682,88 @@ export class ForgeScene extends Phaser.Scene {
         return;
       }
 
-      this.createItemCard(container, layout, inventoryItem, y, cardHeight);
+      const alpha = this.getItemCardEdgeAlpha(y, cardHeight);
+
+      if (alpha <= 0.02) {
+        return;
+      }
+
+      this.createItemCard(container, layout, inventoryItem, y, cardHeight, alpha);
     });
+  }
+
+  private getItemCardEdgeAlpha(y: number, cardHeight: number) {
+    const fadeZone = this.scale.height < 740 ? 48 : 64;
+    const half = cardHeight / 2;
+
+    let alpha = 1;
+
+    if (y - half < this.itemsListTop + fadeZone) {
+      const distance = y + half - this.itemsListTop;
+      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
+    }
+
+    if (y + half > this.itemsListBottom - fadeZone) {
+      const distance = this.itemsListBottom - (y - half);
+      alpha = Math.min(alpha, Phaser.Math.Clamp(distance / fadeZone, 0, 1));
+    }
+
+    return Phaser.Math.Clamp(alpha, 0, 1);
+  }
+
+  private setCardObjectsAlpha(objects: Phaser.GameObjects.GameObject[], alpha: number) {
+    objects.forEach(object => {
+      const target = object as Phaser.GameObjects.GameObject & {
+        setAlpha?: (value: number) => unknown;
+        disableInteractive?: () => unknown;
+      };
+
+      target.setAlpha?.(alpha);
+
+      if (alpha < 0.35) {
+        target.disableInteractive?.();
+      }
+    });
+  }
+
+  private createItemsFadeCovers(layout: ForgeLayout) {
+    const left = layout.centerX - layout.contentWidth / 2 + 12;
+    const width = layout.contentWidth - 24;
+    const steps = layout.veryCompact ? 5 : 6;
+    const totalHeight = layout.veryCompact ? 42 : 54;
+    const stepHeight = totalHeight / steps;
+
+    for (let i = 0; i < steps; i += 1) {
+      const topAlpha = 0.36 * (1 - i / steps);
+      const bottomAlpha = 0.38 * (1 - i / steps);
+
+      this.add.rectangle(
+        layout.centerX,
+        this.itemsListTop + i * stepHeight + stepHeight / 2,
+        width,
+        stepHeight + 1,
+        FORGE.soot,
+        topAlpha
+      ).setDepth(80);
+
+      this.add.rectangle(
+        layout.centerX,
+        this.itemsListBottom - i * stepHeight - stepHeight / 2,
+        width,
+        stepHeight + 1,
+        FORGE.soot,
+        bottomAlpha
+      ).setDepth(80);
+    }
+
+    this.add.rectangle(
+      left + width - 8,
+      this.itemsListTop + this.itemsListHeight / 2,
+      2,
+      this.itemsListHeight,
+      0x000000,
+      0.22
+    ).setDepth(81);
   }
 
   private clearVisibleForgeItems() {
@@ -1123,13 +1204,17 @@ export class ForgeScene extends Phaser.Scene {
     layout: ForgeLayout,
     inventoryItem: InventoryItem,
     y: number,
-    cardHeight: number
+    cardHeight: number,
+    alpha = 1
   ) {
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
     if (!item) {
       return;
     }
+
+    const cardContainer = this.add.container(0, 0).setDepth(0);
+    container.add(cardContainer);
 
     const equipped = isItemEquipped(player, inventoryItem.instanceId);
     const upgradeLevel = inventoryItem.upgradeLevel ?? 0;
@@ -1154,7 +1239,7 @@ export class ForgeScene extends Phaser.Scene {
     const bottom = y + cardHeight / 2;
 
     this.createStonePanel({
-      parent: container,
+      parent: cardContainer,
       x: layout.centerX,
       y,
       width: cardWidth,
@@ -1173,7 +1258,7 @@ export class ForgeScene extends Phaser.Scene {
     rarityStrip.fillStyle(rarityColor, 0.78);
     rarityStrip.fillRoundedRect(left + 8, top + 12, 7, cardHeight - 24, 5);
     rarityStrip.setDepth(8);
-    container.add(rarityStrip);
+    cardContainer.add(rarityStrip);
 
     const iconX = left + 42;
     const textX = left + 78;
@@ -1188,14 +1273,14 @@ export class ForgeScene extends Phaser.Scene {
     const titleWidth = equipped ? cardWidth - 184 : cardWidth - 108;
 
     this.addTo(
-      container,
+      cardContainer,
       this.add.circle(iconX, top + (layout.veryCompact ? 34 : 38), 24, rarityColor, 0.18)
         .setStrokeStyle(2, rarityStroke, 0.72)
         .setDepth(9)
     );
 
     this.addTo(
-      container,
+      cardContainer,
       this.add.text(iconX, top + (layout.veryCompact ? 34 : 38), getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
         fontSize: '18px',
@@ -1206,7 +1291,7 @@ export class ForgeScene extends Phaser.Scene {
     );
 
     this.addTo(
-      container,
+      cardContainer,
       this.add.text(textX, top + (layout.veryCompact ? 13 : 15), `${item.name} +${upgradeLevel}`, {
         fontFamily: UI.font.title,
         fontSize: layout.veryCompact ? '14px' : '16px',
@@ -1223,11 +1308,11 @@ export class ForgeScene extends Phaser.Scene {
     );
 
     if (equipped) {
-      this.createEquippedBadge(container, left + cardWidth - 58, top + (layout.veryCompact ? 25 : 28), 10);
+      this.createEquippedBadge(cardContainer, left + cardWidth - 58, top + (layout.veryCompact ? 25 : 28), 10);
     }
 
     this.addTo(
-      container,
+      cardContainer,
       this.add.text(textX, metaY, `${getRarityText(item)} • ${this.getItemTypeText(item)} • предел +${rarityMax}`, {
         fontFamily: UI.font.body,
         fontSize: '12px',
@@ -1241,7 +1326,7 @@ export class ForgeScene extends Phaser.Scene {
     );
 
     this.createUpgradeProgressBar(
-      container,
+      cardContainer,
       innerLeft,
       progressY,
       Math.min(innerWidth - 58, 380),
@@ -1252,7 +1337,7 @@ export class ForgeScene extends Phaser.Scene {
     );
 
     this.addTo(
-      container,
+      cardContainer,
       this.add.text(innerLeft, statsY, createItemStatsText(inventoryItem) || 'Без бонусов', {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '11px' : '12px',
@@ -1272,7 +1357,7 @@ export class ForgeScene extends Phaser.Scene {
         : `Нужна наковальня II для улучшения выше +${availableMax}`;
 
       this.createLockedPanel(
-        container,
+        cardContainer,
         innerLeft,
         costY,
         innerWidth,
@@ -1282,7 +1367,7 @@ export class ForgeScene extends Phaser.Scene {
       );
     } else {
       this.createCostPanel(
-        container,
+        cardContainer,
         innerLeft,
         costY,
         innerWidth,
@@ -1292,8 +1377,8 @@ export class ForgeScene extends Phaser.Scene {
       );
     }
 
-    this.createForgeButton({
-      parent: container,
+    const upgradeButton = this.createForgeButton({
+      parent: cardContainer,
       x: layout.centerX,
       y: buttonY,
       width: innerWidth,
@@ -1315,6 +1400,9 @@ export class ForgeScene extends Phaser.Scene {
         this.showUpgradeConfirm(inventoryItem);
       },
     });
+
+    cardContainer.setAlpha(alpha);
+    this.setCardObjectsAlpha([cardContainer, upgradeButton.zone], alpha);
   }
 
   private switchForgeCategory(category: ForgeCategory) {
