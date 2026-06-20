@@ -5,7 +5,7 @@ import { gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
 import { addItemToInventory, getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
-import { loadGameAsync, saveGameAsync, startNewGameAsync } from '../systems/SaveSystem';
+import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
 import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
@@ -628,7 +628,6 @@ export class CampScene extends Phaser.Scene {
     const mainHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 104;
     const wideHeight = layout.veryCompact ? 62 : layout.compact ? 68 : 74;
     const tileHeight = layout.veryCompact ? 78 : layout.compact ? 88 : 96;
-    const dangerHeight = layout.veryCompact ? 58 : layout.compact ? 62 : 66;
     const innerWidth = layout.contentWidth - 44;
     const tileGap = 12;
     const tileWidth = Math.min((innerWidth - tileGap) / 2, 278);
@@ -820,24 +819,7 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += wideHeight + gap + 2;
-
-    this.createWideActionButton({
-      x: layout.centerX,
-      y: currentY,
-      width: innerWidth,
-      height: dangerHeight,
-      icon: '✕',
-      title: 'Новая игра',
-      description: 'Стереть прогресс и выбрать героя заново.',
-      accentColor: 0x7d2b2f,
-      danger: true,
-      onClick: () => {
-        this.showNewGameConfirm();
-      },
-    });
-
-    currentY += dangerHeight / 2 + 24;
+    currentY += wideHeight / 2 + 24;
 
     const contentHeight = currentY - layout.actionsTop;
     this.maxScrollY = Math.max(0, contentHeight - layout.actionsViewportHeight + 12);
@@ -2488,7 +2470,7 @@ export class CampScene extends Phaser.Scene {
     if (!player.raceId) {
       this.showMessage(
         'Герой не создан',
-        'Нажми «Новая игра» внизу убежища и выбери расу перед первым спуском.'
+        'Открой профиль, пролистай вниз до «Опасной зоны» и начни новую игру, чтобы выбрать расу перед первым спуском.'
       );
       return;
     }
@@ -2682,107 +2664,6 @@ export class CampScene extends Phaser.Scene {
         this.scene.restart();
       }
     );
-  }
-
-  private showNewGameConfirm() {
-    this.showConfirmMessage(
-      'Начать новую игру?',
-      'Текущий прогресс будет удалён: герой, спуск, чекпоинт костра, магазин и временные награды. После подтверждения сразу откроется выбор расы, без перезагрузки.',
-      () => {
-        this.startNewGame();
-      },
-      'Новая игра'
-    );
-  }
-
-  private async startNewGame() {
-    this.resetGameStateInMemory();
-    clearCampfireBattleCheckpoint();
-    this.clearLocalProgress();
-    this.resetPlayerInMemory();
-
-    await startNewGameAsync();
-
-    CampScene.startupPrepared = true;
-    CampScene.startupPromise = undefined;
-
-    this.scene.start('RaceSelectScene');
-  }
-
-  private resetGameStateInMemory() {
-    resetFloorRun();
-
-    const state = gameState as typeof gameState & {
-      highestClearedFloor?: number;
-      highestClearedTier?: number;
-      dungeonCampfireState?: unknown;
-    };
-
-    state.highestClearedFloor = 0;
-    state.highestClearedTier = 0;
-    state.dungeonCampfireState = undefined;
-  }
-
-  private clearLocalProgress() {
-    const saveKeys = [
-      'below_ashes_save_v3',
-      'below_ashes_save_v3_local_backup',
-      'below_ashes_save_v3_last_good',
-      'below_ashes_save_v2',
-      'below_ashes_save_v1',
-      'catacombs_save_v3',
-      'catacombs_save_v2',
-      'catacombs_save_v1',
-      'catacombs_shop_assortment_v3',
-      'catacombs_shop_assortment_v2',
-      'catacombs_shop_assortment_v1',
-      'below_ashes_campfire_battle_checkpoint_v1',
-      'campfire_battle_checkpoint_v1',
-      'campfire_checkpoint_v1',
-      'quest_state_v1',
-      'quests_state_v1',
-      'stats_tree_v1',
-      'character_tree_v1',
-      this.CITY_CAMPFIRE_KEY,
-      'campfire_last_rest_at',
-      'start_gold_500_v1',
-    ];
-
-    saveKeys.forEach(key => {
-      localStorage.removeItem(key);
-    });
-  }
-
-  private resetPlayerInMemory() {
-    Object.assign(player, {
-      name: 'Безымянный',
-      raceId: undefined,
-      level: 1,
-      exp: 0,
-      expToNextLevel: 100,
-      gold: 0,
-      hp: 100,
-      maxHp: 100,
-      energy: 3,
-      maxEnergy: 3,
-      potions: 6,
-      attack: 1,
-      defense: 0,
-      agility: 1,
-      strength: 1,
-      luck: 0,
-      intelligence: 1,
-      critChance: 0.1,
-      inventory: [],
-      equipment: {},
-      relicIds: [],
-      materials: {},
-      anvilLevel: 1,
-      characterTreePoints: 0,
-      characterTree: {},
-      upgradePoints: 0,
-      totalUpgradePointsEarned: 0,
-    });
   }
 
   private createModalShell(layout: CampLayout, height: number) {
