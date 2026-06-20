@@ -63,6 +63,7 @@ type ForgeLayout = {
   itemsListTop: number;
   itemsListBottom: number;
   itemsListHeight: number;
+  itemsPanelBottom: number;
   itemsActionBottom: number;
 
   bottomBarHeight: number;
@@ -252,6 +253,7 @@ export class ForgeScene extends Phaser.Scene {
     const itemsListTop = itemsPanelTop + (veryCompact ? 42 : 60);
     const itemsListBottom = itemsPanelTop + itemsPanelHeight - (veryCompact ? 10 : 16);
     const itemsListHeight = Math.max(150, itemsListBottom - itemsListTop);
+    const itemsPanelBottom = itemsPanelTop + itemsPanelHeight;
 
     return {
       width,
@@ -284,6 +286,7 @@ export class ForgeScene extends Phaser.Scene {
       itemsListTop,
       itemsListBottom,
       itemsListHeight,
+      itemsPanelBottom,
       itemsActionBottom,
 
       bottomBarHeight,
@@ -465,7 +468,7 @@ export class ForgeScene extends Phaser.Scene {
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
 
-    this.contentContainer = this.add.container(0, 0).setDepth(10);
+    this.contentContainer = this.add.container(0, 0).setDepth(86);
 
     this.createAnvilPanel(layout, layout.anvilTop);
     this.createMaterialsPanel(layout, layout.materialsTop);
@@ -478,16 +481,21 @@ export class ForgeScene extends Phaser.Scene {
     this.itemsScrollbarTrack?.destroy();
     this.itemsScrollbarThumb?.destroy();
 
-    this.itemsContainer = this.add.container(0, layout.itemsListTop).setDepth(48);
-    this.itemsMaskGraphics = this.add.graphics().setDepth(47).setAlpha(0.001);
-    this.itemsMaskGraphics.fillStyle(0xffffff, 1);
-    this.itemsMaskGraphics.fillRect(
+    const itemsContainer = this.add.container(0, 0).setDepth(44);
+    const maskGraphics = this.add.graphics().setDepth(43);
+
+    maskGraphics.setVisible(false);
+    maskGraphics.fillStyle(0xffffff, 1);
+    maskGraphics.fillRect(
       layout.safeX + 10,
       layout.itemsListTop,
       layout.width - (layout.safeX + 10) * 2,
       layout.itemsListHeight
     );
-    this.itemsContainer.setMask(this.itemsMaskGraphics.createGeometryMask());
+    itemsContainer.setMask(maskGraphics.createGeometryMask());
+
+    this.itemsContainer = itemsContainer;
+    this.itemsMaskGraphics = maskGraphics;
 
     const items = this.getForgeItemsByCategory(this.selectedCategory);
     const title = this.getCategoryTitle(this.selectedCategory);
@@ -560,6 +568,9 @@ export class ForgeScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(1, 0.5).setDepth(41);
 
+    this.createItemsViewportGuards(layout);
+
+
     this.itemsListTop = layout.itemsListTop;
     this.itemsListBottom = layout.itemsListBottom;
     this.itemsListHeight = layout.itemsListHeight;
@@ -574,12 +585,51 @@ export class ForgeScene extends Phaser.Scene {
     this.updateItemsScrollbar(layout);
 
     this.tweens.add({
-      targets: this.itemsContainer,
+      targets: itemsContainer,
       alpha: { from: 0, to: 1 },
-      y: { from: layout.itemsListTop + 8, to: layout.itemsListTop },
-      duration: 240,
+      duration: 220,
       ease: 'Sine.easeOut',
     });
+  }
+
+
+  private createItemsViewportGuards(layout: ForgeLayout) {
+    const guardColor = FORGE.soot;
+    const left = layout.centerX - layout.contentWidth / 2 + 2;
+    const width = layout.contentWidth - 4;
+    const topGuardHeight = Math.max(0, layout.itemsListTop - layout.itemsPanelTop - 2);
+    const bottomGuardHeight = Math.max(0, layout.itemsPanelBottom - layout.itemsListBottom - 2);
+
+    if (topGuardHeight > 0) {
+      this.add.rectangle(
+        layout.centerX,
+        layout.itemsPanelTop + topGuardHeight / 2 + 1,
+        width,
+        topGuardHeight,
+        guardColor,
+        0.97
+      ).setDepth(46);
+    }
+
+    if (bottomGuardHeight > 0) {
+      this.add.rectangle(
+        layout.centerX,
+        layout.itemsListBottom + bottomGuardHeight / 2 + 1,
+        width,
+        bottomGuardHeight,
+        guardColor,
+        0.97
+      ).setDepth(46);
+    }
+
+    this.add.rectangle(
+      left + width - 10,
+      layout.itemsListTop + layout.itemsListHeight / 2,
+      2,
+      layout.itemsListHeight,
+      0x000000,
+      0.18
+    ).setDepth(46);
   }
 
   private getForgeItemsContentHeight(layout: ForgeLayout) {
@@ -612,22 +662,22 @@ export class ForgeScene extends Phaser.Scene {
     const items = this.getForgeItemsByCategory(this.selectedCategory);
 
     if (items.length === 0) {
-      this.createEmptyState(container, layout, this.itemsListHeight / 2);
+      this.createEmptyState(container, layout, this.itemsListTop + this.itemsListHeight / 2);
       return;
     }
 
     const cardHeight = this.getForgeItemCardHeight(layout);
     const spacing = this.getForgeItemSpacing(layout);
-    const buffer = layout.veryCompact ? 8 : 22;
+    const buffer = layout.veryCompact ? 18 : 28;
 
     items.forEach((inventoryItem, index) => {
-      const y = cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
+      const y = this.itemsListTop + cardHeight / 2 + 10 + index * spacing - this.itemsScrollY;
 
-      if (y + cardHeight / 2 < -buffer) {
+      if (y + cardHeight / 2 < this.itemsListTop - buffer) {
         return;
       }
 
-      if (y - cardHeight / 2 > this.itemsListHeight + buffer) {
+      if (y - cardHeight / 2 > this.itemsListBottom + buffer) {
         return;
       }
 
@@ -640,7 +690,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private getForgeItemCardHeight(layout: ForgeLayout) {
-    return layout.veryCompact ? 164 : layout.compact ? 176 : 188;
+    return layout.veryCompact ? 190 : layout.compact ? 202 : 214;
   }
 
   private getForgeItemSpacing(layout: ForgeLayout) {
@@ -1125,22 +1175,28 @@ export class ForgeScene extends Phaser.Scene {
     rarityStrip.setDepth(8);
     container.add(rarityStrip);
 
-    const iconX = left + 44;
-    const textX = left + 80;
+    const iconX = left + 42;
+    const textX = left + 78;
     const innerLeft = left + 22;
     const innerWidth = cardWidth - 44;
-    const titleWidth = cardWidth - 108;
+    const buttonHeight = layout.veryCompact ? 42 : 46;
+    const buttonY = bottom - (layout.veryCompact ? 28 : 31);
+    const costY = buttonY - buttonHeight / 2 - (layout.veryCompact ? 8 : 10) - 20;
+    const statsY = Math.min(top + (layout.veryCompact ? 82 : 88), costY - 38);
+    const progressY = Math.min(top + (layout.veryCompact ? 66 : 70), statsY - 17);
+    const metaY = Math.min(top + (layout.veryCompact ? 47 : 50), progressY - 18);
+    const titleWidth = equipped ? cardWidth - 184 : cardWidth - 108;
 
     this.addTo(
       container,
-      this.add.circle(iconX, top + 40, 26, rarityColor, 0.18)
+      this.add.circle(iconX, top + (layout.veryCompact ? 34 : 38), 24, rarityColor, 0.18)
         .setStrokeStyle(2, rarityStroke, 0.72)
         .setDepth(9)
     );
 
     this.addTo(
       container,
-      this.add.text(iconX, top + 40, getSlotIcon(item.slot), {
+      this.add.text(iconX, top + (layout.veryCompact ? 34 : 38), getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
         fontSize: '18px',
         color: '#f1eadc',
@@ -1151,9 +1207,9 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(textX, top + 18, `${item.name} +${upgradeLevel}`, {
+      this.add.text(textX, top + (layout.veryCompact ? 13 : 15), `${item.name} +${upgradeLevel}`, {
         fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '15px' : '17px',
+        fontSize: layout.veryCompact ? '14px' : '16px',
         color: equipped ? '#d6c08a' : '#d8d0bf',
         stroke: '#000000',
         strokeThickness: 3,
@@ -1161,18 +1217,18 @@ export class ForgeScene extends Phaser.Scene {
           width: titleWidth,
           useAdvancedWrap: true,
         },
-        maxLines: 2,
+        maxLines: 1,
         lineSpacing: -2,
       }).setOrigin(0, 0).setDepth(10)
     );
 
     if (equipped) {
-      this.createEquippedBadge(container, left + cardWidth - 58, top + 30, 10);
+      this.createEquippedBadge(container, left + cardWidth - 58, top + (layout.veryCompact ? 25 : 28), 10);
     }
 
     this.addTo(
       container,
-      this.add.text(textX, top + 70, `${getRarityText(item)} • ${this.getItemTypeText(item)} • предел +${rarityMax}`, {
+      this.add.text(textX, metaY, `${getRarityText(item)} • ${this.getItemTypeText(item)} • предел +${rarityMax}`, {
         fontFamily: UI.font.body,
         fontSize: '12px',
         color: this.getRarityTextColor(item),
@@ -1187,7 +1243,7 @@ export class ForgeScene extends Phaser.Scene {
     this.createUpgradeProgressBar(
       container,
       innerLeft,
-      top + 98,
+      progressY,
       Math.min(innerWidth - 58, 380),
       upgradeLevel,
       rarityMax,
@@ -1197,7 +1253,7 @@ export class ForgeScene extends Phaser.Scene {
 
     this.addTo(
       container,
-      this.add.text(innerLeft, top + 124, createItemStatsText(inventoryItem) || 'Без бонусов', {
+      this.add.text(innerLeft, statsY, createItemStatsText(inventoryItem) || 'Без бонусов', {
         fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '11px' : '12px',
         color: '#a9a091',
@@ -1206,7 +1262,7 @@ export class ForgeScene extends Phaser.Scene {
           width: innerWidth,
           useAdvancedWrap: true,
         },
-        maxLines: 2,
+        maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(10)
     );
 
@@ -1218,7 +1274,7 @@ export class ForgeScene extends Phaser.Scene {
       this.createLockedPanel(
         container,
         innerLeft,
-        bottom - 102,
+        costY,
         innerWidth,
         lockedText,
         isRarityMax,
@@ -1228,7 +1284,7 @@ export class ForgeScene extends Phaser.Scene {
       this.createCostPanel(
         container,
         innerLeft,
-        bottom - 102,
+        costY,
         innerWidth,
         cost,
         canUpgrade,
@@ -1239,9 +1295,9 @@ export class ForgeScene extends Phaser.Scene {
     this.createForgeButton({
       parent: container,
       x: layout.centerX,
-      y: bottom - 32,
+      y: buttonY,
       width: innerWidth,
-      height: 50,
+      height: buttonHeight,
       text: isRarityMax
         ? 'Предмет закалён до предела'
         : isAnvilLocked
@@ -1354,19 +1410,20 @@ export class ForgeScene extends Phaser.Scene {
     this.closeModal();
 
     this.isModalOpen = true;
-    this.modalContainer = this.add.container(0, 0).setDepth(1000);
+    const modalContainer = this.add.container(0, 0).setDepth(1000);
+    this.modalContainer = modalContainer;
 
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.76)
       .setInteractive();
 
-    this.modalContainer.add(overlay);
+    modalContainer.add(overlay);
 
     const modalWidth = Math.min(width - 48, 620);
     const modalHeight = Math.min(height - 132, 520);
     const modalY = height / 2;
 
     this.createStonePanel({
-      parent: this.modalContainer,
+      parent: modalContainer,
       x: width / 2,
       y: modalY,
       width: modalWidth,
@@ -1411,10 +1468,10 @@ export class ForgeScene extends Phaser.Scene {
       maxLines: height < 920 ? 10 : 12,
     }).setOrigin(0.5).setDepth(1005);
 
-    this.modalContainer.add([titleText, descriptionText]);
+    modalContainer.add([titleText, descriptionText]);
 
     this.createForgeButton({
-      parent: this.modalContainer,
+      parent: modalContainer,
       x: width / 2,
       y: bottom - 106,
       width: Math.min(modalWidth - 80, 380),
@@ -1430,7 +1487,7 @@ export class ForgeScene extends Phaser.Scene {
     });
 
     this.createForgeButton({
-      parent: this.modalContainer,
+      parent: modalContainer,
       x: width / 2,
       y: bottom - 42,
       width: Math.min(modalWidth - 80, 380),
@@ -1736,7 +1793,7 @@ export class ForgeScene extends Phaser.Scene {
     canUpgrade: boolean,
     depth: number
   ) {
-    const panelHeight = Phaser.Math.Clamp(30 + (1 + cost.materials.length) * 17, 66, 92);
+    const panelHeight = 40;
 
     this.createStonePanel({
       parent: container,
@@ -1744,84 +1801,55 @@ export class ForgeScene extends Phaser.Scene {
       y,
       width,
       height: panelHeight,
-      radius: 16,
+      radius: 15,
       fill: canUpgrade ? 0x0f1711 : 0x17100c,
       alpha: 0.84,
       stroke: canUpgrade ? FORGE.green : FORGE.red,
-      strokeAlpha: canUpgrade ? 0.36 : 0.5,
+      strokeAlpha: canUpgrade ? 0.38 : 0.5,
       glow: canUpgrade ? FORGE.green : FORGE.red,
       depth,
     });
 
-    const left = x + 12;
-    const lineWidth = width - 24;
+    const goldEnough = player.gold >= cost.gold;
+    const materialSummary = cost.materials.length === 0
+      ? 'Материалы не нужны'
+      : cost.materials
+        .map(material => {
+          const owned = player.materials[material.id] ?? 0;
+          return `${owned >= material.amount ? '✓' : '!'} ${this.getShortMaterialName(material.id)} ${owned}/${material.amount}`;
+        })
+        .join('  ');
 
     this.addTo(
       container,
-      this.add.text(left, y - panelHeight / 2 + 14, 'Нужно для закалки', {
+      this.add.text(x + 12, y - 9, `${goldEnough ? '✓' : '!'} Золото ${player.gold}/${cost.gold}`, {
         fontFamily: UI.font.body,
-        fontSize: '10px',
-        color: UI.colors.textMuted,
+        fontSize: '11px',
+        color: goldEnough ? UI.colors.text : UI.colors.red,
+        stroke: '#000000',
+        strokeThickness: 1,
         wordWrap: {
-          width: lineWidth,
+          width: width - 24,
           useAdvancedWrap: true,
         },
         maxLines: 1,
       }).setOrigin(0, 0.5).setDepth(depth + 3)
     );
 
-    let lineY = y - panelHeight / 2 + 32;
-
-    this.createCostLine(
-      container,
-      left,
-      lineY,
-      `Золото: ${player.gold} / ${cost.gold}`,
-      player.gold >= cost.gold,
-      lineWidth,
-      depth + 3
-    );
-
-    cost.materials.forEach(material => {
-      const owned = player.materials[material.id] ?? 0;
-
-      lineY += 17;
-
-      this.createCostLine(
-        container,
-        left,
-        lineY,
-        `${this.getShortMaterialName(material.id)}: ${owned} / ${material.amount}`,
-        owned >= material.amount,
-        lineWidth,
-        depth + 3
-      );
-    });
-  }
-
-  private createCostLine(
-    container: Phaser.GameObjects.Container,
-    x: number,
-    y: number,
-    text: string,
-    enough: boolean,
-    width: number,
-    depth: number
-  ) {
     this.addTo(
       container,
-      this.add.text(x, y, `${enough ? '✓' : '!'} ${text}`, {
+      this.add.text(x + 12, y + 10, materialSummary, {
         fontFamily: UI.font.body,
-        fontSize: '11px',
-        color: enough ? UI.colors.text : UI.colors.red,
+        fontSize: '10px',
+        color: canUpgrade ? '#a9a091' : '#d28f85',
         stroke: '#000000',
         strokeThickness: 1,
         wordWrap: {
-          width,
+          width: width - 24,
           useAdvancedWrap: true,
         },
         maxLines: 1,
-      }).setOrigin(0, 0.5).setDepth(depth)
+      }).setOrigin(0, 0.5).setDepth(depth + 3)
     );
   }
 
@@ -1839,8 +1867,8 @@ export class ForgeScene extends Phaser.Scene {
       x: x + width / 2,
       y,
       width,
-      height: 58,
-      radius: 16,
+      height: 40,
+      radius: 15,
       fill: success ? 0x0f1711 : 0x17100c,
       alpha: 0.84,
       stroke: success ? FORGE.green : FORGE.gold,
@@ -1853,7 +1881,7 @@ export class ForgeScene extends Phaser.Scene {
       container,
       this.add.text(x + 12, y, text, {
         fontFamily: UI.font.body,
-        fontSize: '12px',
+        fontSize: '11px',
         color: success ? UI.colors.green : UI.colors.goldText,
         lineSpacing: 3,
         wordWrap: {
