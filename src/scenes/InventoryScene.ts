@@ -134,6 +134,7 @@ export class InventoryScene extends Phaser.Scene {
   private dragStartScrollY = 0;
 
   private didDragInventory = false;
+  private isRestartingInventory = false;
 
   private inventoryPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
   private inventoryPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
@@ -164,6 +165,7 @@ export class InventoryScene extends Phaser.Scene {
     this.isItemInfoOpen = false;
     this.isDraggingInventory = false;
     this.didDragInventory = false;
+    this.isRestartingInventory = false;
     this.itemInfoContainer = undefined;
     this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
@@ -824,6 +826,10 @@ export class InventoryScene extends Phaser.Scene {
 
       tabBg.zone.on('pointerup', () => {
         tabBg.bg.setAlpha(isActive ? 1 : 0.95);
+
+        if (this.isItemInfoOpen || this.isRestartingInventory) {
+          return;
+        }
 
         if (this.selectedCategory === tab.id) {
           return;
@@ -1657,6 +1663,7 @@ export class InventoryScene extends Phaser.Scene {
 
         if (
           this.isItemInfoOpen ||
+          this.isRestartingInventory ||
           isEquipped ||
           this.didDragInventory ||
           !this.isPointerInsideInventoryList(this.input.activePointer, layout)
@@ -1688,6 +1695,7 @@ export class InventoryScene extends Phaser.Scene {
 
         if (
           this.isItemInfoOpen ||
+          this.isRestartingInventory ||
           isEquipped ||
           this.didDragInventory ||
           !this.isPointerInsideInventoryList(this.input.activePointer, layout)
@@ -1723,7 +1731,7 @@ export class InventoryScene extends Phaser.Scene {
       accentColor: UI.colors.redHex,
       danger: true,
       onClick: () => {
-        if (this.isItemInfoOpen) {
+        if (this.isItemInfoOpen || this.isRestartingInventory) {
           return;
         }
 
@@ -2122,7 +2130,7 @@ export class InventoryScene extends Phaser.Scene {
   update() {
     const layout = this.getLayout();
 
-    if (!this.inventoryItemsContainer || this.isItemInfoOpen || this.isDraggingInventory) {
+    if (!this.inventoryItemsContainer || this.isItemInfoOpen || this.isRestartingInventory || this.isDraggingInventory) {
       return;
     }
 
@@ -2209,7 +2217,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private showItemInfo(inventoryItem: InventoryItem) {
-    if (this.isItemInfoOpen) {
+    if (this.isItemInfoOpen || this.isRestartingInventory) {
       return;
     }
 
@@ -2757,7 +2765,11 @@ export class InventoryScene extends Phaser.Scene {
     hideCancel?: boolean;
     onConfirm: () => void;
   }) {
-    if (this.isItemInfoOpen) {
+    if (this.isRestartingInventory) {
+      return;
+    }
+
+    if (this.itemInfoContainer) {
       return;
     }
 
@@ -2837,8 +2849,14 @@ export class InventoryScene extends Phaser.Scene {
       danger: config.danger,
       onClick: () => {
         const callback = config.onConfirm;
-        this.closeItemInfo(false);
-        callback();
+        this.closeItemInfo(true);
+        try {
+          callback();
+        } catch (error) {
+          this.isItemInfoOpen = false;
+          this.setInventoryListModalMode(false);
+          throw error;
+        }
       },
       depth: 1010,
     });
@@ -2880,6 +2898,8 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     this.isItemInfoOpen = false;
+    this.isDraggingInventory = false;
+    this.didDragInventory = false;
 
     if (restoreInventoryList) {
       this.setInventoryListModalMode(false);
@@ -2953,6 +2973,12 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private restartInventory() {
+    if (this.isRestartingInventory) {
+      return;
+    }
+
+    this.isRestartingInventory = true;
+
     const scrollY = Phaser.Math.Clamp(
       this.inventoryTargetScrollY,
       0,
