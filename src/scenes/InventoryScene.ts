@@ -236,6 +236,7 @@ export class InventoryScene extends Phaser.Scene {
     const contentWidth = Math.min(width - safeX * 2, 640);
 
     const hasMassSellButton =
+      this.canSellItems() &&
       this.selectedCategory !== 'potions' &&
       this.selectedCategory !== 'materials';
 
@@ -976,7 +977,7 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryListUiObjects.push(titleText, counterText);
 
     if (!layout.veryCompact) {
-      const sortText = this.add.text(layout.centerX, layout.listHeaderTop + 50, 'Редкость: божественная → обычная', {
+      const sortText = this.add.text(layout.centerX, layout.listHeaderTop + 50, 'Надетые → кольца → редкость', {
         fontFamily: UI.font.body,
         fontSize: '10px',
         color: '#716a60',
@@ -1098,6 +1099,14 @@ export class InventoryScene extends Phaser.Scene {
       .setDepth(40);
   }
 
+  private isRunPreparationMode() {
+    return this.returnScene === 'DungeonScene';
+  }
+
+  private canSellItems() {
+    return !this.isRunPreparationMode();
+  }
+
   private getCategoryTitle() {
     if (this.selectedCategory === 'materials') return 'Материалы';
     if (this.selectedCategory === 'potions') return 'Зелья здоровья';
@@ -1151,6 +1160,13 @@ export class InventoryScene extends Phaser.Scene {
       const leftBase = getBaseItemFromInventoryItem(leftItem);
       const rightBase = getBaseItemFromInventoryItem(rightItem);
 
+      const leftGroup = this.getInventorySortGroup(leftItem);
+      const rightGroup = this.getInventorySortGroup(rightItem);
+
+      if (leftGroup !== rightGroup) {
+        return leftGroup - rightGroup;
+      }
+
       const rightRank = rightBase ? this.getRaritySortRank(rightBase.rarity) : -1;
       const leftRank = leftBase ? this.getRaritySortRank(leftBase.rarity) : -1;
 
@@ -1158,18 +1174,27 @@ export class InventoryScene extends Phaser.Scene {
         return rightRank - leftRank;
       }
 
-      const leftEquipped = isItemEquipped(player, leftItem.instanceId) ? 1 : 0;
-      const rightEquipped = isItemEquipped(player, rightItem.instanceId) ? 1 : 0;
-
-      if (rightEquipped !== leftEquipped) {
-        return rightEquipped - leftEquipped;
-      }
-
       const leftName = leftBase?.name ?? '';
       const rightName = rightBase?.name ?? '';
 
       return leftName.localeCompare(rightName, 'ru');
     });
+  }
+
+  private getInventorySortGroup(inventoryItem: InventoryItem) {
+    const item = getBaseItemFromInventoryItem(inventoryItem);
+
+    if (isItemEquipped(player, inventoryItem.instanceId)) {
+      return 0;
+    }
+
+    // Ненадетые кольца показываем сразу после всех надетых вещей.
+    // Иначе divine-кольца из-за высокой редкости всплывают выше экипировки.
+    if (item?.slot === 'ring') {
+      return 1;
+    }
+
+    return 2;
   }
 
   private getRaritySortRank(rarity: string) {
@@ -1637,6 +1662,8 @@ export class InventoryScene extends Phaser.Scene {
     const textX = left + 74;
     const buttonWidth = Math.min(88, Math.max(72, cardWidth * 0.18));
     const buttonX = cardWidth / 2 - buttonWidth / 2 - 14;
+    const canSellItems = this.canSellItems();
+    const equipButtonY = canSellItems ? -cardHeight * 0.22 : 0;
     const textWidth = Math.max(118, cardWidth - 78 - buttonWidth - 30);
 
     let actionButtonPressed = false;
@@ -1745,7 +1772,7 @@ export class InventoryScene extends Phaser.Scene {
 
     const equipButton = this.createLocalUiButton({
       x: buttonX,
-      y: -cardHeight * 0.22,
+      y: equipButtonY,
       width: buttonWidth,
       height: layout.veryCompact ? 32 : 36,
       text: isEquipped ? 'Надето' : 'Надеть',
@@ -1777,36 +1804,39 @@ export class InventoryScene extends Phaser.Scene {
       },
     });
 
-    const sellButton = this.createLocalUiButton({
-      x: buttonX,
-      y: cardHeight * 0.24,
-      width: buttonWidth,
-      height: layout.veryCompact ? 32 : 36,
-      text: 'Продать',
-      accentColor: UI.colors.redHex,
-      danger: true,
-      disabled: isEquipped,
-      small: true,
-      onClick: () => {
-        actionButtonPressed = true;
+    const sellButton = canSellItems
+      ? this.createLocalUiButton({
+          x: buttonX,
+          y: cardHeight * 0.24,
+          width: buttonWidth,
+          height: layout.veryCompact ? 32 : 36,
+          text: 'Продать',
+          accentColor: UI.colors.redHex,
+          danger: true,
+          disabled: isEquipped,
+          small: true,
+          onClick: () => {
+            actionButtonPressed = true;
 
-        if (
-          this.isItemInfoOpen ||
-          this.isRestartingInventory ||
-          isEquipped ||
-          this.didDragInventory ||
-          !this.isPointerInsideInventoryList(this.input.activePointer, layout)
-        ) {
-          actionButtonPressed = false;
-          return;
-        }
+            if (
+              this.isItemInfoOpen ||
+              this.isRestartingInventory ||
+              isEquipped ||
+              this.didDragInventory ||
+              !this.canSellItems() ||
+              !this.isPointerInsideInventoryList(this.input.activePointer, layout)
+            ) {
+              actionButtonPressed = false;
+              return;
+            }
 
-        actionButtonPressed = false;
-        this.showSellConfirm(inventoryItem);
-      },
-    });
+            actionButtonPressed = false;
+            this.showSellConfirm(inventoryItem);
+          },
+        })
+      : undefined;
 
-    cardObjects.push(...equipButton.objects, ...sellButton.objects);
+    cardObjects.push(...equipButton.objects, ...(sellButton?.objects ?? []));
 
     card.add(cardObjects);
     this.inventoryItemsContainer.add(card);
@@ -2327,6 +2357,7 @@ export class InventoryScene extends Phaser.Scene {
 
     const equipped = isItemEquipped(player, inventoryItem.instanceId);
     const sellPrice = getItemSellPrice(item, inventoryItem.upgradeLevel);
+    const canSellItems = this.canSellItems();
 
     const rarityColor = getRarityColorHex(item);
     const rarityStrokeColor = getRarityStrokeColor(item);
@@ -2461,7 +2492,7 @@ export class InventoryScene extends Phaser.Scene {
       `Характеристики: ${createItemStatsText(inventoryItem) || 'нет'}`,
       comparisonText,
       weaponDescription,
-      `Цена продажи: ${sellPrice} золота`,
+      canSellItems ? `Цена продажи: ${sellPrice} золота` : 'Продажа: недоступна во время забега',
       equipped ? 'Статус: надето' : 'Статус: в сумке',
     ].filter(Boolean);
 
@@ -2484,9 +2515,12 @@ export class InventoryScene extends Phaser.Scene {
     ).setOrigin(0.5);
 
     const buttonWidth = Math.min(panelWidth - 150, 360);
+    const equipButtonY = canSellItems ? bottom - 150 : bottom - 112;
+    const closeButtonY = canSellItems ? bottom - 38 : bottom - 56;
+
     const equipButton = this.createUiButton({
       x: layout.centerX,
-      y: bottom - 150,
+      y: equipButtonY,
       width: buttonWidth,
       height: 48,
       text: equipped ? 'Уже надето' : 'Надеть',
@@ -2509,25 +2543,27 @@ export class InventoryScene extends Phaser.Scene {
       depth: 1010,
     });
 
-    const sellButton = this.createUiButton({
-      x: layout.centerX,
-      y: bottom - 94,
-      width: buttonWidth,
-      height: 48,
-      text: `Продать за ${sellPrice}`,
-      accentColor: INVENTORY_DARK.red,
-      danger: true,
-      disabled: equipped,
-      onClick: () => {
-        this.closeItemInfo(false);
-        this.showSellConfirm(inventoryItem);
-      },
-      depth: 1010,
-    });
+    const sellButton = canSellItems
+      ? this.createUiButton({
+          x: layout.centerX,
+          y: bottom - 94,
+          width: buttonWidth,
+          height: 48,
+          text: `Продать за ${sellPrice}`,
+          accentColor: INVENTORY_DARK.red,
+          danger: true,
+          disabled: equipped,
+          onClick: () => {
+            this.closeItemInfo(false);
+            this.showSellConfirm(inventoryItem);
+          },
+          depth: 1010,
+        })
+      : undefined;
 
     const closeButton = this.createUiButton({
       x: layout.centerX,
-      y: bottom - 38,
+      y: closeButtonY,
       width: buttonWidth,
       height: 48,
       text: 'Закрыть',
@@ -2548,7 +2584,7 @@ export class InventoryScene extends Phaser.Scene {
       description,
       statsText,
       ...equipButton.objects,
-      ...sellButton.objects,
+      ...(sellButton?.objects ?? []),
       ...closeButton.objects,
     ]);
 
@@ -2689,6 +2725,11 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private showSellConfirm(inventoryItem: InventoryItem) {
+    if (!this.canSellItems()) {
+      this.showMessage('Во время подготовки и забега продавать предметы нельзя.');
+      return;
+    }
+
     const item = getBaseItemFromInventoryItem(inventoryItem);
 
     if (!item) {
@@ -2736,6 +2777,11 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private showMassSellConfirm() {
+    if (!this.canSellItems()) {
+      this.showMessage('Во время подготовки и забега массовая продажа недоступна.');
+      return;
+    }
+
     const itemsToSell = player.inventory.filter((inventoryItem: InventoryItem) => {
       const item = getBaseItemFromInventoryItem(inventoryItem);
 
