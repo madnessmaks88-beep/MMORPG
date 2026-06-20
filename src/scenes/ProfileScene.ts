@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { gameState } from '../data/gameState';
+import { createEmptyCityCampfireState, gameState, resetFloorRun } from '../data/gameState';
 import { getRaceById } from '../data/races';
 import { getRelicById } from '../data/relics';
 
 import { getPlayerStats } from '../systems/InventorySystem';
+import { startNewGameAsync } from '../systems/SaveSystem';
+import { clearCampfireBattleCheckpoint } from '../systems/CampfireCheckpointSystem';
 import { getCachedVKUser } from '../systems/VKBridgeSystem';
 import { getUnlockedSecretAvatars } from '../systems/AvatarSystem';
 
@@ -87,6 +89,10 @@ export class ProfileScene extends Phaser.Scene {
   private isDragging = false;
   private dragStartY = 0;
   private dragStartScrollY = 0;
+
+  private isModalOpen = false;
+  private isStartingNewGame = false;
+  private profileModalObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('ProfileScene');
@@ -256,6 +262,7 @@ export class ProfileScene extends Phaser.Scene {
     cursorY = this.createProgressPanel(layout, cursorY + 14);
     cursorY = this.createSecretAvatarsPanel(layout, cursorY + 14);
     cursorY = this.createRelicsPanel(layout, cursorY + 14);
+    cursorY = this.createDangerZonePanel(layout, cursorY + 14);
 
     const contentHeight = cursorY - layout.contentTop + 36;
 
@@ -754,6 +761,440 @@ export class ProfileScene extends Phaser.Scene {
     return topY + height;
   }
 
+
+  private createDangerZonePanel(layout: ProfileLayout, topY: number) {
+    const container = this.requireContentContainer();
+    const compact = layout.height < 850;
+    const height = compact ? 218 : 238;
+    const y = topY + height / 2;
+    const panelWidth = layout.contentWidth;
+
+    this.createStonePanel({
+      parent: container,
+      x: layout.centerX,
+      y,
+      width: panelWidth,
+      height,
+      radius: compact ? 24 : 30,
+      fill: 0x13090a,
+      alpha: 0.95,
+      stroke: PROFILE.red,
+      strokeAlpha: 0.58,
+      strokeWidth: 2,
+      depth: 2,
+    });
+
+    this.addTo(
+      container,
+      this.add.text(layout.centerX, topY + 33, 'Опасная зона', {
+        fontFamily: UI.font.title,
+        fontSize: compact ? '21px' : '24px',
+        color: '#d9a39c',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center',
+        wordWrap: {
+          width: panelWidth - 48,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(layout.centerX, topY + 62, 'сброс прогресса героя', {
+        fontFamily: UI.font.body,
+        fontSize: compact ? '11px' : '12px',
+        color: '#a87570',
+        align: 'center',
+        wordWrap: {
+          width: panelWidth - 48,
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setDepth(8)
+    );
+
+    this.addTo(
+      container,
+      this.add.text(layout.centerX, topY + (compact ? 103 : 112), 'Новая игра полностью удалит текущий прогресс, героя, спуск, чекпоинты, магазин, задания и временные награды.', {
+        fontFamily: UI.font.body,
+        fontSize: compact ? '13px' : '14px',
+        color: '#c9b7a5',
+        align: 'center',
+        lineSpacing: 4,
+        wordWrap: {
+          width: panelWidth - 62,
+          useAdvancedWrap: true,
+        },
+        maxLines: 3,
+      }).setOrigin(0.5).setDepth(8)
+    );
+
+    const buttonWidth = Math.min(panelWidth - 70, 420);
+    const buttonHeight = compact ? 52 : 56;
+    const buttonY = topY + height - (compact ? 42 : 46);
+
+    this.createDangerZoneButton(container, layout.centerX, buttonY, buttonWidth, buttonHeight);
+
+    return topY + height;
+  }
+
+  private createDangerZoneButton(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) {
+    const radius = Math.min(18, height / 2);
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.38);
+    shadow.fillRoundedRect(x - width / 2, y - height / 2 + 6, width, height, radius);
+    shadow.setDepth(18);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x411315, 0.96);
+    bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+    bg.lineStyle(2, PROFILE.redSoft, 0.8);
+    bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+    bg.setDepth(19);
+
+    const label = this.add.text(x, y, 'Новая игра', {
+      fontFamily: UI.font.title,
+      fontSize: height < 54 ? '18px' : '20px',
+      color: '#f0d0c9',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: width - 28,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(20);
+
+    const zone = this.add.zone(x, y, width, height)
+      .setDepth(24)
+      .setInteractive({ useHandCursor: true });
+
+    const setPressed = (pressed: boolean) => {
+      bg.clear();
+      bg.fillStyle(pressed ? 0x5a1a1c : 0x411315, 0.96);
+      bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+      bg.lineStyle(2, PROFILE.redSoft, pressed ? 0.95 : 0.8);
+      bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+    };
+
+    zone.on('pointerdown', (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: { stopPropagation: () => void }
+    ) => {
+      event.stopPropagation();
+      setPressed(true);
+    });
+
+    zone.on('pointerup', (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: { stopPropagation: () => void }
+    ) => {
+      event.stopPropagation();
+      setPressed(false);
+
+      if (this.isModalOpen || this.isStartingNewGame) {
+        return;
+      }
+
+      this.showNewGameConfirm();
+    });
+
+    zone.on('pointerout', () => {
+      setPressed(false);
+    });
+
+    zone.on('pointerupoutside', () => {
+      setPressed(false);
+    });
+
+    container.add([shadow, bg, label, zone]);
+  }
+
+  private showNewGameConfirm() {
+    if (this.isModalOpen || this.isStartingNewGame) {
+      return;
+    }
+
+    this.hideProfileModal();
+    this.isModalOpen = true;
+    this.isDragging = false;
+
+    const layout = this.getLayout();
+    const panelWidth = Math.min(layout.contentWidth, layout.width - layout.safeX * 2, 560);
+    const panelHeight = layout.height < 760 ? 316 : 342;
+    const panelX = layout.centerX;
+    const panelY = layout.height / 2;
+
+    const overlay = this.add.rectangle(panelX, layout.height / 2, layout.width, layout.height, 0x000000, 0.76)
+      .setDepth(1800)
+      .setInteractive();
+
+    const shadow = this.add.graphics().setDepth(1801);
+    shadow.fillStyle(0x000000, 0.45);
+    shadow.fillRoundedRect(panelX - panelWidth / 2, panelY - panelHeight / 2 + 9, panelWidth, panelHeight, 28);
+
+    const panel = this.add.graphics().setDepth(1802);
+    panel.fillStyle(0x0b0c10, 0.98);
+    panel.fillRoundedRect(panelX - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 28);
+    panel.lineStyle(2, PROFILE.redSoft, 0.72);
+    panel.strokeRoundedRect(panelX - panelWidth / 2, panelY - panelHeight / 2, panelWidth, panelHeight, 28);
+
+    const title = this.add.text(panelX, panelY - panelHeight / 2 + 46, 'Начать новую игру?', {
+      fontFamily: UI.font.title,
+      fontSize: layout.height < 760 ? '22px' : '25px',
+      color: '#f0d0c9',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center',
+      wordWrap: {
+        width: panelWidth - 52,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1804);
+
+    const message = this.add.text(panelX, panelY - 28, 'Текущий прогресс будет удалён: герой, спуск, чекпоинты, магазин, задания и временные награды. После подтверждения откроется выбор расы.', {
+      fontFamily: UI.font.body,
+      fontSize: layout.height < 760 ? '14px' : '15px',
+      color: '#d9cbbb',
+      align: 'center',
+      lineSpacing: 5,
+      wordWrap: {
+        width: panelWidth - 56,
+        useAdvancedWrap: true,
+      },
+      maxLines: 5,
+    }).setOrigin(0.5).setDepth(1804);
+
+    const buttonWidth = Math.min(panelWidth - 64, 360);
+    const confirmButton = this.createProfileModalButton(
+      panelX,
+      panelY + panelHeight / 2 - 108,
+      buttonWidth,
+      52,
+      'Новая игра',
+      true,
+      () => {
+        void this.startNewGame();
+      }
+    );
+
+    const cancelButton = this.createProfileModalButton(
+      panelX,
+      panelY + panelHeight / 2 - 44,
+      buttonWidth,
+      50,
+      'Отмена',
+      false,
+      () => {
+        this.hideProfileModal();
+      }
+    );
+
+    this.profileModalObjects.push(overlay, shadow, panel, title, message, ...confirmButton, ...cancelButton);
+  }
+
+  private createProfileModalButton(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    labelText: string,
+    danger: boolean,
+    onClick: () => void
+  ) {
+    const radius = Math.min(18, height / 2);
+    const baseFill = danger ? 0x4a1719 : 0x171a22;
+    const pressedFill = danger ? 0x651f22 : 0x222735;
+    const stroke = danger ? PROFILE.redSoft : PROFILE.bronze;
+    const textColor = danger ? '#f0d0c9' : '#f1e1bc';
+
+    const bg = this.add.graphics().setDepth(1810);
+    const redraw = (pressed: boolean) => {
+      bg.clear();
+      bg.fillStyle(pressed ? pressedFill : baseFill, 0.98);
+      bg.fillRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+      bg.lineStyle(2, stroke, pressed ? 0.95 : 0.72);
+      bg.strokeRoundedRect(x - width / 2, y - height / 2, width, height, radius);
+    };
+    redraw(false);
+
+    const label = this.add.text(x, y, labelText, {
+      fontFamily: UI.font.title,
+      fontSize: height < 52 ? '17px' : '18px',
+      color: textColor,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: width - 28,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1811);
+
+    const zone = this.add.zone(x, y, width, height)
+      .setDepth(1812)
+      .setInteractive({ useHandCursor: true });
+
+    zone.on('pointerdown', () => {
+      redraw(true);
+    });
+
+    zone.on('pointerup', () => {
+      redraw(false);
+
+      if (this.isStartingNewGame && danger) {
+        return;
+      }
+
+      onClick();
+    });
+
+    zone.on('pointerout', () => {
+      redraw(false);
+    });
+
+    zone.on('pointerupoutside', () => {
+      redraw(false);
+    });
+
+    return [bg, label, zone];
+  }
+
+  private hideProfileModal() {
+    this.profileModalObjects.forEach(object => object.destroy());
+    this.profileModalObjects = [];
+    this.isModalOpen = false;
+  }
+
+  private async startNewGame() {
+    if (this.isStartingNewGame) {
+      return;
+    }
+
+    this.isStartingNewGame = true;
+    this.resetGameStateInMemory();
+    clearCampfireBattleCheckpoint();
+    this.clearLocalProgress();
+    this.resetPlayerInMemory();
+
+    try {
+      await startNewGameAsync();
+      this.hideProfileModal();
+      this.scene.start('RaceSelectScene');
+    } catch (error) {
+      console.error('Failed to start a new game from profile.', error);
+      this.isStartingNewGame = false;
+      this.hideProfileModal();
+    }
+  }
+
+  private resetGameStateInMemory() {
+    resetFloorRun();
+
+    gameState.currentDungeonId = 'tower_depths';
+    gameState.currentRoomIndex = 0;
+    gameState.dungeonCompleted = false;
+    gameState.unlockedDungeonIds = ['tower_depths'];
+    gameState.lastCampRestAt = 0;
+    gameState.highestClearedFloor = 0;
+    gameState.highestClearedTier = 0;
+    gameState.cityCampfire = createEmptyCityCampfireState();
+    gameState.questProgress = {
+      enemiesKilled: 0,
+      chestsOpened: 0,
+      dungeonsCompleted: 0,
+      goldEarned: 0,
+      claimedQuestIds: [],
+    };
+  }
+
+  private clearLocalProgress() {
+    const saveKeys = [
+      'below_ashes_save_v3',
+      'below_ashes_save_v3_local_backup',
+      'below_ashes_save_v3_last_good',
+      'below_ashes_save_v3_active_run_emergency',
+      'below_ashes_save_v2',
+      'below_ashes_save_v1',
+      'catacombs_save_v3',
+      'catacombs_save_v2',
+      'catacombs_save_v1',
+      'catacombs_shop_assortment_v3',
+      'catacombs_shop_assortment_v2',
+      'catacombs_shop_assortment_v1',
+      'catacombs_city_campfire_v1',
+      'below_ashes_campfire_battle_checkpoint_v1',
+      'campfire_battle_checkpoint_v1',
+      'campfire_checkpoint_v1',
+      'campfire_last_rest_at',
+      'quest_state_v1',
+      'quests_state_v1',
+      'stats_tree_v1',
+      'character_tree_v1',
+      'start_gold_500_v1',
+    ];
+
+    saveKeys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        console.warn(`Failed to remove local progress key: ${key}`, error);
+      }
+    });
+  }
+
+  private resetPlayerInMemory() {
+    Object.assign(player, {
+      name: 'Безымянный',
+      raceId: undefined,
+      level: 1,
+      exp: 0,
+      expToNextLevel: 70,
+      gold: 500,
+      hp: 100,
+      maxHp: 100,
+      energy: 3,
+      maxEnergy: 3,
+      potions: 6,
+      attack: 12,
+      defense: 3,
+      critChance: 0.1,
+      agility: 5,
+      luck: 5,
+      strength: 11,
+      intelligence: 11,
+      upgradePoints: 0,
+      totalUpgradePointsEarned: 0,
+      characterTreePoints: 0,
+      characterTree: {},
+      shopRefreshCoupons: 0,
+      relicIds: [],
+      inventory: [],
+      equipment: {},
+      materials: {},
+      anvilLevel: 1,
+      crystalsUnlocked: false,
+      avatarId: undefined,
+      unlockedAvatarIds: [],
+    });
+  }
+
   private createScrollInput(layout: ProfileLayout) {
     this.scrollZone?.destroy();
 
@@ -765,17 +1206,21 @@ export class ProfileScene extends Phaser.Scene {
       0x000000,
       0.001
     )
-      .setDepth(220)
+      .setDepth(4)
       .setInteractive({ useHandCursor: false });
 
     this.scrollZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.isModalOpen) {
+        return;
+      }
+
       this.isDragging = true;
       this.dragStartY = pointer.y;
       this.dragStartScrollY = this.targetScrollY;
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isDragging) {
+      if (this.isModalOpen || !this.isDragging) {
         return;
       }
 
@@ -804,7 +1249,7 @@ export class ProfileScene extends Phaser.Scene {
       _deltaX: number,
       deltaY: number
     ) => {
-      if (pointer.y < layout.contentTop || pointer.y > layout.contentBottom) {
+      if (this.isModalOpen || pointer.y < layout.contentTop || pointer.y > layout.contentBottom) {
         return;
       }
 
