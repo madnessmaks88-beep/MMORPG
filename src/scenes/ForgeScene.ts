@@ -205,6 +205,8 @@ export class ForgeScene extends Phaser.Scene {
     this.createScrollableContent(layout);
     this.createItemsViewport(layout);
     this.createBottomBar(layout);
+
+    this.cameras.main.fadeIn(260, 0, 0, 0);
   }
 
   update() {
@@ -249,7 +251,7 @@ export class ForgeScene extends Phaser.Scene {
     const gap = veryCompact ? 5 : compact ? 7 : 8;
 
     const headerTop = safeTop;
-    const headerHeight = veryCompact ? 42 : compact ? 50 : 58;
+    const headerHeight = veryCompact ? 50 : compact ? 60 : 68;
 
     // Верхняя панель ресурсов больше не используется визуально.
     const resourcesTop = headerTop + headerHeight;
@@ -434,6 +436,7 @@ export class ForgeScene extends Phaser.Scene {
 
   private createHeader(layout: ForgeLayout) {
     const panelY = layout.headerTop + layout.headerHeight / 2;
+    const left = layout.centerX - layout.contentWidth / 2;
 
     this.createStonePanel({
       x: layout.centerX,
@@ -449,48 +452,84 @@ export class ForgeScene extends Phaser.Scene {
       depth: 120,
     });
 
-    this.add.circle(
-      layout.centerX - layout.contentWidth / 2 + 34,
+    const icon = this.add.circle(
+      left + 36,
       panelY,
-      layout.veryCompact ? 15 : 18,
+      layout.veryCompact ? 16 : 19,
       FORGE.ember,
-      0.18
-    ).setStrokeStyle(1, FORGE.gold, 0.44).setDepth(126);
+      0.2
+    ).setStrokeStyle(1, FORGE.gold, 0.52).setDepth(126);
 
-    this.add.text(layout.centerX - layout.contentWidth / 2 + 34, panelY, '⚒', {
+    this.add.text(left + 36, panelY, '⚒', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '14px' : '17px',
+      fontSize: layout.veryCompact ? '15px' : '18px',
       color: '#d6c08a',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
     }).setOrigin(0.5).setDepth(127);
 
-    this.add.text(layout.centerX + 10, panelY, 'Кузница Пепельного Молота', {
+    const titleY = panelY - (layout.veryCompact ? 8 : 10);
+    const subtitleY = panelY + (layout.veryCompact ? 13 : 16);
+
+    this.add.text(layout.centerX + 12, titleY, 'Кузница Пепельного Молота', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '21px' : layout.compact ? '24px' : '27px',
+      fontSize: layout.veryCompact ? '20px' : layout.compact ? '23px' : '26px',
       color: '#d6c08a',
       stroke: '#000000',
       strokeThickness: 5,
       align: 'center',
       wordWrap: {
-        width: layout.contentWidth - 92,
+        width: layout.contentWidth - 96,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(127);
-  }
 
+    this.add.text(layout.centerX + 12, subtitleY, 'Жар горна, чёрный металл и трофеи катакомб', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '10px' : '12px',
+      color: '#9f9788',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 104,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(127);
+
+    this.tweens.add({
+      targets: icon,
+      alpha: { from: 0.16, to: 0.34 },
+      scaleX: { from: 0.96, to: 1.05 },
+      scaleY: { from: 0.96, to: 1.05 },
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
 
   private createScrollableContent(layout: ForgeLayout) {
     this.contentContainer?.destroy(true);
     this.contentMaskGraphics?.destroy();
 
-    this.contentContainer = this.add.container(0, 0).setDepth(250);
+    const container = this.add.container(0, 0).setDepth(250);
+    this.contentContainer = container;
 
     this.createAnvilPanel(layout, layout.anvilTop);
     this.createMaterialsPanel(layout, layout.materialsTop);
     this.createCategoryTabs(layout, layout.tabsTop);
+
+    container.setAlpha(0);
+    container.setY(-8);
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      y: 0,
+      duration: 240,
+      ease: 'Sine.easeOut',
+    });
   }
 
   private createItemsViewport(layout: ForgeLayout) {
@@ -829,7 +868,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private getForgeItemCardHeight(layout: ForgeLayout) {
-    return layout.veryCompact ? 178 : layout.compact ? 188 : 202;
+    return layout.veryCompact ? 172 : layout.compact ? 184 : 196;
   }
 
   private getForgeItemSpacing(layout: ForgeLayout) {
@@ -2127,7 +2166,6 @@ export class ForgeScene extends Phaser.Scene {
     return lines.join('\n');
   }
 
-
   private getShortMaterialName(id: MaterialId) {
     if (id === 'darkened_bone') return 'Кость';
     if (id === 'dim_gem') return 'Самоцв.';
@@ -2181,7 +2219,6 @@ export class ForgeScene extends Phaser.Scene {
 
     return UI.colors.textMuted;
   }
-
 
   private createMaterialLine(
     container: Phaser.GameObjects.Container,
@@ -2648,3 +2685,4 @@ export class ForgeScene extends Phaser.Scene {
     return object;
   }
 }
+
