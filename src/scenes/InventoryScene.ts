@@ -107,8 +107,6 @@ export class InventoryScene extends Phaser.Scene {
   private itemInfoContainer?: Phaser.GameObjects.Container;
 
   private inventoryItemsContainer?: Phaser.GameObjects.Container;
-  private inventoryItemsMaskGraphics?: Phaser.GameObjects.Graphics;
-  private inventoryItemsMask?: Phaser.Display.Masks.GeometryMask;
   private inventoryListCamera?: Phaser.Cameras.Scene2D.Camera;
   private inventoryListObjects: Phaser.GameObjects.GameObject[] = [];
   private inventoryListUiObjects: Phaser.GameObjects.GameObject[] = [];
@@ -168,7 +166,6 @@ export class InventoryScene extends Phaser.Scene {
     this.didDragInventory = false;
     this.isRestartingInventory = false;
     this.itemInfoContainer = undefined;
-    this.inventoryItemsMask = undefined;
     this.inventoryListObjects = [];
     this.inventoryListUiObjects = [];
     this.inventoryTabObjects = [];
@@ -998,15 +995,8 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private createInventoryItemsViewport(layout: InventoryLayout): void {
-    this.inventoryItemsContainer?.clearMask(true);
     this.inventoryItemsContainer?.destroy(true);
     this.inventoryItemsContainer = undefined;
-
-    this.inventoryItemsMask?.destroy();
-    this.inventoryItemsMask = undefined;
-
-    this.inventoryItemsMaskGraphics?.destroy();
-    this.inventoryItemsMaskGraphics = undefined;
 
     this.inventoryListCamera?.destroy();
     this.inventoryListCamera = undefined;
@@ -1022,6 +1012,14 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryViewportWidth = viewportWidth;
 
     const fixedObjectsBeforeList = this.children.list.slice();
+
+    // В WebGL нельзя безопасно использовать GameObject.setMask
+    // для текущей схемы списка: Phaser начинает сыпать warning'ами
+    // `Mask.setMask: This method is not supported in WebGL`.
+    //
+    // Для инвентаря маска не нужна: отдельная камера уже имеет viewport
+    // ровно по области списка и сама отсекает всё, что выходит за границы,
+    // как прокручиваемая область в VK/Telegram.
     this.inventoryListCamera = this.cameras.add(
       this.inventoryViewportLeft,
       this.inventoryViewportTop,
@@ -1036,23 +1034,9 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryListCamera.setBackgroundColor('rgba(0,0,0,0)');
     this.inventoryListCamera.ignore(fixedObjectsBeforeList);
 
-    const itemsContainer = this.add.container(0, this.inventoryViewportTop).setDepth(40);
-    this.inventoryItemsContainer = itemsContainer;
-
-    const maskGraphics = this.add.graphics();
-    this.inventoryItemsMaskGraphics = maskGraphics;
-    maskGraphics.setVisible(false);
-    maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRect(
-      viewportLeft,
-      this.inventoryViewportTop,
-      viewportWidth,
-      this.inventoryViewportHeight
-    );
-
-    const itemsMask = maskGraphics.createGeometryMask();
-    this.inventoryItemsMask = itemsMask;
-    itemsContainer.setMask(itemsMask);
+    this.inventoryItemsContainer = this.add
+      .container(0, this.inventoryViewportTop)
+      .setDepth(40);
   }
 
   private getCategoryTitle() {
@@ -1353,7 +1337,6 @@ export class InventoryScene extends Phaser.Scene {
     cardObjects.push(...button.objects);
 
     card.add(cardObjects);
-    this.applyInventoryViewportMask([card, ...cardObjects]);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...cardObjects]);
   }
@@ -1429,7 +1412,6 @@ export class InventoryScene extends Phaser.Scene {
     );
 
     card.add(objects);
-    this.applyInventoryViewportMask([card, ...objects]);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...objects]);
   }
@@ -1531,7 +1513,6 @@ export class InventoryScene extends Phaser.Scene {
     );
 
     card.add(objects);
-    this.applyInventoryViewportMask([card, ...objects]);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...objects]);
   }
@@ -1735,7 +1716,6 @@ export class InventoryScene extends Phaser.Scene {
     cardObjects.push(...equipButton.objects, ...sellButton.objects);
 
     card.add(cardObjects);
-    this.applyInventoryViewportMask([card, ...cardObjects]);
     this.inventoryItemsContainer.add(card);
     this.registerInventoryListObjects([card, ...cardObjects]);
   }
@@ -1803,26 +1783,6 @@ export class InventoryScene extends Phaser.Scene {
 
     this.inventoryListObjects.push(...objects);
     this.cameras.main.ignore(objects);
-  }
-
-  private hasSetMask(object: Phaser.GameObjects.GameObject): object is Phaser.GameObjects.GameObject & {
-    setMask: (mask: Phaser.Display.Masks.GeometryMask) => unknown;
-  } {
-    return typeof (object as { setMask?: unknown }).setMask === 'function';
-  }
-
-  private applyInventoryViewportMask(objects: Phaser.GameObjects.GameObject[]): void {
-    const mask = this.inventoryItemsMask;
-
-    if (!mask) {
-      return;
-    }
-
-    objects.forEach(object => {
-      if (this.hasSetMask(object)) {
-        object.setMask(mask);
-      }
-    });
   }
 
   private createLocalRoundedPanelAsObjects(config: {
@@ -3000,15 +2960,8 @@ export class InventoryScene extends Phaser.Scene {
     this.inventoryListCamera?.destroy();
     this.inventoryListCamera = undefined;
 
-    this.inventoryItemsContainer?.clearMask(true);
     this.inventoryItemsContainer?.destroy(true);
     this.inventoryItemsContainer = undefined;
-
-    this.inventoryItemsMask?.destroy();
-    this.inventoryItemsMask = undefined;
-
-    this.inventoryItemsMaskGraphics?.destroy();
-    this.inventoryItemsMaskGraphics = undefined;
 
     this.inventoryScrollbarTrack?.destroy();
     this.inventoryScrollbarThumb?.destroy();
