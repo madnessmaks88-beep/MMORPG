@@ -554,7 +554,7 @@ export class InventoryScene extends Phaser.Scene {
     const instanceId = player.equipment[slot];
 
     const inventoryItem = instanceId
-      ? player.inventory.find(item => item.instanceId === instanceId)
+      ? player.inventory.find((item: InventoryItem) => item.instanceId === instanceId)
       : undefined;
 
     const item = inventoryItem
@@ -1018,7 +1018,7 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     return this.sortInventoryItemsByRarity(
-      player.inventory.filter(inventoryItem => {
+      player.inventory.filter((inventoryItem: InventoryItem) => {
         const item = getBaseItemFromInventoryItem(inventoryItem);
 
         if (!item) {
@@ -2350,7 +2350,7 @@ export class InventoryScene extends Phaser.Scene {
       return undefined;
     }
 
-    return player.inventory.find(item => item.instanceId === equippedInstanceId);
+    return player.inventory.find((item: InventoryItem) => item.instanceId === equippedInstanceId);
   }
 
   private getItemBonusValues(inventoryItem?: InventoryItem) {
@@ -2523,7 +2523,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   private showMassSellConfirm() {
-    const itemsToSell = player.inventory.filter(inventoryItem => {
+    const itemsToSell = player.inventory.filter((inventoryItem: InventoryItem) => {
       const item = getBaseItemFromInventoryItem(inventoryItem);
 
       if (!item) {
@@ -2537,7 +2537,7 @@ export class InventoryScene extends Phaser.Scene {
       return item.rarity === 'common';
     });
 
-    const totalGold = itemsToSell.reduce((sum, inventoryItem) => {
+    const totalGold = itemsToSell.reduce((sum: number, inventoryItem: InventoryItem) => {
       const item = getBaseItemFromInventoryItem(inventoryItem);
 
       if (!item) {
@@ -2549,7 +2549,7 @@ export class InventoryScene extends Phaser.Scene {
 
     const itemNames = itemsToSell
       .slice(0, 5)
-      .map(inventoryItem => {
+      .map((inventoryItem: InventoryItem) => {
         const item = getBaseItemFromInventoryItem(inventoryItem);
 
         if (!item) {
@@ -2563,7 +2563,7 @@ export class InventoryScene extends Phaser.Scene {
 
         return `• ${item.name}${upgrade}`;
       })
-      .filter(line => line.length > 0);
+      .filter((line: string) => line.length > 0);
 
     const moreText =
       itemsToSell.length > 5
@@ -2593,7 +2593,7 @@ export class InventoryScene extends Phaser.Scene {
           return;
         }
 
-        itemsToSell.forEach(inventoryItem => {
+        itemsToSell.forEach((inventoryItem: InventoryItem) => {
           sellItem(player, inventoryItem.instanceId);
         });
 
