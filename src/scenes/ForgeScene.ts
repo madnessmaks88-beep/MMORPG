@@ -1610,11 +1610,15 @@ export class ForgeScene extends Phaser.Scene {
       y: layout.bottomButtonY,
       width: Math.min(layout.contentWidth, 540),
       height: layout.veryCompact ? 50 : 56,
-      text: 'Вернуться в лагерь',
+      text: '← Вернуться на рынок',
       variant: 'gold',
       depth: 310,
       onClick: () => {
-        this.scene.start('CampScene');
+        if (this.isModalOpen) {
+          return;
+        }
+
+        this.scene.start('MarketScene');
       },
     });
   }

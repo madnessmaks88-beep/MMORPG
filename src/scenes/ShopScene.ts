@@ -4,7 +4,6 @@ import { player, type EquipmentSlot } from '../data/player';
 import { gameState } from '../data/gameState';
 import { items, type ItemData } from '../data/items';
 
-import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   addItemToInventory,
@@ -53,6 +52,9 @@ type ShopLayout = {
 
   contentTop: number;
   contentBottom: number;
+  bottomButtonHeight: number;
+  bottomButtonTop: number;
+  bottomButtonY: number;
   contentWidth: number;
   viewportHeight: number;
 
@@ -63,6 +65,8 @@ type ShopButton = {
   objects: Phaser.GameObjects.GameObject[];
   zone: Phaser.GameObjects.Zone;
 };
+
+type AlphaGameObject = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha;
 
 type CouponPlayer = typeof player & {
   shopRefreshCoupons?: number;
@@ -121,6 +125,16 @@ export class ShopScene extends Phaser.Scene {
   private lastRefreshTimerSecond = -1;
   private isRefreshingByDailyTimer = false;
 
+  private isAlphaGameObject(object: Phaser.GameObjects.GameObject): object is AlphaGameObject {
+    const candidate = object as Phaser.GameObjects.GameObject & { setAlpha?: unknown };
+
+    return typeof candidate.setAlpha === 'function';
+  }
+
+  private getAlphaGameObjects(objects: Phaser.GameObjects.GameObject[]): AlphaGameObject[] {
+    return objects.filter((object): object is AlphaGameObject => this.isAlphaGameObject(object));
+  }
+
   constructor() {
     super('ShopScene');
   }
@@ -135,11 +149,7 @@ export class ShopScene extends Phaser.Scene {
     this.createHeader(this.layout);
     this.createResourcePanel(this.layout);
     this.createScrollableContent(this.layout);
-    this.createBottomActions(this.layout);
-
-    createBottomNav(this, {
-      activeScene: 'ShopScene',
-    });
+    this.createBottomReturnButton(this.layout);
   }
 
   update() {
@@ -177,12 +187,15 @@ export class ShopScene extends Phaser.Scene {
     const compact = height < 1120;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 30);
-    const safeBottom = height < 760 ? 142 : 154;
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.02), 16, 30);
 
     const contentWidth = Math.min(width - safeX * 2, 640);
     const headerHeight = compact ? 244 : 266;
+    const bottomButtonHeight = compact ? 56 : 62;
+    const bottomButtonTop = height - safeBottom - bottomButtonHeight;
+    const bottomButtonY = bottomButtonTop + bottomButtonHeight / 2;
     const contentTop = safeTop + headerHeight;
-    const contentBottom = height - safeBottom;
+    const contentBottom = bottomButtonTop - 14;
 
     return {
       width,
@@ -195,6 +208,9 @@ export class ShopScene extends Phaser.Scene {
 
       contentTop,
       contentBottom,
+      bottomButtonHeight,
+      bottomButtonTop,
+      bottomButtonY,
       contentWidth,
       viewportHeight: Math.max(280, contentBottom - contentTop),
 
@@ -892,36 +908,52 @@ export class ShopScene extends Phaser.Scene {
       small: true,
     });
   }
-  private createBottomActions(layout: ShopLayout) {
-    const dockY = layout.height - 112;
-    const panelHeight = 58;
+  private createBottomReturnButton(layout: ShopLayout) {
+    const dockHeight = layout.bottomButtonHeight + layout.safeBottom + 20;
+    const dockY = layout.bottomButtonTop + dockHeight / 2 - 4;
 
-    this.createRoundedPanel({
+    this.add.rectangle(layout.centerX, dockY, layout.width, dockHeight, 0x020202, 0.88)
+      .setDepth(232);
+
+    this.add.rectangle(layout.centerX, layout.bottomButtonTop - 8, layout.contentWidth, 1, SHOP_COLORS.bronze, 0.36)
+      .setDepth(233);
+
+    const glow = this.add.rectangle(
+      layout.centerX,
+      layout.bottomButtonY,
+      Math.min(layout.contentWidth - 34, 540),
+      layout.bottomButtonHeight + 8,
+      SHOP_COLORS.gold,
+      0.04
+    ).setDepth(234);
+
+    const button = this.createUiButton({
       x: layout.centerX,
-      y: dockY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: 22,
-      color: 0x050506,
-      alpha: 0.82,
-      strokeColor: 0x30271e,
-      strokeAlpha: 0.5,
-      strokeWidth: 1,
-      depth: 232,
+      y: layout.bottomButtonY,
+      width: Math.min(layout.contentWidth - 30, 540),
+      height: layout.bottomButtonHeight,
+      text: '← Вернуться на рынок',
+      accentColor: SHOP_COLORS.gold,
+      depth: 236,
+      onClick: () => {
+        if (this.isModalOpen) {
+          return;
+        }
+
+        this.scene.start('MarketScene');
+      },
     });
 
-    this.add.text(layout.centerX, dockY, 'Купоны лавки можно получить за задания. Обновление ассортимента — в верхней панели.', {
-      fontFamily: UI.font.body,
-      fontSize: layout.compact ? '11px' : '12px',
-      color: '#8f887b',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 58,
-        useAdvancedWrap: true,
-      },
-      maxLines: 2,
-      lineSpacing: 2,
-    }).setOrigin(0.5).setDepth(236);
+    const animatedObjects = this.getAlphaGameObjects([glow, ...button.objects]);
+    animatedObjects.forEach(object => object.setAlpha(0));
+
+    this.tweens.add({
+      targets: animatedObjects,
+      alpha: 1,
+      duration: 260,
+      delay: 150,
+      ease: 'Cubic.easeOut',
+    });
   }
   private createCouponBanner(config: {
     x: number;

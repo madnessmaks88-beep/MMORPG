@@ -20,7 +20,6 @@ import {
 } from '../systems/QuestSystem';
 import { saveGameAsync } from '../systems/SaveSystem';
 
-import { createBottomNav } from '../ui/createBottomNav';
 
 import {
   UI,
@@ -42,7 +41,9 @@ type QuestLayout = {
 
   headerHeight: number;
   tabsHeight: number;
-  bottomNavHeight: number;
+  bottomButtonHeight: number;
+  bottomButtonTop: number;
+  bottomButtonY: number;
 
   contentTop: number;
   contentBottom: number;
@@ -56,6 +57,8 @@ type QuestButton = {
   objects: Phaser.GameObjects.GameObject[];
   zone: Phaser.GameObjects.Zone;
 };
+
+type AlphaGameObject = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha;
 
 const QUEST_COLORS = {
   ink: 0x040405,
@@ -94,6 +97,16 @@ export class QuestScene extends Phaser.Scene {
   private dragStartY = 0;
   private dragStartScrollY = 0;
 
+  private isAlphaGameObject(object: Phaser.GameObjects.GameObject): object is AlphaGameObject {
+    const candidate = object as Phaser.GameObjects.GameObject & { setAlpha?: unknown };
+
+    return typeof candidate.setAlpha === 'function';
+  }
+
+  private getAlphaGameObjects(objects: Phaser.GameObjects.GameObject[]): AlphaGameObject[] {
+    return objects.filter((object): object is AlphaGameObject => this.isAlphaGameObject(object));
+  }
+
   constructor() {
     super('QuestScene');
   }
@@ -115,9 +128,7 @@ export class QuestScene extends Phaser.Scene {
     // QuestSystem обновит состояние, а здесь мы сразу сохраним это в VK/local save.
     void saveGameAsync();
 
-    createBottomNav(this, {
-      activeScene: 'CampScene',
-    });
+    this.createBottomReturnButton(this.layout);
   }
 
   update() {
@@ -145,13 +156,15 @@ export class QuestScene extends Phaser.Scene {
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 32);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.024), 18, 34);
     const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.02), 18, 34);
-    const bottomNavHeight = 108;
+    const bottomButtonHeight = compact ? 56 : 62;
+    const bottomButtonTop = height - safeBottom - bottomButtonHeight;
+    const bottomButtonY = bottomButtonTop + bottomButtonHeight / 2;
     const headerHeight = compact ? 134 : 148;
     const tabsHeight = compact ? 72 : 78;
     const contentWidth = Math.min(width - safeX * 2, 640);
 
     const contentTop = safeTop + headerHeight + tabsHeight + 12;
-    const contentBottom = height - safeBottom - bottomNavHeight;
+    const contentBottom = bottomButtonTop - 14;
 
     return {
       width,
@@ -164,7 +177,9 @@ export class QuestScene extends Phaser.Scene {
 
       headerHeight,
       tabsHeight,
-      bottomNavHeight,
+      bottomButtonHeight,
+      bottomButtonTop,
+      bottomButtonY,
 
       contentTop,
       contentBottom,
@@ -911,6 +926,57 @@ export class QuestScene extends Phaser.Scene {
       duration: 900,
       yoyo: true,
       repeat: -1,
+    });
+  }
+
+
+  private createBottomReturnButton(layout: QuestLayout) {
+    const dockHeight = layout.bottomButtonHeight + layout.safeBottom + 20;
+    const dockY = layout.bottomButtonTop + dockHeight / 2 - 4;
+
+    this.add.rectangle(layout.centerX, dockY, layout.width, dockHeight, 0x020202, 0.86)
+      .setDepth(240);
+
+    this.add.rectangle(layout.centerX, layout.bottomButtonTop - 8, layout.contentWidth, 1, QUEST_COLORS.bronze, 0.34)
+      .setDepth(241);
+
+    const glow = this.add.rectangle(
+      layout.centerX,
+      layout.bottomButtonY,
+      Math.min(layout.contentWidth - 34, 520),
+      layout.bottomButtonHeight + 8,
+      QUEST_COLORS.gold,
+      0.035
+    ).setDepth(242);
+
+    const button = this.createQuestButton({
+      x: layout.centerX,
+      y: layout.bottomButtonY,
+      width: Math.min(layout.contentWidth - 30, 520),
+      height: layout.bottomButtonHeight,
+      text: '← Вернуться в город',
+      accentColor: QUEST_COLORS.gold,
+      variant: 'gold',
+      depth: 245,
+      onClick: () => {
+        if (this.modalObjects.length > 0) {
+          return;
+        }
+
+        this.scene.start('CampScene');
+      },
+    });
+
+    const animatedObjects = this.getAlphaGameObjects([glow, ...button.objects]);
+    animatedObjects.forEach(object => object.setAlpha(0));
+
+    this.tweens.add({
+      targets: animatedObjects,
+      alpha: 1,
+      y: '+=0',
+      duration: 260,
+      delay: 140,
+      ease: 'Cubic.easeOut',
     });
   }
 
