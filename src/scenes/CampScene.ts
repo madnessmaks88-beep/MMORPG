@@ -786,7 +786,7 @@ export class CampScene extends Phaser.Scene {
       description: 'Торговцы, припасы и редкие товары',
       accentColor: 0xb89a5e,
       onClick: () => {
-        this.showCityMessage('Рынок', 'Рынок пока закрыт.');
+        this.scene.start('MarketScene');
       },
     });
 
