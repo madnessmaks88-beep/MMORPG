@@ -47,6 +47,9 @@ export type PlayerData = {
   maxSanity: number;
   sanityUpdatedAt: number;
 
+  tavernDrinkPurchasedAt: number;
+  tavernFoodPurchasedAt: number;
+
   potions: number;
 
   attack: number;
@@ -101,6 +104,9 @@ export const player: PlayerData = {
   sanity: 500,
   maxSanity: 500,
   sanityUpdatedAt: Date.now(),
+
+  tavernDrinkPurchasedAt: 0,
+  tavernFoodPurchasedAt: 0,
 
   potions: 6,
 

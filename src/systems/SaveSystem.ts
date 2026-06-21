@@ -56,6 +56,12 @@ function normalizePlayerSave() {
   savePlayer.characterTreePoints ??= 0;
   savePlayer.characterTree ??= {};
   savePlayer.shopRefreshCoupons ??= 0;
+  player.tavernDrinkPurchasedAt = typeof player.tavernDrinkPurchasedAt === 'number' && Number.isFinite(player.tavernDrinkPurchasedAt)
+    ? Math.max(0, player.tavernDrinkPurchasedAt)
+    : 0;
+  player.tavernFoodPurchasedAt = typeof player.tavernFoodPurchasedAt === 'number' && Number.isFinite(player.tavernFoodPurchasedAt)
+    ? Math.max(0, player.tavernFoodPurchasedAt)
+    : 0;
   savePlayer.unlockedAvatarIds ??= [];
 
   normalizeSanityFields();
@@ -99,6 +105,9 @@ const STARTING_PLAYER_STATE: SavePlayerData = {
   sanity: 500,
   maxSanity: 500,
   sanityUpdatedAt: Date.now(),
+
+  tavernDrinkPurchasedAt: 0,
+  tavernFoodPurchasedAt: 0,
 
   potions: 6,
 
@@ -370,6 +379,12 @@ function fixMissingPlayerFields() {
   savePlayer.characterTreePoints ??= 0;
   savePlayer.characterTree ??= {};
   savePlayer.shopRefreshCoupons ??= 0;
+  player.tavernDrinkPurchasedAt = typeof player.tavernDrinkPurchasedAt === 'number' && Number.isFinite(player.tavernDrinkPurchasedAt)
+    ? Math.max(0, player.tavernDrinkPurchasedAt)
+    : 0;
+  player.tavernFoodPurchasedAt = typeof player.tavernFoodPurchasedAt === 'number' && Number.isFinite(player.tavernFoodPurchasedAt)
+    ? Math.max(0, player.tavernFoodPurchasedAt)
+    : 0;
   savePlayer.unlockedAvatarIds ??= [];
 
   normalizeSanityFields();
@@ -1534,6 +1549,8 @@ function resetPlayerToNewGame() {
   savePlayer.characterTreePoints = 0;
   savePlayer.characterTree = {};
   savePlayer.shopRefreshCoupons = 0;
+  player.tavernDrinkPurchasedAt = 0;
+  player.tavernFoodPurchasedAt = 0;
 
   fixMissingPlayerFields();
 }

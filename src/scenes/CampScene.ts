@@ -840,7 +840,7 @@ export class CampScene extends Phaser.Scene {
       description: 'Отдых, слухи и подготовка героя',
       accentColor: 0x7a6040,
       onClick: () => {
-        this.showCityMessage('Таверна', 'Таверна пока закрыта.');
+        this.scene.start('TavernScene');
       },
     });
 
