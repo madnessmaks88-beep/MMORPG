@@ -915,7 +915,7 @@ export class CampScene extends Phaser.Scene {
       description: 'Личное убежище героя',
       accentColor: 0x8b7652,
       onClick: () => {
-        this.showCityMessage('Дом', 'Дом пока недоступен.');
+        this.scene.start('HomeScene');
       },
     });
 
@@ -3134,61 +3134,6 @@ export class CampScene extends Phaser.Scene {
         });
       },
     };
-  }
-
-  private showCityMessage(title: string, message: string) {
-    const layout = this.getLayout();
-    const modal = this.createModalShell(layout, layout.compact ? 250 : 270);
-    const centerY = layout.height / 2;
-
-    const titleText = this.add.text(layout.centerX, centerY - 74, title, {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '24px' : '27px',
-      color: '#c9a86a',
-      stroke: '#000000',
-      strokeThickness: 4,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 86,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(1002);
-
-    const messageText = this.add.text(layout.centerX, centerY - 8, message, {
-      fontFamily: UI.font.body,
-      fontSize: layout.compact ? '16px' : '18px',
-      color: '#d1c7b4',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 92,
-        useAdvancedWrap: true,
-      },
-      maxLines: 3,
-      lineSpacing: 5,
-    }).setOrigin(0.5).setDepth(1002);
-
-    const ok = createButton(
-      this,
-      layout.centerX,
-      centerY + 78,
-      'Понятно',
-      () => {
-        modal.destroy();
-      },
-      Math.min(260, layout.contentWidth - 92),
-      52
-    );
-
-    this.setButtonDepth(ok, 1001);
-
-    modal.container.add([
-      titleText,
-      messageText,
-      ok.shadow,
-      ok.bg,
-      ok.label,
-    ]);
   }
 
   private showMessage(title: string, message: string) {

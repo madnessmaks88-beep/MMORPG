@@ -291,9 +291,9 @@ export class TrainingScene extends Phaser.Scene {
       this,
       width / 2,
       1115,
-      'Вернуться в город',
+      'Вернуться в дом',
       () => {
-        this.scene.start('CampScene');
+        this.scene.start('HomeScene');
       },
       520,
       56
