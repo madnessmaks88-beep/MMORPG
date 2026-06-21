@@ -14,6 +14,7 @@ import {
 } from '../systems/FloorSystem';
 
 import { saveGameAsync } from '../systems/SaveSystem';
+import { SANITY_COST_PER_FLOOR, hasEnoughSanityForFloor } from '../systems/SanitySystem';
 import { createBottomNav } from '../ui/createBottomNav';
 
 import {
@@ -502,6 +503,11 @@ export class DungeonSelectScene extends Phaser.Scene {
         subtitle: 'Быстрый допуск к следующему ярусу.',
         accentColor: 0x6e5634,
         onClick: () => {
+          if (!hasEnoughSanityForFloor()) {
+            this.showNotEnoughSanityMessage();
+            return;
+          }
+
           startTierGateBoss(tier);
           void saveGameAsync();
           this.scene.start('DungeonScene');
@@ -817,6 +823,11 @@ export class DungeonSelectScene extends Phaser.Scene {
         'Ярус закрыт',
         `Сначала пройди предыдущий ярус и победи его финального босса.`
       );
+      return;
+    }
+
+    if (!hasEnoughSanityForFloor()) {
+      this.showNotEnoughSanityMessage();
       return;
     }
 
@@ -1370,6 +1381,13 @@ export class DungeonSelectScene extends Phaser.Scene {
     if (shouldRefresh) {
       this.time.delayedCall(350, () => this.scene.restart());
     }
+  }
+
+  private showNotEnoughSanityMessage() {
+    this.showMessage(
+      'Недостаточно рассудка',
+      `Для прохождения этажа нужно ${SANITY_COST_PER_FLOOR} рассудка. Рассудок восстанавливается со временем: 1 единица в минуту.`
+    );
   }
 
   private showMessage(title: string, message: string) {

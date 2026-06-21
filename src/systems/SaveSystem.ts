@@ -1,5 +1,6 @@
 import { player, type PlayerData } from '../data/player';
 import { getPlayerStats } from './InventorySystem';
+import { normalizeSanityFields, resetSanityForNewGame, restoreSanityByTime } from './SanitySystem';
 
 import {
   gameState,
@@ -57,6 +58,9 @@ function normalizePlayerSave() {
   savePlayer.shopRefreshCoupons ??= 0;
   savePlayer.unlockedAvatarIds ??= [];
 
+  normalizeSanityFields();
+  restoreSanityByTime();
+
   if (
     savePlayer.avatarId !== undefined &&
     typeof savePlayer.avatarId !== 'string'
@@ -91,6 +95,10 @@ const STARTING_PLAYER_STATE: SavePlayerData = {
 
   energy: 3,
   maxEnergy: 3,
+
+  sanity: 500,
+  maxSanity: 500,
+  sanityUpdatedAt: Date.now(),
 
   potions: 6,
 
@@ -364,12 +372,18 @@ function fixMissingPlayerFields() {
   savePlayer.shopRefreshCoupons ??= 0;
   savePlayer.unlockedAvatarIds ??= [];
 
+  normalizeSanityFields();
+  restoreSanityByTime();
+
   if (
     savePlayer.avatarId !== undefined &&
     typeof savePlayer.avatarId !== 'string'
   ) {
     savePlayer.avatarId = undefined;
   }
+
+  normalizeSanityFields();
+  restoreSanityByTime();
 
   const derivedStats = getPlayerStats(player);
 
@@ -417,6 +431,13 @@ function fixMissingGameStateFields() {
   if (gameState.floorRun.expEarned === undefined) gameState.floorRun.expEarned = 0;
 
   gameState.floorRun.materialsEarned ??= {};
+
+  if (
+    gameState.floorRun.sanityChargedForFloor !== undefined &&
+    typeof gameState.floorRun.sanityChargedForFloor !== 'number'
+  ) {
+    gameState.floorRun.sanityChargedForFloor = undefined;
+  }
 
   if (!gameState.questProgress) {
     gameState.questProgress = {
@@ -1508,6 +1529,7 @@ function resetPlayerToNewGame() {
   const savePlayer = getSavePlayer();
 
   Object.assign(player, clone(STARTING_PLAYER_STATE));
+  resetSanityForNewGame();
 
   savePlayer.characterTreePoints = 0;
   savePlayer.characterTree = {};

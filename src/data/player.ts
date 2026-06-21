@@ -43,6 +43,10 @@ export type PlayerData = {
   energy: number;
   maxEnergy: number;
 
+  sanity: number;
+  maxSanity: number;
+  sanityUpdatedAt: number;
+
   potions: number;
 
   attack: number;
@@ -93,6 +97,10 @@ export const player: PlayerData = {
 
   energy: 3,
   maxEnergy: 3,
+
+  sanity: 500,
+  maxSanity: 500,
+  sanityUpdatedAt: Date.now(),
 
   potions: 6,
 

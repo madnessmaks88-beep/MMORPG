@@ -72,6 +72,11 @@ import {
   markDungeonResumePoint,
   saveGameAsync,
 } from '../systems/SaveSystem';
+import {
+  SANITY_COST_PER_FLOOR,
+  consumeSanityForCompletedFloor,
+  hasEnoughSanityForFloor,
+} from '../systems/SanitySystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 import {
   getDungeonEventById,
@@ -176,6 +181,12 @@ export class DungeonScene extends Phaser.Scene {
 
   create() {
     if (!gameState.floorRun.active || gameState.floorRun.rooms.length === 0) {
+      if (!hasEnoughSanityForFloor()) {
+        createSceneBackground(this);
+        this.showNotEnoughSanityMessage(() => this.scene.start('DungeonSelectScene'));
+        return;
+      }
+
       startFloorRun(gameState.highestClearedFloor + 1);
       void saveGameAsync();
     }
@@ -4175,6 +4186,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
 
     completeCurrentFloor();
     clearRoomRegenerationBlock();
+    consumeSanityForCompletedFloor(floor);
 
     if (gameState.floorRun.runType === 'tier_gate') {
       void saveGameAsync();
@@ -4213,6 +4225,11 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       nextFloor,
       primaryText: 'Продолжить ниже',
       primaryAction: () => {
+        if (!hasEnoughSanityForFloor()) {
+          this.showNotEnoughSanityMessage();
+          return;
+        }
+
         startFloorRun(nextFloor);
         clearRoomRegenerationBlock();
         void saveGameAsync();
@@ -5097,6 +5114,11 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       text: `Начать ${targetTier}-й ярус`,
       variant: 'green',
       onClick: () => {
+        if (!hasEnoughSanityForFloor()) {
+          this.showNotEnoughSanityMessage();
+          return;
+        }
+
         startFloorRun(startFloor);
       
         void saveGameAsync();
@@ -5147,6 +5169,11 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       nextFloor,
       primaryText: 'Продолжить на новый ярус',
       primaryAction: () => {
+        if (!hasEnoughSanityForFloor()) {
+          this.showNotEnoughSanityMessage();
+          return;
+        }
+
         startFloorRun(nextFloor);
         clearRoomRegenerationBlock();
 
@@ -5158,6 +5185,14 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
         this.exitToTownKeepingCampfireCheckpoint();
       },
     });
+  }
+
+  private showNotEnoughSanityMessage(onContinue?: () => void) {
+    this.showMessage(
+      'Недостаточно рассудка',
+      `Для прохождения этажа нужно ${SANITY_COST_PER_FLOOR} рассудка. Рассудок восстанавливается со временем: 1 единица в минуту.`,
+      onContinue
+    );
   }
 
   private showMessage(title: string, message: string, onContinue?: () => void) {

@@ -63,6 +63,9 @@ export type FloorRun = {
   expEarned: number;
 
   materialsEarned: Partial<Record<string, number>>;
+
+  // Защита от повторного списания рассудка при повторном открытии результата этажа.
+  sanityChargedForFloor?: number;
 };
 
 
@@ -89,6 +92,7 @@ export function createEmptyFloorRun(): FloorRun {
     expEarned: 0,
       
     materialsEarned: {},
+    sanityChargedForFloor: undefined,
   };
 }
 

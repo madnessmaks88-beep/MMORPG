@@ -183,6 +183,8 @@ export function startFloorRun(floor: number) {
   gameState.floorRun.trapsTriggered = 0;
   gameState.floorRun.goldEarned = 0;
   gameState.floorRun.expEarned = 0;
+  gameState.floorRun.materialsEarned = {};
+  gameState.floorRun.sanityChargedForFloor = undefined;
 
   gameState.currentRoomIndex = 0;
 }
@@ -826,6 +828,8 @@ export function startTierGateBoss(targetTier: number) {
   gameState.floorRun.trapsTriggered = 0;
   gameState.floorRun.goldEarned = 0;
   gameState.floorRun.expEarned = 0;
+  gameState.floorRun.materialsEarned = {};
+  gameState.floorRun.sanityChargedForFloor = undefined;
 
   gameState.currentRoomIndex = 0;
 }
