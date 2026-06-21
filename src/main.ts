@@ -13,6 +13,7 @@ import { ProfileScene } from './scenes/ProfileScene';
 import { TrainingScene } from './scenes/TrainingScene';
 import { BootScene } from './scenes/BootScene';
 import { StatsTreeScene } from './scenes/StatsTreeScene.ts';
+import { MarketScene } from './scenes/MarketScene.ts';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -34,6 +35,7 @@ const config: Phaser.Types.Core.GameConfig = {
     ForgeScene,
     ProfileScene,
     TrainingScene,
+    MarketScene,
   ],
   scale: {
     mode: Phaser.Scale.FIT,
