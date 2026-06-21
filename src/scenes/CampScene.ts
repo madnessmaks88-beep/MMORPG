@@ -1,25 +1,24 @@
 import Phaser from 'phaser';
 
 import { player } from '../data/player';
-import { gameState, resetFloorRun } from '../data/gameState';
+import { gameState } from '../data/gameState';
 import { getRaceById } from '../data/races';
 
-import { addItemToInventory, getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
+import { getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
 import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
+import {
+  SANITY_COST_PER_FLOOR,
+  getSanityTimeToFullMs,
+  hasEnoughSanityForFloor,
+  restoreSanityByTime,
+} from '../systems/SanitySystem';
 import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 import {
-  canCompleteIdrisDaughterQuest,
-  completeIdrisDaughterQuest,
-  getIdrisDaughterQuestPreviewText,
-} from '../systems/StoryEncounterSystem';
-
-import {
   getActiveCampfireBattleCheckpoint,
   formatCheckpointTimeLeft,
-  clearCampfireBattleCheckpoint,
 } from '../systems/CampfireCheckpointSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 
@@ -102,6 +101,11 @@ export class CampScene extends Phaser.Scene {
   private cityCampfireGlowObjects: Phaser.GameObjects.GameObject[] = [];
   private cityCampfireVisualTweens: Phaser.Tweens.Tween[] = [];
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
+  private sanityTimerEvent?: Phaser.Time.TimerEvent;
+  private sanityValueText?: Phaser.GameObjects.Text;
+  private sanityHintText?: Phaser.GameObjects.Text;
+  private sanityFill?: Phaser.GameObjects.Rectangle;
+  private sanityFillWidth = 0;
   private cityCampfireIsVisuallyActive = false;
 
   private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
@@ -123,6 +127,7 @@ export class CampScene extends Phaser.Scene {
       
     this.grantStartGoldOnce();
     this.extinguishCityCampfireIfExpired();
+    this.restoreSanityAndSaveIfValueChanged();
       
     this.createCampBackdrop(layout);
     this.createCityCampfireVisualState(layout);
@@ -139,12 +144,17 @@ export class CampScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.campfireTimerEvent?.remove(false);
       this.campfireTimerEvent = undefined;
+      this.sanityTimerEvent?.remove(false);
+      this.sanityTimerEvent = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
       // Важно: не вызываем destroy() у дополнительной камеры на SHUTDOWN.
       // В Phaser 4 WebGL это может падать с customViewports = null;
       // Phaser сам очищает камеры при остановке сцены.
       this.actionViewportCamera = undefined;
+      this.sanityValueText = undefined;
+      this.sanityHintText = undefined;
+      this.sanityFill = undefined;
     });
   }
 
@@ -216,7 +226,7 @@ export class CampScene extends Phaser.Scene {
 
     const headerHeight = veryCompact ? 82 : compact ? 94 : 112;
     const heroTop = safeTop + headerHeight + (veryCompact ? 8 : 10);
-    const heroHeight = veryCompact ? 126 : compact ? 138 : 156;
+    const heroHeight = veryCompact ? 164 : compact ? 178 : 196;
     const actionsTop = heroTop + heroHeight + (veryCompact ? 10 : 14);
     const actionsBottom = bottomNavTop - (veryCompact ? 8 : 12);
     const actionsViewportHeight = Math.max(190, actionsBottom - actionsTop);
@@ -528,8 +538,8 @@ export class CampScene extends Phaser.Scene {
       depth: 9,
     });
 
-    const barY = top + layout.heroHeight - 57;
-    const barGap = 16;
+    const barY = top + layout.heroHeight - (layout.veryCompact ? 94 : 104);
+    const barGap = layout.veryCompact ? 10 : 16;
     const barWidth = Math.min((layout.contentWidth - 64 - barGap) / 2, 258);
 
     this.createSmallBar({
@@ -552,12 +562,20 @@ export class CampScene extends Phaser.Scene {
       color: 0x3d6e9f,
     });
 
+    this.createSanityBar({
+      x: layout.centerX,
+      y: top + layout.heroHeight - (layout.veryCompact ? 58 : 66),
+      width: Math.min(layout.contentWidth - 56, 520),
+    });
+
     const resourceY = top + layout.heroHeight - 19;
     const resourceWidth = Math.min((layout.contentWidth - 52) / 3, 150);
 
     this.createTinyResource(layout.centerX - resourceWidth - 8, resourceY, '◆', `${player.gold}`, resourceWidth);
     this.createTinyResource(layout.centerX, resourceY, '✚', `${player.potions}`, resourceWidth);
     this.createTinyResource(layout.centerX + resourceWidth + 8, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
+
+    this.startSanityTimer();
   }
 
   private getRaceIcon(id: string) {
@@ -625,31 +643,34 @@ export class CampScene extends Phaser.Scene {
     this.createActionViewportCamera(layout, actionContainer);
 
     const gap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const mainHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 104;
-    const wideHeight = layout.veryCompact ? 62 : layout.compact ? 68 : 74;
-    const tileHeight = layout.veryCompact ? 78 : layout.compact ? 88 : 96;
-    const innerWidth = layout.contentWidth - 44;
-    const tileGap = 12;
-    const tileWidth = Math.min((innerWidth - tileGap) / 2, 278);
-    const leftX = layout.centerX - tileWidth / 2 - tileGap / 2;
-    const rightX = layout.centerX + tileWidth / 2 + tileGap / 2;
+    const sectionGap = layout.veryCompact ? 20 : 24;
+    const mainHeight = layout.veryCompact ? 92 : layout.compact ? 104 : 116;
+    const campfireHeight = layout.veryCompact ? 84 : layout.compact ? 96 : 108;
+    const tileHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 100;
+    const largeLocationHeight = layout.veryCompact ? 96 : layout.compact ? 110 : 124;
+    const innerWidth = layout.contentWidth - (layout.veryCompact ? 36 : 44);
+    const tileGap = layout.veryCompact ? 10 : 12;
+    const useTwoCityColumns = innerWidth >= 330;
+    const tileWidth = useTwoCityColumns
+      ? Math.min((innerWidth - tileGap) / 2, 278)
+      : innerWidth;
+    const leftX = useTwoCityColumns
+      ? layout.centerX - tileWidth / 2 - tileGap / 2
+      : layout.centerX;
+    const rightX = useTwoCityColumns
+      ? layout.centerX + tileWidth / 2 + tileGap / 2
+      : layout.centerX;
 
     let currentY = layout.actionsTop + (layout.veryCompact ? 16 : 22);
 
-    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Выход к глубинам');
-    currentY += 24 + mainHeight / 2;
-
-    const dungeonTitle = activeCheckpoint
-      ? 'Выбрать костёр или ярус'
-      : hasActiveRun
-        ? 'Выбрать активный спуск'
-        : 'Выбрать ярус';
+    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Катакомбы');
+    currentY += sectionGap + mainHeight / 2;
 
     const dungeonDesc = activeCheckpoint
-      ? `В выборе яруса доступен костёр: этаж ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
+      ? `Костёр на этаже ${activeCheckpoint.floor}. Осталось ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}.`
       : hasActiveRun
-        ? `Есть активный спуск на этаже ${gameState.floorRun.currentFloor}. Открой выбор яруса.`
-        : 'Открыть карту ярусов и начать спуск.';
+        ? `Активный спуск: этаж ${gameState.floorRun.currentFloor}. Продолжи путь через карту ярусов.`
+        : 'Выбрать ярус и начать спуск.';
 
     this.createMainDungeonButton({
       layout,
@@ -657,7 +678,7 @@ export class CampScene extends Phaser.Scene {
       y: currentY,
       width: innerWidth,
       height: mainHeight,
-      title: dungeonTitle,
+      title: 'Вход в подземелье',
       description: dungeonDesc,
       hasActiveRun: hasActiveRun || hasActiveCheckpoint,
       onClick: () => {
@@ -665,129 +686,20 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += mainHeight / 2 + gap;
+    currentY += mainHeight / 2 + gap + 4;
 
-    if (hasActiveRun) {
-      currentY += wideHeight / 2;
-
-      this.createWideActionButton({
-        x: layout.centerX,
-        y: currentY,
-        width: innerWidth,
-        height: wideHeight,
-        icon: '!',
-        title: 'Покинуть спуск',
-        description: hasActiveCheckpoint
-          ? 'Ярус начнётся заново, чекпоинт костра будет потерян.'
-          : 'Текущий ярус придётся проходить заново.',
-        accentColor: 0x8c2f32,
-        danger: true,
-        onClick: () => {
-          this.showLeaveRunMessage();
-        },
-      });
-
-      currentY += wideHeight / 2 + gap;
-    }
-
-    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Городские места');
-    currentY += 24 + tileHeight / 2;
-
-    this.createCampTile({
-      x: leftX,
-      y: currentY,
-      width: tileWidth,
-      height: tileHeight,
-      icon: '▣',
-      title: 'Лавка',
-      description: 'Зелья и припасы',
-      accentColor: 0x9a7a45,
-      onClick: () => {
-        this.scene.start('ShopScene');
-      },
-    });
-
-    this.createCampTile({
-      x: rightX,
-      y: currentY,
-      width: tileWidth,
-      height: tileHeight,
-      icon: '▲',
-      title: 'Тренировка',
-      description: 'Сила героя',
-      accentColor: 0x51715e,
-      onClick: () => {
-        this.scene.start('TrainingScene');
-      },
-    });
-
-    currentY += tileHeight + gap;
-
-    this.createCampTile({
-      x: leftX,
-      y: currentY,
-      width: tileWidth,
-      height: tileHeight,
-      icon: hasQuestReward ? '!' : '◆',
-      title: hasQuestReward ? 'Задания!' : 'Задания',
-      description: hasQuestReward ? 'Есть награда' : 'Цели и награды',
-      accentColor: hasQuestReward ? 0x5d7f65 : 0x6f5635,
-      highlighted: hasQuestReward,
-      onClick: () => {
-        this.scene.start('QuestScene');
-      },
-    });
-
-    this.createCampTile({
-      x: rightX,
-      y: currentY,
-      width: tileWidth,
-      height: tileHeight,
-      icon: '⚒',
-      title: 'Кузница',
-      description: 'Оружие и броня',
-      accentColor: 0x7b6b52,
-      onClick: () => {
-        this.scene.start('ForgeScene');
-      },
-    });
-
-    currentY += tileHeight / 2 + gap;
-
-    if (canCompleteIdrisDaughterQuest()) {
-      currentY += wideHeight / 2;
-
-      this.createWideActionButton({
-        x: layout.centerX,
-        y: currentY,
-        width: innerWidth,
-        height: wideHeight,
-        icon: '♞',
-        title: 'Дом Идриса',
-        description: 'Передать амулет семье рыцаря и завершить тайную просьбу.',
-        accentColor: 0xb89a5e,
-        onClick: () => {
-          this.showIdrisDaughterQuest();
-        },
-      });
-
-      currentY += wideHeight / 2 + gap;
-    }
-
-    currentY += 8;
-
-    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Подготовка');
-    currentY += 24 + wideHeight / 2;
+    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Огонь убежища');
+    currentY += sectionGap + campfireHeight / 2;
 
     const restCard = this.createWideActionButton({
       x: layout.centerX,
       y: currentY,
       width: innerWidth,
-      height: wideHeight,
+      height: campfireHeight,
       icon: '♨',
       title: this.getCityCampfireButtonTitle(),
       description: this.getCityCampfireButtonDescription(),
-      accentColor: this.isCityCampfireActive() ? 0xd28a3a : 0x6f5432,
+      accentColor: cityCampfireActive ? 0xd28a3a : 0x6f5432,
       onClick: () => {
         this.restAtCampfire();
       },
@@ -799,27 +711,105 @@ export class CampScene extends Phaser.Scene {
       x: layout.centerX,
       y: currentY,
       width: innerWidth,
-      height: wideHeight,
+      height: campfireHeight,
     });
     this.startCampfireTimer();
 
-    currentY += wideHeight + gap;
+    currentY += campfireHeight / 2 + gap + 4;
 
-    this.createWideActionButton({
-      x: layout.centerX,
+    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Город');
+    currentY += sectionGap + tileHeight / 2;
+
+    this.createCampTile({
+      x: leftX,
       y: currentY,
-      width: innerWidth,
-      height: wideHeight,
-      icon: '✦',
-      title: 'Дерево характеристик',
-      description: 'Потратить очки прокачки героя.',
-      accentColor: 0x4f6f82,
+      width: tileWidth,
+      height: tileHeight,
+      icon: '☕',
+      title: 'Таверна',
+      description: 'Отдых, слухи и подготовка героя',
+      accentColor: 0x7a6040,
       onClick: () => {
-        this.scene.start('StatsTreeScene');
+        this.showCityMessage('Таверна', 'Таверна пока закрыта.');
       },
     });
 
-    currentY += wideHeight / 2 + 24;
+    if (useTwoCityColumns) {
+      this.createCampTile({
+        x: rightX,
+        y: currentY,
+        width: tileWidth,
+        height: tileHeight,
+        icon: hasQuestReward ? '!' : '◆',
+        title: 'Доска заданий',
+        description: hasQuestReward ? 'Есть награда' : 'Задания и награды',
+        accentColor: hasQuestReward ? 0x6d875e : 0x6f5635,
+        highlighted: hasQuestReward,
+        onClick: () => {
+          this.scene.start('QuestScene');
+        },
+      });
+
+      currentY += tileHeight / 2 + gap;
+    } else {
+      currentY += tileHeight / 2 + gap + tileHeight / 2;
+
+      this.createCampTile({
+        x: layout.centerX,
+        y: currentY,
+        width: tileWidth,
+        height: tileHeight,
+        icon: hasQuestReward ? '!' : '◆',
+        title: 'Доска заданий',
+        description: hasQuestReward ? 'Есть награда' : 'Задания и награды',
+        accentColor: hasQuestReward ? 0x6d875e : 0x6f5635,
+        highlighted: hasQuestReward,
+        onClick: () => {
+          this.scene.start('QuestScene');
+        },
+      });
+
+      currentY += tileHeight / 2 + gap;
+    }
+
+    currentY += 4;
+    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Торговая площадь');
+    currentY += sectionGap + largeLocationHeight / 2;
+
+    this.createLargeLocationButton({
+      x: layout.centerX,
+      y: currentY,
+      width: innerWidth,
+      height: largeLocationHeight,
+      icon: '▣',
+      title: 'Рынок',
+      description: 'Торговцы, припасы и редкие товары',
+      accentColor: 0xb89a5e,
+      onClick: () => {
+        this.showCityMessage('Рынок', 'Рынок пока закрыт.');
+      },
+    });
+
+    currentY += largeLocationHeight / 2 + gap + 4;
+
+    this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Убежище');
+    currentY += sectionGap + largeLocationHeight / 2;
+
+    this.createLargeLocationButton({
+      x: layout.centerX,
+      y: currentY,
+      width: innerWidth,
+      height: largeLocationHeight,
+      icon: '⌂',
+      title: 'Дом',
+      description: 'Личное убежище героя',
+      accentColor: 0x8b7652,
+      onClick: () => {
+        this.showCityMessage('Дом', 'Дом пока недоступен.');
+      },
+    });
+
+    currentY += largeLocationHeight / 2 + 24;
 
     const contentHeight = currentY - layout.actionsTop;
     this.maxScrollY = Math.max(0, contentHeight - layout.actionsViewportHeight + 12);
@@ -1118,9 +1108,7 @@ export class CampScene extends Phaser.Scene {
   }
 
   private getCityCampfireButtonTitle() {
-    return this.isCityCampfireActive()
-      ? 'Отдохнуть у костра'
-      : 'Зажечь костёр';
+    return 'Костёр';
   }
 
   private getCityCampfireButtonDescription() {
@@ -1361,6 +1349,113 @@ export class CampScene extends Phaser.Scene {
     }
   }
 
+  private createLargeLocationButton(config: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    description: string;
+    accentColor: number;
+    onClick: () => void;
+  }): CampActionButton {
+    const container = this.requireActionContainer();
+    const left = config.x - config.width / 2;
+    const right = config.x + config.width / 2;
+    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.5), 46, 64);
+    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 0.94), 88, 110);
+    const titleColor = '#d8c088';
+
+    this.createRoundedPanel({
+      parent: container,
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      radius: 28,
+      color: 0x11100d,
+      alpha: 0.98,
+      strokeColor: config.accentColor,
+      strokeAlpha: 0.68,
+      strokeWidth: 2,
+      depth: 4,
+    });
+
+    const glow = this.add.circle(iconX, config.y, 33, config.accentColor, 0.14)
+      .setStrokeStyle(2, config.accentColor, 0.58)
+      .setDepth(6);
+
+    const icon = this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.title,
+      fontSize: '24px',
+      color: '#e0c585',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(7);
+
+    const titleText = this.add.text(textX, config.y - 22, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: config.height < 104 ? '20px' : '23px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 4,
+      wordWrap: {
+        width: Math.max(130, right - textX - 46),
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    const descriptionText = this.add.text(textX, config.y + 15, config.description, {
+      fontFamily: UI.font.body,
+      fontSize: config.height < 104 ? '12px' : '13px',
+      color: '#9f9686',
+      wordWrap: {
+        width: Math.max(130, right - textX - 46),
+        useAdvancedWrap: true,
+      },
+      maxLines: 2,
+      lineSpacing: 2,
+    }).setOrigin(0, 0.5).setDepth(7);
+
+    const arrow = this.add.text(right - 28, config.y, '›', {
+      fontFamily: UI.font.title,
+      fontSize: '30px',
+      color: '#8d7147',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(7);
+
+    const accentLine = this.add.rectangle(
+      config.x,
+      config.y + config.height / 2 - 7,
+      config.width - 52,
+      2,
+      config.accentColor,
+      0.18
+    ).setDepth(6);
+
+    container.add([glow, icon, titleText, descriptionText, arrow, accentLine]);
+
+    this.createClickZone({
+      parent: container,
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      onClick: config.onClick,
+      titleText,
+      normalColor: titleColor,
+    });
+
+    return {
+      titleText,
+      descriptionText,
+    };
+  }
+
   private createWideActionButton(config: {
     x: number;
     y: number;
@@ -1555,17 +1650,163 @@ export class CampScene extends Phaser.Scene {
       .setDepth(8);
 
     this.add.rectangle(
-      config.x - config.width / 2 + (config.width * progress) / 2,
+      config.x - config.width / 2,
       config.y + 8,
-      config.width * progress,
+      Math.max(0, config.width * progress),
       barHeight,
       config.color,
       0.88
-    ).setDepth(9);
+    ).setOrigin(0, 0.5).setDepth(9);
 
     this.add.rectangle(config.x, config.y + 8, config.width, barHeight)
       .setStrokeStyle(1, 0x5c503d, 0.5)
       .setDepth(10);
+  }
+
+  private createSanityBar(config: {
+    x: number;
+    y: number;
+    width: number;
+  }) {
+    restoreSanityByTime();
+
+    const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
+    const barHeight = 12;
+    const left = config.x - config.width / 2;
+    const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
+    const fillWidth = Math.max(0, config.width * progress);
+
+    this.add.text(left, config.y - 15, '☾ Рассудок', {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: '#a99bc6',
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: Math.floor(config.width * 0.58),
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(9);
+
+    this.sanityValueText = this.add.text(left + config.width, config.y - 15, `${player.sanity}/${player.maxSanity}`, {
+      fontFamily: UI.font.body,
+      fontSize: '12px',
+      color: '#d8d0e8',
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: Math.floor(config.width * 0.38),
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(1, 0.5).setDepth(9);
+
+    this.add.rectangle(config.x, config.y + 6, config.width, barHeight, 0x030305, 0.94)
+      .setDepth(8);
+
+    const glow = this.add.rectangle(left, config.y + 6, Math.max(1, fillWidth), barHeight + 4, fillColor, 0.16)
+      .setOrigin(0, 0.5)
+      .setDepth(8);
+
+    this.sanityFill = this.add.rectangle(left, config.y + 6, Math.max(1, fillWidth), barHeight, fillColor, 0.9)
+      .setOrigin(0, 0.5)
+      .setDepth(9)
+      .setScale(0.01, 1);
+
+    this.sanityFillWidth = config.width;
+
+    this.add.rectangle(config.x, config.y + 6, config.width, barHeight)
+      .setStrokeStyle(1, 0x6b5a7f, 0.62)
+      .setDepth(10);
+
+    this.sanityHintText = this.add.text(config.x, config.y + 24, this.formatSanityTimeToFull(), {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#817891',
+      align: 'center',
+      wordWrap: {
+        width: config.width,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(9);
+
+    this.tweens.add({
+      targets: [this.sanityFill, glow],
+      scaleX: 1,
+      duration: 430,
+      delay: 170,
+      ease: 'Cubic.easeOut',
+    });
+  }
+
+  private startSanityTimer() {
+    this.sanityTimerEvent?.remove(false);
+
+    this.sanityTimerEvent = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        const previousSanity = player.sanity;
+        restoreSanityByTime();
+        this.updateSanityUi();
+
+        if (player.sanity !== previousSanity) {
+          void saveGameAsync();
+        }
+      },
+    });
+  }
+
+  private restoreSanityAndSaveIfValueChanged() {
+    const previousSanity = player.sanity;
+    restoreSanityByTime();
+
+    if (player.sanity !== previousSanity) {
+      void saveGameAsync();
+    }
+  }
+
+  private updateSanityUi() {
+    const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
+    const fillWidth = Math.max(1, this.sanityFillWidth * progress);
+    const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
+
+    this.sanityValueText?.setText(`${player.sanity}/${player.maxSanity}`);
+    this.sanityHintText?.setText(this.formatSanityTimeToFull());
+
+    if (this.sanityFill) {
+      this.sanityFill.setFillStyle(fillColor, 0.9);
+      this.sanityFill.setDisplaySize(fillWidth, this.sanityFill.displayHeight);
+      this.sanityFill.setScale(1, 1);
+      this.sanityFill.setAlpha(player.sanity <= 0 ? 0.2 : 1);
+    }
+  }
+
+  private formatSanityTimeToFull() {
+    const timeLeftMs = getSanityTimeToFullMs();
+
+    if (timeLeftMs <= 0) {
+      return 'Рассудок полон';
+    }
+
+    const totalMinutes = Math.ceil(timeLeftMs / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours <= 0) {
+      return `До полного: ${minutes} мин`;
+    }
+
+    return `До полного: ${hours} ч ${minutes} мин`;
+  }
+
+  private showNotEnoughSanityMessage() {
+    this.showMessage(
+      'Недостаточно рассудка',
+      `Для прохождения этажа нужно ${SANITY_COST_PER_FLOOR} рассудка. Рассудок восстанавливается со временем: 1 единица в минуту.`
+    );
   }
 
   private createTinyResource(
@@ -2475,6 +2716,14 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
+    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
+    const hasActiveCheckpoint = Boolean(getActiveCampfireBattleCheckpoint());
+
+    if (!hasActiveRun && !hasActiveCheckpoint && !hasEnoughSanityForFloor()) {
+      this.showNotEnoughSanityMessage();
+      return;
+    }
+
     const stats = getPlayerStats(player);
 
     const hpPercent = stats.maxHp > 0
@@ -2489,43 +2738,6 @@ export class CampScene extends Phaser.Scene {
     this.scene.start('DungeonSelectScene');
   }
 
-
-  private showIdrisDaughterQuest() {
-    this.showConfirmMessage(
-      'Дом Идриса',
-      `${getIdrisDaughterQuestPreviewText()}\n\nПередать амулет и завершить просьбу?`,
-      () => {
-        const result = completeIdrisDaughterQuest();
-
-        if (!result.completed) {
-          this.showMessage('Просьба недоступна', 'Амулет Идриса уже передан или просьба больше не может быть завершена.');
-          return;
-        }
-
-        player.gold += 650;
-        addItemToInventory(player, 'idris_last_amulet');
-        addItemToInventory(player, 'idris_oath_armor');
-
-        void saveGameAsync();
-
-        this.showMessage(
-          'Дочь Идриса спасена',
-          [
-            'Ты сказал, что Идрис ушёл в дальние глубины искать свет, которого здесь давно нет.',
-            'Мать молчала, но не стала спрашивать правду.',
-            '',
-            'Девочка сжала амулет, и на мгновение в комнате стало теплее.',
-            '',
-            '+650 золота',
-            'Получено: Амулет последнего огонька',
-            'Получено: Доспех Идриса',
-            'Открыта секретная аватарка: Идрис',
-          ].join('\n')
-        );
-      },
-      'Передать'
-    );
-  }
 
   private showLowHpWarning() {
     const layout = this.getLayout();
@@ -2647,25 +2859,6 @@ export class CampScene extends Phaser.Scene {
     this.setButtonDepth(cancelButton, 1001);
   }
 
-  private showLeaveRunMessage() {
-    const activeCheckpoint = getActiveCampfireBattleCheckpoint();
-
-    this.showConfirmMessage(
-      'Покинуть спуск?',
-      activeCheckpoint
-        ? 'Если выйти сейчас, текущий ярус придётся проходить заново. Чекпоинт костра тоже будет потерян.'
-        : 'Если выйти сейчас, текущий ярус придётся проходить заново.',
-      () => {
-        resetFloorRun();
-        clearCampfireBattleCheckpoint();
-
-        void saveGameAsync();
-
-        this.scene.restart();
-      }
-    );
-  }
-
   private createModalShell(layout: CampLayout, height: number) {
     const modal = this.add.container(0, 0).setDepth(1000);
 
@@ -2747,6 +2940,61 @@ export class CampScene extends Phaser.Scene {
     };
   }
 
+  private showCityMessage(title: string, message: string) {
+    const layout = this.getLayout();
+    const modal = this.createModalShell(layout, layout.compact ? 250 : 270);
+    const centerY = layout.height / 2;
+
+    const titleText = this.add.text(layout.centerX, centerY - 74, title, {
+      fontFamily: UI.font.title,
+      fontSize: layout.compact ? '24px' : '27px',
+      color: '#c9a86a',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 86,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(1002);
+
+    const messageText = this.add.text(layout.centerX, centerY - 8, message, {
+      fontFamily: UI.font.body,
+      fontSize: layout.compact ? '16px' : '18px',
+      color: '#d1c7b4',
+      align: 'center',
+      wordWrap: {
+        width: layout.contentWidth - 92,
+        useAdvancedWrap: true,
+      },
+      maxLines: 3,
+      lineSpacing: 5,
+    }).setOrigin(0.5).setDepth(1002);
+
+    const ok = createButton(
+      this,
+      layout.centerX,
+      centerY + 78,
+      'Понятно',
+      () => {
+        modal.destroy();
+      },
+      Math.min(260, layout.contentWidth - 92),
+      52
+    );
+
+    this.setButtonDepth(ok, 1001);
+
+    modal.container.add([
+      titleText,
+      messageText,
+      ok.shadow,
+      ok.bg,
+      ok.label,
+    ]);
+  }
+
   private showMessage(title: string, message: string) {
     const layout = this.getLayout();
     const modal = this.createModalShell(layout, 310);
@@ -2799,91 +3047,6 @@ export class CampScene extends Phaser.Scene {
       ok.shadow,
       ok.bg,
       ok.label,
-    ]);
-  }
-
-  private showConfirmMessage(
-    title: string,
-    message: string,
-    onConfirm: () => void,
-    confirmText = 'Выйти'
-  ) {
-    const layout = this.getLayout();
-    const modal = this.createModalShell(layout, 350);
-    const centerY = layout.height / 2;
-
-    const titleText = this.add.text(layout.centerX, centerY - 116, title, {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '26px' : '29px',
-      color: '#c9a86a',
-      stroke: '#000000',
-      strokeThickness: 4,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 80,
-        useAdvancedWrap: true,
-      },
-      maxLines: 2,
-    }).setOrigin(0.5).setDepth(1002);
-
-    const messageText = this.add.text(layout.centerX, centerY - 34, message, {
-      fontFamily: UI.font.body,
-      fontSize: layout.compact ? '16px' : '18px',
-      color: '#d1c7b4',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 80,
-        useAdvancedWrap: true,
-      },
-      maxLines: 7,
-      lineSpacing: 6,
-    }).setOrigin(0.5).setDepth(1002);
-
-    const buttonWidth = Math.min((layout.contentWidth - 90) / 2, 230);
-    const leftX = layout.centerX - buttonWidth / 2 - 10;
-    const rightX = layout.centerX + buttonWidth / 2 + 10;
-
-    const cancel = createButton(
-      this,
-      leftX,
-      centerY + 104,
-      'Отмена',
-      () => {
-        modal.destroy();
-      },
-      buttonWidth,
-      54
-    );
-
-    this.setButtonDepth(cancel, 1001);
-
-    const confirm = createButton(
-      this,
-      rightX,
-      centerY + 104,
-      confirmText,
-      () => {
-        modal.destroy();
-        onConfirm();
-      },
-      buttonWidth,
-      54,
-      {
-        danger: true,
-      }
-    );
-
-    this.setButtonDepth(confirm, 1001);
-
-    modal.container.add([
-      titleText,
-      messageText,
-      cancel.shadow,
-      cancel.bg,
-      cancel.label,
-      confirm.shadow,
-      confirm.bg,
-      confirm.label,
     ]);
   }
 
