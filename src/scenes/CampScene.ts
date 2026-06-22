@@ -16,7 +16,10 @@ import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSys
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
-import { getActiveCampfireBattleCheckpoint } from '../systems/CampfireCheckpointSystem';
+import {
+  getActiveCampfireBattleCheckpoint,
+  formatCheckpointTimeLeft,
+} from '../systems/CampfireCheckpointSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 
 import {
@@ -584,69 +587,115 @@ export class CampScene extends Phaser.Scene {
 
     const panelHeight = layout.actionsHeight;
     const panelY = layout.actionsTop + panelHeight / 2;
+    const panelRadius = layout.veryCompact ? 22 : layout.compact ? 28 : 34;
 
     const panel = this.createRoundedPanel({
       x: layout.centerX,
       y: panelY,
       width: layout.contentWidth,
       height: panelHeight,
-      radius: layout.veryCompact ? 12 : 16,
+      radius: panelRadius,
       color: cityCampfireActive ? 0x0d0a08 : 0x050609,
-      alpha: cityCampfireActive ? 0.9 : 0.86,
-      strokeColor: cityCampfireActive ? 0x8f6238 : 0x5b4932,
-      strokeAlpha: cityCampfireActive ? 0.72 : 0.58,
+      alpha: cityCampfireActive ? 0.92 : 0.88,
+      strokeColor: cityCampfireActive ? 0x9a6537 : 0x6b5434,
+      strokeAlpha: cityCampfireActive ? 0.74 : 0.62,
       strokeWidth: 1,
       depth: 4,
     });
 
+    const panelGlow = this.add.rectangle(
+      layout.centerX,
+      panelY,
+      layout.contentWidth - 18,
+      panelHeight - 14,
+      cityCampfireActive ? 0x7a3f1f : 0x1d2741,
+      cityCampfireActive ? 0.055 : 0.035
+    ).setDepth(5);
+
     const runeTop = this.add.rectangle(
       layout.centerX,
-      layout.actionsTop + 8,
-      layout.contentWidth - 34,
+      layout.actionsTop + 10,
+      layout.contentWidth - 42,
       1,
       cityCampfireActive ? 0xd28a3a : 0xb9985b,
-      cityCampfireActive ? 0.22 : 0.13
+      cityCampfireActive ? 0.25 : 0.16
     ).setDepth(6);
 
     const runeBottom = this.add.rectangle(
       layout.centerX,
-      layout.actionsBottom - 8,
-      layout.contentWidth - 34,
+      layout.actionsBottom - 10,
+      layout.contentWidth - 42,
       1,
       0x6e5634,
-      0.16
+      0.2
     ).setDepth(6);
 
-    const pad = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const gap = layout.veryCompact ? 7 : layout.compact ? 8 : 10;
-    const innerWidth = layout.contentWidth - pad * 2;
-    const availableHeight = Math.max(180, panelHeight - pad * 2);
+    const panelRunes = [
+      this.add.text(layout.centerX - layout.contentWidth / 2 + 24, layout.actionsTop + 18, '᛫', {
+        fontFamily: UI.font.title,
+        fontSize: '17px',
+        color: '#8f7650',
+      }).setOrigin(0.5).setDepth(7).setAlpha(0.38),
+      this.add.text(layout.centerX + layout.contentWidth / 2 - 24, layout.actionsTop + 18, '᛫', {
+        fontFamily: UI.font.title,
+        fontSize: '17px',
+        color: '#8f7650',
+      }).setOrigin(0.5).setDepth(7).setAlpha(0.38),
+      this.add.text(layout.centerX - layout.contentWidth / 2 + 24, layout.actionsBottom - 18, '᛫', {
+        fontFamily: UI.font.title,
+        fontSize: '17px',
+        color: '#6f5634',
+      }).setOrigin(0.5).setDepth(7).setAlpha(0.26),
+      this.add.text(layout.centerX + layout.contentWidth / 2 - 24, layout.actionsBottom - 18, '᛫', {
+        fontFamily: UI.font.title,
+        fontSize: '17px',
+        color: '#6f5634',
+      }).setOrigin(0.5).setDepth(7).setAlpha(0.26),
+    ];
+
+    const padX = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
+    const padY = layout.veryCompact ? 9 : layout.compact ? 12 : 14;
+    const gap = layout.veryCompact ? 5 : layout.compact ? 7 : 9;
+    const pairGap = layout.veryCompact ? 7 : 9;
+    const innerWidth = layout.contentWidth - padX * 2;
+    const availableHeight = Math.max(210, panelHeight - padY * 2);
+
     const primaryHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.23 : 0.25)),
-      layout.veryCompact ? 52 : 60,
-      layout.veryCompact ? 62 : layout.compact ? 74 : 82
+      Math.round(availableHeight * (layout.veryCompact ? 0.205 : 0.215)),
+      layout.veryCompact ? 46 : 56,
+      layout.veryCompact ? 56 : layout.compact ? 70 : 78
     );
-    const gridHeight = availableHeight - primaryHeight - gap;
-    const tileGap = layout.veryCompact ? 7 : 9;
-    const tileHeight = Phaser.Math.Clamp(
-      Math.floor((gridHeight - tileGap * 2) / 3),
-      layout.veryCompact ? 44 : 54,
-      layout.veryCompact ? 62 : layout.compact ? 88 : 96
+
+    const remainingHeight = availableHeight - primaryHeight - gap * 4;
+    const smallRowHeight = Phaser.Math.Clamp(
+      Math.floor(remainingHeight * (layout.veryCompact ? 0.235 : 0.23)),
+      layout.veryCompact ? 42 : 54,
+      layout.veryCompact ? 54 : layout.compact ? 74 : 82
     );
-    const contentGroupHeight = primaryHeight + gap + tileHeight * 3 + tileGap * 2;
-    const verticalPad = Math.max(pad, Math.floor((panelHeight - contentGroupHeight) / 2));
-    const tileWidth = Math.floor((innerWidth - tileGap) / 2);
-    const leftX = layout.centerX - tileWidth / 2 - tileGap / 2;
-    const rightX = layout.centerX + tileWidth / 2 + tileGap / 2;
-    const primaryY = layout.actionsTop + verticalPad + primaryHeight / 2;
-    const firstRowY = primaryY + primaryHeight / 2 + gap + tileHeight / 2;
+
+    const wideHeight = Math.max(
+      layout.veryCompact ? 42 : 54,
+      Math.floor((remainingHeight - smallRowHeight * 2) / 2)
+    );
+
+    const contentGroupHeight = primaryHeight + gap * 4 + smallRowHeight * 2 + wideHeight * 2;
+    const topOffset = Math.max(padY, Math.floor((panelHeight - contentGroupHeight) / 2));
+    const pairWidth = Math.floor((innerWidth - pairGap) / 2);
+    const leftX = layout.centerX - pairWidth / 2 - pairGap / 2;
+    const rightX = layout.centerX + pairWidth / 2 + pairGap / 2;
+
+    const primaryY = layout.actionsTop + topOffset + primaryHeight / 2;
+    const firstPairY = primaryY + primaryHeight / 2 + gap + smallRowHeight / 2;
+    const secondPairY = firstPairY + smallRowHeight + gap;
+    const marketY = secondPairY + smallRowHeight / 2 + gap + wideHeight / 2;
+    const homeY = marketY + wideHeight + gap;
 
     const dungeonTitle = hasActiveRun || hasActiveCheckpoint
       ? 'Продолжить спуск'
       : 'Вход в подземелье';
 
     const dungeonStatus = activeCheckpoint
-      ? `Костёр: эт. ${activeCheckpoint.floor}`
+      ? `Эт. ${activeCheckpoint.floor} • ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}`
       : hasActiveRun
         ? `Этаж ${gameState.floorRun.currentFloor}`
         : hasEnoughSanityForFloor()
@@ -665,111 +714,126 @@ export class CampScene extends Phaser.Scene {
       onClick: () => {
         this.tryEnterCatacombs();
       },
-      delay: 140,
+      delay: 130,
     });
 
-    const tiles = [
-      {
-        x: leftX,
-        y: firstRowY,
-        icon: '♨',
-        title: 'Костёр',
-        status: this.getCityCampfireButtonStatus(),
-        accentColor: cityCampfireActive ? 0xd28a3a : 0x7b5632,
-        highlighted: cityCampfireActive,
-        onClick: () => {
-          this.restAtCampfire();
-        },
+    const restTile = this.createPairedActionTile({
+      layout,
+      x: leftX,
+      y: firstPairY,
+      width: pairWidth,
+      height: smallRowHeight,
+      icon: '♨',
+      title: 'Костёр',
+      status: this.getCityCampfireButtonStatus(),
+      accentColor: cityCampfireActive ? 0xd28a3a : 0x7b5632,
+      highlighted: cityCampfireActive,
+      onClick: () => {
+        this.restAtCampfire();
       },
-      {
-        x: rightX,
-        y: firstRowY,
-        icon: hasAscensionPoints ? '!' : '✦',
-        title: 'Храм',
-        status: hasAscensionPoints ? `${ascensionPoints} очк.` : 'Древо силы',
-        accentColor: hasAscensionPoints ? 0xd6c08a : 0x6b4a8c,
-        highlighted: hasAscensionPoints,
-        onClick: () => {
-          this.scene.start('StatsTreeScene');
-        },
-      },
-      {
-        x: leftX,
-        y: firstRowY + tileHeight + tileGap,
-        icon: '☕',
-        title: 'Таверна',
-        status: 'Отдых',
-        accentColor: 0x7a6040,
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('TavernScene');
-        },
-      },
-      {
-        x: rightX,
-        y: firstRowY + tileHeight + tileGap,
-        icon: hasQuestReward ? '!' : '◆',
-        title: 'Задания',
-        status: hasQuestReward ? 'Есть награда' : 'Награды',
-        accentColor: hasQuestReward ? 0x6d875e : 0x6f5635,
-        highlighted: hasQuestReward,
-        onClick: () => {
-          this.scene.start('QuestScene');
-        },
-      },
-      {
-        x: leftX,
-        y: firstRowY + (tileHeight + tileGap) * 2,
-        icon: '▣',
-        title: 'Рынок',
-        status: 'Торговцы',
-        accentColor: 0xb89a5e,
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('MarketScene');
-        },
-      },
-      {
-        x: rightX,
-        y: firstRowY + (tileHeight + tileGap) * 2,
-        icon: '⌂',
-        title: 'Дом',
-        status: 'Убежище',
-        accentColor: 0x8b7652,
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('HomeScene');
-        },
-      },
-    ];
+      delay: 190,
+    });
 
-    tiles.forEach((tile, index) => {
-      const createdTile = this.createStoneActionTile({
-        layout,
-        x: tile.x,
-        y: tile.y,
-        width: tileWidth,
-        height: tileHeight,
-        icon: tile.icon,
-        title: tile.title,
-        status: tile.status,
-        accentColor: tile.accentColor,
-        highlighted: tile.highlighted,
-        onClick: tile.onClick,
-        delay: 190 + index * 45,
-      });
+    this.restButtonLabel = restTile.titleText;
+    this.restButtonDescription = restTile.descriptionText;
 
-      if (tile.title === 'Костёр') {
-        this.restButtonLabel = createdTile.titleText;
-        this.restButtonDescription = createdTile.descriptionText;
+    this.createPairedActionTile({
+      layout,
+      x: rightX,
+      y: firstPairY,
+      width: pairWidth,
+      height: smallRowHeight,
+      icon: hasAscensionPoints ? '!' : '✦',
+      title: 'Храм',
+      status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
+      accentColor: hasAscensionPoints ? 0xd6c08a : 0x6b4a8c,
+      highlighted: hasAscensionPoints,
+      onClick: () => {
+        this.scene.start('StatsTreeScene');
+      },
+      delay: 235,
+    });
+
+    this.createPairedActionTile({
+      layout,
+      x: leftX,
+      y: secondPairY,
+      width: pairWidth,
+      height: smallRowHeight,
+      icon: '☕',
+      title: 'Таверна',
+      status: 'Отдых',
+      accentColor: 0x7a6040,
+      highlighted: false,
+      onClick: () => {
+        this.scene.start('TavernScene');
+      },
+      delay: 280,
+    });
+
+    this.createPairedActionTile({
+      layout,
+      x: rightX,
+      y: secondPairY,
+      width: pairWidth,
+      height: smallRowHeight,
+      icon: hasQuestReward ? '!' : '◆',
+      title: 'Доска заданий',
+      status: hasQuestReward ? 'Есть награда' : 'Награды',
+      accentColor: hasQuestReward ? 0x6d875e : 0x6f5635,
+      highlighted: hasQuestReward,
+      onClick: () => {
+        this.scene.start('QuestScene');
+      },
+      delay: 325,
+    });
+
+    this.createWideActionPlate({
+      layout,
+      x: layout.centerX,
+      y: marketY,
+      width: innerWidth,
+      height: wideHeight,
+      icon: '▣',
+      title: 'Рынок',
+      status: 'Торговцы',
+      accentColor: 0xb89a5e,
+      onClick: () => {
+        this.scene.start('MarketScene');
+      },
+      delay: 370,
+    });
+
+    this.createWideActionPlate({
+      layout,
+      x: layout.centerX,
+      y: homeY,
+      width: innerWidth,
+      height: wideHeight,
+      icon: '⌂',
+      title: 'Дом',
+      status: 'Убежище',
+      accentColor: 0x8b7652,
+      onClick: () => {
+        this.scene.start('HomeScene');
+      },
+      delay: 415,
+    });
+
+    const panelObjects = [panel.shadow, panel.panel, panelGlow, runeTop, runeBottom, ...panelRunes];
+
+    panelObjects.forEach(object => {
+      const alphaObject = object as Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha;
+      if (typeof alphaObject.setAlpha === 'function') {
+        alphaObject.setAlpha(0);
       }
     });
 
     this.tweens.add({
-      targets: [panel.shadow, panel.panel, runeTop, runeBottom],
-      alpha: { from: 0, to: 1 },
-      duration: 260,
-      delay: 90,
+      targets: panelObjects,
+      alpha: 1,
+      duration: 300,
+      delay: 80,
       ease: 'Sine.easeOut',
     });
 
@@ -789,44 +853,55 @@ export class CampScene extends Phaser.Scene {
     delay: number;
   }) {
     const accent = config.highlighted ? 0x4d7c5c : 0x8c2f32;
-    const titleColor = config.highlighted ? '#a7dfad' : '#d9bd7a';
+    const titleColor = config.highlighted ? '#a7dfad' : '#e0c585';
     const left = config.x - config.width / 2;
-    const iconSize = config.height <= 58 ? 28 : 34;
-    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.56), 34, 52);
-    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 1.02), 64, 88);
-    const textWidth = Math.max(170, config.width - (textX - left) - 30);
+    const right = config.x + config.width / 2;
+    const iconSize = Phaser.Math.Clamp(config.height * 0.52, 26, 38);
+    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.58), 36, 54);
+    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 1.06), 68, 92);
+    const textWidth = Math.max(158, right - textX - 34);
+    const radius = config.layout.veryCompact ? 18 : config.layout.compact ? 22 : 26;
 
     const panel = this.createRoundedPanel({
       x: config.x,
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: config.layout.veryCompact ? 8 : 10,
-      color: config.highlighted ? 0x0b1712 : 0x150d0c,
-      alpha: 0.98,
+      radius,
+      color: config.highlighted ? 0x0b1712 : 0x170d0c,
+      alpha: 0.99,
       strokeColor: accent,
-      strokeAlpha: config.highlighted ? 0.84 : 0.74,
+      strokeAlpha: config.highlighted ? 0.88 : 0.8,
       strokeWidth: 2,
       depth: 8,
     });
 
-    const glow = this.add.circle(iconX, config.y, iconSize + 8, accent, config.highlighted ? 0.18 : 0.1)
-      .setDepth(10);
-    const iconFrame = this.add.rectangle(iconX, config.y, iconSize + 12, iconSize + 12, 0x050505, 0.26)
-      .setStrokeStyle(1, accent, 0.58)
+    const innerShade = this.add.rectangle(
+      config.x,
+      config.y + config.height * 0.14,
+      config.width - 18,
+      Math.max(10, config.height * 0.48),
+      0x000000,
+      0.14
+    ).setDepth(10);
+
+    const glow = this.add.circle(iconX, config.y, iconSize + 11, accent, config.highlighted ? 0.18 : 0.13)
       .setDepth(11);
+    const iconFrame = this.add.rectangle(iconX, config.y, iconSize + 15, iconSize + 15, 0x050505, 0.28)
+      .setStrokeStyle(1, accent, 0.68)
+      .setDepth(12);
     const icon = this.add.text(iconX, config.y, config.highlighted ? '▼' : '☠', {
       fontFamily: UI.font.body,
-      fontSize: config.height <= 58 ? '21px' : '25px',
+      fontSize: config.height <= 52 ? '20px' : '25px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
-    }).setOrigin(0.5).setDepth(12);
+    }).setOrigin(0.5).setDepth(13);
 
     const titleText = this.add.text(textX, config.y - config.height * 0.16, config.title, {
       fontFamily: UI.font.title,
-      fontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '21px' : '23px',
+      fontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '21px' : '24px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
@@ -835,27 +910,36 @@ export class CampScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(12);
+    }).setOrigin(0, 0.5).setDepth(13);
 
     const statusText = this.add.text(textX, config.y + config.height * 0.18, config.status, {
       fontFamily: UI.font.body,
       fontSize: config.layout.veryCompact ? '10px' : '12px',
-      color: '#a09688',
+      color: '#b2a696',
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(12);
+    }).setOrigin(0, 0.5).setDepth(13);
 
-    const topRune = this.add.rectangle(config.x, config.y - config.height / 2 + 6, config.width - 36, 1, accent, 0.22)
-      .setDepth(11);
-    const bottomRune = this.add.rectangle(config.x, config.y + config.height / 2 - 6, config.width - 36, 2, accent, config.highlighted ? 0.28 : 0.18)
-      .setDepth(11);
+    const arrow = this.add.text(right - 24, config.y, '›', {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '23px' : '30px',
+      color: config.highlighted ? '#a7dfad' : '#b99257',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(13).setAlpha(0.82);
 
-    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, accent, 0.74, 12);
+    const topRune = this.add.rectangle(config.x, config.y - config.height / 2 + 7, config.width - 42, 1, accent, 0.24)
+      .setDepth(12);
+    const bottomRune = this.add.rectangle(config.x, config.y + config.height / 2 - 7, config.width - 42, 2, accent, config.highlighted ? 0.32 : 0.22)
+      .setDepth(12);
 
-    const objects = [panel.shadow, panel.panel, glow, iconFrame, icon, titleText, statusText, topRune, bottomRune, ...cornerMarks];
+    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, accent, 0.76, 13);
+
+    const objects = [panel.shadow, panel.panel, innerShade, glow, iconFrame, icon, titleText, statusText, arrow, topRune, bottomRune, ...cornerMarks];
     this.playActionIntro(objects, config.delay);
     this.createActionPressZone({
       x: config.x,
@@ -865,21 +949,21 @@ export class CampScene extends Phaser.Scene {
       onClick: config.onClick,
       titleText,
       normalColor: titleColor,
-      pressTargets: [glow, icon, titleText, statusText, iconFrame],
+      pressTargets: [innerShade, glow, iconFrame, icon, titleText, statusText, arrow, bottomRune],
     });
 
     this.tweens.add({
-      targets: [glow, bottomRune],
+      targets: [glow, bottomRune, arrow],
       alpha: config.highlighted ? '+=0.08' : '+=0.04',
-      scale: { from: 0.98, to: config.highlighted ? 1.06 : 1.03 },
-      duration: config.highlighted ? 900 : 1500,
+      scale: { from: 0.98, to: config.highlighted ? 1.06 : 1.035 },
+      duration: config.highlighted ? 900 : 1450,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
   }
 
-  private createStoneActionTile(config: {
+  private createPairedActionTile(config: {
     layout: CampLayout;
     x: number;
     y: number;
@@ -895,42 +979,48 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     const titleColor = config.highlighted ? '#e5d08d' : '#cdb682';
     const left = config.x - config.width / 2;
-    const iconBox = Phaser.Math.Clamp(config.height - 18, 28, 42);
-    const iconX = left + iconBox / 2 + 9;
-    const textX = left + iconBox + 18;
-    const textWidth = Math.max(72, config.width - iconBox - 28);
-    const titleFontSize = config.height <= 52 ? '12px' : config.height <= 64 ? '14px' : '16px';
-    const statusFontSize = config.height <= 52 ? '9px' : config.height <= 64 ? '10px' : '11px';
+    const right = config.x + config.width / 2;
+    const radius = config.layout.veryCompact ? 16 : config.layout.compact ? 20 : 24;
+    const iconBox = Phaser.Math.Clamp(config.height * 0.56, 25, 38);
+    const iconX = left + iconBox / 2 + (config.layout.veryCompact ? 8 : 10);
+    const textX = left + iconBox + (config.layout.veryCompact ? 18 : 22);
+    const textWidth = Math.max(66, right - textX - 10);
+    const titleFontSize = config.title.length > 10
+      ? (config.height <= 46 ? '11px' : config.height <= 58 ? '13px' : '15px')
+      : (config.height <= 46 ? '12px' : config.height <= 58 ? '14px' : '16px');
+    const statusFontSize = config.height <= 46 ? '9px' : config.height <= 58 ? '10px' : '11px';
 
     const panel = this.createRoundedPanel({
       x: config.x,
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: config.layout.veryCompact ? 7 : 9,
+      radius,
       color: config.highlighted ? 0x11170f : 0x0b0c0f,
-      alpha: config.highlighted ? 0.98 : 0.94,
+      alpha: config.highlighted ? 0.985 : 0.955,
       strokeColor: config.accentColor,
-      strokeAlpha: config.highlighted ? 0.74 : 0.44,
+      strokeAlpha: config.highlighted ? 0.78 : 0.5,
       strokeWidth: config.highlighted ? 2 : 1,
       depth: 8,
     });
 
-    const glow = this.add.circle(iconX, config.y, iconBox * 0.58, config.accentColor, config.highlighted ? 0.16 : 0.08)
+    const innerShade = this.add.rectangle(config.x, config.y + config.height * 0.14, config.width - 12, Math.max(8, config.height * 0.46), 0x000000, 0.11)
       .setDepth(10);
-    const iconPlate = this.add.rectangle(iconX, config.y, iconBox, iconBox, 0x040405, 0.38)
-      .setStrokeStyle(1, config.accentColor, config.highlighted ? 0.62 : 0.38)
+    const glow = this.add.circle(iconX, config.y, iconBox * 0.68, config.accentColor, config.highlighted ? 0.17 : 0.09)
       .setDepth(11);
+    const iconPlate = this.add.rectangle(iconX, config.y, iconBox, iconBox, 0x040405, 0.4)
+      .setStrokeStyle(1, config.accentColor, config.highlighted ? 0.66 : 0.42)
+      .setDepth(12);
     const icon = this.add.text(iconX, config.y, config.icon, {
       fontFamily: UI.font.body,
-      fontSize: config.height <= 52 ? '15px' : '17px',
+      fontSize: config.height <= 46 ? '14px' : '17px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
-    }).setOrigin(0.5).setDepth(12);
+    }).setOrigin(0.5).setDepth(13);
 
-    const titleText = this.add.text(textX, config.y - config.height * 0.14, config.title, {
+    const titleText = this.add.text(textX, config.y - config.height * 0.15, config.title, {
       fontFamily: UI.font.title,
       fontSize: titleFontSize,
       color: titleColor,
@@ -942,32 +1032,32 @@ export class CampScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(12);
+    }).setOrigin(0, 0.5).setDepth(13);
 
     const statusText = this.add.text(textX, config.y + config.height * 0.2, config.status, {
       fontFamily: UI.font.body,
       fontSize: statusFontSize,
-      color: config.highlighted ? '#bdae86' : '#8f887b',
+      color: config.highlighted ? '#bdae86' : '#918a7e',
       align: 'left',
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(12);
+    }).setOrigin(0, 0.5).setDepth(13);
 
     const accentLine = this.add.rectangle(
       config.x,
       config.y + config.height / 2 - 5,
-      config.width - 22,
+      config.width - 24,
       1,
       config.accentColor,
-      config.highlighted ? 0.28 : 0.12
-    ).setDepth(11);
+      config.highlighted ? 0.3 : 0.14
+    ).setDepth(12);
 
-    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, config.accentColor, config.highlighted ? 0.72 : 0.42, 8);
+    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, config.accentColor, config.highlighted ? 0.76 : 0.46, 9);
 
-    const objects = [panel.shadow, panel.panel, glow, iconPlate, icon, titleText, statusText, accentLine, ...cornerMarks];
+    const objects = [panel.shadow, panel.panel, innerShade, glow, iconPlate, icon, titleText, statusText, accentLine, ...cornerMarks];
     this.playActionIntro(objects, config.delay);
 
     this.createActionPressZone({
@@ -978,13 +1068,13 @@ export class CampScene extends Phaser.Scene {
       onClick: config.onClick,
       titleText,
       normalColor: titleColor,
-      pressTargets: [glow, iconPlate, icon, titleText, statusText],
+      pressTargets: [innerShade, glow, iconPlate, icon, titleText, statusText, accentLine],
     });
 
     if (config.highlighted) {
       this.tweens.add({
         targets: [glow, titleText, accentLine],
-        alpha: '+=0.07',
+        alpha: '+=0.075',
         scale: { from: 0.99, to: 1.045 },
         duration: 900,
         yoyo: true,
@@ -992,6 +1082,123 @@ export class CampScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       });
     }
+
+    return {
+      titleText,
+      descriptionText: statusText,
+    };
+  }
+
+  private createWideActionPlate(config: {
+    layout: CampLayout;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    status: string;
+    accentColor: number;
+    onClick: () => void;
+    delay: number;
+  }): CampActionButton {
+    const titleColor = '#d8c088';
+    const left = config.x - config.width / 2;
+    const right = config.x + config.width / 2;
+    const radius = config.layout.veryCompact ? 17 : config.layout.compact ? 21 : 25;
+    const iconBox = Phaser.Math.Clamp(config.height * 0.55, 26, 42);
+    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.55), 32, 52);
+    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 1.0), 66, 90);
+    const textWidth = Math.max(150, right - textX - 54);
+
+    const panel = this.createRoundedPanel({
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      radius,
+      color: 0x0c0d0d,
+      alpha: 0.975,
+      strokeColor: config.accentColor,
+      strokeAlpha: 0.68,
+      strokeWidth: 2,
+      depth: 8,
+    });
+
+    const innerShade = this.add.rectangle(config.x, config.y + config.height * 0.12, config.width - 16, Math.max(9, config.height * 0.48), 0x000000, 0.12)
+      .setDepth(10);
+    const wideGlow = this.add.rectangle(config.x, config.y, config.width - 24, config.height - 12, config.accentColor, 0.038)
+      .setDepth(11);
+    const glow = this.add.circle(iconX, config.y, iconBox * 0.7, config.accentColor, 0.14)
+      .setDepth(12);
+    const iconPlate = this.add.rectangle(iconX, config.y, iconBox, iconBox, 0x040405, 0.36)
+      .setStrokeStyle(1, config.accentColor, 0.55)
+      .setDepth(13);
+    const icon = this.add.text(iconX, config.y, config.icon, {
+      fontFamily: UI.font.title,
+      fontSize: config.height <= 48 ? '16px' : '20px',
+      color: '#e0c585',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(14);
+
+    const titleText = this.add.text(textX, config.y - config.height * 0.15, config.title, {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '15px' : config.layout.compact ? '18px' : '21px',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 4,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(14);
+
+    const statusText = this.add.text(textX, config.y + config.height * 0.2, config.status, {
+      fontFamily: UI.font.body,
+      fontSize: config.layout.veryCompact ? '10px' : '12px',
+      color: '#a09688',
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(14);
+
+    const arrow = this.add.text(right - 25, config.y, '›', {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '22px' : '30px',
+      color: '#a38452',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(14);
+
+    const accentLine = this.add.rectangle(
+      config.x,
+      config.y + config.height / 2 - 6,
+      config.width - 44,
+      2,
+      config.accentColor,
+      0.22
+    ).setDepth(13);
+
+    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, config.accentColor, 0.62, 11);
+
+    const objects = [panel.shadow, panel.panel, innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine, ...cornerMarks];
+    this.playActionIntro(objects, config.delay);
+
+    this.createActionPressZone({
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      onClick: config.onClick,
+      titleText,
+      normalColor: titleColor,
+      pressTargets: [innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine],
+    });
 
     return {
       titleText,
@@ -1013,17 +1220,17 @@ export class CampScene extends Phaser.Scene {
     const top = y - height / 2;
     const bottom = y + height / 2;
     const marks = [
-      this.add.rectangle(left + size / 2 + 3, top + 4, size, 2, color, alpha),
-      this.add.rectangle(left + 4, top + size / 2 + 3, 2, size, color, alpha),
-      this.add.rectangle(right - size / 2 - 3, top + 4, size, 2, color, alpha),
-      this.add.rectangle(right - 4, top + size / 2 + 3, 2, size, color, alpha),
-      this.add.rectangle(left + size / 2 + 3, bottom - 4, size, 2, color, alpha * 0.72),
-      this.add.rectangle(left + 4, bottom - size / 2 - 3, 2, size, color, alpha * 0.72),
-      this.add.rectangle(right - size / 2 - 3, bottom - 4, size, 2, color, alpha * 0.72),
-      this.add.rectangle(right - 4, bottom - size / 2 - 3, 2, size, color, alpha * 0.72),
+      this.add.rectangle(left + size / 2 + 4, top + 5, size, 2, color, alpha),
+      this.add.rectangle(left + 5, top + size / 2 + 4, 2, size, color, alpha),
+      this.add.rectangle(right - size / 2 - 4, top + 5, size, 2, color, alpha),
+      this.add.rectangle(right - 5, top + size / 2 + 4, 2, size, color, alpha),
+      this.add.rectangle(left + size / 2 + 4, bottom - 5, size, 2, color, alpha * 0.7),
+      this.add.rectangle(left + 5, bottom - size / 2 - 4, 2, size, color, alpha * 0.7),
+      this.add.rectangle(right - size / 2 - 4, bottom - 5, size, 2, color, alpha * 0.7),
+      this.add.rectangle(right - 5, bottom - size / 2 - 4, 2, size, color, alpha * 0.7),
     ];
 
-    marks.forEach(mark => mark.setDepth(13));
+    marks.forEach(mark => mark.setDepth(15));
     return marks;
   }
 
@@ -1033,12 +1240,18 @@ export class CampScene extends Phaser.Scene {
       if (typeof alphaObject.setAlpha === 'function') {
         alphaObject.setAlpha(0);
       }
+
+      const transformObject = object as Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
+      if (typeof transformObject.setY === 'function') {
+        transformObject.setY(transformObject.y + 8);
+      }
     });
 
     this.tweens.add({
       targets: objects,
       alpha: 1,
-      duration: 260,
+      y: '-=8',
+      duration: 270,
       delay,
       ease: 'Cubic.easeOut',
     });
@@ -1064,6 +1277,16 @@ export class CampScene extends Phaser.Scene {
         useHandCursor: true,
       });
 
+    const resetTargets = (duration = 90) => {
+      this.tweens.add({
+        targets: config.pressTargets,
+        scaleX: 1,
+        scaleY: 1,
+        duration,
+        ease: 'Sine.easeOut',
+      });
+    };
+
     zone.on('pointerover', () => {
       if (isLocked) {
         return;
@@ -1075,13 +1298,7 @@ export class CampScene extends Phaser.Scene {
     zone.on('pointerout', () => {
       isPressed = false;
       config.titleText?.setColor(normalColor);
-      this.tweens.add({
-        targets: config.pressTargets,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 80,
-        ease: 'Sine.easeOut',
-      });
+      resetTargets();
     });
 
     zone.on('pointerdown', () => {
@@ -1090,6 +1307,7 @@ export class CampScene extends Phaser.Scene {
       }
 
       isPressed = true;
+      config.titleText?.setColor('#fff0c4');
       this.tweens.add({
         targets: config.pressTargets,
         scaleX: 0.985,
@@ -1101,13 +1319,8 @@ export class CampScene extends Phaser.Scene {
 
     zone.on('pointerupoutside', () => {
       isPressed = false;
-      this.tweens.add({
-        targets: config.pressTargets,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 80,
-        ease: 'Sine.easeOut',
-      });
+      config.titleText?.setColor(normalColor);
+      resetTargets();
     });
 
     zone.on('pointerup', () => {
@@ -1117,6 +1330,7 @@ export class CampScene extends Phaser.Scene {
 
       isPressed = false;
       isLocked = true;
+      config.titleText?.setColor('#fff0c4');
 
       this.time.delayedCall(350, () => {
         isLocked = false;
