@@ -495,35 +495,69 @@ export class CampScene extends Phaser.Scene {
     const ascensionPoints = this.getAvailableAscensionPoints();
     const hasAscensionPoints = ascensionPoints > 0;
 
-    const boardY = layout.actionsTop + layout.actionsHeight / 2;
+    const maxAvailableHeight = Math.max(240, layout.actionsBottom - layout.actionsTop);
+    const desiredBoardHeight = Phaser.Math.Clamp(
+      Math.round(layout.height * (layout.veryCompact ? 0.38 : layout.compact ? 0.405 : 0.42)),
+      layout.veryCompact ? 300 : layout.compact ? 330 : 360,
+      layout.veryCompact ? 342 : layout.compact ? 390 : 430
+    );
+    const boardHeight = Math.min(maxAvailableHeight, desiredBoardHeight);
+    const boardTop = layout.actionsTop + Math.max(
+      0,
+      Math.min(layout.veryCompact ? 0 : 10, maxAvailableHeight - boardHeight)
+    );
+    const boardY = boardTop + boardHeight / 2;
     const board = this.add.container(layout.centerX, boardY).setDepth(26).setAlpha(0).setY(boardY + 8);
     this.trackActionObject(board);
 
-    this.createLocalPanel(board, layout.contentWidth, layout.actionsHeight, layout.veryCompact ? 18 : 24, cityCampfireActive ? 0x0b0806 : 0x05070a, 0.92, cityCampfireActive ? 0x8f6238 : 0x5d4a32, cityCampfireActive ? 0.42 : 0.3, 1);
-    const boardShade = this.add.rectangle(0, 0, layout.contentWidth - 18, layout.actionsHeight - 18, 0x000000, 0.08);
-    const boardLine = this.add.rectangle(0, -layout.actionsHeight / 2 + 12, layout.contentWidth - 58, 1, cityCampfireActive ? 0xd28a3a : 0xb9985b, cityCampfireActive ? 0.16 : 0.1);
-    const boardTitle = this.add.text(0, -layout.actionsHeight / 2 + (layout.veryCompact ? 12 : 14), 'КАРТА УБЕЖИЩА', {
+    this.createLocalPanel(
+      board,
+      layout.contentWidth,
+      boardHeight,
+      layout.veryCompact ? 18 : 24,
+      cityCampfireActive ? 0x0b0806 : 0x05070a,
+      0.9,
+      cityCampfireActive ? 0x8f6238 : 0x5d4a32,
+      cityCampfireActive ? 0.34 : 0.24,
+      1
+    );
+
+    const boardShade = this.add.rectangle(0, 0, layout.contentWidth - 18, boardHeight - 18, 0x000000, 0.06);
+    const boardLine = this.add.rectangle(0, -boardHeight / 2 + 12, layout.contentWidth - 58, 1, cityCampfireActive ? 0xd28a3a : 0xb9985b, cityCampfireActive ? 0.14 : 0.08);
+    const boardTitle = this.add.text(0, -boardHeight / 2 + (layout.veryCompact ? 12 : 14), 'КАРТА УБЕЖИЩА', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '8px' : '10px',
       color: '#89714c',
       align: 'center',
       wordWrap: { width: layout.contentWidth - 80, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0.5).setAlpha(0.42);
+    }).setOrigin(0.5).setAlpha(0.34);
     board.add([boardShade, boardLine, boardTitle]);
 
     const padX = layout.veryCompact ? 10 : 12;
     const padTop = layout.veryCompact ? 22 : 26;
-    const padBottom = layout.veryCompact ? 10 : 12;
+    const padBottom = layout.veryCompact ? 12 : 14;
     const innerWidth = layout.contentWidth - padX * 2;
-    const usableHeight = layout.actionsHeight - padTop - padBottom;
-    const rowGapBase = layout.veryCompact ? 5 : layout.compact ? 7 : 9;
-    const primaryHeight = Phaser.Math.Clamp(Math.round(usableHeight * 0.21), layout.veryCompact ? 50 : 56, layout.veryCompact ? 58 : 72);
+    const usableHeight = boardHeight - padTop - padBottom;
+    const rowGapBase = layout.veryCompact ? 6 : layout.compact ? 8 : 10;
+    const primaryHeight = Phaser.Math.Clamp(
+      Math.round(usableHeight * 0.23),
+      layout.veryCompact ? 54 : 60,
+      layout.veryCompact ? 64 : layout.compact ? 72 : 76
+    );
     const tileGap = layout.veryCompact ? 7 : 9;
-    const tileHeight = Phaser.Math.Clamp(Math.floor((usableHeight - primaryHeight - rowGapBase * 3) / 3), layout.veryCompact ? 48 : 54, layout.veryCompact ? 58 : 68);
-    const rowGap = Math.max(rowGapBase, Math.floor((usableHeight - primaryHeight - tileHeight * 3) / 3));
+    const tileHeight = Phaser.Math.Clamp(
+      Math.floor((usableHeight - primaryHeight - rowGapBase * 3) / 3),
+      layout.veryCompact ? 54 : 58,
+      layout.veryCompact ? 64 : layout.compact ? 72 : 76
+    );
+    const rowGap = Phaser.Math.Clamp(
+      Math.floor((usableHeight - primaryHeight - tileHeight * 3) / 3),
+      rowGapBase,
+      layout.veryCompact ? 10 : layout.compact ? 13 : 15
+    );
     const groupHeight = primaryHeight + tileHeight * 3 + rowGap * 3;
-    const startY = -layout.actionsHeight / 2 + padTop + Math.max(0, (usableHeight - groupHeight) / 2);
+    const startY = -boardHeight / 2 + padTop + Math.max(0, (usableHeight - groupHeight) / 2);
     const pairWidth = Math.floor((innerWidth - tileGap) / 2);
     const leftX = -innerWidth / 2 + pairWidth / 2;
     const rightX = innerWidth / 2 - pairWidth / 2;
@@ -655,7 +689,7 @@ export class CampScene extends Phaser.Scene {
       delay: 360,
     });
 
-    this.createSubtleBrackets(board, layout.contentWidth, layout.actionsHeight, cityCampfireActive ? 0xd28a3a : 0x8b7652, 0.16, 9);
+    this.createSubtleBrackets(board, layout.contentWidth, boardHeight, cityCampfireActive ? 0xd28a3a : 0x8b7652, 0.14, 8);
 
     this.tweens.add({
       targets: board,
@@ -782,9 +816,9 @@ export class CampScene extends Phaser.Scene {
 
     const titleColor = config.highlighted ? '#ead694' : '#d8c088';
     const statusColor = config.highlighted ? '#cfc29e' : '#a09688';
-    const iconBox = Phaser.Math.Clamp(config.height * 0.56, 27, 38);
-    const iconX = -config.width / 2 + iconBox / 2 + (config.layout.veryCompact ? 8 : 10);
-    const textX = iconX + iconBox / 2 + (config.layout.veryCompact ? 10 : 13);
+    const iconBox = Phaser.Math.Clamp(config.height * 0.58, 30, 42);
+    const iconX = -config.width / 2 + iconBox / 2 + (config.layout.veryCompact ? 9 : 11);
+    const textX = iconX + iconBox / 2 + (config.layout.veryCompact ? 12 : 15);
     const textWidth = Math.max(64, config.width / 2 - textX + config.width / 2 - 10);
 
     this.createLocalPanel(container, config.width, config.height, config.layout.veryCompact ? 15 : 19, config.highlighted ? 0x11130e : 0x0b0d10, config.highlighted ? 0.98 : 0.94, config.accentColor, config.highlighted ? 0.58 : 0.34, config.highlighted ? 2 : 1);
@@ -793,7 +827,7 @@ export class CampScene extends Phaser.Scene {
     const iconNest = this.add.rectangle(iconX, 0, iconBox, iconBox, 0x050506, 0.44).setStrokeStyle(1, config.accentColor, config.highlighted ? 0.62 : 0.36);
     const icon = this.add.text(iconX, 0, config.icon, {
       fontFamily: UI.font.title,
-      fontSize: config.layout.veryCompact ? '16px' : '19px',
+      fontSize: config.layout.veryCompact ? '18px' : '21px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
@@ -802,7 +836,7 @@ export class CampScene extends Phaser.Scene {
 
     const title = this.add.text(textX, -config.height * 0.17, config.title, {
       fontFamily: UI.font.title,
-      fontSize: config.layout.veryCompact ? '12px' : config.layout.compact ? '14px' : '16px',
+      fontSize: config.layout.veryCompact ? '13px' : config.layout.compact ? '15px' : '17px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
@@ -812,7 +846,7 @@ export class CampScene extends Phaser.Scene {
 
     const status = this.add.text(textX, config.height * 0.2, config.status, {
       fontFamily: UI.font.body,
-      fontSize: config.layout.veryCompact ? '9px' : '11px',
+      fontSize: config.layout.veryCompact ? '10px' : '12px',
       color: statusColor,
       wordWrap: { width: textWidth, useAdvancedWrap: true },
       maxLines: 1,
@@ -1033,7 +1067,7 @@ export class CampScene extends Phaser.Scene {
       return 'Горит всегда';
     }
 
-    return `Горит ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}`;
+    return `Горит ${this.formatCityCampfireTimeLeftShort(this.getCityCampfireTimeLeft())}`;
   }
 
   private updateCampfireButtonText() {
@@ -1391,6 +1425,22 @@ export class CampScene extends Phaser.Scene {
     return Math.max(0, state.expiresAt - Date.now());
   }
 
+
+  private formatCityCampfireTimeLeftShort(ms: number) {
+    if (!Number.isFinite(ms)) {
+      return 'всегда';
+    }
+
+    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+      return `${hours}ч ${minutes}м`;
+    }
+
+    return `${Math.max(1, totalMinutes)} мин.`;
+  }
   private formatCityCampfireTimeLeft(ms: number) {
     if (!Number.isFinite(ms)) {
       return 'постоянно';
