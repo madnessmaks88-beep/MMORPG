@@ -164,20 +164,20 @@ export class CampScene extends Phaser.Scene {
   private getLayout(): CampLayout {
     const { width, height } = this.scale;
 
-    const veryCompact = height < 760;
-    const compact = height < 900;
+    const veryCompact = height <= 700 || width <= 370;
+    const compact = height <= 860 || width <= 410;
     const safeX = Phaser.Math.Clamp(Math.round(width * 0.048), 16, 34);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.02), 14, 30);
     const safeBottom = veryCompact ? 92 : compact ? 104 : 116;
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    const headerHeight = veryCompact ? 82 : compact ? 94 : 112;
-    const heroTop = safeTop + headerHeight + (veryCompact ? 8 : 10);
-    const heroHeight = veryCompact ? 164 : compact ? 178 : 196;
-    const actionsTop = heroTop + heroHeight + (veryCompact ? 12 : 16);
-    const actionsBottom = bottomNavTop - (veryCompact ? 16 : 20);
-    const actionsHeight = Math.max(206, actionsBottom - actionsTop);
+    const headerHeight = veryCompact ? 76 : compact ? 90 : 108;
+    const heroTop = safeTop + headerHeight + (veryCompact ? 7 : 10);
+    const heroHeight = veryCompact ? 164 : compact ? 176 : 194;
+    const actionsTop = heroTop + heroHeight + (veryCompact ? 8 : 14);
+    const actionsBottom = bottomNavTop - (veryCompact ? 12 : 18);
+    const actionsHeight = Math.max(232, actionsBottom - actionsTop);
 
     return {
       width,
@@ -214,6 +214,24 @@ export class CampScene extends Phaser.Scene {
     this.add.rectangle(centerX, height * 0.28, width, height * 0.58, 0x07101a, 0.2).setDepth(0);
     this.add.rectangle(centerX, height - 140, width, 320, 0x030202, 0.7).setDepth(0);
 
+    // Мягкая кинематографичная виньетка: фон глубже, а UI читается лучше.
+    this.add.rectangle(centerX, 22, width, 72, 0x000000, 0.38).setDepth(1);
+    this.add.rectangle(centerX, height - 22, width, 94, 0x000000, 0.48).setDepth(1);
+    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.34).setDepth(1);
+    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.34).setDepth(1);
+    this.add.ellipse(centerX, height * 0.43, width * 1.05, height * 0.72, 0x000000, 0.12).setDepth(1);
+
+    for (let i = 0; i < 5; i += 1) {
+      this.add.rectangle(
+        centerX,
+        height - 240 + i * 42,
+        width - 34 - i * 18,
+        2,
+        0x493b2c,
+        0.08
+      ).setDepth(1);
+    }
+
     const farGlow = this.add.circle(centerX, cryptY + 12, width * 0.56, 0x1d2741, 0.13).setDepth(0);
     this.tweens.add({
       targets: farGlow,
@@ -249,6 +267,28 @@ export class CampScene extends Phaser.Scene {
     this.add.ellipse(gateX, gateY - 16, gateWidth * 0.68, gateHeight * 0.76, 0x17130f, 0.42)
       .setStrokeStyle(2, 0x4d4030, 0.32)
       .setDepth(2);
+
+    this.add.rectangle(gateX, gateY - 20, gateWidth * 0.48, 3, 0x000000, 0.36).setDepth(3);
+    this.add.rectangle(gateX, gateY + gateHeight * 0.16, gateWidth * 0.54, 4, 0x000000, 0.32).setDepth(3);
+
+    ['ᛟ', 'ᚱ', 'ᛝ'].forEach((rune, index) => {
+      const runeText = this.add.text(gateX - 42 + index * 42, gateY - gateHeight * 0.38, rune, {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '10px' : '12px',
+        color: '#8a714c',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(3).setAlpha(0.22);
+
+      this.tweens.add({
+        targets: runeText,
+        alpha: { from: 0.12, to: 0.34 },
+        duration: 1700 + index * 180,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
 
     const fireGlow = this.add.circle(centerX, fireY, width * 0.28, 0xb86b2e, 0.09).setDepth(2);
     const fireCore = this.add.circle(centerX, fireY + 8, 38, 0xb86b2e, 0.14).setDepth(2);
@@ -293,7 +333,7 @@ export class CampScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    for (let i = 0; i < 24; i += 1) {
+    for (let i = 0; i < 30; i += 1) {
       const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
       const y = Phaser.Math.Between(layout.safeTop + 60, height - layout.safeBottom - 40);
       const ash = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.045)
@@ -366,10 +406,48 @@ export class CampScene extends Phaser.Scene {
       depth: 8,
     });
 
+    const innerGlow = this.add.rectangle(
+      layout.centerX,
+      panelY,
+      layout.contentWidth - 18,
+      panelHeight - 14,
+      0xb9985b,
+      0.035
+    ).setDepth(10);
+    const headerLineTop = this.add.rectangle(
+      layout.centerX,
+      panelY - panelHeight / 2 + 9,
+      layout.contentWidth - 54,
+      1,
+      0xb9985b,
+      0.24
+    ).setDepth(11);
+    const headerLineBottom = this.add.rectangle(
+      layout.centerX,
+      panelY + panelHeight / 2 - 10,
+      layout.contentWidth - 80,
+      1,
+      0x6f5434,
+      0.18
+    ).setDepth(11);
+    const headerCorners = this.createActionCornerMarks(
+      layout.centerX,
+      panelY,
+      layout.contentWidth,
+      panelHeight,
+      0xb9985b,
+      0.46,
+      layout.veryCompact ? 12 : 16
+    );
+
     panel.shadow.setAlpha(0);
     panel.panel.setAlpha(0);
+    innerGlow.setAlpha(0);
+    headerLineTop.setAlpha(0);
+    headerLineBottom.setAlpha(0);
+    headerCorners.forEach(corner => corner.setAlpha(0));
 
-    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 24 : 32), 'Убежище у катакомб', {
+    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 22 : 30), 'Убежище у катакомб', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '22px' : layout.compact ? '26px' : '31px',
       color: '#d2b87a',
@@ -383,7 +461,7 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0.5).setDepth(12).setAlpha(0).setY(panelY - (layout.veryCompact ? 31 : 40));
 
-    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 4 : 0), 'Последний огонь перед спуском во тьму', {
+    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 5 : 3), 'Огонь, тени и последний шанс', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
       color: '#9a9385',
@@ -396,10 +474,19 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(12).setAlpha(0);
 
     this.tweens.add({
-      targets: [panel.shadow, panel.panel],
+      targets: [panel.shadow, panel.panel, innerGlow, headerLineTop, headerLineBottom, ...headerCorners],
       alpha: 1,
-      duration: 260,
+      duration: 280,
       ease: 'Sine.easeOut',
+    });
+
+    this.tweens.add({
+      targets: [innerGlow, headerLineTop],
+      alpha: '+=0.06',
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
     });
 
     this.tweens.add({
@@ -436,18 +523,60 @@ export class CampScene extends Phaser.Scene {
 
     const cardY = layout.heroTop + layout.heroHeight / 2;
 
-    this.createRoundedPanel({
+    const heroPanel = this.createRoundedPanel({
       x: layout.centerX,
       y: cardY,
       width: layout.contentWidth,
       height: layout.heroHeight,
-      radius: 30,
+      radius: layout.veryCompact ? 24 : 32,
       color: 0x090b0d,
-      alpha: 0.95,
-      strokeColor: 0x4e4637,
-      strokeAlpha: 0.72,
+      alpha: 0.96,
+      strokeColor: 0x6d5a3b,
+      strokeAlpha: 0.68,
       strokeWidth: 2,
       depth: 6,
+    });
+
+    const heroInner = this.add.rectangle(
+      layout.centerX,
+      cardY + layout.heroHeight * 0.12,
+      layout.contentWidth - 18,
+      layout.heroHeight * 0.64,
+      0x000000,
+      0.13
+    ).setDepth(7);
+    const heroTopLine = this.add.rectangle(
+      layout.centerX,
+      layout.heroTop + 9,
+      layout.contentWidth - 60,
+      1,
+      0xb9985b,
+      0.18
+    ).setDepth(8);
+    const heroCorners = this.createActionCornerMarks(
+      layout.centerX,
+      cardY,
+      layout.contentWidth,
+      layout.heroHeight,
+      0x8b7652,
+      0.34,
+      layout.veryCompact ? 10 : 14
+    );
+
+    const heroIntroObjects = [heroPanel.shadow, heroPanel.panel, heroInner, heroTopLine, ...heroCorners];
+    heroIntroObjects.forEach(object => {
+      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
+      if (typeof alphaObject.setAlpha === 'function') {
+        alphaObject.setAlpha(0);
+      }
+    });
+    this.tweens.add({
+      targets: heroIntroObjects,
+      alpha: 1,
+      y: '+=0',
+      duration: 280,
+      delay: 120,
+      ease: 'Sine.easeOut',
     });
 
     const left = layout.centerX - layout.contentWidth / 2 + 22;
@@ -460,11 +589,23 @@ export class CampScene extends Phaser.Scene {
         : `${player.name} • ${race.name}`
       : player.name;
 
-    this.add.circle(left + 34, top + 43, 31, 0x16120f, 0.96)
-      .setStrokeStyle(2, 0x7d633b, 0.78)
+    const portraitGlow = this.add.circle(left + 34, top + (layout.veryCompact ? 36 : 43), 39, 0xb9985b, 0.08)
       .setDepth(8);
+    this.add.circle(left + 34, top + (layout.veryCompact ? 36 : 43), layout.veryCompact ? 28 : 31, 0x16120f, 0.96)
+      .setStrokeStyle(2, 0x7d633b, 0.78)
+      .setDepth(9);
 
-    this.add.text(left + 34, top + 43, race ? this.getRaceIcon(race.id) : '◆', {
+    this.tweens.add({
+      targets: portraitGlow,
+      alpha: { from: 0.06, to: 0.16 },
+      scale: { from: 0.96, to: 1.06 },
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.add.text(left + 34, top + (layout.veryCompact ? 36 : 43), race ? this.getRaceIcon(race.id) : '◆', {
       fontFamily: UI.font.title,
       fontSize: '23px',
       color: '#c9a86a',
@@ -493,7 +634,7 @@ export class CampScene extends Phaser.Scene {
         width: layout.contentWidth - 174,
         useAdvancedWrap: true,
       },
-      maxLines: 2,
+      maxLines: layout.veryCompact ? 1 : 2,
       lineSpacing: 1,
     }).setOrigin(0, 0.5).setDepth(9);
 
@@ -508,7 +649,7 @@ export class CampScene extends Phaser.Scene {
       depth: 9,
     });
 
-    const barY = top + layout.heroHeight - (layout.veryCompact ? 94 : 104);
+    const barY = top + layout.heroHeight - (layout.veryCompact ? 80 : layout.compact ? 94 : 104);
     const barGap = layout.veryCompact ? 10 : 16;
     const barWidth = Math.min((layout.contentWidth - 64 - barGap) / 2, 258);
 
@@ -534,7 +675,7 @@ export class CampScene extends Phaser.Scene {
 
     this.createSanityBar({
       x: layout.centerX,
-      y: top + layout.heroHeight - (layout.veryCompact ? 58 : 66),
+      y: top + layout.heroHeight - (layout.veryCompact ? 60 : 66),
       width: Math.min(layout.contentWidth - 56, 520),
     });
 
@@ -653,8 +794,21 @@ export class CampScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(7).setAlpha(0.26),
     ];
 
+    const panelTitle = this.add.text(layout.centerX, layout.actionsTop + (layout.veryCompact ? 12 : 15), 'МЕСТА УБЕЖИЩА', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '9px' : '11px',
+      color: '#8f7650',
+      align: 'center',
+      letterSpacing: 1,
+      wordWrap: {
+        width: layout.contentWidth - 70,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(7).setAlpha(0.34);
+
     const padX = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const padY = layout.veryCompact ? 9 : layout.compact ? 12 : 14;
+    const padY = layout.veryCompact ? 16 : layout.compact ? 18 : 20;
     const gap = layout.veryCompact ? 5 : layout.compact ? 7 : 9;
     const pairGap = layout.veryCompact ? 7 : 9;
     const innerWidth = layout.contentWidth - padX * 2;
@@ -820,10 +974,10 @@ export class CampScene extends Phaser.Scene {
       delay: 415,
     });
 
-    const panelObjects = [panel.shadow, panel.panel, panelGlow, runeTop, runeBottom, ...panelRunes];
+    const panelObjects = [panel.shadow, panel.panel, panelGlow, runeTop, runeBottom, panelTitle, ...panelRunes];
 
     panelObjects.forEach(object => {
-      const alphaObject = object as Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha;
+      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
       if (typeof alphaObject.setAlpha === 'function') {
         alphaObject.setAlpha(0);
       }
@@ -936,10 +1090,21 @@ export class CampScene extends Phaser.Scene {
       .setDepth(12);
     const bottomRune = this.add.rectangle(config.x, config.y + config.height / 2 - 7, config.width - 42, 2, accent, config.highlighted ? 0.32 : 0.22)
       .setDepth(12);
+    const leftBracket = this.add.rectangle(left + 7, config.y, 3, config.height - 18, accent, 0.42)
+      .setDepth(13);
+    const rightBracket = this.add.rectangle(right - 7, config.y, 3, config.height - 18, accent, 0.3)
+      .setDepth(13);
+    const gateRune = this.add.text(right - 50, config.y - config.height * 0.27, 'ᛟ', {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '10px' : '13px',
+      color: config.highlighted ? '#a7dfad' : '#b99257',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(13).setAlpha(0.5);
 
     const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, accent, 0.76, 13);
 
-    const objects = [panel.shadow, panel.panel, innerShade, glow, iconFrame, icon, titleText, statusText, arrow, topRune, bottomRune, ...cornerMarks];
+    const objects = [panel.shadow, panel.panel, innerShade, glow, iconFrame, icon, titleText, statusText, arrow, topRune, bottomRune, leftBracket, rightBracket, gateRune, ...cornerMarks];
     this.playActionIntro(objects, config.delay);
     this.createActionPressZone({
       x: config.x,
@@ -949,7 +1114,7 @@ export class CampScene extends Phaser.Scene {
       onClick: config.onClick,
       titleText,
       normalColor: titleColor,
-      pressTargets: [innerShade, glow, iconFrame, icon, titleText, statusText, arrow, bottomRune],
+      pressTargets: [innerShade, glow, iconFrame, icon, titleText, statusText, arrow, bottomRune, leftBracket, rightBracket, gateRune],
     });
 
     this.tweens.add({
@@ -1054,10 +1219,19 @@ export class CampScene extends Phaser.Scene {
       config.accentColor,
       config.highlighted ? 0.3 : 0.14
     ).setDepth(12);
+    const sidePin = this.add.rectangle(left + 5, config.y, 2, config.height - 16, config.accentColor, config.highlighted ? 0.34 : 0.18)
+      .setDepth(12);
+    const runeMark = this.add.text(right - 11, config.y - config.height * 0.28, '᛫', {
+      fontFamily: UI.font.title,
+      fontSize: config.height <= 46 ? '9px' : '11px',
+      color: '#8f7650',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(13).setAlpha(config.highlighted ? 0.65 : 0.34);
 
     const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, config.accentColor, config.highlighted ? 0.76 : 0.46, 9);
 
-    const objects = [panel.shadow, panel.panel, innerShade, glow, iconPlate, icon, titleText, statusText, accentLine, ...cornerMarks];
+    const objects = [panel.shadow, panel.panel, innerShade, glow, iconPlate, icon, titleText, statusText, accentLine, sidePin, runeMark, ...cornerMarks];
     this.playActionIntro(objects, config.delay);
 
     this.createActionPressZone({
@@ -1068,7 +1242,7 @@ export class CampScene extends Phaser.Scene {
       onClick: config.onClick,
       titleText,
       normalColor: titleColor,
-      pressTargets: [innerShade, glow, iconPlate, icon, titleText, statusText, accentLine],
+      pressTargets: [innerShade, glow, iconPlate, icon, titleText, statusText, accentLine, sidePin, runeMark],
     });
 
     if (config.highlighted) {
@@ -1183,10 +1357,19 @@ export class CampScene extends Phaser.Scene {
       config.accentColor,
       0.22
     ).setDepth(13);
+    const leftBracket = this.add.rectangle(left + 7, config.y, 3, config.height - 18, config.accentColor, 0.28)
+      .setDepth(13);
+    const rightRune = this.add.text(right - 48, config.y - config.height * 0.28, config.title === 'Рынок' ? '¤' : '⌂', {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '9px' : '12px',
+      color: '#8f7650',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(14).setAlpha(0.44);
 
     const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, config.accentColor, 0.62, 11);
 
-    const objects = [panel.shadow, panel.panel, innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine, ...cornerMarks];
+    const objects = [panel.shadow, panel.panel, innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine, leftBracket, rightRune, ...cornerMarks];
     this.playActionIntro(objects, config.delay);
 
     this.createActionPressZone({
@@ -1197,7 +1380,7 @@ export class CampScene extends Phaser.Scene {
       onClick: config.onClick,
       titleText,
       normalColor: titleColor,
-      pressTargets: [innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine],
+      pressTargets: [innerShade, wideGlow, glow, iconPlate, icon, titleText, statusText, arrow, accentLine, leftBracket, rightRune],
     });
 
     return {
@@ -1236,13 +1419,13 @@ export class CampScene extends Phaser.Scene {
 
   private playActionIntro(objects: Phaser.GameObjects.GameObject[], delay: number) {
     objects.forEach(object => {
-      const alphaObject = object as Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha;
+      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
       if (typeof alphaObject.setAlpha === 'function') {
         alphaObject.setAlpha(0);
       }
 
-      const transformObject = object as Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
-      if (typeof transformObject.setY === 'function') {
+      const transformObject = object as unknown as { y?: number; setY?: (value: number) => void };
+      if (typeof transformObject.setY === 'function' && typeof transformObject.y === 'number') {
         transformObject.setY(transformObject.y + 8);
       }
     });
@@ -1377,7 +1560,7 @@ export class CampScene extends Phaser.Scene {
 
   private getCityCampfireButtonStatus() {
     if (!this.isCityCampfireActive()) {
-      return 'Зажечь огниво';
+      return 'Зажечь';
     }
 
     const state = this.getCityCampfireState();
