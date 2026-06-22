@@ -25,8 +25,6 @@ import {
   isQuestClaimed,
 } from '../systems/QuestSystem';
 
-import { UI } from '../ui/theme';
-
 type CampLayout = {
   width: number;
   height: number;
@@ -74,6 +72,7 @@ type CampfirePlayer = typeof player & {
 export class CampScene extends Phaser.Scene {
   private static startupPrepared = false;
   private static startupPromise?: Promise<void>;
+  private static pixelFontPromise?: Promise<void>;
 
   private restButtonLabel?: Phaser.GameObjects.Text;
   private restButtonDescription?: Phaser.GameObjects.Text;
@@ -91,6 +90,9 @@ export class CampScene extends Phaser.Scene {
   private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
   private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
+  private readonly PIXEL_FONT_FACE_NAME = 'PixeloidMono';
+  private readonly PIXEL_FONT_FAMILY = '"PixeloidMono", monospace';
+  private readonly PIXEL_FONT_ASSET_URL = new URL('../assets/fonts/PixeloidMono.ttf', import.meta.url).href;
 
   private readonly CAMP_BACKGROUND_ASSET = {
     key: 'campBackground',
@@ -125,8 +127,10 @@ export class CampScene extends Phaser.Scene {
 
   async create() {
     const layout = this.getLayout();
+    const fontLoadPromise = this.loadPixelFontOnce();
 
     await this.prepareStartupOnce();
+    await fontLoadPromise;
       
     this.grantStartGoldOnce();
     this.extinguishCityCampfireIfExpired();
@@ -144,6 +148,8 @@ export class CampScene extends Phaser.Scene {
       activeScene: 'CampScene',
     });
 
+    this.applyPixelFontToSceneTexts();
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.campfireTimerEvent?.remove(false);
       this.campfireTimerEvent = undefined;
@@ -154,6 +160,89 @@ export class CampScene extends Phaser.Scene {
       this.sanityValueText = undefined;
       this.sanityHintText = undefined;
       this.sanityFill = undefined;
+    });
+  }
+
+  private async loadPixelFontOnce() {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || !document.fonts) {
+      return;
+    }
+
+    if (!CampScene.pixelFontPromise) {
+      CampScene.pixelFontPromise = new Promise<void>((resolve) => {
+        const styleId = 'camp-scene-pixeloid-mono-font';
+
+        if (!document.getElementById(styleId)) {
+          const style = document.createElement('style');
+          style.id = styleId;
+          style.textContent = `
+@font-face {
+  font-family: "${this.PIXEL_FONT_FACE_NAME}";
+  src: url("${this.PIXEL_FONT_ASSET_URL}") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}`;
+          document.head.appendChild(style);
+        }
+
+        const font = new FontFace(
+          this.PIXEL_FONT_FACE_NAME,
+          `url("${this.PIXEL_FONT_ASSET_URL}") format("truetype")`,
+          {
+            weight: '400',
+            style: 'normal',
+          }
+        );
+
+        font.load()
+          .then(loadedFont => {
+            document.fonts.add(loadedFont);
+            return document.fonts.load(`18px "${this.PIXEL_FONT_FACE_NAME}"`);
+          })
+          .then(() => document.fonts.ready)
+          .then(() => {
+            console.info(`[CampScene] Pixel font loaded: ${this.PIXEL_FONT_FACE_NAME}`);
+            resolve();
+          })
+          .catch(error => {
+            console.warn(
+              'CampScene pixel font was not loaded. Check this file exists: src/assets/fonts/PixeloidMono.ttf',
+              error
+            );
+            resolve();
+          });
+      });
+    }
+
+    await CampScene.pixelFontPromise;
+  }
+
+  private applyPixelFontToSceneTexts() {
+    const applyToObject = (object: Phaser.GameObjects.GameObject) => {
+      if (object instanceof Phaser.GameObjects.Text) {
+        object.setFontFamily(this.PIXEL_FONT_FAMILY);
+        object.updateText();
+        return;
+      }
+
+      if (object instanceof Phaser.GameObjects.Container) {
+        object.list.forEach(child => {
+          applyToObject(child as Phaser.GameObjects.GameObject);
+        });
+      }
+    };
+
+    this.children.list.forEach(child => {
+      applyToObject(child);
+    });
+
+    // Повторное применение через кадр нужно для Canvas/Phaser Text,
+    // когда браузер подтвердил загрузку шрифта, но текстуры текста ещё не перерисовались.
+    this.time.delayedCall(80, () => {
+      this.children.list.forEach(child => {
+        applyToObject(child);
+      });
     });
   }
 
@@ -307,11 +396,11 @@ export class CampScene extends Phaser.Scene {
     const bottomLine = this.add.rectangle(layout.centerX, panelY + layout.headerHeight / 2 - 10, layout.contentWidth - 68, 2, 0x453220, 0.64).setDepth(11);
 
     const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 12 : 16), 'Убежище у катакомб', {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.veryCompact ? '20px' : layout.compact ? '24px' : '28px',
       color: '#e0c585',
       stroke: '#000000',
-      strokeThickness: 4,
+      strokeThickness: 2,
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 44,
@@ -321,7 +410,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(12);
 
     const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 14 : 18), 'последний пиксельный огонь перед тьмой', {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.veryCompact ? '10px' : '12px',
       color: '#9f9078',
       align: 'center',
@@ -338,11 +427,11 @@ export class CampScene extends Phaser.Scene {
         panelY,
         mark,
         {
-          fontFamily: UI.font.title,
+          fontFamily: this.PIXEL_FONT_FAMILY,
           fontSize: '14px',
           color: '#b99257',
           stroke: '#000000',
-          strokeThickness: 2,
+          strokeThickness: 1,
         }
       ).setOrigin(0.5).setDepth(12);
     });
@@ -406,11 +495,11 @@ export class CampScene extends Phaser.Scene {
     });
 
     this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.veryCompact ? '22px' : '26px',
       color: '#d8b56d',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
       align: 'center',
     }).setOrigin(0.5).setDepth(12);
 
@@ -424,11 +513,11 @@ export class CampScene extends Phaser.Scene {
     const titleWidth = Math.max(130, right - titleX - 72);
 
     this.add.text(titleX, top + (layout.veryCompact ? 22 : 28), heroName, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.veryCompact ? '15px' : layout.compact ? '18px' : '20px',
       color: '#e0c585',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
       wordWrap: {
         width: titleWidth,
         useAdvancedWrap: true,
@@ -437,7 +526,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(10);
 
     this.add.text(titleX, top + (layout.veryCompact ? 45 : 54), race ? race.description : 'Путь ещё не выбран.', {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.veryCompact ? '9px' : '11px',
       color: '#9b9283',
       wordWrap: {
@@ -552,41 +641,28 @@ export class CampScene extends Phaser.Scene {
 
     this.createPixelFloor(layout, panelY, panelHeight);
 
-    const padX = layout.veryCompact ? 6 : layout.compact ? 8 : 10;
-    const padY = layout.veryCompact ? 9 : layout.compact ? 11 : 13;
+    const padX = layout.veryCompact ? 8 : layout.compact ? 12 : 16;
+    const padY = layout.veryCompact ? 12 : layout.compact ? 14 : 16;
     const innerWidth = layout.contentWidth - padX * 2;
-    const availableHeight = Math.max(260, panelHeight - padY * 2);
+    const availableHeight = Math.max(250, panelHeight - padY * 2);
 
-    const baseGap = layout.veryCompact ? 7 : layout.compact ? 9 : 11;
-    const primaryHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.22 : 0.19)),
-      layout.veryCompact ? 60 : 68,
-      layout.veryCompact ? 68 : layout.compact ? 82 : 86
-    );
-    const smallTileHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.17 : 0.152)),
-      layout.veryCompact ? 54 : 60,
-      layout.veryCompact ? 64 : layout.compact ? 72 : 76
-    );
-    const wideHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.19 : 0.17)),
-      layout.veryCompact ? 58 : 66,
-      layout.veryCompact ? 70 : layout.compact ? 80 : 84
-    );
+    const baseGap = layout.veryCompact ? 9 : layout.compact ? 11 : 12;
+    const primaryHeight = layout.veryCompact ? 58 : layout.compact ? 64 : 66;
+    const smallTileHeight = layout.veryCompact ? 50 : layout.compact ? 56 : 58;
+    const wideHeight = layout.veryCompact ? 56 : layout.compact ? 62 : 64;
 
-    const minContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
-    const extraHeight = Math.max(0, availableHeight - minContentHeight);
+    const fixedContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
+    const extraHeight = Math.max(0, availableHeight - fixedContentHeight);
     const gap = Phaser.Math.Clamp(
-      baseGap + Math.floor(extraHeight / 7),
+      baseGap + Math.floor(extraHeight / 10),
       baseGap,
-      layout.veryCompact ? 11 : layout.compact ? 15 : 18
+      layout.veryCompact ? 12 : 14
     );
     const contentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + gap * 4;
 
-    // Не центрируем кнопки строго по панели: так исчезает огромная пустота сверху.
-    const topPad = padY + Math.max(4, Math.floor((availableHeight - contentHeight) * 0.28));
+    const topPad = padY + Math.max(0, Math.floor((availableHeight - contentHeight) * 0.12));
 
-    const pairGap = layout.veryCompact ? 6 : 8;
+    const pairGap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
     const tileWidth = Math.floor((innerWidth - pairGap) / 2);
     const leftX = layout.centerX - tileWidth / 2 - pairGap / 2;
     const rightX = layout.centerX + tileWidth / 2 + pairGap / 2;
@@ -821,9 +897,9 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     return this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 12, 42, 58),
-      titleFontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '19px' : '21px',
-      statusFontSize: config.layout.veryCompact ? '11px' : '12px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 38, 48),
+      titleFontSize: config.layout.veryCompact ? '16px' : config.layout.compact ? '18px' : '19px',
+      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
       primary: true,
     });
   }
@@ -910,9 +986,9 @@ export class CampScene extends Phaser.Scene {
   }) {
     this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 10, 44, 62),
-      titleFontSize: config.layout.veryCompact ? '18px' : config.layout.compact ? '21px' : '23px',
-      statusFontSize: config.layout.veryCompact ? '11px' : '13px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 12, 40, 50),
+      titleFontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '19px' : '20px',
+      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
       primary: true,
     });
   }
@@ -940,9 +1016,9 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     return this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 34, 48),
-      titleFontSize: config.layout.veryCompact ? '14px' : config.layout.compact ? '16px' : '17px',
-      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 32, 40),
+      titleFontSize: config.layout.veryCompact ? '13px' : config.layout.compact ? '15px' : '16px',
+      statusFontSize: config.layout.veryCompact ? '9px' : '10px',
       primary: false,
     });
   }
@@ -991,32 +1067,20 @@ export class CampScene extends Phaser.Scene {
       config.highlighted ? 0.075 : 0.025
     );
 
-    const iconBoxSize = config.iconBoxSize;
-    const iconX = -config.width / 2 + iconBoxSize / 2 + (config.primary ? 22 : 14);
-    const textX = iconX + iconBoxSize / 2 + (config.primary ? 18 : 11);
-    const textRightPad = config.primary ? 48 : 20;
-    const textWidth = Math.max(72, config.width / 2 - textX - textRightPad);
-    const titleOffsetY = config.primary ? -config.height * 0.13 : -config.height * 0.14;
-    const statusOffsetY = config.primary ? config.height * 0.2 : config.height * 0.22;
-
-    const iconPlate = this.add.rectangle(iconX, 0, iconBoxSize, iconBoxSize, 0x080808, config.primary ? 0.42 : 0.36)
-      .setStrokeStyle(config.primary ? 2 : 1, config.innerBorderColor, config.highlighted ? 0.72 : 0.48);
-
-    const iconText = this.add.text(iconX, 0, config.icon, {
-      fontFamily: UI.font.title,
-      fontSize: `${Math.floor(iconBoxSize * (config.primary ? 0.52 : 0.48))}px`,
-      color: config.textColor,
-      stroke: '#000000',
-      strokeThickness: config.primary ? 4 : 3,
-      align: 'center',
-    }).setOrigin(0.5);
+    const textX = -config.width / 2 + (config.primary
+      ? Phaser.Math.Clamp(Math.round(config.width * 0.24), 88, 116)
+      : Phaser.Math.Clamp(Math.round(config.width * 0.34), 58, 78));
+    const textRightPad = config.primary ? 50 : 16;
+    const textWidth = Math.max(78, config.width / 2 - textX - textRightPad);
+    const titleOffsetY = -config.height * 0.16;
+    const statusOffsetY = config.height * 0.18;
 
     const titleText = this.add.text(textX, titleOffsetY, config.title, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.titleFontSize,
       color: config.textColor,
       stroke: '#000000',
-      strokeThickness: config.primary ? 4 : 3,
+      strokeThickness: 1,
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
@@ -1025,11 +1089,11 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5);
 
     const statusText = this.add.text(textX, statusOffsetY, config.status, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.statusFontSize,
       color: config.statusColor,
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 1,
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
@@ -1037,20 +1101,18 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const marker = this.add.text(config.width / 2 - (config.primary ? 26 : 14), 0, config.primary ? '›' : '▪', {
-      fontFamily: UI.font.title,
+    const marker = this.add.text(config.width / 2 - (config.primary ? 24 : 12), 0, config.primary ? '›' : '▪', {
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.primary ? '25px' : '12px',
       color: config.statusColor,
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
     }).setOrigin(0.5).setAlpha(config.primary ? 0.8 : 0.55);
 
     container.add([
       shadow,
       buttonImage,
       accentGlow,
-      iconPlate,
-      iconText,
       titleText,
       statusText,
       marker,
@@ -1253,7 +1315,7 @@ export class CampScene extends Phaser.Scene {
     const fillWidth = Math.max(1, config.width * progress);
 
     this.add.text(left, config.y - 12, config.label, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: '#a99d8a',
       wordWrap: { width: config.width * 0.45, useAdvancedWrap: true },
@@ -1261,7 +1323,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(10);
 
     this.add.text(left + config.width, config.y - 12, config.value, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: '#d8c7a3',
       wordWrap: { width: config.width * 0.5, useAdvancedWrap: true },
@@ -1295,7 +1357,7 @@ export class CampScene extends Phaser.Scene {
     const fillWidth = Math.max(1, config.width * progress);
 
     this.add.text(left, config.y - 12, '☾ Рассудок', {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: '#b8aee0',
       wordWrap: { width: config.width * 0.55, useAdvancedWrap: true },
@@ -1303,7 +1365,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(10);
 
     this.sanityValueText = this.add.text(left + config.width, config.y - 12, `${player.sanity}/${player.maxSanity}`, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: '#ded5ff',
       wordWrap: { width: config.width * 0.42, useAdvancedWrap: true },
@@ -1326,7 +1388,7 @@ export class CampScene extends Phaser.Scene {
     }
 
     this.sanityHintText = this.add.text(config.x, config.y + 18, this.formatSanityTimeToFull(), {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '9px',
       color: '#817891',
       align: 'center',
@@ -1435,19 +1497,19 @@ export class CampScene extends Phaser.Scene {
     });
 
     this.add.text(x - width / 2 + 20, y, icon, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '11px',
       color: '#d8b56d',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 1,
     }).setOrigin(0.5).setDepth(10);
 
     this.add.text(x - width / 2 + 35, y, value, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '12px',
       color: '#d8c7a3',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 1,
       wordWrap: {
         width: width - 42,
         useAdvancedWrap: true,
@@ -1484,14 +1546,14 @@ export class CampScene extends Phaser.Scene {
 
     if (config.icon) {
       this.add.text(config.x - config.width / 2 + 20, config.y, config.icon, {
-        fontFamily: UI.font.body,
+        fontFamily: this.PIXEL_FONT_FAMILY,
         fontSize: '10px',
         color: '#d8b56d',
       }).setOrigin(0.5).setDepth(config.depth + 2);
     }
 
     this.add.text(textX, config.y, config.text, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: '#9f9788',
       align: 'center',
@@ -1963,7 +2025,7 @@ export class CampScene extends Phaser.Scene {
     const startY = top + (layout.veryCompact ? 128 : 142);
 
     const titleText = this.add.text(layout.centerX, top + 42, 'Выбери огниво', {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.compact ? '27px' : '31px',
       color: '#d8b36f',
       stroke: '#000000',
@@ -1981,7 +2043,7 @@ export class CampScene extends Phaser.Scene {
       top + (layout.veryCompact ? 76 : 84),
       'Обычное и среднее огниво крафтятся из материалов. Донатное доступно только после разблокировки.',
       {
-        fontFamily: UI.font.body,
+        fontFamily: this.PIXEL_FONT_FAMILY,
         fontSize: layout.veryCompact ? '12px' : '14px',
         color: '#b8aa91',
         align: 'center',
@@ -2119,21 +2181,21 @@ export class CampScene extends Phaser.Scene {
       .setDepth(1004);
 
     const icon = this.add.text(iconX, config.y, config.flintType === 'donate' ? '✦' : config.flintType === 'rare' ? '◆' : '◇', {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '20px',
       color: canSelect
         ? config.flintType === 'donate' ? '#d7b7ff' : '#f0c17d'
         : '#6b6258',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 1,
     }).setOrigin(0.5).setDepth(1005);
 
     const title = this.add.text(textX, config.y - 25, config.title, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '17px',
       color: canSelect ? '#d8c088' : '#766d62',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
       wordWrap: {
         width: config.width - 168,
         useAdvancedWrap: true,
@@ -2142,7 +2204,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(1005);
 
     const description = this.add.text(textX, config.y + 1, config.description, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '12px',
       color: canSelect ? '#b8aa91' : '#6f665b',
       wordWrap: {
@@ -2153,7 +2215,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(1005);
 
     const cost = this.add.text(textX, config.y + 25, costText, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '10px',
       color: canSelect ? '#8f877a' : '#c4877f',
       wordWrap: {
@@ -2164,11 +2226,11 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(1005);
 
     const action = this.add.text(left + config.width - 50, config.y, buttonText, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '12px',
       color: canSelect ? '#f0d58a' : '#7d6860',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 1,
       align: 'center',
       wordWrap: {
         width: 78,
@@ -2376,7 +2438,7 @@ export class CampScene extends Phaser.Scene {
     const centerY = layout.height / 2;
 
     const title = this.add.text(layout.centerX, centerY - 178, 'Ты ранен', {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.compact ? '28px' : '32px',
       color: '#c76d68',
       stroke: '#000000',
@@ -2402,7 +2464,7 @@ export class CampScene extends Phaser.Scene {
           : 'Сначала нужно зажечь городской костёр через огниво.',
       ].join('\n'),
       {
-        fontFamily: UI.font.body,
+        fontFamily: this.PIXEL_FONT_FAMILY,
         fontSize: layout.compact ? '17px' : '19px',
         color: '#d1c7b4',
         align: 'center',
@@ -2558,11 +2620,11 @@ export class CampScene extends Phaser.Scene {
     const modal = this.createModalShell(layout, 310);
 
     const titleText = this.add.text(layout.centerX, layout.height / 2 - 96, title, {
-      fontFamily: UI.font.title,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.compact ? '26px' : '29px',
       color: '#c9a86a',
       stroke: '#000000',
-      strokeThickness: 4,
+      strokeThickness: 2,
       align: 'center',
       wordWrap: {
         width: layout.contentWidth - 80,
@@ -2572,7 +2634,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(1002);
 
     const messageText = this.add.text(layout.centerX, layout.height / 2 - 10, message, {
-      fontFamily: UI.font.body,
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: layout.compact ? '17px' : '19px',
       color: '#d1c7b4',
       align: 'center',
