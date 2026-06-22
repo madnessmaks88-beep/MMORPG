@@ -552,34 +552,41 @@ export class CampScene extends Phaser.Scene {
 
     this.createPixelFloor(layout, panelY, panelHeight);
 
-    const pad = layout.veryCompact ? 9 : layout.compact ? 12 : 14;
-    const innerWidth = layout.contentWidth - pad * 2;
-    const availableHeight = Math.max(236, panelHeight - pad * 2);
+    const padX = layout.veryCompact ? 6 : layout.compact ? 8 : 10;
+    const padY = layout.veryCompact ? 9 : layout.compact ? 11 : 13;
+    const innerWidth = layout.contentWidth - padX * 2;
+    const availableHeight = Math.max(260, panelHeight - padY * 2);
 
-    const baseGap = layout.veryCompact ? 6 : layout.compact ? 8 : 10;
+    const baseGap = layout.veryCompact ? 7 : layout.compact ? 9 : 11;
     const primaryHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.18 : 0.16)),
-      layout.veryCompact ? 52 : 62,
-      layout.veryCompact ? 62 : layout.compact ? 76 : 82
+      Math.round(availableHeight * (layout.veryCompact ? 0.22 : 0.19)),
+      layout.veryCompact ? 60 : 68,
+      layout.veryCompact ? 68 : layout.compact ? 82 : 86
     );
     const smallTileHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.155 : 0.14)),
-      layout.veryCompact ? 46 : 54,
-      layout.veryCompact ? 58 : layout.compact ? 66 : 68
+      Math.round(availableHeight * (layout.veryCompact ? 0.17 : 0.152)),
+      layout.veryCompact ? 54 : 60,
+      layout.veryCompact ? 64 : layout.compact ? 72 : 76
     );
     const wideHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.16 : 0.145)),
-      layout.veryCompact ? 48 : 58,
-      layout.veryCompact ? 60 : layout.compact ? 72 : 76
+      Math.round(availableHeight * (layout.veryCompact ? 0.19 : 0.17)),
+      layout.veryCompact ? 58 : 66,
+      layout.veryCompact ? 70 : layout.compact ? 80 : 84
     );
 
-    const compactContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
-    const extraHeight = Math.max(0, availableHeight - compactContentHeight);
-    const gap = Phaser.Math.Clamp(baseGap + Math.floor(extraHeight / 8), baseGap, layout.veryCompact ? 9 : 13);
+    const minContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
+    const extraHeight = Math.max(0, availableHeight - minContentHeight);
+    const gap = Phaser.Math.Clamp(
+      baseGap + Math.floor(extraHeight / 7),
+      baseGap,
+      layout.veryCompact ? 11 : layout.compact ? 15 : 18
+    );
     const contentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + gap * 4;
-    const topPad = pad + Math.max(0, Math.floor((availableHeight - contentHeight) / 2));
 
-    const pairGap = layout.veryCompact ? 8 : 10;
+    // Не центрируем кнопки строго по панели: так исчезает огромная пустота сверху.
+    const topPad = padY + Math.max(4, Math.floor((availableHeight - contentHeight) * 0.28));
+
+    const pairGap = layout.veryCompact ? 6 : 8;
     const tileWidth = Math.floor((innerWidth - pairGap) / 2);
     const leftX = layout.centerX - tileWidth / 2 - pairGap / 2;
     const rightX = layout.centerX + tileWidth / 2 + pairGap / 2;
@@ -590,7 +597,7 @@ export class CampScene extends Phaser.Scene {
     const marketY = rowTwoY + smallTileHeight / 2 + gap + wideHeight / 2;
     const homeY = marketY + wideHeight + gap;
     const decorationTop = homeY + wideHeight / 2 + Math.max(5, gap - 2);
-    const decorationHeight = Math.max(0, layout.actionsBottom - pad - decorationTop);
+    const decorationHeight = Math.max(0, layout.actionsBottom - padY - decorationTop);
 
     const dungeonTitle = hasActiveRun || hasActiveCheckpoint
       ? 'Продолжить спуск'
@@ -814,9 +821,9 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     return this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 16, 34, 46),
-      titleFontSize: config.layout.veryCompact ? '15px' : config.layout.compact ? '18px' : '20px',
-      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 12, 42, 58),
+      titleFontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '19px' : '21px',
+      statusFontSize: config.layout.veryCompact ? '11px' : '12px',
       primary: true,
     });
   }
@@ -903,9 +910,9 @@ export class CampScene extends Phaser.Scene {
   }) {
     this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 16, 34, 48),
-      titleFontSize: config.layout.veryCompact ? '16px' : config.layout.compact ? '20px' : '22px',
-      statusFontSize: config.layout.veryCompact ? '10px' : '12px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 10, 44, 62),
+      titleFontSize: config.layout.veryCompact ? '18px' : config.layout.compact ? '21px' : '23px',
+      statusFontSize: config.layout.veryCompact ? '11px' : '13px',
       primary: true,
     });
   }
@@ -933,9 +940,9 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     return this.createSpriteRpgButton({
       ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 18, 30, 42),
-      titleFontSize: config.height <= 54 ? '12px' : config.layout.compact ? '14px' : '16px',
-      statusFontSize: config.height <= 54 ? '9px' : '10px',
+      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 34, 48),
+      titleFontSize: config.layout.veryCompact ? '14px' : config.layout.compact ? '16px' : '17px',
+      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
       primary: false,
     });
   }
@@ -984,11 +991,25 @@ export class CampScene extends Phaser.Scene {
       config.highlighted ? 0.075 : 0.025
     );
 
-    const textX = -config.width / 2 + (config.primary ? Math.min(118, config.width * 0.24) : Math.min(76, config.width * 0.36));
-    const textRightPad = config.primary ? 46 : 18;
-    const textWidth = Math.max(58, config.width / 2 - textX - textRightPad);
-    const titleOffsetY = config.primary ? -config.height * 0.12 : -config.height * 0.13;
-    const statusOffsetY = config.primary ? config.height * 0.18 : config.height * 0.21;
+    const iconBoxSize = config.iconBoxSize;
+    const iconX = -config.width / 2 + iconBoxSize / 2 + (config.primary ? 22 : 14);
+    const textX = iconX + iconBoxSize / 2 + (config.primary ? 18 : 11);
+    const textRightPad = config.primary ? 48 : 20;
+    const textWidth = Math.max(72, config.width / 2 - textX - textRightPad);
+    const titleOffsetY = config.primary ? -config.height * 0.13 : -config.height * 0.14;
+    const statusOffsetY = config.primary ? config.height * 0.2 : config.height * 0.22;
+
+    const iconPlate = this.add.rectangle(iconX, 0, iconBoxSize, iconBoxSize, 0x080808, config.primary ? 0.42 : 0.36)
+      .setStrokeStyle(config.primary ? 2 : 1, config.innerBorderColor, config.highlighted ? 0.72 : 0.48);
+
+    const iconText = this.add.text(iconX, 0, config.icon, {
+      fontFamily: UI.font.title,
+      fontSize: `${Math.floor(iconBoxSize * (config.primary ? 0.52 : 0.48))}px`,
+      color: config.textColor,
+      stroke: '#000000',
+      strokeThickness: config.primary ? 4 : 3,
+      align: 'center',
+    }).setOrigin(0.5);
 
     const titleText = this.add.text(textX, titleOffsetY, config.title, {
       fontFamily: UI.font.title,
@@ -1028,6 +1049,8 @@ export class CampScene extends Phaser.Scene {
       shadow,
       buttonImage,
       accentGlow,
+      iconPlate,
+      iconText,
       titleText,
       statusText,
       marker,
@@ -1085,7 +1108,7 @@ export class CampScene extends Phaser.Scene {
       config.container.setY(baseY);
       config.shadow.setAlpha(0.32);
       config.buttonImage.setAlpha(1);
-      config.accentGlow.setAlpha(0.025);
+      config.accentGlow.setAlpha(config.buttonImage.alpha >= 1 ? 0.05 : 0.025);
     };
 
     zone.on('pointerdown', () => {
@@ -1113,7 +1136,7 @@ export class CampScene extends Phaser.Scene {
         onComplete: () => {
           config.shadow.setAlpha(0.32);
           config.buttonImage.setAlpha(1);
-          config.accentGlow.setAlpha(0.025);
+          config.accentGlow.setAlpha(config.buttonImage.alpha >= 1 ? 0.05 : 0.025);
           config.onClick();
         },
       });
