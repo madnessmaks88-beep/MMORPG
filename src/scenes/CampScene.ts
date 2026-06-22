@@ -227,9 +227,9 @@ export class CampScene extends Phaser.Scene {
     const headerHeight = veryCompact ? 82 : compact ? 94 : 112;
     const heroTop = safeTop + headerHeight + (veryCompact ? 8 : 10);
     const heroHeight = veryCompact ? 164 : compact ? 178 : 196;
-    const actionsTop = heroTop + heroHeight + (veryCompact ? 10 : 14);
-    const actionsBottom = bottomNavTop - (veryCompact ? 8 : 12);
-    const actionsViewportHeight = Math.max(190, actionsBottom - actionsTop);
+    const actionsTop = heroTop + heroHeight + (veryCompact ? 12 : 16);
+    const actionsBottom = bottomNavTop - (veryCompact ? 16 : 20);
+    const actionsViewportHeight = Math.max(188, actionsBottom - actionsTop);
 
     return {
       width,
@@ -637,16 +637,17 @@ export class CampScene extends Phaser.Scene {
     const ascensionPoints = this.getAvailableAscensionPoints();
     const hasAscensionPoints = ascensionPoints > 0;
 
+    const panelInset = layout.veryCompact ? 8 : 10;
     const actionsPanel = this.createRoundedPanel({
       x: layout.centerX,
       y: layout.actionsTop + layout.actionsViewportHeight / 2,
       width: layout.contentWidth,
       height: layout.actionsViewportHeight,
-      radius: layout.veryCompact ? 24 : 32,
-      color: cityCampfireActive ? 0x0d0a08 : 0x06070a,
-      alpha: cityCampfireActive ? 0.82 : 0.78,
-      strokeColor: cityCampfireActive ? 0x8f6238 : 0x4b3928,
-      strokeAlpha: cityCampfireActive ? 0.54 : 0.62,
+      radius: layout.veryCompact ? 24 : 34,
+      color: cityCampfireActive ? 0x0d0a08 : 0x050609,
+      alpha: cityCampfireActive ? 0.88 : 0.84,
+      strokeColor: cityCampfireActive ? 0x8f6238 : 0x5b4932,
+      strokeAlpha: cityCampfireActive ? 0.64 : 0.58,
       strokeWidth: 1,
       depth: 4,
     });
@@ -666,36 +667,25 @@ export class CampScene extends Phaser.Scene {
     this.actionContainer = actionContainer;
     this.createActionViewportCamera(layout, actionContainer);
 
-    const gap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const sectionGap = layout.veryCompact ? 20 : 24;
-    const mainHeight = layout.veryCompact ? 92 : layout.compact ? 104 : 116;
-    const campfireHeight = layout.veryCompact ? 84 : layout.compact ? 96 : 108;
-    const tileHeight = layout.veryCompact ? 82 : layout.compact ? 92 : 100;
-    const largeLocationHeight = layout.veryCompact ? 96 : layout.compact ? 110 : 124;
-    const innerWidth = layout.contentWidth - (layout.veryCompact ? 36 : 44);
-    const tileGap = layout.veryCompact ? 10 : 12;
-    const useTwoCityColumns = innerWidth >= 330;
-    const useTwoRestColumns = innerWidth >= 350;
-    const tileWidth = useTwoCityColumns
-      ? Math.min((innerWidth - tileGap) / 2, 278)
+    const gap = layout.veryCompact ? 14 : layout.compact ? 16 : 18;
+    const sectionGap = layout.veryCompact ? 26 : layout.compact ? 30 : 34;
+    const mainHeight = layout.veryCompact ? 96 : layout.compact ? 110 : 124;
+    const pairCardHeight = layout.veryCompact ? 88 : layout.compact ? 100 : 112;
+    const largeLocationHeight = layout.veryCompact ? 102 : layout.compact ? 116 : 132;
+    const innerWidth = layout.contentWidth - (layout.veryCompact ? 46 : 56);
+    const pairGap = layout.veryCompact ? 10 : 12;
+    const useTwoColumns = layout.contentWidth >= 380 && !layout.veryCompact;
+    const pairWidth = useTwoColumns
+      ? Math.min((innerWidth - pairGap) / 2, 282)
       : innerWidth;
-    const restTileWidth = useTwoRestColumns
-      ? Math.min((innerWidth - tileGap) / 2, 286)
-      : innerWidth;
-    const leftX = useTwoCityColumns
-      ? layout.centerX - tileWidth / 2 - tileGap / 2
+    const leftX = useTwoColumns
+      ? layout.centerX - pairWidth / 2 - pairGap / 2
       : layout.centerX;
-    const rightX = useTwoCityColumns
-      ? layout.centerX + tileWidth / 2 + tileGap / 2
-      : layout.centerX;
-    const restLeftX = useTwoRestColumns
-      ? layout.centerX - restTileWidth / 2 - tileGap / 2
-      : layout.centerX;
-    const restRightX = useTwoRestColumns
-      ? layout.centerX + restTileWidth / 2 + tileGap / 2
+    const rightX = useTwoColumns
+      ? layout.centerX + pairWidth / 2 + pairGap / 2
       : layout.centerX;
 
-    let currentY = layout.actionsTop + (layout.veryCompact ? 16 : 22);
+    let currentY = layout.actionsTop + panelInset + (layout.veryCompact ? 14 : 18);
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Катакомбы');
     currentY += sectionGap + mainHeight / 2;
@@ -720,21 +710,21 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += mainHeight / 2 + gap + 4;
+    currentY += mainHeight / 2 + gap + 2;
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Привал');
-    currentY += sectionGap + (useTwoRestColumns ? tileHeight : campfireHeight) / 2;
+    currentY += sectionGap + pairCardHeight / 2;
 
-    if (useTwoRestColumns) {
+    if (useTwoColumns) {
       const restCard = this.createCampTile({
-        x: restLeftX,
+        x: leftX,
         y: currentY,
-        width: restTileWidth,
-        height: tileHeight,
+        width: pairWidth,
+        height: pairCardHeight,
         icon: '♨',
         title: this.getCityCampfireButtonTitle(),
         description: this.getCityCampfireButtonDescription(),
-        accentColor: cityCampfireActive ? 0xd28a3a : 0x6f5432,
+        accentColor: cityCampfireActive ? 0xd28a3a : 0x7b5632,
         highlighted: cityCampfireActive,
         onClick: () => {
           this.restAtCampfire();
@@ -744,18 +734,18 @@ export class CampScene extends Phaser.Scene {
       this.restButtonLabel = restCard.titleText;
       this.restButtonDescription = restCard.descriptionText;
       this.createCampfireTileGlow({
-        x: restLeftX,
+        x: leftX,
         y: currentY,
-        width: restTileWidth,
-        height: tileHeight,
+        width: pairWidth,
+        height: pairCardHeight,
         active: cityCampfireActive,
       });
 
       this.createCampTile({
-        x: restRightX,
+        x: rightX,
         y: currentY,
-        width: restTileWidth,
-        height: tileHeight,
+        width: pairWidth,
+        height: pairCardHeight,
         icon: hasAscensionPoints ? '!' : '✦',
         title: 'Храм возвышения',
         description: hasAscensionPoints ? `Есть очки: ${ascensionPoints}` : 'Раскрыть силу героя',
@@ -766,24 +756,24 @@ export class CampScene extends Phaser.Scene {
         },
       });
       this.createAscensionShrinePulse({
-        x: restRightX,
+        x: rightX,
         y: currentY,
-        width: restTileWidth,
-        height: tileHeight,
+        width: pairWidth,
+        height: pairCardHeight,
         highlighted: hasAscensionPoints,
       });
 
-      currentY += tileHeight / 2 + gap + 4;
+      currentY += pairCardHeight / 2 + gap + 2;
     } else {
       const restCard = this.createWideActionButton({
         x: layout.centerX,
         y: currentY,
         width: innerWidth,
-        height: campfireHeight,
+        height: pairCardHeight,
         icon: '♨',
         title: this.getCityCampfireButtonTitle(),
         description: this.getCityCampfireButtonDescription(),
-        accentColor: cityCampfireActive ? 0xd28a3a : 0x6f5432,
+        accentColor: cityCampfireActive ? 0xd28a3a : 0x7b5632,
         onClick: () => {
           this.restAtCampfire();
         },
@@ -795,16 +785,16 @@ export class CampScene extends Phaser.Scene {
         x: layout.centerX,
         y: currentY,
         width: innerWidth,
-        height: campfireHeight,
+        height: pairCardHeight,
       });
 
-      currentY += campfireHeight / 2 + gap + tileHeight / 2;
+      currentY += pairCardHeight / 2 + gap + pairCardHeight / 2;
 
       this.createCampTile({
         x: layout.centerX,
         y: currentY,
         width: innerWidth,
-        height: tileHeight,
+        height: pairCardHeight,
         icon: hasAscensionPoints ? '!' : '✦',
         title: 'Храм возвышения',
         description: hasAscensionPoints ? `Есть очки: ${ascensionPoints}` : 'Потратить очки и раскрыть силу',
@@ -818,23 +808,23 @@ export class CampScene extends Phaser.Scene {
         x: layout.centerX,
         y: currentY,
         width: innerWidth,
-        height: tileHeight,
+        height: pairCardHeight,
         highlighted: hasAscensionPoints,
       });
 
-      currentY += tileHeight / 2 + gap + 4;
+      currentY += pairCardHeight / 2 + gap + 2;
     }
 
     this.startCampfireTimer();
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Лагерь');
-    currentY += sectionGap + tileHeight / 2;
+    currentY += sectionGap + pairCardHeight / 2;
 
     this.createCampTile({
       x: leftX,
       y: currentY,
-      width: tileWidth,
-      height: tileHeight,
+      width: pairWidth,
+      height: pairCardHeight,
       icon: '☕',
       title: 'Таверна',
       description: 'Отдых, слухи и подготовка героя',
@@ -844,12 +834,12 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    if (useTwoCityColumns) {
+    if (useTwoColumns) {
       this.createCampTile({
         x: rightX,
         y: currentY,
-        width: tileWidth,
-        height: tileHeight,
+        width: pairWidth,
+        height: pairCardHeight,
         icon: hasQuestReward ? '!' : '◆',
         title: 'Доска заданий',
         description: hasQuestReward ? 'Есть награда' : 'Задания и награды',
@@ -860,15 +850,15 @@ export class CampScene extends Phaser.Scene {
         },
       });
 
-      currentY += tileHeight / 2 + gap;
+      currentY += pairCardHeight / 2 + gap + 2;
     } else {
-      currentY += tileHeight / 2 + gap + tileHeight / 2;
+      currentY += pairCardHeight / 2 + gap + pairCardHeight / 2;
 
       this.createCampTile({
         x: layout.centerX,
         y: currentY,
-        width: tileWidth,
-        height: tileHeight,
+        width: innerWidth,
+        height: pairCardHeight,
         icon: hasQuestReward ? '!' : '◆',
         title: 'Доска заданий',
         description: hasQuestReward ? 'Есть награда' : 'Задания и награды',
@@ -879,10 +869,9 @@ export class CampScene extends Phaser.Scene {
         },
       });
 
-      currentY += tileHeight / 2 + gap;
+      currentY += pairCardHeight / 2 + gap + 2;
     }
 
-    currentY += 4;
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Торговая площадь');
     currentY += sectionGap + largeLocationHeight / 2;
 
@@ -900,7 +889,7 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += largeLocationHeight / 2 + gap + 4;
+    currentY += largeLocationHeight / 2 + gap + 2;
 
     this.createSectionLabel(layout.centerX, currentY, innerWidth, 'Убежище');
     currentY += sectionGap + largeLocationHeight / 2;
@@ -919,10 +908,10 @@ export class CampScene extends Phaser.Scene {
       },
     });
 
-    currentY += largeLocationHeight / 2 + 24;
+    currentY += largeLocationHeight / 2 + (layout.veryCompact ? 42 : 54);
 
     const contentHeight = currentY - layout.actionsTop;
-    this.maxScrollY = Math.max(0, contentHeight - layout.actionsViewportHeight + 12);
+    this.maxScrollY = Math.max(0, contentHeight - layout.actionsViewportHeight + 18);
     this.currentScrollY = Phaser.Math.Clamp(this.currentScrollY, 0, this.maxScrollY);
     this.targetScrollY = this.currentScrollY;
 
@@ -936,22 +925,32 @@ export class CampScene extends Phaser.Scene {
 
   private createSectionLabel(x: number, y: number, width: number, text: string) {
     const container = this.requireActionContainer();
+    const pillWidth = Phaser.Math.Clamp(Math.round(text.length * 12 + 46), 126, Math.min(230, width));
 
-    const lineLeft = this.add.rectangle(x - width / 4, y, width / 2 - 72, 1, 0x4b4031, 0.45).setDepth(8);
-    const lineRight = this.add.rectangle(x + width / 4, y, width / 2 - 72, 1, 0x4b4031, 0.45).setDepth(8);
-    const label = this.add.text(x, y, text, {
+    const glow = this.add.rectangle(x, y, pillWidth + 24, 24, 0x000000, 0.22)
+      .setDepth(7);
+    const bg = this.add.rectangle(x, y, pillWidth, 24, 0x10100e, 0.9)
+      .setStrokeStyle(1, 0x6d5634, 0.5)
+      .setDepth(8);
+    const leftMark = this.add.rectangle(x - pillWidth / 2 + 10, y, 4, 12, 0xb9985b, 0.72)
+      .setDepth(9);
+    const rightMark = this.add.rectangle(x + pillWidth / 2 - 10, y, 4, 12, 0xb9985b, 0.38)
+      .setDepth(9);
+
+    const label = this.add.text(x, y, text.toUpperCase(), {
       fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#8e806b',
+      fontSize: '13px',
+      color: '#bda678',
       align: 'center',
+      letterSpacing: 1,
       wordWrap: {
-        width: 138,
+        width: pillWidth - 34,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(9);
+    }).setOrigin(0.5).setDepth(10);
 
-    container.add([lineLeft, lineRight, label]);
+    container.add([glow, bg, leftMark, rightMark, label]);
   }
 
   private createCityCampfireButtonFireEffect(config: {
@@ -1210,15 +1209,15 @@ export class CampScene extends Phaser.Scene {
   }
 
   private createActionScrollbar(layout: CampLayout) {
-    const trackHeight = Math.max(40, layout.actionsViewportHeight - 40);
-    const x = layout.centerX + layout.contentWidth / 2 - 13;
+    const trackHeight = Math.max(40, layout.actionsViewportHeight - 48);
+    const x = layout.centerX + layout.contentWidth / 2 - 12;
     const y = layout.actionsTop + layout.actionsViewportHeight / 2;
 
-    this.actionScrollTrack = this.add.rectangle(x, y, 4, trackHeight, 0x21170f, 0.5)
+    this.actionScrollTrack = this.add.rectangle(x, y, 3, trackHeight, 0x21170f, 0.42)
       .setDepth(18)
       .setVisible(this.maxScrollY > 0);
 
-    this.actionScrollThumb = this.add.rectangle(x, layout.actionsTop + 24, 4, 28, 0xb89a5e, 0.82)
+    this.actionScrollThumb = this.add.rectangle(x, layout.actionsTop + 28, 3, 30, 0xb89a5e, 0.86)
       .setDepth(19)
       .setVisible(this.maxScrollY > 0);
 
@@ -1359,7 +1358,11 @@ export class CampScene extends Phaser.Scene {
   }) {
     const container = this.requireActionContainer();
     const accent = config.hasActiveRun ? 0x4d7c5c : 0x8c2f32;
-    const titleColor = config.hasActiveRun ? '#8fc89b' : '#d2b87a';
+    const titleColor = config.hasActiveRun ? '#a7dfad' : '#d9bd7a';
+    const left = config.x - config.width / 2;
+    const right = config.x + config.width / 2;
+    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.47), 48, 68);
+    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 0.9), 92, 118);
 
     this.createRoundedPanel({
       parent: container,
@@ -1367,57 +1370,63 @@ export class CampScene extends Phaser.Scene {
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: 28,
-      color: config.hasActiveRun ? 0x0b1712 : 0x17100d,
+      radius: 30,
+      color: config.hasActiveRun ? 0x0b1712 : 0x150d0c,
       alpha: 0.98,
       strokeColor: accent,
-      strokeAlpha: 0.72,
+      strokeAlpha: 0.78,
       strokeWidth: 2,
       depth: 4,
     });
 
-    const left = config.x - config.width / 2;
-    const iconX = left + 48;
-    const textX = left + 92;
-
+    const shadowGlow = this.add.circle(iconX, config.y, 48, accent, config.hasActiveRun ? 0.16 : 0.11)
+      .setDepth(5);
     const ring = this.add.circle(iconX, config.y, 32, accent, 0.16)
       .setStrokeStyle(2, accent, 0.72)
       .setDepth(6);
-
     const icon = this.add.text(iconX, config.y, config.hasActiveRun ? '▼' : '☠', {
       fontFamily: UI.font.body,
-      fontSize: '27px',
+      fontSize: config.layout.veryCompact ? '26px' : '30px',
       color: titleColor,
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 4,
     }).setOrigin(0.5).setDepth(7);
 
-    const titleText = this.add.text(textX, config.y - 21, config.title, {
+    const titleText = this.add.text(textX, config.y - config.height * 0.18, config.title, {
       fontFamily: UI.font.title,
-      fontSize: config.layout.compact ? '21px' : '24px',
+      fontSize: config.layout.veryCompact ? '21px' : config.layout.compact ? '24px' : '27px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       wordWrap: {
-        width: config.width - 122,
+        width: Math.max(150, right - textX - 36),
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const description = this.add.text(textX, config.y + 19, config.description, {
+    const description = this.add.text(textX, config.y + config.height * 0.17, config.description, {
       fontFamily: UI.font.body,
-      fontSize: '13px',
-      color: '#91887b',
+      fontSize: config.layout.veryCompact ? '12px' : '13px',
+      color: '#a09688',
       wordWrap: {
-        width: config.width - 122,
+        width: Math.max(150, right - textX - 36),
         useAdvancedWrap: true,
       },
       maxLines: 2,
-      lineSpacing: 2,
+      lineSpacing: 3,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    container.add([ring, icon, titleText, description]);
+    const bottomLine = this.add.rectangle(
+      config.x,
+      config.y + config.height / 2 - 8,
+      config.width - 54,
+      2,
+      accent,
+      config.hasActiveRun ? 0.28 : 0.18
+    ).setDepth(6);
+
+    container.add([shadowGlow, ring, icon, titleText, description, bottomLine]);
 
     this.createClickZone({
       parent: container,
@@ -1430,16 +1439,15 @@ export class CampScene extends Phaser.Scene {
       normalColor: titleColor,
     });
 
-    if (config.hasActiveRun) {
-      this.tweens.add({
-        targets: [ring, titleText],
-        alpha: { from: 0.72, to: 1 },
-        duration: 900,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
+    this.tweens.add({
+      targets: [shadowGlow, ring, bottomLine],
+      alpha: config.hasActiveRun ? '+=0.08' : '+=0.04',
+      scale: { from: 0.98, to: config.hasActiveRun ? 1.06 : 1.03 },
+      duration: config.hasActiveRun ? 900 : 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   private createCampTile(config: {
@@ -1456,6 +1464,11 @@ export class CampScene extends Phaser.Scene {
   }): CampActionButton {
     const container = this.requireActionContainer();
     const highlighted = config.highlighted ?? false;
+    const titleColor = highlighted ? '#e5d08d' : '#cdb682';
+    const top = config.y - config.height / 2;
+    const iconY = top + Phaser.Math.Clamp(Math.round(config.height * 0.29), 25, 34);
+    const titleY = top + Phaser.Math.Clamp(Math.round(config.height * 0.57), 52, 64);
+    const descY = top + Phaser.Math.Clamp(Math.round(config.height * 0.79), 72, 88);
 
     this.createRoundedPanel({
       parent: container,
@@ -1463,42 +1476,39 @@ export class CampScene extends Phaser.Scene {
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: 24,
-      color: highlighted ? 0x0e1812 : 0x0d0d0f,
-      alpha: highlighted ? 0.98 : 0.95,
+      radius: 26,
+      color: highlighted ? 0x11170f : 0x0b0c0f,
+      alpha: highlighted ? 0.98 : 0.96,
       strokeColor: config.accentColor,
-      strokeAlpha: highlighted ? 0.78 : 0.42,
+      strokeAlpha: highlighted ? 0.78 : 0.52,
       strokeWidth: highlighted ? 2 : 1,
       depth: 4,
     });
 
-    const top = config.y - config.height / 2;
-    const iconY = top + 25;
-    const titleY = top + 54;
-    const descY = top + 76;
-    const titleColor = highlighted ? '#9fd0a6' : '#c9a86a';
-
-    const iconBg = this.add.circle(config.x, iconY, 21, config.accentColor, 0.13)
-      .setStrokeStyle(1, config.accentColor, 0.55)
+    const glow = this.add.circle(config.x, iconY, highlighted ? 29 : 24, config.accentColor, highlighted ? 0.16 : 0.1)
+      .setDepth(5);
+    const iconBg = this.add.circle(config.x, iconY, highlighted ? 22 : 20, config.accentColor, highlighted ? 0.18 : 0.12)
+      .setStrokeStyle(1, config.accentColor, highlighted ? 0.68 : 0.5)
       .setDepth(6);
 
     const icon = this.add.text(config.x, iconY, config.icon, {
       fontFamily: UI.font.body,
-      fontSize: '18px',
+      fontSize: config.height <= 90 ? '18px' : '20px',
       color: titleColor,
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
+      align: 'center',
     }).setOrigin(0.5).setDepth(7);
 
     const titleText = this.add.text(config.x, titleY, config.title, {
       fontFamily: UI.font.title,
-      fontSize: '16px',
+      fontSize: config.height <= 90 ? '16px' : '18px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
       wordWrap: {
-        width: config.width - 18,
+        width: config.width - 20,
         useAdvancedWrap: true,
       },
       maxLines: 1,
@@ -1506,17 +1516,27 @@ export class CampScene extends Phaser.Scene {
 
     const description = this.add.text(config.x, descY, config.description, {
       fontFamily: UI.font.body,
-      fontSize: '11px',
-      color: '#8c8579',
+      fontSize: config.height <= 90 ? '11px' : '12px',
+      color: '#928a7e',
       align: 'center',
       wordWrap: {
-        width: config.width - 18,
+        width: config.width - 24,
         useAdvancedWrap: true,
       },
-      maxLines: 1,
+      maxLines: 2,
+      lineSpacing: 1,
     }).setOrigin(0.5).setDepth(7);
 
-    container.add([iconBg, icon, titleText, description]);
+    const accentLine = this.add.rectangle(
+      config.x,
+      config.y + config.height / 2 - 6,
+      config.width - 30,
+      2,
+      config.accentColor,
+      highlighted ? 0.28 : 0.12
+    ).setDepth(6);
+
+    container.add([glow, iconBg, icon, titleText, description, accentLine]);
 
     this.createClickZone({
       parent: container,
@@ -1531,11 +1551,13 @@ export class CampScene extends Phaser.Scene {
 
     if (highlighted) {
       this.tweens.add({
-        targets: titleText,
-        alpha: 0.55,
-        duration: 700,
+        targets: [glow, titleText, accentLine],
+        alpha: '+=0.08',
+        scale: { from: 0.98, to: 1.05 },
+        duration: 820,
         yoyo: true,
         repeat: -1,
+        ease: 'Sine.easeInOut',
       });
     }
 
@@ -1559,8 +1581,8 @@ export class CampScene extends Phaser.Scene {
     const container = this.requireActionContainer();
     const left = config.x - config.width / 2;
     const right = config.x + config.width / 2;
-    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.5), 46, 64);
-    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 0.94), 88, 110);
+    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.5), 50, 68);
+    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 0.92), 94, 118);
     const titleColor = '#d8c088';
 
     this.createRoundedPanel({
@@ -1569,71 +1591,73 @@ export class CampScene extends Phaser.Scene {
       y: config.y,
       width: config.width,
       height: config.height,
-      radius: 28,
-      color: 0x11100d,
+      radius: 30,
+      color: 0x0c0d0d,
       alpha: 0.98,
       strokeColor: config.accentColor,
-      strokeAlpha: 0.68,
+      strokeAlpha: 0.72,
       strokeWidth: 2,
       depth: 4,
     });
 
-    const glow = this.add.circle(iconX, config.y, 33, config.accentColor, 0.14)
-      .setStrokeStyle(2, config.accentColor, 0.58)
+    const wideGlow = this.add.rectangle(config.x, config.y, config.width - 18, config.height - 12, config.accentColor, 0.035)
+      .setDepth(5);
+    const glow = this.add.circle(iconX, config.y, 36, config.accentColor, 0.16)
+      .setStrokeStyle(2, config.accentColor, 0.6)
       .setDepth(6);
 
     const icon = this.add.text(iconX, config.y, config.icon, {
       fontFamily: UI.font.title,
-      fontSize: '24px',
+      fontSize: config.height < 110 ? '24px' : '27px',
       color: '#e0c585',
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
     }).setOrigin(0.5).setDepth(7);
 
-    const titleText = this.add.text(textX, config.y - 22, config.title, {
+    const titleText = this.add.text(textX, config.y - config.height * 0.18, config.title, {
       fontFamily: UI.font.title,
-      fontSize: config.height < 104 ? '20px' : '23px',
+      fontSize: config.height < 110 ? '21px' : '24px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       wordWrap: {
-        width: Math.max(130, right - textX - 46),
+        width: Math.max(130, right - textX - 48),
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const descriptionText = this.add.text(textX, config.y + 15, config.description, {
+    const descriptionText = this.add.text(textX, config.y + config.height * 0.14, config.description, {
       fontFamily: UI.font.body,
-      fontSize: config.height < 104 ? '12px' : '13px',
-      color: '#9f9686',
+      fontSize: config.height < 110 ? '12px' : '13px',
+      color: '#a09688',
       wordWrap: {
-        width: Math.max(130, right - textX - 46),
+        width: Math.max(130, right - textX - 48),
         useAdvancedWrap: true,
       },
       maxLines: 2,
       lineSpacing: 2,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const arrow = this.add.text(right - 28, config.y, '›', {
+    const arrow = this.add.text(right - 30, config.y, '›', {
       fontFamily: UI.font.title,
-      fontSize: '30px',
-      color: '#8d7147',
+      fontSize: '32px',
+      color: '#a38452',
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(7);
 
     const accentLine = this.add.rectangle(
       config.x,
-      config.y + config.height / 2 - 7,
-      config.width - 52,
+      config.y + config.height / 2 - 8,
+      config.width - 58,
       2,
       config.accentColor,
-      0.18
+      0.22
     ).setDepth(6);
 
-    container.add([glow, icon, titleText, descriptionText, arrow, accentLine]);
+    container.add([wideGlow, glow, icon, titleText, descriptionText, arrow, accentLine]);
 
     this.createClickZone({
       parent: container,
