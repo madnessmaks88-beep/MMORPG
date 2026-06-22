@@ -16,10 +16,7 @@ import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSys
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
-import {
-  getActiveCampfireBattleCheckpoint,
-  formatCheckpointTimeLeft,
-} from '../systems/CampfireCheckpointSystem';
+import { getActiveCampfireBattleCheckpoint } from '../systems/CampfireCheckpointSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 
 import {
@@ -93,8 +90,6 @@ export class CampScene extends Phaser.Scene {
   private sanityFill?: Phaser.GameObjects.Rectangle;
   private sanityFillWidth = 0;
   private cityCampfireIsVisuallyActive = false;
-  private actionBoardObjects: Phaser.GameObjects.GameObject[] = [];
-  private actionBoardStateKey = '';
 
   private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
@@ -134,7 +129,6 @@ export class CampScene extends Phaser.Scene {
       this.sanityTimerEvent = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
-      this.clearActionBoard();
       this.sanityValueText = undefined;
       this.sanityHintText = undefined;
       this.sanityFill = undefined;
@@ -169,34 +163,38 @@ export class CampScene extends Phaser.Scene {
 
     const veryCompact = height <= 700 || width <= 370;
     const compact = height <= 860 || width <= 410;
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 14, 28);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.048), 14, 30);
     const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 10, 24);
-    const safeBottom = veryCompact ? 92 : compact ? 104 : 116;
+    const safeBottom = veryCompact ? 90 : compact ? 102 : 112;
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    const headerHeight = veryCompact ? 54 : compact ? 66 : 76;
+    const headerHeight = veryCompact ? 62 : compact ? 74 : 86;
     const heroTop = safeTop + headerHeight + (veryCompact ? 6 : 8);
-    const heroHeight = veryCompact ? 124 : compact ? 146 : 164;
+    const heroHeight = veryCompact ? 136 : compact ? 154 : 172;
     const actionsTop = heroTop + heroHeight + (veryCompact ? 7 : 10);
-    const actionsBottom = bottomNavTop - (veryCompact ? 10 : 14);
+    const actionsBottom = bottomNavTop - (veryCompact ? 8 : 12);
     const actionsHeight = Math.max(236, actionsBottom - actionsTop);
 
     return {
       width,
       height,
       centerX: width / 2,
+
       safeX,
       safeTop,
       safeBottom,
+
       contentWidth,
       bottomNavTop,
+
       headerHeight,
       heroTop,
       heroHeight,
       actionsTop,
       actionsBottom,
       actionsHeight,
+
       compact,
       veryCompact,
     };
@@ -204,259 +202,326 @@ export class CampScene extends Phaser.Scene {
 
   private createCampBackdrop(layout: CampLayout) {
     const { width, height, centerX } = layout;
-    const gateY = Phaser.Math.Clamp(height * 0.3, 190, 310);
-    const fireY = Phaser.Math.Clamp(height * 0.49, 300, 440);
+    const gateY = Phaser.Math.Clamp(height * 0.31, 210, 340);
+    const fireY = Phaser.Math.Clamp(height * 0.52, 330, 500);
 
-    this.cameras.main.fadeIn(280, 0, 0, 0);
+    this.cameras.main.fadeIn(190, 0, 0, 0);
 
-    this.add.rectangle(centerX, height / 2, width, height, 0x020304, 1).setDepth(0);
-    this.add.rectangle(centerX, height * 0.3, width, height * 0.72, 0x07101a, 0.28).setDepth(0);
-    this.add.rectangle(centerX, height * 0.82, width, height * 0.42, 0x070504, 0.78).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, 0x040506, 1).setDepth(0);
+    this.add.rectangle(centerX, height * 0.24, width, height * 0.42, 0x08101a, 0.78).setDepth(0);
+    this.add.rectangle(centerX, height * 0.68, width, height * 0.64, 0x070403, 0.86).setDepth(0);
 
-    this.add.circle(centerX, gateY + 20, Math.min(width * 0.62, 270), 0x13233a, 0.16).setDepth(0.4);
-    this.add.circle(centerX - width * 0.22, fireY + 20, Math.min(width * 0.42, 180), 0x8b3f1f, 0.08).setDepth(0.5);
-    this.add.circle(centerX + width * 0.24, fireY - 6, Math.min(width * 0.32, 150), 0x4d2b67, 0.055).setDepth(0.5);
-
-    const gateWidth = Math.min(layout.contentWidth * 0.74, 430);
-    const gateHeight = layout.veryCompact ? 96 : layout.compact ? 118 : 144;
-    const gateTop = gateY - gateHeight / 2;
-    const gateLeft = centerX - gateWidth / 2;
-
-    const gate = this.add.graphics().setDepth(1);
-    gate.fillStyle(0x05070a, 0.76);
-    gate.fillRoundedRect(gateLeft, gateTop, gateWidth, gateHeight, 24);
-    gate.lineStyle(2, 0x2d2924, 0.58);
-    gate.strokeRoundedRect(gateLeft, gateTop, gateWidth, gateHeight, 24);
-    gate.fillStyle(0x010203, 0.68);
-    gate.fillRoundedRect(gateLeft + gateWidth * 0.26, gateTop + gateHeight * 0.2, gateWidth * 0.48, gateHeight * 0.72, 26);
-    gate.lineStyle(1, 0x6d5634, 0.24);
-    gate.strokeRoundedRect(gateLeft + gateWidth * 0.26, gateTop + gateHeight * 0.2, gateWidth * 0.48, gateHeight * 0.72, 26);
-
-    const gateGlow = this.add.rectangle(centerX, gateY + gateHeight * 0.18, gateWidth * 0.46, 4, 0x5f7f9d, 0.1).setDepth(1.2);
-    this.tweens.add({
-      targets: gateGlow,
-      alpha: { from: 0.055, to: 0.16 },
-      duration: 1900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    const fireGlow = this.add.circle(centerX - layout.contentWidth * 0.28, fireY, layout.veryCompact ? 42 : 58, 0xd28a3a, 0.08).setDepth(1.3);
-    const fire = this.add.text(centerX - layout.contentWidth * 0.28, fireY - 2, '♨', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '24px' : '32px',
-      color: '#c48b52',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(1.5);
-
-    this.tweens.add({
-      targets: [fireGlow, fire],
-      alpha: '+=0.08',
-      scale: { from: 0.97, to: 1.08 },
-      duration: 780,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    const shrineGlow = this.add.circle(centerX + layout.contentWidth * 0.28, fireY - 4, layout.veryCompact ? 36 : 50, 0x6b4a8c, 0.06).setDepth(1.3);
-    const shrineRune = this.add.text(centerX + layout.contentWidth * 0.28, fireY - 4, '✦', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '17px' : '23px',
-      color: '#bfa46f',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(1.5).setAlpha(0.62);
-
-    this.tweens.add({
-      targets: [shrineGlow, shrineRune],
-      alpha: '+=0.06',
-      duration: 1600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    for (let i = 0; i < 18; i += 1) {
-      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
-      const y = Phaser.Math.Between(layout.safeTop + 40, height - layout.safeBottom - 20);
-      const mote = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.035).setDepth(1.1);
-      this.tweens.add({
-        targets: mote,
-        alpha: { from: 0.018, to: 0.07 },
-        y: y - Phaser.Math.Between(18, 48),
-        x: x + Phaser.Math.Between(-8, 8),
-        duration: Phaser.Math.Between(2100, 3900),
-        delay: i * 95,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+    // Крупные блоки вместо мягкого градиента — полупиксельная глубина фона.
+    for (let i = 0; i < 8; i += 1) {
+      const blockW = width - 34 - i * 14;
+      this.add.rectangle(centerX, height - 92 - i * 31, blockW, 16, i % 2 === 0 ? 0x0c0a08 : 0x0f0d0a, 0.36)
+        .setDepth(1);
     }
 
-    this.add.rectangle(centerX, 14, width, 70, 0x000000, 0.38).setDepth(2);
-    this.add.rectangle(centerX, height - 12, width, 130, 0x000000, 0.54).setDepth(2);
-    this.add.rectangle(6, height / 2, 12, height, 0x000000, 0.34).setDepth(2);
-    this.add.rectangle(width - 6, height / 2, 12, height, 0x000000, 0.34).setDepth(2);
+    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.5).setDepth(2);
+    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.5).setDepth(2);
+    this.add.rectangle(centerX, 10, width, 20, 0x000000, 0.42).setDepth(2);
+    this.add.rectangle(centerX, height - 12, width, 24, 0x000000, 0.55).setDepth(2);
+
+    const gateWidth = Math.min(layout.contentWidth * 0.62, 330);
+    const gateHeight = layout.veryCompact ? 98 : layout.compact ? 118 : 140;
+    const gateX = centerX;
+
+    this.createPixelBlock(gateX, gateY + 18, gateWidth + 46, 18, 0x17110c, 0.86, 1, 0x4f3f2d, 0.5, 1);
+    this.createPixelBlock(gateX, gateY + gateHeight * 0.48, gateWidth + 72, 20, 0x11100d, 0.9, 1, 0x4f3f2d, 0.42, 1);
+    this.createPixelBlock(gateX - gateWidth / 2 - 20, gateY + gateHeight * 0.12, 24, gateHeight + 42, 0x111315, 0.9, 1, 0x514a3d, 0.48, 2);
+    this.createPixelBlock(gateX + gateWidth / 2 + 20, gateY + gateHeight * 0.12, 24, gateHeight + 42, 0x111315, 0.9, 1, 0x514a3d, 0.48, 2);
+    this.createPixelBlock(gateX, gateY + gateHeight * 0.15, gateWidth, gateHeight, 0x050507, 0.78, 2, 0x2f2620, 0.72, 1);
+
+    for (let i = 0; i < 5; i += 1) {
+      this.add.rectangle(gateX - gateWidth / 2 + 30 + i * (gateWidth - 60) / 4, gateY + gateHeight * 0.05, 3, gateHeight * 0.78, 0x000000, 0.22)
+        .setDepth(2);
+    }
+
+    ['ᛟ', 'ᚱ', 'ᛝ'].forEach((rune, index) => {
+      const runeText = this.add.text(gateX - 34 + index * 34, gateY - gateHeight * 0.42, rune, {
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '9px' : '11px',
+        color: '#8b724b',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(3).setAlpha(0.22);
+
+      this.tweens.add({
+        targets: runeText,
+        alpha: { from: 0.14, to: 0.38 },
+        duration: 520 + index * 70,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Linear',
+      });
+    });
+
+    // Полупиксельный костёр: несколько прямоугольников, без мыльного свечения.
+    const fireGlow = this.add.rectangle(centerX, fireY + 4, width * 0.48, 58, 0x8b421c, 0.08).setDepth(1);
+    const fireBlocks = [
+      this.add.rectangle(centerX - 13, fireY + 10, 8, 20, 0xa65a28, 0.58),
+      this.add.rectangle(centerX, fireY + 2, 10, 28, 0xd28a3a, 0.74),
+      this.add.rectangle(centerX + 12, fireY + 12, 8, 18, 0x7d2d1d, 0.58),
+      this.add.rectangle(centerX, fireY + 24, 42, 6, 0x3a2317, 0.9),
+    ].map(object => object.setDepth(3));
+
+    this.tweens.add({
+      targets: [fireGlow, ...fireBlocks],
+      alpha: '+=0.08',
+      duration: 360,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Linear',
+    });
+
+    for (let i = 0; i < 26; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop + 70, height - layout.safeBottom - 28);
+      const size = Phaser.Math.Between(2, 3);
+      const ash = this.add.rectangle(x, y, size, size, i % 3 === 0 ? 0xb8965a : 0x69645b, 0.07).setDepth(2);
+
+      this.tweens.add({
+        targets: ash,
+        alpha: { from: 0.03, to: 0.12 },
+        y: y - Phaser.Math.Between(8, 22),
+        duration: Phaser.Math.Between(900, 1700),
+        yoyo: true,
+        repeat: -1,
+        delay: i * 45,
+        ease: 'Linear',
+      });
+    }
+  }
+
+  private createPixelBlock(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: number,
+    alpha: number,
+    strokeWidth = 0,
+    strokeColor = 0x000000,
+    strokeAlpha = 1,
+    depth = 0
+  ) {
+    const block = this.add.rectangle(x, y, width, height, color, alpha).setDepth(depth);
+
+    if (strokeWidth > 0) {
+      block.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
+    }
+
+    return block;
   }
 
   private createHeader(layout: CampLayout) {
-    const y = layout.safeTop + layout.headerHeight / 2;
-    const width = layout.contentWidth;
-    const height = layout.headerHeight;
-    const radius = layout.veryCompact ? 18 : 22;
+    const panelY = layout.safeTop + layout.headerHeight / 2;
+    const panel = this.createPixelPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: layout.contentWidth,
+      height: layout.headerHeight,
+      color: 0x0a0b0d,
+      borderColor: 0x111111,
+      innerColor: 0x8b6a3f,
+      depth: 8,
+      cut: layout.veryCompact ? 8 : 10,
+    });
 
-    const container = this.add.container(layout.centerX, y).setDepth(20).setAlpha(0);
-    container.setY(y - 8);
+    const topLine = this.add.rectangle(layout.centerX, panelY - layout.headerHeight / 2 + 10, layout.contentWidth - 42, 2, 0xb99257, 0.46).setDepth(11);
+    const bottomLine = this.add.rectangle(layout.centerX, panelY + layout.headerHeight / 2 - 10, layout.contentWidth - 68, 2, 0x453220, 0.64).setDepth(11);
 
-    const bg = this.createLocalPanel(container, width, height, radius, 0x07090c, 0.9, 0x8b6a3f, 0.44, 1);
-    const glow = this.add.rectangle(0, -height * 0.18, width - 22, Math.max(10, height * 0.3), 0xb9985b, 0.035);
-    const line = this.add.rectangle(0, height / 2 - 8, width - 70, 1, 0xb9985b, 0.18);
-    container.add([glow, line]);
-
-    const title = this.add.text(0, layout.veryCompact ? -10 : -13, 'Убежище у катакомб', {
+    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 12 : 16), 'Убежище у катакомб', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '20px' : layout.compact ? '24px' : '28px',
-      color: '#d8c088',
+      color: '#e0c585',
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
-      wordWrap: { width: width - 34, useAdvancedWrap: true },
+      wordWrap: {
+        width: layout.contentWidth - 44,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(12);
 
-    const subtitle = this.add.text(0, layout.veryCompact ? 13 : 17, 'последний огонь перед тьмой', {
+    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 14 : 18), 'последний пиксельный огонь перед тьмой', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '12px',
-      color: '#958a78',
+      color: '#9f9078',
       align: 'center',
-      wordWrap: { width: width - 58, useAdvancedWrap: true },
+      wordWrap: {
+        width: layout.contentWidth - 60,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(12);
 
-    container.add([title, subtitle]);
-    bg.setDepth(0);
-
-    this.createSubtleBrackets(container, width, height, 0xb9985b, 0.34, layout.veryCompact ? 9 : 12);
-
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      y,
-      duration: 320,
-      ease: 'Cubic.easeOut',
+    ['▪', '▪'].forEach((mark, index) => {
+      this.add.text(
+        index === 0 ? layout.centerX - layout.contentWidth / 2 + 26 : layout.centerX + layout.contentWidth / 2 - 26,
+        panelY,
+        mark,
+        {
+          fontFamily: UI.font.title,
+          fontSize: '14px',
+          color: '#b99257',
+          stroke: '#000000',
+          strokeThickness: 2,
+        }
+      ).setOrigin(0.5).setDepth(12);
     });
+
+    this.playPixelIntro([panel.shadow, panel.panel, topLine, bottomLine, title, subtitle], 40);
   }
 
   private createPlayerLine(layout: CampLayout) {
     const vkUser = getCachedVKUser();
     const vkName = vkUser ? vkUser.first_name : 'локальный режим';
-    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 11 : 13);
-    const width = Math.min(layout.contentWidth - 100, 320);
+    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 11 : 14);
+    const width = Math.min(layout.contentWidth - 92, 340);
 
     this.createDarkTag({
       x: layout.centerX,
       y,
       width,
-      height: layout.veryCompact ? 22 : 25,
+      height: layout.veryCompact ? 22 : 24,
       icon: '◆',
       text: `Игрок: ${vkName}`,
       accentColor: 0x6e5634,
-      depth: 24,
+      depth: 13,
     });
   }
 
   private createHeroStatusCard(layout: CampLayout) {
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
-    const y = layout.heroTop + layout.heroHeight / 2;
-    const width = layout.contentWidth;
-    const height = layout.heroHeight;
-    const container = this.add.container(layout.centerX, y).setDepth(18).setAlpha(0);
-    container.setY(y + 8);
+    const cardY = layout.heroTop + layout.heroHeight / 2;
 
-    this.createLocalPanel(container, width, height, layout.veryCompact ? 18 : 24, 0x080a0d, 0.94, 0x6d5a3b, 0.46, 1);
-    const portraitX = -width / 2 + (layout.veryCompact ? 38 : 48);
-    const portraitY = layout.veryCompact ? -height / 2 + 31 : -height / 2 + 40;
-
-    const portraitGlow = this.add.circle(portraitX, portraitY, layout.veryCompact ? 28 : 34, 0xb9985b, 0.08);
-    const portrait = this.add.circle(portraitX, portraitY, layout.veryCompact ? 23 : 28, 0x14100d, 0.96)
-      .setStrokeStyle(2, 0x8b6a3f, 0.62);
-    const raceIcon = this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '19px' : '23px',
-      color: '#d8c088',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
-    container.add([portraitGlow, portrait, raceIcon]);
-
-    this.tweens.add({
-      targets: portraitGlow,
-      alpha: { from: 0.05, to: 0.15 },
-      scale: { from: 0.96, to: 1.08 },
-      duration: 1450,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    const panel = this.createPixelPanel({
+      x: layout.centerX,
+      y: cardY,
+      width: layout.contentWidth,
+      height: layout.heroHeight,
+      color: 0x08090b,
+      borderColor: 0x0e0e0f,
+      innerColor: 0x65513a,
+      depth: 6,
+      cut: layout.veryCompact ? 8 : 10,
     });
 
-    const nameX = portraitX + (layout.veryCompact ? 36 : 44);
-    const nameY = portraitY - (layout.veryCompact ? 9 : 12);
-    const heroName = race && player.name !== race.name ? `${player.name} • ${race.name}` : player.name;
-    const levelWidth = layout.veryCompact ? 58 : 68;
+    const left = layout.centerX - layout.contentWidth / 2 + 16;
+    const right = layout.centerX + layout.contentWidth / 2 - 16;
+    const top = layout.heroTop;
+    const portraitSize = layout.veryCompact ? 44 : 52;
+    const portraitX = left + portraitSize / 2 + 4;
+    const portraitY = top + (layout.veryCompact ? 34 : 42);
 
-    const name = this.add.text(nameX, nameY, heroName, {
+    this.createPixelPanel({
+      x: portraitX,
+      y: portraitY,
+      width: portraitSize,
+      height: portraitSize,
+      color: 0x12100d,
+      borderColor: 0x020202,
+      innerColor: 0x8b6a3f,
+      depth: 9,
+      cut: 6,
+      shadowOffset: 2,
+    });
+
+    this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '22px' : '26px',
+      color: '#d8b56d',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(12);
+
+    const heroName = race
+      ? player.name === race.name
+        ? player.name
+        : `${player.name} • ${race.name}`
+      : player.name;
+
+    const titleX = portraitX + portraitSize / 2 + 12;
+    const titleWidth = Math.max(130, right - titleX - 72);
+
+    this.add.text(titleX, top + (layout.veryCompact ? 22 : 28), heroName, {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '15px' : layout.compact ? '18px' : '20px',
-      color: '#d8c088',
+      color: '#e0c585',
       stroke: '#000000',
       strokeThickness: 3,
-      wordWrap: { width: width - Math.abs(nameX) - levelWidth - 34, useAdvancedWrap: true },
+      wordWrap: {
+        width: titleWidth,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0, 0.5).setDepth(10);
 
-    const raceText = this.add.text(nameX, nameY + (layout.veryCompact ? 20 : 24), race ? race.description : 'Герой ещё не выбрал путь.', {
+    this.add.text(titleX, top + (layout.veryCompact ? 45 : 54), race ? race.description : 'Путь ещё не выбран.', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '11px',
-      color: '#91877a',
-      wordWrap: { width: width - Math.abs(nameX) - 32, useAdvancedWrap: true },
+      fontSize: layout.veryCompact ? '9px' : '11px',
+      color: '#9b9283',
+      wordWrap: {
+        width: titleWidth,
+        useAdvancedWrap: true,
+      },
       maxLines: layout.veryCompact ? 1 : 2,
       lineSpacing: 1,
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0, 0.5).setDepth(10);
 
-    const level = this.createLocalChip(container, width / 2 - levelWidth / 2 - 14, -height / 2 + (layout.veryCompact ? 28 : 34), levelWidth, layout.veryCompact ? 24 : 28, `Ур. ${player.level}`, 0x53735b);
-    container.add([name, raceText]);
-
-    const meterTop = layout.veryCompact ? 21 : 34;
-    const meterGap = layout.veryCompact ? 5 : 7;
-    const meterWidth = (width - 40 - meterGap) / 2;
-    this.createHeroMeter(container, -meterWidth / 2 - meterGap / 2, meterTop, meterWidth, 'HP', `${player.hp}/${stats.maxHp}`, stats.maxHp > 0 ? player.hp / stats.maxHp : 1, 0x9a3733);
-    this.createHeroMeter(container, meterWidth / 2 + meterGap / 2, meterTop, meterWidth, 'Энергия', `${player.energy}/${stats.maxEnergy}`, stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1, 0x4e7fa6);
-
-    const sanityY = meterTop + (layout.veryCompact ? 25 : 30);
-    this.createSanityBarInContainer(container, 0, sanityY, width - 42);
-
-    const resY = height / 2 - (layout.veryCompact ? 17 : 20);
-    const resWidth = Math.min((width - 46) / 3, 136);
-    this.createTinyResourceLocal(container, -resWidth - 7, resY, '◆', `${player.gold}`, resWidth);
-    this.createTinyResourceLocal(container, 0, resY, '✚', `${player.potions}`, resWidth);
-    this.createTinyResourceLocal(container, resWidth + 7, resY, '★', `${player.relicIds.length}`, resWidth);
-
-    this.createSubtleBrackets(container, width, height, 0x8b7652, 0.24, layout.veryCompact ? 7 : 10);
-
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      y,
-      delay: 90,
-      duration: 300,
-      ease: 'Cubic.easeOut',
+    this.createDarkTag({
+      x: right - 34,
+      y: top + (layout.veryCompact ? 24 : 30),
+      width: 66,
+      height: 26,
+      icon: '',
+      text: `Ур. ${player.level}`,
+      accentColor: 0x4f6b4b,
+      depth: 10,
     });
 
-    void level;
+    const barWidth = Math.min((layout.contentWidth - 48) / 2, 260);
+    const barGap = layout.veryCompact ? 8 : 12;
+    const barY = top + layout.heroHeight - (layout.veryCompact ? 72 : 86);
+
+    this.createSmallBar({
+      x: layout.centerX - barWidth / 2 - barGap / 2,
+      y: barY,
+      width: barWidth,
+      label: 'HP',
+      value: `${player.hp}/${stats.maxHp}`,
+      progress: stats.maxHp > 0 ? player.hp / stats.maxHp : 1,
+      color: 0x9f3535,
+    });
+
+    this.createSmallBar({
+      x: layout.centerX + barWidth / 2 + barGap / 2,
+      y: barY,
+      width: barWidth,
+      label: 'Энергия',
+      value: `${player.energy}/${stats.maxEnergy}`,
+      progress: stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1,
+      color: 0x356ea6,
+    });
+
+    this.createSanityBar({
+      x: layout.centerX,
+      y: top + layout.heroHeight - (layout.veryCompact ? 46 : 54),
+      width: Math.min(layout.contentWidth - 42, 520),
+    });
+
+    const resourceY = top + layout.heroHeight - 16;
+    const resourceWidth = Math.min((layout.contentWidth - 38) / 3, 152);
+    this.createTinyResource(layout.centerX - resourceWidth - 6, resourceY, '◆', `${player.gold}`, resourceWidth);
+    this.createTinyResource(layout.centerX, resourceY, '✚', `${player.potions}`, resourceWidth);
+    this.createTinyResource(layout.centerX + resourceWidth + 6, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
+
+    this.playPixelIntro([panel.shadow, panel.panel], 95);
     this.startSanityTimer();
   }
 
@@ -479,15 +544,17 @@ export class CampScene extends Phaser.Scene {
     }
 
     player.gold = Math.max(player.gold, 500);
+
     localStorage.setItem(key, '1');
+
     void saveGameAsync();
   }
 
   private createMainActions(layout: CampLayout) {
-    this.clearActionBoard();
-    this.actionBoardStateKey = this.getActionBoardStateKey();
+    const hasActiveRun =
+      gameState.floorRun.active &&
+      gameState.floorRun.rooms.length > 0;
 
-    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
     const activeCheckpoint = getActiveCampfireBattleCheckpoint();
     const hasActiveCheckpoint = Boolean(activeCheckpoint);
     const hasQuestReward = this.hasClaimableQuests();
@@ -495,367 +562,275 @@ export class CampScene extends Phaser.Scene {
     const ascensionPoints = this.getAvailableAscensionPoints();
     const hasAscensionPoints = ascensionPoints > 0;
 
-    const maxAvailableHeight = Math.max(240, layout.actionsBottom - layout.actionsTop);
-    // Используем почти всю доступную высоту между карточкой героя и нижней навигацией,
-    // но заполняем её самими кнопками и ровными интервалами, а не пустой чёрной панелью.
-    const boardHeight = maxAvailableHeight;
-    const boardTop = layout.actionsTop;
-    const boardY = boardTop + boardHeight / 2;
-    const board = this.add.container(layout.centerX, boardY).setDepth(26).setAlpha(0).setY(boardY + 8);
-    this.trackActionObject(board);
+    const panelHeight = layout.actionsHeight;
+    const panelY = layout.actionsTop + panelHeight / 2;
+    const panel = this.createPixelPanel({
+      x: layout.centerX,
+      y: panelY,
+      width: layout.contentWidth,
+      height: panelHeight,
+      color: cityCampfireActive ? 0x0b0806 : 0x050608,
+      borderColor: 0x050505,
+      innerColor: cityCampfireActive ? 0x9b642f : 0x5b4932,
+      depth: 4,
+      cut: 12,
+    });
 
-    this.createLocalPanel(
-      board,
-      layout.contentWidth,
-      boardHeight,
-      layout.veryCompact ? 18 : 24,
-      cityCampfireActive ? 0x0b0806 : 0x05070a,
-      0.9,
-      cityCampfireActive ? 0x8f6238 : 0x5d4a32,
-      cityCampfireActive ? 0.34 : 0.24,
-      1
-    );
+    this.createPixelFloor(layout, panelY, panelHeight);
 
-    const boardShade = this.add.rectangle(0, 0, layout.contentWidth - 18, boardHeight - 18, 0x000000, 0.045);
-    const lowerCampGlow = this.add.circle(
-      -layout.contentWidth * 0.28,
-      boardHeight / 2 - Math.min(58, boardHeight * 0.18),
-      Math.min(96, layout.contentWidth * 0.24),
-      0xd28a3a,
-      cityCampfireActive ? 0.075 : 0.035
-    );
-    const gateShadow = this.add.rectangle(
-      0,
-      -boardHeight / 2 + 16,
-      layout.contentWidth - 52,
-      2,
-      cityCampfireActive ? 0xc98a42 : 0x765637,
-      cityCampfireActive ? 0.16 : 0.09
-    );
-    board.add([boardShade, lowerCampGlow, gateShadow]);
-
-    const padX = layout.veryCompact ? 10 : 12;
-    const padTop = layout.veryCompact ? 14 : 16;
-    const padBottom = layout.veryCompact ? 12 : 14;
-    const innerWidth = layout.contentWidth - padX * 2;
-    const usableHeight = boardHeight - padTop - padBottom;
-    const rowGapBase = layout.veryCompact ? 8 : layout.compact ? 10 : 12;
+    const pad = layout.veryCompact ? 10 : 13;
+    const baseGap = layout.veryCompact ? 7 : 9;
+    const baseGridGap = layout.veryCompact ? 7 : 9;
+    const innerWidth = layout.contentWidth - pad * 2;
+    const availableHeight = Math.max(220, panelHeight - pad * 2);
     const primaryHeight = Phaser.Math.Clamp(
-      Math.round(usableHeight * 0.22),
-      layout.veryCompact ? 58 : 64,
-      layout.veryCompact ? 70 : layout.compact ? 78 : 84
+      Math.round(availableHeight * 0.22),
+      layout.veryCompact ? 52 : 58,
+      layout.veryCompact ? 64 : layout.compact ? 74 : 78
     );
-    const tileGap = layout.veryCompact ? 8 : 10;
     const tileHeight = Phaser.Math.Clamp(
-      Math.floor((usableHeight - primaryHeight - rowGapBase * 3) / 3),
-      layout.veryCompact ? 58 : 62,
-      layout.veryCompact ? 72 : layout.compact ? 80 : 86
+      Math.floor((availableHeight - primaryHeight - baseGap - baseGridGap * 2) / 3),
+      layout.veryCompact ? 48 : 54,
+      layout.veryCompact ? 62 : layout.compact ? 78 : 84
     );
-    const rowGap = Phaser.Math.Clamp(
-      Math.floor((usableHeight - primaryHeight - tileHeight * 3) / 3),
-      rowGapBase,
-      layout.veryCompact ? 16 : layout.compact ? 20 : 24
-    );
-    const groupHeight = primaryHeight + tileHeight * 3 + rowGap * 3;
-    const startY = -boardHeight / 2 + padTop + Math.max(0, (usableHeight - groupHeight) / 2);
-    const pairWidth = Math.floor((innerWidth - tileGap) / 2);
-    const leftX = -innerWidth / 2 + pairWidth / 2;
-    const rightX = innerWidth / 2 - pairWidth / 2;
-    const primaryY = startY + primaryHeight / 2;
-    const row1Y = primaryY + primaryHeight / 2 + rowGap + tileHeight / 2;
-    const row2Y = row1Y + tileHeight + rowGap;
-    const row3Y = row2Y + tileHeight + rowGap;
+    const compactContentHeight = primaryHeight + baseGap + tileHeight * 3 + baseGridGap * 2;
+    const extraHeight = Math.max(0, availableHeight - compactContentHeight);
+    const gap = baseGap + Math.min(layout.veryCompact ? 8 : 16, Math.floor(extraHeight / 10));
+    const gridGap = baseGridGap + Math.min(layout.veryCompact ? 8 : 18, Math.floor(extraHeight / 8));
+    const contentHeight = primaryHeight + gap + tileHeight * 3 + gridGap * 2;
+    const topPad = pad + Math.max(0, Math.floor((availableHeight - contentHeight) / 2));
+    const tileWidth = Math.floor((innerWidth - gridGap) / 2);
+    const leftX = layout.centerX - tileWidth / 2 - gridGap / 2;
+    const rightX = layout.centerX + tileWidth / 2 + gridGap / 2;
+    const primaryY = layout.actionsTop + topPad + primaryHeight / 2;
+    const firstRowY = primaryY + primaryHeight / 2 + gap + tileHeight / 2;
 
-    this.createMapConnectors(board, innerWidth, primaryY, row1Y, row2Y, row3Y, cityCampfireActive ? 0x9a6537 : 0x6d5634);
+    const dungeonTitle = hasActiveRun || hasActiveCheckpoint
+      ? 'Продолжить спуск'
+      : 'Вход в подземелье';
 
-    const dungeonTitle = hasActiveRun || hasActiveCheckpoint ? 'Продолжить спуск' : 'Вход в подземелье';
     const dungeonStatus = activeCheckpoint
-      ? `Эт. ${activeCheckpoint.floor} • ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}`
+      ? `Эт. ${activeCheckpoint.floor}`
       : hasActiveRun
         ? `Этаж ${gameState.floorRun.currentFloor}`
         : hasEnoughSanityForFloor()
           ? `Рассудок -${SANITY_COST_PER_FLOOR}`
           : 'Мало рассудка';
 
-    this.createDungeonAction({
+    this.createPixelDungeonButton({
       layout,
-      board,
-      x: 0,
+      x: layout.centerX,
       y: primaryY,
       width: innerWidth,
       height: primaryHeight,
       title: dungeonTitle,
       status: dungeonStatus,
+      icon: '☠',
+      baseColor: 0x641f22,
+      topColor: 0xa7483f,
+      bottomColor: 0x2b0d10,
+      borderColor: 0x160708,
+      innerBorderColor: 0xd27a54,
+      textColor: '#ffe3b0',
+      statusColor: '#ffd0b6',
       highlighted: hasActiveRun || hasActiveCheckpoint,
-      onClick: () => this.tryEnterCatacombs(),
-      delay: 130,
+      onClick: () => {
+        this.tryEnterCatacombs();
+      },
+      delay: 120,
     });
 
-    const restTile = this.createCampLocationTile({
-      layout,
-      board,
-      x: leftX,
-      y: row1Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: '♨',
-      title: 'Костёр',
-      status: this.getCityCampfireButtonStatus(),
-      accentColor: cityCampfireActive ? 0xd28a3a : 0x9b7043,
-      highlighted: cityCampfireActive,
-      onClick: () => this.restAtCampfire(),
-      delay: 185,
+    const tiles = [
+      {
+        x: leftX,
+        y: firstRowY,
+        icon: '♨',
+        title: 'Костёр',
+        status: this.getCityCampfireButtonStatus(),
+        baseColor: 0x8f5a18,
+        topColor: 0xd89b35,
+        bottomColor: 0x3b2109,
+        borderColor: 0x151008,
+        innerBorderColor: 0xf0c06a,
+        textColor: '#fff0bd',
+        statusColor: '#ffe1a0',
+        highlighted: cityCampfireActive,
+        onClick: () => {
+          this.restAtCampfire();
+        },
+      },
+      {
+        x: rightX,
+        y: firstRowY,
+        icon: hasAscensionPoints ? '!' : '✦',
+        title: 'Храм',
+        status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
+        baseColor: 0x313d85,
+        topColor: 0x5e6fc0,
+        bottomColor: 0x171b45,
+        borderColor: 0x090b1e,
+        innerBorderColor: 0xb5a1e8,
+        textColor: '#eef0ff',
+        statusColor: '#d8d5ff',
+        highlighted: hasAscensionPoints,
+        onClick: () => {
+          this.scene.start('StatsTreeScene');
+        },
+      },
+      {
+        x: leftX,
+        y: firstRowY + tileHeight + gridGap,
+        icon: '☕',
+        title: 'Таверна',
+        status: 'Отдых',
+        baseColor: 0x65401e,
+        topColor: 0xa87537,
+        bottomColor: 0x2e1a0c,
+        borderColor: 0x100b08,
+        innerBorderColor: 0xd19a58,
+        textColor: '#ffe0b4',
+        statusColor: '#d7b88d',
+        highlighted: false,
+        onClick: () => {
+          this.scene.start('TavernScene');
+        },
+      },
+      {
+        x: rightX,
+        y: firstRowY + tileHeight + gridGap,
+        icon: hasQuestReward ? '!' : '◆',
+        title: 'Задания',
+        status: hasQuestReward ? 'Есть награда' : 'Награды',
+        baseColor: 0x255332,
+        topColor: 0x4c8956,
+        bottomColor: 0x102716,
+        borderColor: 0x071008,
+        innerBorderColor: 0xa4d078,
+        textColor: '#e7ffd6',
+        statusColor: '#cbe8ba',
+        highlighted: hasQuestReward,
+        onClick: () => {
+          this.scene.start('QuestScene');
+        },
+      },
+      {
+        x: leftX,
+        y: firstRowY + (tileHeight + gridGap) * 2,
+        icon: '¤',
+        title: 'Рынок',
+        status: 'Торговцы',
+        baseColor: 0x7e6120,
+        topColor: 0xc19a3e,
+        bottomColor: 0x332509,
+        borderColor: 0x111008,
+        innerBorderColor: 0xe5c267,
+        textColor: '#fff0b5',
+        statusColor: '#e7d090',
+        highlighted: false,
+        onClick: () => {
+          this.scene.start('MarketScene');
+        },
+      },
+      {
+        x: rightX,
+        y: firstRowY + (tileHeight + gridGap) * 2,
+        icon: '⌂',
+        title: 'Дом',
+        status: 'Убежище',
+        baseColor: 0x24354c,
+        topColor: 0x4f6687,
+        bottomColor: 0x111a28,
+        borderColor: 0x070b10,
+        innerBorderColor: 0x9eb2cf,
+        textColor: '#e8f0ff',
+        statusColor: '#bfcbdb',
+        highlighted: false,
+        onClick: () => {
+          this.scene.start('HomeScene');
+        },
+      },
+    ];
+
+    tiles.forEach((tile, index) => {
+      const created = this.createPixelLocationButton({
+        layout,
+        x: tile.x,
+        y: tile.y,
+        width: tileWidth,
+        height: tileHeight,
+        icon: tile.icon,
+        title: tile.title,
+        status: tile.status,
+        baseColor: tile.baseColor,
+        topColor: tile.topColor,
+        bottomColor: tile.bottomColor,
+        borderColor: tile.borderColor,
+        innerBorderColor: tile.innerBorderColor,
+        textColor: tile.textColor,
+        statusColor: tile.statusColor,
+        highlighted: tile.highlighted,
+        onClick: tile.onClick,
+        delay: 170 + index * 45,
+      });
+
+      if (tile.title === 'Костёр') {
+        this.restButtonLabel = created.titleText;
+        this.restButtonDescription = created.descriptionText;
+      }
     });
-    this.restButtonLabel = restTile.titleText;
-    this.restButtonDescription = restTile.descriptionText;
 
-    this.createCampLocationTile({
-      layout,
-      board,
-      x: rightX,
-      y: row1Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: hasAscensionPoints ? '!' : '✦',
-      title: 'Храм',
-      status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
-      accentColor: hasAscensionPoints ? 0xd6c08a : 0x7253a8,
-      highlighted: hasAscensionPoints,
-      onClick: () => this.scene.start('StatsTreeScene'),
-      delay: 220,
-    });
-
-    this.createCampLocationTile({
-      layout,
-      board,
-      x: leftX,
-      y: row2Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: '☕',
-      title: 'Таверна',
-      status: 'Отдых',
-      accentColor: 0xa06f43,
-      highlighted: false,
-      onClick: () => this.scene.start('TavernScene'),
-      delay: 255,
-    });
-
-    this.createCampLocationTile({
-      layout,
-      board,
-      x: rightX,
-      y: row2Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: hasQuestReward ? '!' : '◆',
-      title: 'Доска заданий',
-      status: hasQuestReward ? 'Есть награда' : 'Награды',
-      accentColor: hasQuestReward ? 0x7fa06d : 0x8b6a3f,
-      highlighted: hasQuestReward,
-      onClick: () => this.scene.start('QuestScene'),
-      delay: 290,
-    });
-
-    this.createCampLocationTile({
-      layout,
-      board,
-      x: leftX,
-      y: row3Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: '¤',
-      title: 'Рынок',
-      status: 'Торговцы',
-      accentColor: 0xb89a5e,
-      highlighted: false,
-      onClick: () => this.scene.start('MarketScene'),
-      delay: 325,
-    });
-
-    this.createCampLocationTile({
-      layout,
-      board,
-      x: rightX,
-      y: row3Y,
-      width: pairWidth,
-      height: tileHeight,
-      icon: '⌂',
-      title: 'Дом',
-      status: 'Убежище',
-      accentColor: 0x8b7652,
-      highlighted: false,
-      onClick: () => this.scene.start('HomeScene'),
-      delay: 360,
-    });
-
-    this.createSubtleBrackets(board, layout.contentWidth, boardHeight, cityCampfireActive ? 0xd28a3a : 0x8b7652, 0.14, 8);
-
-    this.tweens.add({
-      targets: board,
-      alpha: 1,
-      y: boardY,
-      delay: 100,
-      duration: 300,
-      ease: 'Cubic.easeOut',
-    });
-
+    this.playPixelIntro([panel.shadow, panel.panel], 80);
     this.startCampfireTimer();
   }
 
-  private createDungeonAction(config: {
+  private createPixelFloor(layout: CampLayout, panelY: number, panelHeight: number) {
+    const top = panelY - panelHeight / 2 + 14;
+    const bottom = panelY + panelHeight / 2 - 14;
+    const left = layout.centerX - layout.contentWidth / 2 + 14;
+    const right = layout.centerX + layout.contentWidth / 2 - 14;
+
+    for (let y = top; y <= bottom; y += 22) {
+      this.add.rectangle(layout.centerX, y, right - left, 1, 0x2a2118, 0.12).setDepth(5);
+    }
+
+    for (let x = left; x <= right; x += 38) {
+      this.add.rectangle(x, panelY, 1, panelHeight - 32, 0x1f1812, 0.09).setDepth(5);
+    }
+
+    this.add.rectangle(layout.centerX, bottom - 16, right - left - 18, 6, 0x000000, 0.18).setDepth(5);
+  }
+
+  private createPixelDungeonButton(config: {
     layout: CampLayout;
-    board: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
     height: number;
     title: string;
     status: string;
+    icon: string;
+    baseColor: number;
+    topColor: number;
+    bottomColor: number;
+    borderColor: number;
+    innerBorderColor: number;
+    textColor: string;
+    statusColor: string;
     highlighted: boolean;
     onClick: () => void;
     delay: number;
   }) {
-    this.createBeveledRpgButton({
-      layout: config.layout,
-      board: config.board,
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      icon: config.highlighted ? '▼' : '☠',
-      title: config.title,
-      status: config.status,
-      baseColor: config.highlighted ? 0x2f7a4b : 0x9b2f2a,
-      highlightColor: config.highlighted ? 0xa9e3a6 : 0xff8a64,
-      shadowColor: config.highlighted ? 0x12351f : 0x4a1210,
-      borderColor: config.highlighted ? 0x102014 : 0x1a0807,
-      innerBorderColor: config.highlighted ? 0xd9f2b3 : 0xffc184,
-      textColor: config.highlighted ? '#fff7c7' : '#fff0b8',
-      statusColor: '#2a140f',
-      highlighted: config.highlighted,
+    this.createPixelRpgButton({
+      ...config,
+      iconBoxSize: Phaser.Math.Clamp(config.height - 16, 34, 48),
+      titleFontSize: config.layout.veryCompact ? '16px' : config.layout.compact ? '20px' : '22px',
+      statusFontSize: config.layout.veryCompact ? '10px' : '12px',
       primary: true,
-      onClick: config.onClick,
-      delay: config.delay,
     });
   }
 
-  private createCampLocationTile(config: {
+  private createPixelLocationButton(config: {
     layout: CampLayout;
-    board: Phaser.GameObjects.Container;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    icon: string;
-    title: string;
-    status: string;
-    accentColor: number;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-  }): CampActionButton {
-    const palette = this.getBeveledPalette(config.title, config.highlighted);
-
-    return this.createBeveledRpgButton({
-      layout: config.layout,
-      board: config.board,
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      icon: config.icon,
-      title: config.title,
-      status: config.status,
-      baseColor: palette.base,
-      highlightColor: palette.highlight,
-      shadowColor: palette.shadow,
-      borderColor: palette.border,
-      innerBorderColor: palette.innerBorder,
-      textColor: palette.text,
-      statusColor: palette.status,
-      highlighted: config.highlighted,
-      primary: false,
-      onClick: config.onClick,
-      delay: config.delay,
-    });
-  }
-
-  private getBeveledPalette(title: string, highlighted: boolean) {
-    if (title === 'Костёр') {
-      return {
-        base: highlighted ? 0xe49b22 : 0xc97922,
-        highlight: highlighted ? 0xffdf76 : 0xffbd55,
-        shadow: 0x6b310c,
-        border: 0x211006,
-        innerBorder: 0xffdf86,
-        text: '#fff2b8',
-        status: '#321807',
-      };
-    }
-
-    if (title === 'Храм') {
-      return {
-        base: highlighted ? 0x7064c4 : 0x4d5fa8,
-        highlight: highlighted ? 0xc8b6ff : 0x9db6ff,
-        shadow: 0x1d2458,
-        border: 0x0a0c20,
-        innerBorder: highlighted ? 0xe7d9ff : 0xc5d4ff,
-        text: '#f5edff',
-        status: '#111632',
-      };
-    }
-
-    if (title === 'Таверна') {
-      return {
-        base: 0xb06d35,
-        highlight: 0xf0b169,
-        shadow: 0x543015,
-        border: 0x1d1008,
-        innerBorder: 0xf5ca88,
-        text: '#fff0c7',
-        status: '#271508',
-      };
-    }
-
-    if (title === 'Доска заданий') {
-      return {
-        base: highlighted ? 0x4f9653 : 0x35704a,
-        highlight: highlighted ? 0xb4e386 : 0x8fcf82,
-        shadow: 0x173821,
-        border: 0x07160c,
-        innerBorder: highlighted ? 0xd8f0a6 : 0xb7dfa2,
-        text: '#f4ffd0',
-        status: '#0d2412',
-      };
-    }
-
-    if (title === 'Рынок') {
-      return {
-        base: 0xd3a32f,
-        highlight: 0xffdf72,
-        shadow: 0x6e4a0e,
-        border: 0x221604,
-        innerBorder: 0xffef9a,
-        text: '#fff3b7',
-        status: '#2c1c05',
-      };
-    }
-
-    return {
-      base: 0x4e6f93,
-      highlight: 0xa8c9e8,
-      shadow: 0x1a2a3b,
-      border: 0x070d13,
-      innerBorder: 0xc2d9ef,
-      text: '#edf8ff',
-      status: '#101923',
-    };
-  }
-
-  private createBeveledRpgButton(config: {
-    layout: CampLayout;
-    board: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
@@ -864,186 +839,189 @@ export class CampScene extends Phaser.Scene {
     title: string;
     status: string;
     baseColor: number;
-    highlightColor: number;
-    shadowColor: number;
+    topColor: number;
+    bottomColor: number;
     borderColor: number;
     innerBorderColor: number;
     textColor: string;
     statusColor: string;
     highlighted: boolean;
-    primary: boolean;
     onClick: () => void;
     delay: number;
   }): CampActionButton {
-    const container = this.add.container(config.x, config.y).setAlpha(0);
-    container.setY(config.y + 8);
-    config.board.add(container);
+    return this.createPixelRpgButton({
+      ...config,
+      iconBoxSize: Phaser.Math.Clamp(config.height - 18, 30, 42),
+      titleFontSize: config.height <= 54 ? '12px' : config.layout.compact ? '14px' : '16px',
+      statusFontSize: config.height <= 54 ? '9px' : '10px',
+      primary: false,
+    });
+  }
 
-    const cut = Phaser.Math.Clamp(Math.floor(config.height * 0.22), 9, config.primary ? 18 : 14);
-    const iconSize = Phaser.Math.Clamp(config.height * (config.primary ? 0.58 : 0.54), config.primary ? 34 : 30, config.primary ? 48 : 42);
-    const iconX = -config.width / 2 + iconSize / 2 + (config.primary ? 18 : 13);
-    const textX = iconX + iconSize / 2 + (config.primary ? 18 : 14);
-    const textWidth = Math.max(config.primary ? 150 : 68, config.width / 2 - textX + config.width / 2 - (config.primary ? 42 : 14));
-    const titleFont = config.primary
-      ? config.layout.veryCompact ? '18px' : config.layout.compact ? '21px' : '24px'
-      : config.layout.veryCompact ? '13px' : config.layout.compact ? '15px' : '17px';
-    const statusFont = config.primary
-      ? config.layout.veryCompact ? '10px' : '12px'
-      : config.layout.veryCompact ? '10px' : '11px';
+  private createPixelRpgButton(config: {
+    layout: CampLayout;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    status: string;
+    baseColor: number;
+    topColor: number;
+    bottomColor: number;
+    borderColor: number;
+    innerBorderColor: number;
+    textColor: string;
+    statusColor: string;
+    highlighted: boolean;
+    onClick: () => void;
+    delay: number;
+    iconBoxSize: number;
+    titleFontSize: string;
+    statusFontSize: string;
+    primary: boolean;
+  }): CampActionButton {
+    const container = this.add.container(config.x, config.y).setDepth(9);
+    const cut = config.primary ? 13 : 9;
+    const iconX = -config.width / 2 + (config.primary ? 38 : 28);
+    const iconBox = config.iconBoxSize;
+    const textX = iconX + iconBox / 2 + (config.primary ? 18 : 13);
+    const textWidth = Math.max(72, config.width / 2 - textX + config.width / 2 - (config.primary ? 30 : 18));
 
     const shadow = this.add.graphics();
-    this.fillBeveledShape(shadow, config.width, config.height, cut, config.borderColor, 0.58, 0, 5);
+    this.drawPixelButtonShape(shadow, 0, 4, config.width, config.height, cut, 0x000000, 0.58, 0, 0x000000, 0);
 
     const outer = this.add.graphics();
-    this.fillBeveledShape(outer, config.width, config.height, cut, config.borderColor, 1);
+    this.drawPixelButtonShape(outer, 0, 0, config.width, config.height, cut, config.borderColor, 1, 0, 0x000000, 0);
 
-    const metal = this.add.graphics();
-    this.fillBeveledShape(metal, config.width - 8, config.height - 8, Math.max(5, cut - 4), config.shadowColor, 1);
+    const innerBorder = this.add.graphics();
+    this.drawPixelButtonShape(innerBorder, 0, 0, config.width - 8, config.height - 8, Math.max(4, cut - 4), config.innerBorderColor, 0.86, 0, 0x000000, 0);
 
-    const face = this.add.graphics();
-    this.fillBeveledShape(face, config.width - 14, config.height - 14, Math.max(4, cut - 6), config.baseColor, 1);
+    const core = this.add.graphics();
+    this.drawPixelButtonShape(core, 0, 0, config.width - 14, config.height - 14, Math.max(3, cut - 6), config.baseColor, 0.98, 0, 0x000000, 0);
 
-    const topGlow = this.add.graphics();
-    this.fillBeveledShape(topGlow, config.width - 20, Math.max(16, config.height * 0.42), Math.max(4, cut - 7), config.highlightColor, 0.45, 0, -config.height * 0.18);
+    const topShade = this.add.rectangle(0, -config.height * 0.18, config.width - 22, Math.max(8, config.height * 0.32), config.topColor, 0.34);
+    const bottomShade = this.add.rectangle(0, config.height / 2 - 11, config.width - 26, 8, config.bottomColor, 0.78);
+    const pixelGlint = this.add.rectangle(-config.width * 0.1, -config.height / 2 + 13, config.width * 0.52, 3, 0xffffff, 0.14);
 
-    const shine = this.add.graphics();
-    shine.fillStyle(0xffffff, config.primary ? 0.2 : 0.16);
-    shine.fillRoundedRect(-config.width / 2 + 26, -config.height / 2 + 10, config.width * 0.52, Math.max(6, config.height * 0.13), 5);
-    shine.fillStyle(0xffffff, config.primary ? 0.09 : 0.07);
-    shine.fillRoundedRect(-config.width / 2 + 16, -config.height / 2 + 22, config.width - 58, Math.max(4, config.height * 0.08), 4);
+    const leftBevel = this.add.rectangle(-config.width / 2 + 8, 0, 4, config.height - 24, config.topColor, 0.34);
+    const rightBevel = this.add.rectangle(config.width / 2 - 8, 0, 4, config.height - 24, config.bottomColor, 0.42);
 
-    const bottomShade = this.add.graphics();
-    this.fillBeveledShape(bottomShade, config.width - 22, Math.max(12, config.height * 0.26), Math.max(4, cut - 8), config.shadowColor, 0.5, 0, config.height * 0.26);
-
-    const innerStroke = this.add.graphics();
-    this.strokeBeveledShape(innerStroke, config.width - 16, config.height - 16, Math.max(4, cut - 7), config.innerBorderColor, config.highlighted ? 0.72 : 0.46, 1.5);
-
-    const leftBevel = this.add.polygon(
-      -config.width / 2 + 12,
-      0,
-      [0, -config.height * 0.24, 8, -config.height * 0.12, 8, config.height * 0.12, 0, config.height * 0.24],
-      config.highlightColor,
-      0.24
-    );
-    const rightBevel = this.add.polygon(
-      config.width / 2 - 12,
-      0,
-      [0, -config.height * 0.24, -8, -config.height * 0.12, -8, config.height * 0.12, 0, config.height * 0.24],
-      config.shadowColor,
-      0.38
-    );
-
-    const iconFrame = this.add.graphics();
-    this.fillBeveledShape(iconFrame, iconSize, iconSize, Math.max(5, iconSize * 0.18), config.borderColor, 0.82, iconX, 0);
-    this.fillBeveledShape(iconFrame, iconSize - 7, iconSize - 7, Math.max(4, iconSize * 0.14), config.shadowColor, 0.92, iconX, 0);
-    this.strokeBeveledShape(iconFrame, iconSize - 8, iconSize - 8, Math.max(4, iconSize * 0.14), config.innerBorderColor, config.highlighted ? 0.78 : 0.52, 1, iconX, 0);
-
-    const icon = this.add.text(iconX, 0, config.icon, {
+    const iconOuter = this.add.rectangle(iconX, 0, iconBox, iconBox, config.borderColor, 1);
+    const iconInner = this.add.rectangle(iconX, 0, iconBox - 6, iconBox - 6, config.bottomColor, 0.92)
+      .setStrokeStyle(2, config.innerBorderColor, 0.58);
+    const iconText = this.add.text(iconX, 0, config.icon, {
       fontFamily: UI.font.title,
-      fontSize: config.primary ? config.layout.veryCompact ? '21px' : '25px' : config.layout.veryCompact ? '17px' : '20px',
+      fontSize: config.primary ? '23px' : config.height <= 54 ? '15px' : '18px',
       color: config.textColor,
       stroke: '#000000',
-      strokeThickness: config.primary ? 4 : 3,
+      strokeThickness: 3,
       align: 'center',
     }).setOrigin(0.5);
 
-    const title = this.add.text(textX, -config.height * 0.15, config.title, {
+    const titleText = this.add.text(textX, -config.height * 0.16, config.title, {
       fontFamily: UI.font.title,
-      fontSize: titleFont,
+      fontSize: config.titleFontSize,
       color: config.textColor,
       stroke: '#000000',
       strokeThickness: config.primary ? 4 : 3,
-      wordWrap: { width: textWidth, useAdvancedWrap: true },
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const status = this.add.text(textX, config.height * 0.2, config.status, {
+    const statusText = this.add.text(textX, config.height * 0.2, config.status, {
       fontFamily: UI.font.body,
-      fontSize: statusFont,
+      fontSize: config.statusFontSize,
       color: config.statusColor,
-      wordWrap: { width: textWidth, useAdvancedWrap: true },
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: textWidth,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const arrow = config.primary
-      ? this.add.text(config.width / 2 - 24, 0, '›', {
-          fontFamily: UI.font.title,
-          fontSize: config.layout.veryCompact ? '24px' : '31px',
-          color: config.textColor,
-          stroke: '#000000',
-          strokeThickness: 3,
-        }).setOrigin(0.5).setAlpha(0.76)
-      : undefined;
+    const marker = this.add.rectangle(config.width / 2 - 15, 0, 7, 7, config.innerBorderColor, 0.85)
+      .setStrokeStyle(1, config.borderColor, 0.8);
 
-    const objects: Phaser.GameObjects.GameObject[] = [
-      shadow,
-      outer,
-      metal,
-      face,
-      topGlow,
-      shine,
-      bottomShade,
-      innerStroke,
-      leftBevel,
-      rightBevel,
-      iconFrame,
-      icon,
-      title,
-      status,
+    const smallPixels = [
+      this.add.rectangle(-config.width / 2 + 12, -config.height / 2 + 10, 4, 4, config.innerBorderColor, 0.75),
+      this.add.rectangle(config.width / 2 - 12, -config.height / 2 + 10, 4, 4, config.innerBorderColor, 0.55),
+      this.add.rectangle(-config.width / 2 + 12, config.height / 2 - 10, 4, 4, config.bottomColor, 0.8),
+      this.add.rectangle(config.width / 2 - 12, config.height / 2 - 10, 4, 4, config.bottomColor, 0.7),
     ];
 
-    if (arrow) {
-      objects.push(arrow);
-    }
+    container.add([
+      shadow,
+      outer,
+      innerBorder,
+      core,
+      topShade,
+      bottomShade,
+      pixelGlint,
+      leftBevel,
+      rightBevel,
+      iconOuter,
+      iconInner,
+      iconText,
+      titleText,
+      statusText,
+      marker,
+      ...smallPixels,
+    ]);
 
-    container.add(objects);
+    this.playPixelContainerIntro(container, config.delay);
 
-    this.playContainerIntro(container, config.delay);
-    this.createPressableZone({
-      board: config.board,
-      target: container,
-      x: config.x,
-      y: config.y,
+    this.createPixelPressZone({
+      container,
       width: config.width,
       height: config.height,
-      titleText: title,
-      normalColor: config.textColor,
+      shadow,
+      bottomShade,
       onClick: config.onClick,
     });
 
-    if (config.highlighted || config.primary) {
+    if (config.highlighted) {
       this.tweens.add({
-        targets: [topGlow, shine, innerStroke],
-        alpha: config.highlighted ? '+=0.12' : '+=0.06',
-        duration: config.highlighted ? 850 : 1350,
+        targets: [pixelGlint, marker, innerBorder],
+        alpha: { from: 0.35, to: 0.9 },
+        duration: 420,
         yoyo: true,
         repeat: -1,
-        ease: 'Sine.easeInOut',
+        ease: 'Linear',
       });
     }
 
     return {
-      titleText: title,
-      descriptionText: status,
+      titleText,
+      descriptionText: statusText,
     };
   }
 
-  private fillBeveledShape(
+  private drawPixelButtonShape(
     graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
     width: number,
     height: number,
     cut: number,
-    color: number,
-    alpha: number,
-    offsetX = 0,
-    offsetY = 0
+    fillColor: number,
+    fillAlpha: number,
+    strokeWidth: number,
+    strokeColor: number,
+    strokeAlpha: number
   ) {
-    const left = offsetX - width / 2;
-    const right = offsetX + width / 2;
-    const top = offsetY - height / 2;
-    const bottom = offsetY + height / 2;
+    const left = x - width / 2;
+    const right = x + width / 2;
+    const top = y - height / 2;
+    const bottom = y + height / 2;
 
-    graphics.fillStyle(color, alpha);
+    graphics.fillStyle(fillColor, fillAlpha);
     graphics.beginPath();
     graphics.moveTo(left + cut, top);
     graphics.lineTo(right - cut, top);
@@ -1055,179 +1033,106 @@ export class CampScene extends Phaser.Scene {
     graphics.lineTo(left, top + cut);
     graphics.closePath();
     graphics.fillPath();
+
+    if (strokeWidth > 0) {
+      graphics.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+      graphics.strokePath();
+    }
   }
 
-  private strokeBeveledShape(
-    graphics: Phaser.GameObjects.Graphics,
-    width: number,
-    height: number,
-    cut: number,
-    color: number,
-    alpha: number,
-    lineWidth: number,
-    offsetX = 0,
-    offsetY = 0
-  ) {
-    const left = offsetX - width / 2;
-    const right = offsetX + width / 2;
-    const top = offsetY - height / 2;
-    const bottom = offsetY + height / 2;
-
-    graphics.lineStyle(lineWidth, color, alpha);
-    graphics.beginPath();
-    graphics.moveTo(left + cut, top);
-    graphics.lineTo(right - cut, top);
-    graphics.lineTo(right, top + cut);
-    graphics.lineTo(right, bottom - cut);
-    graphics.lineTo(right - cut, bottom);
-    graphics.lineTo(left + cut, bottom);
-    graphics.lineTo(left, bottom - cut);
-    graphics.lineTo(left, top + cut);
-    graphics.closePath();
-    graphics.strokePath();
-  }
-
-  private createMapConnectors(board: Phaser.GameObjects.Container, width: number, primaryY: number, row1Y: number, row2Y: number, row3Y: number, color: number) {
-    const alpha = 0.08;
-    [row1Y, row2Y, row3Y].forEach(y => {
-      board.add(this.add.rectangle(0, y, width * 0.35, 1, color, alpha));
-    });
-    board.add(this.add.rectangle(0, (primaryY + row3Y) / 2, 2, row3Y - primaryY, color, alpha));
-  }
-
-  private createSubtleBrackets(container: Phaser.GameObjects.Container, width: number, height: number, color: number, alpha: number, size: number) {
-    const left = -width / 2;
-    const right = width / 2;
-    const top = -height / 2;
-    const bottom = height / 2;
-    const marks = [
-      this.add.rectangle(left + size / 2 + 5, top + 5, size, 2, color, alpha),
-      this.add.rectangle(left + 5, top + size / 2 + 5, 2, size, color, alpha),
-      this.add.rectangle(right - size / 2 - 5, top + 5, size, 2, color, alpha),
-      this.add.rectangle(right - 5, top + size / 2 + 5, 2, size, color, alpha),
-      this.add.rectangle(left + size / 2 + 5, bottom - 5, size, 2, color, alpha * 0.7),
-      this.add.rectangle(left + 5, bottom - size / 2 - 5, 2, size, color, alpha * 0.7),
-      this.add.rectangle(right - size / 2 - 5, bottom - 5, size, 2, color, alpha * 0.7),
-      this.add.rectangle(right - 5, bottom - size / 2 - 5, 2, size, color, alpha * 0.7),
-    ];
-    container.add(marks);
-  }
-
-  private createPressableZone(config: {
-    board: Phaser.GameObjects.Container;
-    target: Phaser.GameObjects.Container;
-    x: number;
-    y: number;
+  private createPixelPressZone(config: {
+    container: Phaser.GameObjects.Container;
     width: number;
     height: number;
-    titleText: Phaser.GameObjects.Text;
-    normalColor: string;
+    shadow: Phaser.GameObjects.Graphics;
+    bottomShade: Phaser.GameObjects.Rectangle;
     onClick: () => void;
   }) {
     let isPressed = false;
     let isLocked = false;
-    const zone = this.add.zone(config.x, config.y, config.width, config.height)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(40);
+    const baseY = config.container.y;
+    const zone = this.add.zone(0, 0, config.width, config.height)
+      .setInteractive({ useHandCursor: true });
 
-    config.board.add(zone);
-    this.trackActionObject(zone);
+    config.container.add(zone);
 
-    zone.on('pointerover', () => {
-      if (!isLocked) {
-        config.titleText.setColor('#f1dfb2');
-      }
-    });
-
-    zone.on('pointerout', () => {
+    const reset = () => {
       isPressed = false;
-      config.titleText.setColor(config.normalColor);
-      this.tweens.add({ targets: config.target, scaleX: 1, scaleY: 1, duration: 90, ease: 'Sine.easeOut' });
-    });
+      this.tweens.add({
+        targets: config.container,
+        y: baseY,
+        duration: 80,
+        ease: 'Linear',
+      });
+      config.shadow.setAlpha(1);
+      config.bottomShade.setAlpha(0.78);
+    };
 
     zone.on('pointerdown', () => {
-      if (isLocked) {
-        return;
-      }
+      if (isLocked) return;
       isPressed = true;
-      config.titleText.setColor('#fff0c4');
-      this.tweens.add({ targets: config.target, scaleX: 0.982, scaleY: 0.982, duration: 70, ease: 'Sine.easeOut' });
+      config.container.setY(baseY + 2);
+      config.shadow.setAlpha(0.35);
+      config.bottomShade.setAlpha(0.48);
     });
 
-    zone.on('pointerupoutside', () => {
-      isPressed = false;
-      config.titleText.setColor(config.normalColor);
-      this.tweens.add({ targets: config.target, scaleX: 1, scaleY: 1, duration: 90, ease: 'Sine.easeOut' });
-    });
+    zone.on('pointerout', reset);
+    zone.on('pointerupoutside', reset);
 
     zone.on('pointerup', () => {
-      if (!isPressed || isLocked) {
-        return;
-      }
+      if (!isPressed || isLocked) return;
       isPressed = false;
       isLocked = true;
-      config.titleText.setColor('#fff0c4');
       this.tweens.add({
-        targets: config.target,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 105,
-        ease: 'Back.easeOut',
+        targets: config.container,
+        y: baseY,
+        duration: 90,
+        ease: 'Linear',
         onComplete: () => {
+          config.shadow.setAlpha(1);
+          config.bottomShade.setAlpha(0.78);
           config.onClick();
-          this.time.delayedCall(260, () => {
-            isLocked = false;
-          });
         },
+      });
+      this.time.delayedCall(360, () => {
+        isLocked = false;
       });
     });
   }
 
-  private playContainerIntro(container: Phaser.GameObjects.Container, delay: number) {
+  private playPixelContainerIntro(container: Phaser.GameObjects.Container, delay: number) {
+    container.setAlpha(0);
+    container.setY(container.y + 6);
+
     this.tweens.add({
       targets: container,
       alpha: 1,
-      y: container.y - 8,
-      duration: 260,
+      y: container.y - 6,
+      duration: 160,
       delay,
-      ease: 'Cubic.easeOut',
+      ease: 'Linear',
     });
   }
 
-  private trackActionObject(object: Phaser.GameObjects.GameObject) {
-    this.actionBoardObjects.push(object);
-  }
-
-  private clearActionBoard() {
-    this.actionBoardObjects.forEach(object => {
-      if (object.active) {
-        object.destroy();
-      }
+  private playPixelIntro(objects: Phaser.GameObjects.GameObject[], delay: number) {
+    objects.forEach(object => {
+      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
+      alphaObject.setAlpha?.(0);
     });
-    this.actionBoardObjects = [];
-    this.restButtonLabel = undefined;
-    this.restButtonDescription = undefined;
-  }
 
-  private refreshActionBoard() {
-    this.createMainActions(this.getLayout());
-  }
-
-  private getActionBoardStateKey() {
-    const checkpoint = getActiveCampfireBattleCheckpoint();
-    const cityState = this.getCityCampfireState();
-    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
-    return [
-      hasActiveRun ? `run:${gameState.floorRun.currentFloor}` : 'run:none',
-      checkpoint ? `checkpoint:${checkpoint.id}` : 'checkpoint:none',
-      cityState.active ? `campfire:${cityState.flintType}` : 'campfire:none',
-      this.hasClaimableQuests() ? 'quest:reward' : 'quest:none',
-      `points:${this.getAvailableAscensionPoints()}`,
-    ].join('|');
+    this.tweens.add({
+      targets: objects,
+      alpha: 1,
+      duration: 150,
+      delay,
+      ease: 'Linear',
+    });
   }
 
   private hasClaimableQuests() {
-    return getQuests().some(quest => isQuestCompleted(quest) && !isQuestClaimed(quest.id));
+    return getQuests().some(quest => {
+      return isQuestCompleted(quest) && !isQuestClaimed(quest.id);
+    });
   }
 
   private getAvailableAscensionPoints() {
@@ -1236,16 +1141,16 @@ export class CampScene extends Phaser.Scene {
 
   private getCityCampfireButtonDescription() {
     if (!this.isCityCampfireActive()) {
-      return 'Костёр не горит. Зажги его через огниво, чтобы восстановить силы.';
+      return 'Костёр не горит. Выбери огниво, чтобы зажечь его.';
     }
 
     const state = this.getCityCampfireState();
 
     if (state.flintType === 'donate') {
-      return 'Донатное огниво горит постоянно.';
+      return 'Костёр горит постоянно.';
     }
 
-    return `Огонь активен ещё ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}.`;
+    return `Костёр горит ещё ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}.`;
   }
 
   private getCityCampfireButtonStatus() {
@@ -1259,24 +1164,21 @@ export class CampScene extends Phaser.Scene {
       return 'Горит всегда';
     }
 
-    return `Горит ${this.formatCityCampfireTimeLeftShort(this.getCityCampfireTimeLeft())}`;
+    return `Горит ${this.formatCityCampfireTimeLeft(this.getCityCampfireTimeLeft())}`;
   }
 
   private updateCampfireButtonText() {
     this.extinguishCityCampfireIfExpired();
-
-    const nextKey = this.getActionBoardStateKey();
-    if (nextKey !== this.actionBoardStateKey) {
-      this.refreshActionBoard();
-      return;
-    }
 
     this.restButtonLabel?.setText('Костёр');
     this.restButtonDescription?.setText(this.getCityCampfireButtonStatus());
   }
 
   private startCampfireTimer() {
-    this.campfireTimerEvent?.remove(false);
+    if (this.campfireTimerEvent) {
+      this.campfireTimerEvent.remove(false);
+    }
+
     this.updateCampfireButtonText();
 
     this.campfireTimerEvent = this.time.addEvent({
@@ -1289,66 +1191,112 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createHeroMeter(container: Phaser.GameObjects.Container, x: number, y: number, width: number, label: string, value: string, progress: number, color: number) {
-    const pct = Phaser.Math.Clamp(progress, 0, 1);
-    const labelText = this.add.text(x - width / 2, y - 9, label, {
+  private createSmallBar(config: {
+    x: number;
+    y: number;
+    width: number;
+    label: string;
+    value: string;
+    progress: number;
+    color: number;
+  }) {
+    const progress = Phaser.Math.Clamp(config.progress, 0, 1);
+    const barHeight = 9;
+    const left = config.x - config.width / 2;
+    const fillWidth = Math.max(1, config.width * progress);
+
+    this.add.text(left, config.y - 12, config.label, {
       fontFamily: UI.font.body,
       fontSize: '10px',
-      color: '#908778',
-      wordWrap: { width: width * 0.46, useAdvancedWrap: true },
+      color: '#a99d8a',
+      wordWrap: { width: config.width * 0.45, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5);
-    const valueText = this.add.text(x + width / 2, y - 9, value, {
+    }).setOrigin(0, 0.5).setDepth(10);
+
+    this.add.text(left + config.width, config.y - 12, config.value, {
       fontFamily: UI.font.body,
       fontSize: '10px',
-      color: '#d1c7b4',
-      wordWrap: { width: width * 0.5, useAdvancedWrap: true },
+      color: '#d8c7a3',
+      wordWrap: { width: config.width * 0.5, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(1, 0.5);
-    const bg = this.add.rectangle(x, y + 5, width, 8, 0x030303, 0.9);
-    const fill = this.add.rectangle(x - width / 2, y + 5, Math.max(1, width * pct), 8, color, 0.86).setOrigin(0, 0.5).setScale(0.01, 1);
-    const stroke = this.add.rectangle(x, y + 5, width, 8).setStrokeStyle(1, 0x5c503d, 0.42);
-    container.add([labelText, valueText, bg, fill, stroke]);
-    this.tweens.add({ targets: fill, scaleX: 1, duration: 380, delay: 150, ease: 'Cubic.easeOut' });
+    }).setOrigin(1, 0.5).setDepth(10);
+
+    this.add.rectangle(config.x, config.y + 4, config.width, barHeight, 0x010101, 1)
+      .setStrokeStyle(2, 0x121212, 1)
+      .setDepth(9);
+    this.add.rectangle(left, config.y + 4, fillWidth, barHeight - 4, config.color, 0.95)
+      .setOrigin(0, 0.5)
+      .setDepth(10);
+
+    const segments = 8;
+    for (let i = 1; i < segments; i += 1) {
+      this.add.rectangle(left + (config.width / segments) * i, config.y + 4, 1, barHeight, 0x000000, 0.38).setDepth(11);
+    }
   }
 
-  private createSanityBarInContainer(container: Phaser.GameObjects.Container, x: number, y: number, width: number) {
+  private createSanityBar(config: {
+    x: number;
+    y: number;
+    width: number;
+  }) {
     restoreSanityByTime();
+
     const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
+    const barHeight = 10;
+    const left = config.x - config.width / 2;
     const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
-    const left = x - width / 2;
+    const fillWidth = Math.max(1, config.width * progress);
 
-    const label = this.add.text(left, y - 10, '☾ Рассудок', {
+    this.add.text(left, config.y - 12, '☾ Рассудок', {
       fontFamily: UI.font.body,
       fontSize: '10px',
-      color: '#a99bc6',
-      wordWrap: { width: width * 0.52, useAdvancedWrap: true },
+      color: '#b8aee0',
+      wordWrap: { width: config.width * 0.55, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0, 0.5).setDepth(10);
 
-    this.sanityValueText = this.add.text(left + width, y - 10, `${player.sanity}/${player.maxSanity}`, {
+    this.sanityValueText = this.add.text(left + config.width, config.y - 12, `${player.sanity}/${player.maxSanity}`, {
       fontFamily: UI.font.body,
       fontSize: '10px',
-      color: '#d8d0e8',
-      wordWrap: { width: width * 0.4, useAdvancedWrap: true },
+      color: '#ded5ff',
+      wordWrap: { width: config.width * 0.42, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(1, 0.5);
+    }).setOrigin(1, 0.5).setDepth(10);
 
-    const bg = this.add.rectangle(x, y + 5, width, 8, 0x030305, 0.94);
-    this.sanityFill = this.add.rectangle(left, y + 5, Math.max(1, width * progress), 8, fillColor, 0.9).setOrigin(0, 0.5).setScale(0.01, 1);
-    const stroke = this.add.rectangle(x, y + 5, width, 8).setStrokeStyle(1, 0x6b5a7f, 0.56);
-    this.sanityHintText = this.add.text(x, y + 18, this.formatSanityTimeToFull(), {
+    this.add.rectangle(config.x, config.y + 4, config.width, barHeight, 0x020204, 1)
+      .setStrokeStyle(2, 0x141018, 1)
+      .setDepth(9);
+
+    this.sanityFill = this.add.rectangle(left, config.y + 4, fillWidth, barHeight - 4, fillColor, 0.95)
+      .setOrigin(0, 0.5)
+      .setDepth(10)
+      .setScale(0.01, 1);
+
+    this.sanityFillWidth = config.width;
+
+    for (let i = 1; i < 12; i += 1) {
+      this.add.rectangle(left + (config.width / 12) * i, config.y + 4, 1, barHeight, 0x000000, 0.35).setDepth(11);
+    }
+
+    this.sanityHintText = this.add.text(config.x, config.y + 18, this.formatSanityTimeToFull(), {
       fontFamily: UI.font.body,
       fontSize: '9px',
       color: '#817891',
       align: 'center',
-      wordWrap: { width, useAdvancedWrap: true },
+      wordWrap: {
+        width: config.width,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(10);
 
-    this.sanityFillWidth = width;
-    container.add([label, this.sanityValueText, bg, this.sanityFill, stroke, this.sanityHintText]);
-    this.tweens.add({ targets: this.sanityFill, scaleX: 1, duration: 420, delay: 170, ease: 'Cubic.easeOut' });
+    this.tweens.add({
+      targets: this.sanityFill,
+      scaleX: 1,
+      duration: 260,
+      delay: 120,
+      ease: 'Linear',
+    });
   }
 
   private startSanityTimer() {
@@ -1387,7 +1335,7 @@ export class CampScene extends Phaser.Scene {
     this.sanityHintText?.setText(this.formatSanityTimeToFull());
 
     if (this.sanityFill) {
-      this.sanityFill.setFillStyle(fillColor, 0.9);
+      this.sanityFill.setFillStyle(fillColor, 0.95);
       this.sanityFill.setDisplaySize(fillWidth, this.sanityFill.displayHeight);
       this.sanityFill.setScale(1, 1);
       this.sanityFill.setAlpha(player.sanity <= 0 ? 0.2 : 1);
@@ -1419,26 +1367,46 @@ export class CampScene extends Phaser.Scene {
     );
   }
 
-  private createTinyResourceLocal(container: Phaser.GameObjects.Container, x: number, y: number, icon: string, value: string, width: number) {
-    this.createLocalChip(container, x, y, width, 28, `${icon} ${value}`, 0x6e5634);
-  }
+  private createTinyResource(
+    x: number,
+    y: number,
+    icon: string,
+    value: string,
+    width: number
+  ) {
+    this.createPixelPanel({
+      x,
+      y,
+      width,
+      height: 26,
+      color: 0x101012,
+      borderColor: 0x050505,
+      innerColor: 0x4b4031,
+      depth: 8,
+      cut: 4,
+      shadowOffset: 2,
+    });
 
-  private createLocalChip(container: Phaser.GameObjects.Container, x: number, y: number, width: number, height: number, text: string, accentColor: number) {
-    const chip = this.add.graphics();
-    chip.fillStyle(0x101012, 0.94);
-    chip.fillRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
-    chip.lineStyle(1, accentColor, 0.38);
-    chip.strokeRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
-    const label = this.add.text(x, y, text, {
+    this.add.text(x - width / 2 + 20, y, icon, {
       fontFamily: UI.font.body,
-      fontSize: height <= 24 ? '10px' : '12px',
-      color: '#d1c7b4',
-      align: 'center',
-      wordWrap: { width: width - 12, useAdvancedWrap: true },
+      fontSize: '11px',
+      color: '#d8b56d',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(10);
+
+    this.add.text(x - width / 2 + 35, y, value, {
+      fontFamily: UI.font.title,
+      fontSize: '12px',
+      color: '#d8c7a3',
+      stroke: '#000000',
+      strokeThickness: 2,
+      wordWrap: {
+        width: width - 42,
+        useAdvancedWrap: true,
+      },
       maxLines: 1,
-    }).setOrigin(0.5);
-    container.add([chip, label]);
-    return { chip, label };
+    }).setOrigin(0, 0.5).setDepth(10);
   }
 
   private createDarkTag(config: {
@@ -1451,26 +1419,78 @@ export class CampScene extends Phaser.Scene {
     accentColor: number;
     depth: number;
   }) {
-    const container = this.add.container(config.x, config.y).setDepth(config.depth).setAlpha(0);
-    this.createLocalChip(container, 0, 0, config.width, config.height, `${config.icon ? `${config.icon} ` : ''}${config.text}`, config.accentColor);
-    this.tweens.add({ targets: container, alpha: 1, duration: 240, delay: 110, ease: 'Sine.easeOut' });
+    this.createPixelPanel({
+      x: config.x,
+      y: config.y,
+      width: config.width,
+      height: config.height,
+      color: 0x0d0d0f,
+      borderColor: 0x040404,
+      innerColor: config.accentColor,
+      depth: config.depth,
+      cut: 4,
+      shadowOffset: 1,
+    });
+
+    const textX = config.icon ? config.x - config.width / 2 + 34 : config.x;
+    const originX = config.icon ? 0 : 0.5;
+
+    if (config.icon) {
+      this.add.text(config.x - config.width / 2 + 20, config.y, config.icon, {
+        fontFamily: UI.font.body,
+        fontSize: '10px',
+        color: '#d8b56d',
+      }).setOrigin(0.5).setDepth(config.depth + 2);
+    }
+
+    this.add.text(textX, config.y, config.text, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#9f9788',
+      align: 'center',
+      wordWrap: {
+        width: config.icon ? config.width - 44 : config.width - 16,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(originX, 0.5).setDepth(config.depth + 2);
   }
 
-  private createLocalPanel(container: Phaser.GameObjects.Container, width: number, height: number, radius: number, color: number, alpha: number, strokeColor: number, strokeAlpha: number, strokeWidth: number) {
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.3);
-    shadow.fillRoundedRect(-width / 2, -height / 2 + 5, width, height, radius);
+  private createPixelPanel(config: {
+    parent?: Phaser.GameObjects.Container;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: number;
+    alpha?: number;
+    borderColor: number;
+    innerColor: number;
+    innerAlpha?: number;
+    depth: number;
+    cut?: number;
+    shadowOffset?: number;
+  }) {
+    const cut = config.cut ?? 8;
+    const alpha = config.alpha ?? 0.96;
+    const shadowOffset = config.shadowOffset ?? 4;
 
-    const panel = this.add.graphics();
-    panel.fillStyle(color, alpha);
-    panel.fillRoundedRect(-width / 2, -height / 2, width, height, radius);
-    panel.fillStyle(0xffffff, 0.025);
-    panel.fillRoundedRect(-width / 2 + 6, -height / 2 + 5, width - 12, Math.max(8, height * 0.28), Math.max(4, radius - 6));
-    panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
-    panel.strokeRoundedRect(-width / 2, -height / 2, width, height, radius);
+    const shadow = this.add.graphics().setDepth(config.depth);
+    this.drawPixelButtonShape(shadow, config.x, config.y + shadowOffset, config.width, config.height, cut, 0x000000, 0.45, 0, 0x000000, 0);
 
-    container.add([shadow, panel]);
-    return panel;
+    const panel = this.add.graphics().setDepth(config.depth + 1);
+    this.drawPixelButtonShape(panel, config.x, config.y, config.width, config.height, cut, config.borderColor, 1, 0, 0x000000, 0);
+    this.drawPixelButtonShape(panel, config.x, config.y, config.width - 6, config.height - 6, Math.max(3, cut - 3), config.color, alpha, 0, 0x000000, 0);
+    this.drawPixelButtonShape(panel, config.x, config.y, config.width - 12, config.height - 12, Math.max(2, cut - 5), config.color, alpha, 2, config.innerColor, config.innerAlpha ?? 0.54);
+
+    if (config.parent) {
+      config.parent.add([shadow, panel]);
+    }
+
+    return {
+      shadow,
+      panel,
+    };
   }
 
   private getDefaultCityCampfireState(): CityCampfireState {
@@ -1617,22 +1637,6 @@ export class CampScene extends Phaser.Scene {
     return Math.max(0, state.expiresAt - Date.now());
   }
 
-
-  private formatCityCampfireTimeLeftShort(ms: number) {
-    if (!Number.isFinite(ms)) {
-      return 'всегда';
-    }
-
-    const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours > 0) {
-      return `${hours}ч ${minutes}м`;
-    }
-
-    return `${Math.max(1, totalMinutes)} мин.`;
-  }
   private formatCityCampfireTimeLeft(ms: number) {
     if (!Number.isFinite(ms)) {
       return 'постоянно';
@@ -1958,7 +1962,6 @@ export class CampScene extends Phaser.Scene {
     accentColor: number;
     closeModal: () => void;
   }) {
-    const radius = 22;
     const left = config.x - config.width / 2;
     const iconX = left + 42;
     const textX = left + 82;
@@ -1971,16 +1974,36 @@ export class CampScene extends Phaser.Scene {
         : 'Нет рес.';
 
     const shadow = this.add.graphics().setDepth(1002);
-    shadow.fillStyle(0x000000, 0.35);
-    shadow.fillRoundedRect(left, config.y - config.height / 2 + 5, config.width, config.height, radius);
+    this.drawPixelButtonShape(
+      shadow,
+      config.x,
+      config.y + 5,
+      config.width,
+      config.height,
+      10,
+      0x000000,
+      0.35,
+      0,
+      0x000000,
+      0
+    );
 
     const bg = this.add.graphics().setDepth(1003);
     const drawBg = (fillColor: number, strokeAlpha: number, fillAlpha = 0.96) => {
       bg.clear();
-      bg.fillStyle(fillColor, canSelect ? fillAlpha : 0.68);
-      bg.fillRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
-      bg.lineStyle(2, config.accentColor, canSelect ? strokeAlpha : 0.28);
-      bg.strokeRoundedRect(left, config.y - config.height / 2, config.width, config.height, radius);
+      this.drawPixelButtonShape(
+        bg,
+        config.x,
+        config.y,
+        config.width,
+        config.height,
+        10,
+        fillColor,
+        canSelect ? fillAlpha : 0.68,
+        2,
+        config.accentColor,
+        canSelect ? strokeAlpha : 0.28
+      );
     };
 
     drawBg(canSelect ? 0x120d0a : 0x0a0a0c, 0.72);
@@ -2185,7 +2208,7 @@ export class CampScene extends Phaser.Scene {
       return;
     }
 
-    restorePlayerVitalsToMaximum(player, maxPotions);
+    restorePlayerVitalsToMaximum(player);
     player.hp = stats.maxHp;
     player.energy = stats.maxEnergy;
     player.potions = maxPotions;
@@ -2371,37 +2394,24 @@ export class CampScene extends Phaser.Scene {
     const panelWidth = Math.min(layout.contentWidth, 620);
     const panelHeight = Math.min(height, layout.height - 110);
 
-    const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.42);
-    shadow.fillRoundedRect(
-      layout.centerX - panelWidth / 2,
-      layout.height / 2 - panelHeight / 2 + 9,
-      panelWidth,
-      panelHeight,
-      28
-    );
+    const shell = this.createPixelPanel({
+      x: layout.centerX,
+      y: layout.height / 2,
+      width: panelWidth,
+      height: panelHeight,
+      color: 0x0c0d10,
+      alpha: 0.98,
+      borderColor: 0x030303,
+      innerColor: 0x6e5634,
+      innerAlpha: 0.85,
+      depth: 1000,
+      cut: 14,
+      shadowOffset: 9,
+    });
 
-    const panel = this.add.graphics();
-    panel.fillStyle(0x0c0d10, 0.98);
-    panel.fillRoundedRect(
-      layout.centerX - panelWidth / 2,
-      layout.height / 2 - panelHeight / 2,
-      panelWidth,
-      panelHeight,
-      28
-    );
-    panel.lineStyle(3, 0x6e5634, 0.85);
-    panel.strokeRoundedRect(
-      layout.centerX - panelWidth / 2,
-      layout.height / 2 - panelHeight / 2,
-      panelWidth,
-      panelHeight,
-      28
-    );
+    const glow = this.add.rectangle(layout.centerX, layout.height / 2 - panelHeight / 2 + 18, panelWidth - 54, 2, 0xb89a5e, 0.32);
 
-    const glow = this.add.rectangle(layout.centerX, layout.height / 2 - panelHeight / 2 + 18, panelWidth - 54, 1, 0xb89a5e, 0.32);
-
-    modal.add([overlay, shadow, panel, glow]);
+    modal.add([overlay, shell.shadow, shell.panel, glow]);
     modal.setScale(0.96);
     modal.setAlpha(0);
 
@@ -2430,7 +2440,7 @@ export class CampScene extends Phaser.Scene {
           duration: 120,
           ease: 'Sine.easeIn',
           onComplete: () => {
-            modal.destroy(true);
+            modal.destroy();
           },
         });
       },
@@ -2475,7 +2485,7 @@ export class CampScene extends Phaser.Scene {
       'Понятно',
       () => {
         modal.destroy();
-        this.scene.restart();
+        this.scene.start('CampScene');
       },
       260,
       54
