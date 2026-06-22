@@ -25,10 +25,7 @@ import {
   isQuestClaimed,
 } from '../systems/QuestSystem';
 
-import {
-  UI,
-  createSceneBackground,
-} from '../ui/theme';
+import { UI } from '../ui/theme';
 
 type CampLayout = {
   width: number;
@@ -95,6 +92,11 @@ export class CampScene extends Phaser.Scene {
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
   private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
 
+  private readonly CAMP_BACKGROUND_ASSET = {
+    key: 'campBackground',
+    url: new URL('../assets/images/camp/camp_background.png', import.meta.url).href,
+  } as const;
+
   private readonly CAMP_BUTTON_ASSETS = {
     dungeon: { key: 'campButtonDungeon', url: new URL('../assets/images/camp/buttons/button_dungeon.png', import.meta.url).href },
     campfire: { key: 'campButtonCampfire', url: new URL('../assets/images/camp/buttons/button_campfire.png', import.meta.url).href },
@@ -110,6 +112,10 @@ export class CampScene extends Phaser.Scene {
   }
 
   preload() {
+    if (!this.textures.exists(this.CAMP_BACKGROUND_ASSET.key)) {
+      this.load.image(this.CAMP_BACKGROUND_ASSET.key, this.CAMP_BACKGROUND_ASSET.url);
+    }
+
     Object.values(this.CAMP_BUTTON_ASSETS).forEach(asset => {
       if (!this.textures.exists(asset.key)) {
         this.load.image(asset.key, asset.url);
@@ -119,8 +125,6 @@ export class CampScene extends Phaser.Scene {
 
   async create() {
     const layout = this.getLayout();
-
-    createSceneBackground(this);
 
     await this.prepareStartupOnce();
       
@@ -220,117 +224,69 @@ export class CampScene extends Phaser.Scene {
 
   private createCampBackdrop(layout: CampLayout) {
     const { width, height, centerX } = layout;
-    const gateY = Phaser.Math.Clamp(height * 0.31, 210, 340);
-    const fireY = Phaser.Math.Clamp(height * 0.52, 330, 500);
 
-    this.cameras.main.fadeIn(190, 0, 0, 0);
+    this.cameras.main.fadeIn(220, 0, 0, 0);
 
-    this.add.rectangle(centerX, height / 2, width, height, 0x040506, 1).setDepth(0);
-    this.add.rectangle(centerX, height * 0.24, width, height * 0.42, 0x08101a, 0.78).setDepth(0);
-    this.add.rectangle(centerX, height * 0.68, width, height * 0.64, 0x070403, 0.86).setDepth(0);
+    if (this.textures.exists(this.CAMP_BACKGROUND_ASSET.key)) {
+      const bg = this.add.image(centerX, height / 2, this.CAMP_BACKGROUND_ASSET.key)
+        .setOrigin(0.5)
+        .setDepth(0);
 
-    // Крупные блоки вместо мягкого градиента — полупиксельная глубина фона.
-    for (let i = 0; i < 8; i += 1) {
-      const blockW = width - 34 - i * 14;
-      this.add.rectangle(centerX, height - 92 - i * 31, blockW, 16, i % 2 === 0 ? 0x0c0a08 : 0x0f0d0a, 0.36)
-        .setDepth(1);
+      const scale = Math.max(
+        width / Math.max(1, bg.width),
+        height / Math.max(1, bg.height)
+      );
+
+      bg.setScale(scale);
+
+      // Небольшой сдвиг вверх: вход в катакомбы и двор остаются видимыми за UI.
+      bg.setY(height / 2 - height * 0.035);
+    } else {
+      // Fallback только на случай, если ассет реально не найден.
+      this.add.rectangle(centerX, height / 2, width, height, 0x05070a, 1)
+        .setDepth(0);
     }
 
-    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.5).setDepth(2);
-    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.5).setDepth(2);
-    this.add.rectangle(centerX, 10, width, 20, 0x000000, 0.42).setDepth(2);
-    this.add.rectangle(centerX, height - 12, width, 24, 0x000000, 0.55).setDepth(2);
+    // Общий слой читаемости: не скрывает фон полностью.
+    this.add.rectangle(centerX, height / 2, width, height, 0x000000, 0.28)
+      .setDepth(1);
 
-    const gateWidth = Math.min(layout.contentWidth * 0.62, 330);
-    const gateHeight = layout.veryCompact ? 98 : layout.compact ? 118 : 140;
-    const gateX = centerX;
+    // Локальные затемнения под UI, вместо огромного чёрного фона.
+    this.add.rectangle(centerX, height * 0.17, width, height * 0.34, 0x000000, 0.24)
+      .setDepth(1);
+    this.add.rectangle(centerX, height * 0.52, width, height * 0.22, 0x000000, 0.12)
+      .setDepth(1);
+    this.add.rectangle(centerX, height * 0.81, width, height * 0.42, 0x000000, 0.32)
+      .setDepth(1);
 
-    this.createPixelBlock(gateX, gateY + 18, gateWidth + 46, 18, 0x17110c, 0.86, 1, 0x4f3f2d, 0.5, 1);
-    this.createPixelBlock(gateX, gateY + gateHeight * 0.48, gateWidth + 72, 20, 0x11100d, 0.9, 1, 0x4f3f2d, 0.42, 1);
-    this.createPixelBlock(gateX - gateWidth / 2 - 20, gateY + gateHeight * 0.12, 24, gateHeight + 42, 0x111315, 0.9, 1, 0x514a3d, 0.48, 2);
-    this.createPixelBlock(gateX + gateWidth / 2 + 20, gateY + gateHeight * 0.12, 24, gateHeight + 42, 0x111315, 0.9, 1, 0x514a3d, 0.48, 2);
-    this.createPixelBlock(gateX, gateY + gateHeight * 0.15, gateWidth, gateHeight, 0x050507, 0.78, 2, 0x2f2620, 0.72, 1);
+    // Виньетка по краям.
+    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.26)
+      .setDepth(1);
+    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.26)
+      .setDepth(1);
+    this.add.rectangle(centerX, 12, width, 24, 0x000000, 0.32)
+      .setDepth(1);
+    this.add.rectangle(centerX, height - 12, width, 24, 0x000000, 0.38)
+      .setDepth(1);
 
-    for (let i = 0; i < 5; i += 1) {
-      this.add.rectangle(gateX - gateWidth / 2 + 30 + i * (gateWidth - 60) / 4, gateY + gateHeight * 0.05, 3, gateHeight * 0.78, 0x000000, 0.22)
-        .setDepth(2);
-    }
-
-    ['ᛟ', 'ᚱ', 'ᛝ'].forEach((rune, index) => {
-      const runeText = this.add.text(gateX - 34 + index * 34, gateY - gateHeight * 0.42, rune, {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '9px' : '11px',
-        color: '#8b724b',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(3).setAlpha(0.22);
-
-      this.tweens.add({
-        targets: runeText,
-        alpha: { from: 0.14, to: 0.38 },
-        duration: 520 + index * 70,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Linear',
-      });
-    });
-
-    // Полупиксельный костёр: несколько прямоугольников, без мыльного свечения.
-    const fireGlow = this.add.rectangle(centerX, fireY + 4, width * 0.48, 58, 0x8b421c, 0.08).setDepth(1);
-    const fireBlocks = [
-      this.add.rectangle(centerX - 13, fireY + 10, 8, 20, 0xa65a28, 0.58),
-      this.add.rectangle(centerX, fireY + 2, 10, 28, 0xd28a3a, 0.74),
-      this.add.rectangle(centerX + 12, fireY + 12, 8, 18, 0x7d2d1d, 0.58),
-      this.add.rectangle(centerX, fireY + 24, 42, 6, 0x3a2317, 0.9),
-    ].map(object => object.setDepth(3));
+    // Очень лёгкий тёплый акцент, чтобы костры на фоне поддерживали атмосферу.
+    const torchGlow = this.add.circle(
+      centerX,
+      height * 0.58,
+      Math.min(width * 0.28, 112),
+      0xd28a3a,
+      0.045
+    ).setDepth(1.2);
 
     this.tweens.add({
-      targets: [fireGlow, ...fireBlocks],
-      alpha: '+=0.08',
-      duration: 360,
+      targets: torchGlow,
+      alpha: { from: 0.025, to: 0.07 },
+      scale: { from: 0.96, to: 1.04 },
+      duration: 1500,
       yoyo: true,
       repeat: -1,
-      ease: 'Linear',
+      ease: 'Sine.easeInOut',
     });
-
-    for (let i = 0; i < 26; i += 1) {
-      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
-      const y = Phaser.Math.Between(layout.safeTop + 70, height - layout.safeBottom - 28);
-      const size = Phaser.Math.Between(2, 3);
-      const ash = this.add.rectangle(x, y, size, size, i % 3 === 0 ? 0xb8965a : 0x69645b, 0.07).setDepth(2);
-
-      this.tweens.add({
-        targets: ash,
-        alpha: { from: 0.03, to: 0.12 },
-        y: y - Phaser.Math.Between(8, 22),
-        duration: Phaser.Math.Between(900, 1700),
-        yoyo: true,
-        repeat: -1,
-        delay: i * 45,
-        ease: 'Linear',
-      });
-    }
-  }
-
-  private createPixelBlock(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    color: number,
-    alpha: number,
-    strokeWidth = 0,
-    strokeColor = 0x000000,
-    strokeAlpha = 1,
-    depth = 0
-  ) {
-    const block = this.add.rectangle(x, y, width, height, color, alpha).setDepth(depth);
-
-    if (strokeWidth > 0) {
-      block.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
-    }
-
-    return block;
   }
 
   private createHeader(layout: CampLayout) {
