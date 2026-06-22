@@ -93,6 +93,8 @@ export class CampScene extends Phaser.Scene {
   private sanityFill?: Phaser.GameObjects.Rectangle;
   private sanityFillWidth = 0;
   private cityCampfireIsVisuallyActive = false;
+  private actionBoardObjects: Phaser.GameObjects.GameObject[] = [];
+  private actionBoardStateKey = '';
 
   private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
@@ -132,6 +134,7 @@ export class CampScene extends Phaser.Scene {
       this.sanityTimerEvent = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
+      this.clearActionBoard();
       this.sanityValueText = undefined;
       this.sanityHintText = undefined;
       this.sanityFill = undefined;
@@ -166,38 +169,34 @@ export class CampScene extends Phaser.Scene {
 
     const veryCompact = height <= 700 || width <= 370;
     const compact = height <= 860 || width <= 410;
-    const safeX = Phaser.Math.Clamp(Math.round(width * 0.048), 16, 34);
-    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.02), 14, 30);
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 14, 28);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.018), 10, 24);
     const safeBottom = veryCompact ? 92 : compact ? 104 : 116;
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    const headerHeight = veryCompact ? 76 : compact ? 90 : 108;
-    const heroTop = safeTop + headerHeight + (veryCompact ? 7 : 10);
-    const heroHeight = veryCompact ? 164 : compact ? 176 : 194;
-    const actionsTop = heroTop + heroHeight + (veryCompact ? 8 : 14);
-    const actionsBottom = bottomNavTop - (veryCompact ? 12 : 18);
-    const actionsHeight = Math.max(232, actionsBottom - actionsTop);
+    const headerHeight = veryCompact ? 54 : compact ? 66 : 76;
+    const heroTop = safeTop + headerHeight + (veryCompact ? 6 : 8);
+    const heroHeight = veryCompact ? 124 : compact ? 146 : 164;
+    const actionsTop = heroTop + heroHeight + (veryCompact ? 7 : 10);
+    const actionsBottom = bottomNavTop - (veryCompact ? 10 : 14);
+    const actionsHeight = Math.max(236, actionsBottom - actionsTop);
 
     return {
       width,
       height,
       centerX: width / 2,
-
       safeX,
       safeTop,
       safeBottom,
-
       contentWidth,
       bottomNavTop,
-
       headerHeight,
       heroTop,
       heroHeight,
       actionsTop,
       actionsBottom,
       actionsHeight,
-
       compact,
       veryCompact,
     };
@@ -205,283 +204,74 @@ export class CampScene extends Phaser.Scene {
 
   private createCampBackdrop(layout: CampLayout) {
     const { width, height, centerX } = layout;
-    const cryptY = Phaser.Math.Clamp(height * 0.31, 250, 380);
-    const fireY = Phaser.Math.Clamp(height * 0.51, 330, 520);
+    const gateY = Phaser.Math.Clamp(height * 0.3, 190, 310);
+    const fireY = Phaser.Math.Clamp(height * 0.49, 300, 440);
 
-    this.cameras.main.fadeIn(260, 0, 0, 0);
+    this.cameras.main.fadeIn(280, 0, 0, 0);
 
-    this.add.rectangle(centerX, height / 2, width, height, 0x030405, 0.95).setDepth(0);
-    this.add.rectangle(centerX, height * 0.28, width, height * 0.58, 0x07101a, 0.2).setDepth(0);
-    this.add.rectangle(centerX, height - 140, width, 320, 0x030202, 0.7).setDepth(0);
+    this.add.rectangle(centerX, height / 2, width, height, 0x020304, 1).setDepth(0);
+    this.add.rectangle(centerX, height * 0.3, width, height * 0.72, 0x07101a, 0.28).setDepth(0);
+    this.add.rectangle(centerX, height * 0.82, width, height * 0.42, 0x070504, 0.78).setDepth(0);
 
-    // Мягкая кинематографичная виньетка: фон глубже, а UI читается лучше.
-    this.add.rectangle(centerX, 22, width, 72, 0x000000, 0.38).setDepth(1);
-    this.add.rectangle(centerX, height - 22, width, 94, 0x000000, 0.48).setDepth(1);
-    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.34).setDepth(1);
-    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.34).setDepth(1);
-    this.add.ellipse(centerX, height * 0.43, width * 1.05, height * 0.72, 0x000000, 0.12).setDepth(1);
+    this.add.circle(centerX, gateY + 20, Math.min(width * 0.62, 270), 0x13233a, 0.16).setDepth(0.4);
+    this.add.circle(centerX - width * 0.22, fireY + 20, Math.min(width * 0.42, 180), 0x8b3f1f, 0.08).setDepth(0.5);
+    this.add.circle(centerX + width * 0.24, fireY - 6, Math.min(width * 0.32, 150), 0x4d2b67, 0.055).setDepth(0.5);
 
-    for (let i = 0; i < 5; i += 1) {
-      this.add.rectangle(
-        centerX,
-        height - 240 + i * 42,
-        width - 34 - i * 18,
-        2,
-        0x493b2c,
-        0.08
-      ).setDepth(1);
-    }
+    const gateWidth = Math.min(layout.contentWidth * 0.74, 430);
+    const gateHeight = layout.veryCompact ? 96 : layout.compact ? 118 : 144;
+    const gateTop = gateY - gateHeight / 2;
+    const gateLeft = centerX - gateWidth / 2;
 
-    const farGlow = this.add.circle(centerX, cryptY + 12, width * 0.56, 0x1d2741, 0.13).setDepth(0);
+    const gate = this.add.graphics().setDepth(1);
+    gate.fillStyle(0x05070a, 0.76);
+    gate.fillRoundedRect(gateLeft, gateTop, gateWidth, gateHeight, 24);
+    gate.lineStyle(2, 0x2d2924, 0.58);
+    gate.strokeRoundedRect(gateLeft, gateTop, gateWidth, gateHeight, 24);
+    gate.fillStyle(0x010203, 0.68);
+    gate.fillRoundedRect(gateLeft + gateWidth * 0.26, gateTop + gateHeight * 0.2, gateWidth * 0.48, gateHeight * 0.72, 26);
+    gate.lineStyle(1, 0x6d5634, 0.24);
+    gate.strokeRoundedRect(gateLeft + gateWidth * 0.26, gateTop + gateHeight * 0.2, gateWidth * 0.48, gateHeight * 0.72, 26);
+
+    const gateGlow = this.add.rectangle(centerX, gateY + gateHeight * 0.18, gateWidth * 0.46, 4, 0x5f7f9d, 0.1).setDepth(1.2);
     this.tweens.add({
-      targets: farGlow,
-      alpha: { from: 0.08, to: 0.16 },
-      scale: { from: 0.98, to: 1.04 },
-      duration: 2400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    const gateWidth = Math.min(layout.contentWidth * 0.76, 450);
-    const gateHeight = layout.veryCompact ? 132 : layout.compact ? 154 : 184;
-    const gateX = centerX;
-    const gateY = cryptY + 26;
-
-    this.add.rectangle(gateX, gateY + 35, gateWidth, gateHeight, 0x050608, 0.84)
-      .setStrokeStyle(2, 0x332a20, 0.72)
-      .setDepth(1);
-
-    this.add.rectangle(gateX, gateY - gateHeight / 2 + 10, gateWidth + 30, 18, 0x18130e, 0.96)
-      .setStrokeStyle(1, 0x6b5431, 0.58)
-      .setDepth(2);
-
-    this.add.rectangle(gateX, gateY + gateHeight / 2 + 36, gateWidth + 46, 24, 0x12100d, 0.96)
-      .setStrokeStyle(1, 0x594d3d, 0.5)
-      .setDepth(2);
-
-    const columnOffset = gateWidth / 2 + 15;
-    this.createStoneColumn(gateX - columnOffset, gateY + 18, gateHeight + 58);
-    this.createStoneColumn(gateX + columnOffset, gateY + 18, gateHeight + 58);
-
-    this.add.ellipse(gateX, gateY - 16, gateWidth * 0.68, gateHeight * 0.76, 0x17130f, 0.42)
-      .setStrokeStyle(2, 0x4d4030, 0.32)
-      .setDepth(2);
-
-    this.add.rectangle(gateX, gateY - 20, gateWidth * 0.48, 3, 0x000000, 0.36).setDepth(3);
-    this.add.rectangle(gateX, gateY + gateHeight * 0.16, gateWidth * 0.54, 4, 0x000000, 0.32).setDepth(3);
-
-    ['ᛟ', 'ᚱ', 'ᛝ'].forEach((rune, index) => {
-      const runeText = this.add.text(gateX - 42 + index * 42, gateY - gateHeight * 0.38, rune, {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '10px' : '12px',
-        color: '#8a714c',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(3).setAlpha(0.22);
-
-      this.tweens.add({
-        targets: runeText,
-        alpha: { from: 0.12, to: 0.34 },
-        duration: 1700 + index * 180,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    });
-
-    const fireGlow = this.add.circle(centerX, fireY, width * 0.28, 0xb86b2e, 0.09).setDepth(2);
-    const fireCore = this.add.circle(centerX, fireY + 8, 38, 0xb86b2e, 0.14).setDepth(2);
-
-    this.tweens.add({
-      targets: [fireGlow, fireCore],
-      alpha: { from: 0.07, to: 0.18 },
-      scale: { from: 0.94, to: 1.08 },
-      duration: 760,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    this.add.text(centerX, fireY, '♨', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '32px' : layout.compact ? '38px' : '46px',
-      color: '#c09155',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(3);
-
-    const shrineX = centerX + Math.min(layout.contentWidth * 0.27, 138);
-    const shrineY = fireY + (layout.veryCompact ? 6 : 2);
-    const shrineGlow = this.add.circle(shrineX, shrineY - 22, layout.veryCompact ? 46 : 56, 0x6b4a8c, 0.09)
-      .setDepth(2);
-    const shrineRune = this.add.text(shrineX, shrineY - 6, '✦', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '16px' : '19px',
-      color: '#d6c08a',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setAlpha(0.56).setDepth(3);
-
-    this.tweens.add({
-      targets: [shrineGlow, shrineRune],
-      alpha: { from: 0.07, to: 0.18 },
-      scale: { from: 0.97, to: 1.05 },
+      targets: gateGlow,
+      alpha: { from: 0.055, to: 0.16 },
       duration: 1900,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
 
-    for (let i = 0; i < 30; i += 1) {
-      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
-      const y = Phaser.Math.Between(layout.safeTop + 60, height - layout.safeBottom - 40);
-      const ash = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.045)
-        .setDepth(1)
-        .setAlpha(0.02);
-
-      this.tweens.add({
-        targets: ash,
-        alpha: { from: 0.018, to: 0.075 },
-        y: y - Phaser.Math.Between(16, 40),
-        x: x + Phaser.Math.Between(-10, 10),
-        duration: Phaser.Math.Between(1800, 3400),
-        yoyo: true,
-        repeat: -1,
-        delay: i * 80,
-        ease: 'Sine.easeInOut',
-      });
-    }
-
-    for (let i = 0; i < 9; i += 1) {
-      const y = layout.safeTop + 90 + i * 64;
-      this.add.line(0, 0, layout.safeX, y, width - layout.safeX, y + (i % 2) * 12, 0x2a2119, 0.14)
-        .setOrigin(0, 0)
-        .setDepth(1);
-    }
-
-    this.add.text(centerX, cryptY - (layout.veryCompact ? 72 : 92), 'КАТАКОМБЫ', {
+    const fireGlow = this.add.circle(centerX - layout.contentWidth * 0.28, fireY, layout.veryCompact ? 42 : 58, 0xd28a3a, 0.08).setDepth(1.3);
+    const fire = this.add.text(centerX - layout.contentWidth * 0.28, fireY - 2, '♨', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '12px' : '15px',
-      color: '#6f6655',
+      fontSize: layout.veryCompact ? '24px' : '32px',
+      color: '#c48b52',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(1.5);
+
+    this.tweens.add({
+      targets: [fireGlow, fire],
+      alpha: '+=0.08',
+      scale: { from: 0.97, to: 1.08 },
+      duration: 780,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const shrineGlow = this.add.circle(centerX + layout.contentWidth * 0.28, fireY - 4, layout.veryCompact ? 36 : 50, 0x6b4a8c, 0.06).setDepth(1.3);
+    const shrineRune = this.add.text(centerX + layout.contentWidth * 0.28, fireY - 4, '✦', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '17px' : '23px',
+      color: '#bfa46f',
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5).setAlpha(0.28).setDepth(2);
-  }
-
-  private createStoneColumn(x: number, y: number, height: number) {
-    this.add.rectangle(x, y, 26, height, 0x121315, 0.9)
-      .setStrokeStyle(1, 0x4d473b, 0.5)
-      .setDepth(2);
-
-    this.add.rectangle(x, y - height / 2 + 10, 40, 18, 0x17130f, 0.95)
-      .setStrokeStyle(1, 0x5b513e, 0.44)
-      .setDepth(3);
-
-    this.add.rectangle(x, y + height / 2 - 10, 44, 20, 0x17130f, 0.95)
-      .setStrokeStyle(1, 0x5b513e, 0.44)
-      .setDepth(3);
-
-    for (let i = 0; i < 4; i += 1) {
-      this.add.rectangle(x, y - height / 2 + 42 + i * 42, 22, 2, 0x303030, 0.5)
-        .setDepth(3);
-    }
-  }
-
-  private createHeader(layout: CampLayout) {
-    const panelHeight = layout.headerHeight;
-    const panelY = layout.safeTop + panelHeight / 2;
-
-    const panel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: layout.veryCompact ? 22 : 28,
-      color: 0x07080b,
-      alpha: 0.9,
-      strokeColor: 0x755a35,
-      strokeAlpha: 0.58,
-      strokeWidth: 2,
-      depth: 8,
-    });
-
-    const innerGlow = this.add.rectangle(
-      layout.centerX,
-      panelY,
-      layout.contentWidth - 18,
-      panelHeight - 14,
-      0xb9985b,
-      0.035
-    ).setDepth(10);
-    const headerLineTop = this.add.rectangle(
-      layout.centerX,
-      panelY - panelHeight / 2 + 9,
-      layout.contentWidth - 54,
-      1,
-      0xb9985b,
-      0.24
-    ).setDepth(11);
-    const headerLineBottom = this.add.rectangle(
-      layout.centerX,
-      panelY + panelHeight / 2 - 10,
-      layout.contentWidth - 80,
-      1,
-      0x6f5434,
-      0.18
-    ).setDepth(11);
-    const headerCorners = this.createActionCornerMarks(
-      layout.centerX,
-      panelY,
-      layout.contentWidth,
-      panelHeight,
-      0xb9985b,
-      0.46,
-      layout.veryCompact ? 12 : 16
-    );
-
-    panel.shadow.setAlpha(0);
-    panel.panel.setAlpha(0);
-    innerGlow.setAlpha(0);
-    headerLineTop.setAlpha(0);
-    headerLineBottom.setAlpha(0);
-    headerCorners.forEach(corner => corner.setAlpha(0));
-
-    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 22 : 30), 'Убежище у катакомб', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '22px' : layout.compact ? '26px' : '31px',
-      color: '#d2b87a',
-      stroke: '#000000',
-      strokeThickness: 5,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 36,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(12).setAlpha(0).setY(panelY - (layout.veryCompact ? 31 : 40));
-
-    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 5 : 3), 'Огонь, тени и последний шанс', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
-      color: '#9a9385',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 58,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(12).setAlpha(0);
+    }).setOrigin(0.5).setDepth(1.5).setAlpha(0.62);
 
     this.tweens.add({
-      targets: [panel.shadow, panel.panel, innerGlow, headerLineTop, headerLineBottom, ...headerCorners],
-      alpha: 1,
-      duration: 280,
-      ease: 'Sine.easeOut',
-    });
-
-    this.tweens.add({
-      targets: [innerGlow, headerLineTop],
+      targets: [shrineGlow, shrineRune],
       alpha: '+=0.06',
       duration: 1600,
       yoyo: true,
@@ -489,12 +279,73 @@ export class CampScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
+    for (let i = 0; i < 18; i += 1) {
+      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
+      const y = Phaser.Math.Between(layout.safeTop + 40, height - layout.safeBottom - 20);
+      const mote = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.035).setDepth(1.1);
+      this.tweens.add({
+        targets: mote,
+        alpha: { from: 0.018, to: 0.07 },
+        y: y - Phaser.Math.Between(18, 48),
+        x: x + Phaser.Math.Between(-8, 8),
+        duration: Phaser.Math.Between(2100, 3900),
+        delay: i * 95,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    this.add.rectangle(centerX, 14, width, 70, 0x000000, 0.38).setDepth(2);
+    this.add.rectangle(centerX, height - 12, width, 130, 0x000000, 0.54).setDepth(2);
+    this.add.rectangle(6, height / 2, 12, height, 0x000000, 0.34).setDepth(2);
+    this.add.rectangle(width - 6, height / 2, 12, height, 0x000000, 0.34).setDepth(2);
+  }
+
+  private createHeader(layout: CampLayout) {
+    const y = layout.safeTop + layout.headerHeight / 2;
+    const width = layout.contentWidth;
+    const height = layout.headerHeight;
+    const radius = layout.veryCompact ? 18 : 22;
+
+    const container = this.add.container(layout.centerX, y).setDepth(20).setAlpha(0);
+    container.setY(y - 8);
+
+    const bg = this.createLocalPanel(container, width, height, radius, 0x07090c, 0.9, 0x8b6a3f, 0.44, 1);
+    const glow = this.add.rectangle(0, -height * 0.18, width - 22, Math.max(10, height * 0.3), 0xb9985b, 0.035);
+    const line = this.add.rectangle(0, height / 2 - 8, width - 70, 1, 0xb9985b, 0.18);
+    container.add([glow, line]);
+
+    const title = this.add.text(0, layout.veryCompact ? -10 : -13, 'Убежище у катакомб', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '20px' : layout.compact ? '24px' : '28px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      wordWrap: { width: width - 34, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    const subtitle = this.add.text(0, layout.veryCompact ? 13 : 17, 'последний огонь перед тьмой', {
+      fontFamily: UI.font.body,
+      fontSize: layout.veryCompact ? '10px' : '12px',
+      color: '#958a78',
+      align: 'center',
+      wordWrap: { width: width - 58, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    container.add([title, subtitle]);
+    bg.setDepth(0);
+
+    this.createSubtleBrackets(container, width, height, 0xb9985b, 0.34, layout.veryCompact ? 9 : 12);
+
     this.tweens.add({
-      targets: [title, subtitle],
+      targets: container,
       alpha: 1,
-      y: '+=8',
+      y,
       duration: 320,
-      delay: 90,
       ease: 'Cubic.easeOut',
     });
   }
@@ -502,190 +353,110 @@ export class CampScene extends Phaser.Scene {
   private createPlayerLine(layout: CampLayout) {
     const vkUser = getCachedVKUser();
     const vkName = vkUser ? vkUser.first_name : 'локальный режим';
-    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 16 : 22);
-    const width = Math.min(layout.contentWidth - 86, 360);
+    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 11 : 13);
+    const width = Math.min(layout.contentWidth - 100, 320);
 
     this.createDarkTag({
       x: layout.centerX,
       y,
       width,
-      height: 30,
+      height: layout.veryCompact ? 22 : 25,
       icon: '◆',
       text: `Игрок: ${vkName}`,
       accentColor: 0x6e5634,
-      depth: 13,
+      depth: 24,
     });
   }
 
   private createHeroStatusCard(layout: CampLayout) {
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
+    const y = layout.heroTop + layout.heroHeight / 2;
+    const width = layout.contentWidth;
+    const height = layout.heroHeight;
+    const container = this.add.container(layout.centerX, y).setDepth(18).setAlpha(0);
+    container.setY(y + 8);
 
-    const cardY = layout.heroTop + layout.heroHeight / 2;
+    this.createLocalPanel(container, width, height, layout.veryCompact ? 18 : 24, 0x080a0d, 0.94, 0x6d5a3b, 0.46, 1);
+    const portraitX = -width / 2 + (layout.veryCompact ? 38 : 48);
+    const portraitY = layout.veryCompact ? -height / 2 + 31 : -height / 2 + 40;
 
-    const heroPanel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: cardY,
-      width: layout.contentWidth,
-      height: layout.heroHeight,
-      radius: layout.veryCompact ? 24 : 32,
-      color: 0x090b0d,
-      alpha: 0.96,
-      strokeColor: 0x6d5a3b,
-      strokeAlpha: 0.68,
-      strokeWidth: 2,
-      depth: 6,
-    });
-
-    const heroInner = this.add.rectangle(
-      layout.centerX,
-      cardY + layout.heroHeight * 0.12,
-      layout.contentWidth - 18,
-      layout.heroHeight * 0.64,
-      0x000000,
-      0.13
-    ).setDepth(7);
-    const heroTopLine = this.add.rectangle(
-      layout.centerX,
-      layout.heroTop + 9,
-      layout.contentWidth - 60,
-      1,
-      0xb9985b,
-      0.18
-    ).setDepth(8);
-    const heroCorners = this.createActionCornerMarks(
-      layout.centerX,
-      cardY,
-      layout.contentWidth,
-      layout.heroHeight,
-      0x8b7652,
-      0.34,
-      layout.veryCompact ? 10 : 14
-    );
-
-    const heroIntroObjects = [heroPanel.shadow, heroPanel.panel, heroInner, heroTopLine, ...heroCorners];
-    heroIntroObjects.forEach(object => {
-      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
-      if (typeof alphaObject.setAlpha === 'function') {
-        alphaObject.setAlpha(0);
-      }
-    });
-    this.tweens.add({
-      targets: heroIntroObjects,
-      alpha: 1,
-      y: '+=0',
-      duration: 280,
-      delay: 120,
-      ease: 'Sine.easeOut',
-    });
-
-    const left = layout.centerX - layout.contentWidth / 2 + 22;
-    const right = layout.centerX + layout.contentWidth / 2 - 22;
-    const top = layout.heroTop;
-
-    const heroName = race
-      ? player.name === race.name
-        ? player.name
-        : `${player.name} • ${race.name}`
-      : player.name;
-
-    const portraitGlow = this.add.circle(left + 34, top + (layout.veryCompact ? 36 : 43), 39, 0xb9985b, 0.08)
-      .setDepth(8);
-    this.add.circle(left + 34, top + (layout.veryCompact ? 36 : 43), layout.veryCompact ? 28 : 31, 0x16120f, 0.96)
-      .setStrokeStyle(2, 0x7d633b, 0.78)
-      .setDepth(9);
+    const portraitGlow = this.add.circle(portraitX, portraitY, layout.veryCompact ? 28 : 34, 0xb9985b, 0.08);
+    const portrait = this.add.circle(portraitX, portraitY, layout.veryCompact ? 23 : 28, 0x14100d, 0.96)
+      .setStrokeStyle(2, 0x8b6a3f, 0.62);
+    const raceIcon = this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '19px' : '23px',
+      color: '#d8c088',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+    container.add([portraitGlow, portrait, raceIcon]);
 
     this.tweens.add({
       targets: portraitGlow,
-      alpha: { from: 0.06, to: 0.16 },
-      scale: { from: 0.96, to: 1.06 },
-      duration: 1500,
+      alpha: { from: 0.05, to: 0.15 },
+      scale: { from: 0.96, to: 1.08 },
+      duration: 1450,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
 
-    this.add.text(left + 34, top + (layout.veryCompact ? 36 : 43), race ? this.getRaceIcon(race.id) : '◆', {
+    const nameX = portraitX + (layout.veryCompact ? 36 : 44);
+    const nameY = portraitY - (layout.veryCompact ? 9 : 12);
+    const heroName = race && player.name !== race.name ? `${player.name} • ${race.name}` : player.name;
+    const levelWidth = layout.veryCompact ? 58 : 68;
+
+    const name = this.add.text(nameX, nameY, heroName, {
       fontFamily: UI.font.title,
-      fontSize: '23px',
-      color: '#c9a86a',
+      fontSize: layout.veryCompact ? '15px' : layout.compact ? '18px' : '20px',
+      color: '#d8c088',
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(9);
-
-    this.add.text(left + 76, top + 31, heroName, {
-      fontFamily: UI.font.title,
-      fontSize: layout.compact ? '19px' : '22px',
-      color: '#d2b87a',
-      stroke: '#000000',
-      strokeThickness: 4,
-      wordWrap: {
-        width: layout.contentWidth - 174,
-        useAdvancedWrap: true,
-      },
+      wordWrap: { width: width - Math.abs(nameX) - levelWidth - 34, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(9);
+    }).setOrigin(0, 0.5);
 
-    this.add.text(left + 76, top + 60, race ? race.description : 'Герой ещё не выбрал путь.', {
+    const raceText = this.add.text(nameX, nameY + (layout.veryCompact ? 20 : 24), race ? race.description : 'Герой ещё не выбрал путь.', {
       fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#8f8a80',
-      wordWrap: {
-        width: layout.contentWidth - 174,
-        useAdvancedWrap: true,
-      },
+      fontSize: layout.veryCompact ? '10px' : '11px',
+      color: '#91877a',
+      wordWrap: { width: width - Math.abs(nameX) - 32, useAdvancedWrap: true },
       maxLines: layout.veryCompact ? 1 : 2,
       lineSpacing: 1,
-    }).setOrigin(0, 0.5).setDepth(9);
+    }).setOrigin(0, 0.5);
 
-    this.createDarkTag({
-      x: right - 37,
-      y: top + 34,
-      width: 74,
-      height: 32,
-      icon: '',
-      text: `Ур. ${player.level}`,
-      accentColor: 0x3f6d5a,
-      depth: 9,
+    const level = this.createLocalChip(container, width / 2 - levelWidth / 2 - 14, -height / 2 + (layout.veryCompact ? 28 : 34), levelWidth, layout.veryCompact ? 24 : 28, `Ур. ${player.level}`, 0x53735b);
+    container.add([name, raceText]);
+
+    const meterTop = layout.veryCompact ? 21 : 34;
+    const meterGap = layout.veryCompact ? 5 : 7;
+    const meterWidth = (width - 40 - meterGap) / 2;
+    this.createHeroMeter(container, -meterWidth / 2 - meterGap / 2, meterTop, meterWidth, 'HP', `${player.hp}/${stats.maxHp}`, stats.maxHp > 0 ? player.hp / stats.maxHp : 1, 0x9a3733);
+    this.createHeroMeter(container, meterWidth / 2 + meterGap / 2, meterTop, meterWidth, 'Энергия', `${player.energy}/${stats.maxEnergy}`, stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1, 0x4e7fa6);
+
+    const sanityY = meterTop + (layout.veryCompact ? 25 : 30);
+    this.createSanityBarInContainer(container, 0, sanityY, width - 42);
+
+    const resY = height / 2 - (layout.veryCompact ? 17 : 20);
+    const resWidth = Math.min((width - 46) / 3, 136);
+    this.createTinyResourceLocal(container, -resWidth - 7, resY, '◆', `${player.gold}`, resWidth);
+    this.createTinyResourceLocal(container, 0, resY, '✚', `${player.potions}`, resWidth);
+    this.createTinyResourceLocal(container, resWidth + 7, resY, '★', `${player.relicIds.length}`, resWidth);
+
+    this.createSubtleBrackets(container, width, height, 0x8b7652, 0.24, layout.veryCompact ? 7 : 10);
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      y,
+      delay: 90,
+      duration: 300,
+      ease: 'Cubic.easeOut',
     });
 
-    const barY = top + layout.heroHeight - (layout.veryCompact ? 80 : layout.compact ? 94 : 104);
-    const barGap = layout.veryCompact ? 10 : 16;
-    const barWidth = Math.min((layout.contentWidth - 64 - barGap) / 2, 258);
-
-    this.createSmallBar({
-      x: layout.centerX - barWidth / 2 - barGap / 2,
-      y: barY,
-      width: barWidth,
-      label: 'HP',
-      value: `${player.hp}/${stats.maxHp}`,
-      progress: stats.maxHp > 0 ? player.hp / stats.maxHp : 1,
-      color: 0x8c2f32,
-    });
-
-    this.createSmallBar({
-      x: layout.centerX + barWidth / 2 + barGap / 2,
-      y: barY,
-      width: barWidth,
-      label: 'Энергия',
-      value: `${player.energy}/${stats.maxEnergy}`,
-      progress: stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1,
-      color: 0x3d6e9f,
-    });
-
-    this.createSanityBar({
-      x: layout.centerX,
-      y: top + layout.heroHeight - (layout.veryCompact ? 60 : 66),
-      width: Math.min(layout.contentWidth - 56, 520),
-    });
-
-    const resourceY = top + layout.heroHeight - 19;
-    const resourceWidth = Math.min((layout.contentWidth - 52) / 3, 150);
-
-    this.createTinyResource(layout.centerX - resourceWidth - 8, resourceY, '◆', `${player.gold}`, resourceWidth);
-    this.createTinyResource(layout.centerX, resourceY, '✚', `${player.potions}`, resourceWidth);
-    this.createTinyResource(layout.centerX + resourceWidth + 8, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
-
+    void level;
     this.startSanityTimer();
   }
 
@@ -708,17 +479,15 @@ export class CampScene extends Phaser.Scene {
     }
 
     player.gold = Math.max(player.gold, 500);
-
     localStorage.setItem(key, '1');
-
     void saveGameAsync();
   }
 
   private createMainActions(layout: CampLayout) {
-    const hasActiveRun =
-      gameState.floorRun.active &&
-      gameState.floorRun.rooms.length > 0;
+    this.clearActionBoard();
+    this.actionBoardStateKey = this.getActionBoardStateKey();
 
+    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
     const activeCheckpoint = getActiveCampfireBattleCheckpoint();
     const hasActiveCheckpoint = Boolean(activeCheckpoint);
     const hasQuestReward = this.hasClaimableQuests();
@@ -726,141 +495,46 @@ export class CampScene extends Phaser.Scene {
     const ascensionPoints = this.getAvailableAscensionPoints();
     const hasAscensionPoints = ascensionPoints > 0;
 
-    const panelHeight = layout.actionsHeight;
-    const panelY = layout.actionsTop + panelHeight / 2;
-    const panelRadius = layout.veryCompact ? 20 : layout.compact ? 26 : 30;
+    const boardY = layout.actionsTop + layout.actionsHeight / 2;
+    const board = this.add.container(layout.centerX, boardY).setDepth(26).setAlpha(0).setY(boardY + 8);
+    this.trackActionObject(board);
 
-    const panel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      radius: panelRadius,
-      color: cityCampfireActive ? 0x0c0907 : 0x05070a,
-      alpha: 0.9,
-      strokeColor: cityCampfireActive ? 0x8f6238 : 0x5d4a32,
-      strokeAlpha: cityCampfireActive ? 0.64 : 0.52,
-      strokeWidth: 1,
-      depth: 4,
-    });
-
-    const boardShade = this.add.rectangle(
-      layout.centerX,
-      panelY + panelHeight * 0.08,
-      layout.contentWidth - 18,
-      panelHeight * 0.72,
-      0x000000,
-      0.11
-    ).setDepth(5);
-
-    const fireWash = this.add.circle(
-      layout.centerX - layout.contentWidth * 0.34,
-      layout.actionsBottom - panelHeight * 0.18,
-      Math.min(layout.contentWidth * 0.28, 120),
-      0xa85a28,
-      cityCampfireActive ? 0.08 : 0.035
-    ).setDepth(5);
-
-    const runeTop = this.add.rectangle(
-      layout.centerX,
-      layout.actionsTop + 10,
-      layout.contentWidth - 44,
-      1,
-      cityCampfireActive ? 0xd28a3a : 0xb9985b,
-      cityCampfireActive ? 0.2 : 0.13
-    ).setDepth(6);
-
-    const runeBottom = this.add.rectangle(
-      layout.centerX,
-      layout.actionsBottom - 10,
-      layout.contentWidth - 44,
-      1,
-      0x6e5634,
-      0.14
-    ).setDepth(6);
-
-    const panelRunes = [
-      this.add.text(layout.centerX - layout.contentWidth / 2 + 23, layout.actionsTop + 17, 'ᛟ', {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '11px' : '14px',
-        color: '#8f7650',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(7).setAlpha(0.24),
-      this.add.text(layout.centerX + layout.contentWidth / 2 - 23, layout.actionsTop + 17, 'ᛟ', {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '11px' : '14px',
-        color: '#8f7650',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(7).setAlpha(0.24),
-    ];
-
-    const panelTitle = this.add.text(layout.centerX, layout.actionsTop + (layout.veryCompact ? 12 : 14), 'КАРТА УБЕЖИЩА', {
+    this.createLocalPanel(board, layout.contentWidth, layout.actionsHeight, layout.veryCompact ? 18 : 24, cityCampfireActive ? 0x0b0806 : 0x05070a, 0.92, cityCampfireActive ? 0x8f6238 : 0x5d4a32, cityCampfireActive ? 0.42 : 0.3, 1);
+    const boardShade = this.add.rectangle(0, 0, layout.contentWidth - 18, layout.actionsHeight - 18, 0x000000, 0.08);
+    const boardLine = this.add.rectangle(0, -layout.actionsHeight / 2 + 12, layout.contentWidth - 58, 1, cityCampfireActive ? 0xd28a3a : 0xb9985b, cityCampfireActive ? 0.16 : 0.1);
+    const boardTitle = this.add.text(0, -layout.actionsHeight / 2 + (layout.veryCompact ? 12 : 14), 'КАРТА УБЕЖИЩА', {
       fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '8px' : '10px',
-      color: '#8f7650',
+      color: '#89714c',
       align: 'center',
-      letterSpacing: 1,
-      wordWrap: {
-        width: layout.contentWidth - 76,
-        useAdvancedWrap: true,
-      },
+      wordWrap: { width: layout.contentWidth - 80, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(7).setAlpha(0.3);
+    }).setOrigin(0.5).setAlpha(0.42);
+    board.add([boardShade, boardLine, boardTitle]);
 
-    const padX = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const padTop = layout.veryCompact ? 17 : layout.compact ? 20 : 22;
-    const padBottom = layout.veryCompact ? 12 : 14;
-    const pairGap = layout.veryCompact ? 7 : 9;
+    const padX = layout.veryCompact ? 10 : 12;
+    const padTop = layout.veryCompact ? 22 : 26;
+    const padBottom = layout.veryCompact ? 10 : 12;
     const innerWidth = layout.contentWidth - padX * 2;
-    const availableHeight = Math.max(218, panelHeight - padTop - padBottom);
+    const usableHeight = layout.actionsHeight - padTop - padBottom;
+    const rowGapBase = layout.veryCompact ? 5 : layout.compact ? 7 : 9;
+    const primaryHeight = Phaser.Math.Clamp(Math.round(usableHeight * 0.21), layout.veryCompact ? 50 : 56, layout.veryCompact ? 58 : 72);
+    const tileGap = layout.veryCompact ? 7 : 9;
+    const tileHeight = Phaser.Math.Clamp(Math.floor((usableHeight - primaryHeight - rowGapBase * 3) / 3), layout.veryCompact ? 48 : 54, layout.veryCompact ? 58 : 68);
+    const rowGap = Math.max(rowGapBase, Math.floor((usableHeight - primaryHeight - tileHeight * 3) / 3));
+    const groupHeight = primaryHeight + tileHeight * 3 + rowGap * 3;
+    const startY = -layout.actionsHeight / 2 + padTop + Math.max(0, (usableHeight - groupHeight) / 2);
+    const pairWidth = Math.floor((innerWidth - tileGap) / 2);
+    const leftX = -innerWidth / 2 + pairWidth / 2;
+    const rightX = innerWidth / 2 - pairWidth / 2;
+    const primaryY = startY + primaryHeight / 2;
+    const row1Y = primaryY + primaryHeight / 2 + rowGap + tileHeight / 2;
+    const row2Y = row1Y + tileHeight + rowGap;
+    const row3Y = row2Y + tileHeight + rowGap;
 
-    const primaryHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * (layout.veryCompact ? 0.23 : 0.2)),
-      layout.veryCompact ? 50 : 58,
-      layout.veryCompact ? 60 : layout.compact ? 74 : 82
-    );
+    this.createMapConnectors(board, innerWidth, primaryY, row1Y, row2Y, row3Y, cityCampfireActive ? 0x9a6537 : 0x6d5634);
 
-    const minTileHeight = layout.veryCompact ? 50 : layout.compact ? 58 : 64;
-    const maxTileHeight = layout.veryCompact ? 58 : layout.compact ? 76 : 82;
-    const baseGap = layout.veryCompact ? 5 : layout.compact ? 8 : 10;
-    const tileHeight = Phaser.Math.Clamp(
-      Math.floor((availableHeight - primaryHeight - baseGap * 3) / 3),
-      minTileHeight,
-      maxTileHeight
-    );
-    const gap = Math.max(
-      baseGap,
-      Math.floor((availableHeight - primaryHeight - tileHeight * 3) / 3)
-    );
-
-    const contentGroupHeight = primaryHeight + tileHeight * 3 + gap * 3;
-    const topOffset = padTop + Math.max(0, Math.floor((availableHeight - contentGroupHeight) / 2));
-    const pairWidth = Math.floor((innerWidth - pairGap) / 2);
-    const leftX = layout.centerX - pairWidth / 2 - pairGap / 2;
-    const rightX = layout.centerX + pairWidth / 2 + pairGap / 2;
-
-    const primaryY = layout.actionsTop + topOffset + primaryHeight / 2;
-    const firstRowY = primaryY + primaryHeight / 2 + gap + tileHeight / 2;
-    const secondRowY = firstRowY + tileHeight + gap;
-    const thirdRowY = secondRowY + tileHeight + gap;
-
-    const mapLineAlpha = layout.veryCompact ? 0.08 : 0.11;
-    const mapLineColor = cityCampfireActive ? 0x9a6537 : 0x6d5634;
-    const mapLines = [
-      this.add.rectangle(layout.centerX, firstRowY - tileHeight / 2 - gap / 2, 2, gap + 6, mapLineColor, mapLineAlpha).setDepth(6),
-      this.add.rectangle(layout.centerX, secondRowY - tileHeight / 2 - gap / 2, 2, gap + 6, mapLineColor, mapLineAlpha).setDepth(6),
-      this.add.rectangle(layout.centerX, thirdRowY - tileHeight / 2 - gap / 2, 2, gap + 6, mapLineColor, mapLineAlpha).setDepth(6),
-      this.add.rectangle(layout.centerX, firstRowY, innerWidth * 0.42, 1, mapLineColor, mapLineAlpha).setDepth(6),
-      this.add.rectangle(layout.centerX, secondRowY, innerWidth * 0.42, 1, mapLineColor, mapLineAlpha).setDepth(6),
-      this.add.rectangle(layout.centerX, thirdRowY, innerWidth * 0.42, 1, mapLineColor, mapLineAlpha).setDepth(6),
-    ];
-
-    const dungeonTitle = hasActiveRun || hasActiveCheckpoint
-      ? 'Продолжить спуск'
-      : 'Вход в подземелье';
-
+    const dungeonTitle = hasActiveRun || hasActiveCheckpoint ? 'Продолжить спуск' : 'Вход в подземелье';
     const dungeonStatus = activeCheckpoint
       ? `Эт. ${activeCheckpoint.floor} • ${formatCheckpointTimeLeft(activeCheckpoint.expiresAt - Date.now())}`
       : hasActiveRun
@@ -869,25 +543,25 @@ export class CampScene extends Phaser.Scene {
           ? `Рассудок -${SANITY_COST_PER_FLOOR}`
           : 'Мало рассудка';
 
-    this.createPrimaryDungeonPlate({
+    this.createDungeonAction({
       layout,
-      x: layout.centerX,
+      board,
+      x: 0,
       y: primaryY,
       width: innerWidth,
       height: primaryHeight,
       title: dungeonTitle,
       status: dungeonStatus,
       highlighted: hasActiveRun || hasActiveCheckpoint,
-      onClick: () => {
-        this.tryEnterCatacombs();
-      },
-      delay: 120,
+      onClick: () => this.tryEnterCatacombs(),
+      delay: 130,
     });
 
-    const restTile = this.createPairedActionTile({
+    const restTile = this.createCampLocationTile({
       layout,
+      board,
       x: leftX,
-      y: firstRowY,
+      y: row1Y,
       width: pairWidth,
       height: tileHeight,
       icon: '♨',
@@ -895,19 +569,17 @@ export class CampScene extends Phaser.Scene {
       status: this.getCityCampfireButtonStatus(),
       accentColor: cityCampfireActive ? 0xd28a3a : 0x9b7043,
       highlighted: cityCampfireActive,
-      onClick: () => {
-        this.restAtCampfire();
-      },
-      delay: 175,
+      onClick: () => this.restAtCampfire(),
+      delay: 185,
     });
-
     this.restButtonLabel = restTile.titleText;
     this.restButtonDescription = restTile.descriptionText;
 
-    this.createPairedActionTile({
+    this.createCampLocationTile({
       layout,
+      board,
       x: rightX,
-      y: firstRowY,
+      y: row1Y,
       width: pairWidth,
       height: tileHeight,
       icon: hasAscensionPoints ? '!' : '✦',
@@ -915,33 +587,31 @@ export class CampScene extends Phaser.Scene {
       status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
       accentColor: hasAscensionPoints ? 0xd6c08a : 0x7253a8,
       highlighted: hasAscensionPoints,
-      onClick: () => {
-        this.scene.start('StatsTreeScene');
-      },
-      delay: 215,
+      onClick: () => this.scene.start('StatsTreeScene'),
+      delay: 220,
     });
 
-    this.createPairedActionTile({
+    this.createCampLocationTile({
       layout,
+      board,
       x: leftX,
-      y: secondRowY,
+      y: row2Y,
       width: pairWidth,
       height: tileHeight,
       icon: '☕',
       title: 'Таверна',
       status: 'Отдых',
-      accentColor: 0x9a7046,
+      accentColor: 0xa06f43,
       highlighted: false,
-      onClick: () => {
-        this.scene.start('TavernScene');
-      },
+      onClick: () => this.scene.start('TavernScene'),
       delay: 255,
     });
 
-    this.createPairedActionTile({
+    this.createCampLocationTile({
       layout,
+      board,
       x: rightX,
-      y: secondRowY,
+      y: row2Y,
       width: pairWidth,
       height: tileHeight,
       icon: hasQuestReward ? '!' : '◆',
@@ -949,16 +619,15 @@ export class CampScene extends Phaser.Scene {
       status: hasQuestReward ? 'Есть награда' : 'Награды',
       accentColor: hasQuestReward ? 0x7fa06d : 0x8b6a3f,
       highlighted: hasQuestReward,
-      onClick: () => {
-        this.scene.start('QuestScene');
-      },
-      delay: 295,
+      onClick: () => this.scene.start('QuestScene'),
+      delay: 290,
     });
 
-    this.createPairedActionTile({
+    this.createCampLocationTile({
       layout,
+      board,
       x: leftX,
-      y: thirdRowY,
+      y: row3Y,
       width: pairWidth,
       height: tileHeight,
       icon: '¤',
@@ -966,16 +635,15 @@ export class CampScene extends Phaser.Scene {
       status: 'Торговцы',
       accentColor: 0xb89a5e,
       highlighted: false,
-      onClick: () => {
-        this.scene.start('MarketScene');
-      },
-      delay: 335,
+      onClick: () => this.scene.start('MarketScene'),
+      delay: 325,
     });
 
-    this.createPairedActionTile({
+    this.createCampLocationTile({
       layout,
+      board,
       x: rightX,
-      y: thirdRowY,
+      y: row3Y,
       width: pairWidth,
       height: tileHeight,
       icon: '⌂',
@@ -983,43 +651,27 @@ export class CampScene extends Phaser.Scene {
       status: 'Убежище',
       accentColor: 0x8b7652,
       highlighted: false,
-      onClick: () => {
-        this.scene.start('HomeScene');
-      },
-      delay: 375,
+      onClick: () => this.scene.start('HomeScene'),
+      delay: 360,
     });
 
-    const panelObjects = [
-      panel.shadow,
-      panel.panel,
-      boardShade,
-      fireWash,
-      runeTop,
-      runeBottom,
-      panelTitle,
-      ...panelRunes,
-      ...mapLines,
-    ];
-
-    panelObjects.forEach(object => {
-      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
-      if (typeof alphaObject.setAlpha === 'function') {
-        alphaObject.setAlpha(0);
-      }
-    });
+    this.createSubtleBrackets(board, layout.contentWidth, layout.actionsHeight, cityCampfireActive ? 0xd28a3a : 0x8b7652, 0.16, 9);
 
     this.tweens.add({
-      targets: panelObjects,
+      targets: board,
       alpha: 1,
+      y: boardY,
+      delay: 100,
       duration: 300,
-      delay: 70,
-      ease: 'Sine.easeOut',
+      ease: 'Cubic.easeOut',
     });
 
     this.startCampfireTimer();
   }
-  private createPrimaryDungeonPlate(config: {
+
+  private createDungeonAction(config: {
     layout: CampLayout;
+    board: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
@@ -1030,120 +682,77 @@ export class CampScene extends Phaser.Scene {
     onClick: () => void;
     delay: number;
   }) {
-    const accent = config.highlighted ? 0x4d7c5c : 0x8c2f32;
-    const titleColor = config.highlighted ? '#a7dfad' : '#e0c585';
-    const left = config.x - config.width / 2;
-    const right = config.x + config.width / 2;
-    const iconSize = Phaser.Math.Clamp(config.height * 0.52, 26, 38);
-    const iconX = left + Phaser.Math.Clamp(Math.round(config.height * 0.58), 36, 54);
-    const textX = left + Phaser.Math.Clamp(Math.round(config.height * 1.06), 68, 92);
-    const textWidth = Math.max(158, right - textX - 34);
-    const radius = config.layout.veryCompact ? 18 : config.layout.compact ? 22 : 26;
+    const container = this.add.container(config.x, config.y).setAlpha(0);
+    container.setY(config.y + 8);
+    config.board.add(container);
 
-    const panel = this.createRoundedPanel({
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      radius,
-      color: config.highlighted ? 0x0b1712 : 0x170d0c,
-      alpha: 0.99,
-      strokeColor: accent,
-      strokeAlpha: config.highlighted ? 0.88 : 0.8,
-      strokeWidth: 2,
-      depth: 8,
-    });
+    const accent = config.highlighted ? 0x5f9a68 : 0x9d3f36;
+    const titleColor = config.highlighted ? '#b6e5b1' : '#e2c27d';
+    const iconBox = Phaser.Math.Clamp(config.height * 0.58, 32, 42);
+    const iconX = -config.width / 2 + iconBox / 2 + 13;
+    const textX = iconX + iconBox / 2 + 15;
+    const textWidth = Math.max(150, config.width / 2 - textX + config.width / 2 - 40);
 
-    const innerShade = this.add.rectangle(
-      config.x,
-      config.y + config.height * 0.14,
-      config.width - 18,
-      Math.max(10, config.height * 0.48),
-      0x000000,
-      0.14
-    ).setDepth(10);
-
-    const glow = this.add.circle(iconX, config.y, iconSize + 11, accent, config.highlighted ? 0.18 : 0.13)
-      .setDepth(11);
-    const iconFrame = this.add.rectangle(iconX, config.y, iconSize + 15, iconSize + 15, 0x050505, 0.28)
-      .setStrokeStyle(1, accent, 0.68)
-      .setDepth(12);
-    const icon = this.add.text(iconX, config.y, config.highlighted ? '▼' : '☠', {
-      fontFamily: UI.font.body,
-      fontSize: config.height <= 52 ? '20px' : '25px',
+    this.createLocalPanel(container, config.width, config.height, config.layout.veryCompact ? 18 : 24, config.highlighted ? 0x0a1710 : 0x180d0c, 0.98, accent, 0.68, 2);
+    const shade = this.add.rectangle(0, config.height * 0.14, config.width - 20, Math.max(12, config.height * 0.38), 0x000000, 0.13);
+    const iconGlow = this.add.circle(iconX, 0, iconBox * 0.8, accent, config.highlighted ? 0.16 : 0.12);
+    const iconNest = this.add.rectangle(iconX, 0, iconBox, iconBox, 0x040405, 0.5).setStrokeStyle(1, accent, 0.58);
+    const icon = this.add.text(iconX, 0, config.highlighted ? '▼' : '☠', {
+      fontFamily: UI.font.title,
+      fontSize: config.layout.veryCompact ? '19px' : '24px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
       align: 'center',
-    }).setOrigin(0.5).setDepth(13);
+    }).setOrigin(0.5);
 
-    const titleText = this.add.text(textX, config.y - config.height * 0.16, config.title, {
+    const title = this.add.text(textX, -config.height * 0.15, config.title, {
       fontFamily: UI.font.title,
-      fontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '21px' : '24px',
+      fontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '20px' : '23px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 4,
-      wordWrap: {
-        width: textWidth,
-        useAdvancedWrap: true,
-      },
+      wordWrap: { width: textWidth, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(13);
+    }).setOrigin(0, 0.5);
 
-    const statusText = this.add.text(textX, config.y + config.height * 0.18, config.status, {
+    const status = this.add.text(textX, config.height * 0.2, config.status, {
       fontFamily: UI.font.body,
       fontSize: config.layout.veryCompact ? '10px' : '12px',
-      color: '#b2a696',
-      wordWrap: {
-        width: textWidth,
-        useAdvancedWrap: true,
-      },
+      color: '#b3a796',
+      wordWrap: { width: textWidth, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(13);
+    }).setOrigin(0, 0.5);
 
-    const arrow = this.add.text(right - 24, config.y, '›', {
+    const arrow = this.add.text(config.width / 2 - 22, 0, '›', {
       fontFamily: UI.font.title,
       fontSize: config.layout.veryCompact ? '23px' : '30px',
-      color: config.highlighted ? '#a7dfad' : '#b99257',
+      color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
-      align: 'center',
-    }).setOrigin(0.5).setDepth(13).setAlpha(0.82);
+    }).setOrigin(0.5).setAlpha(0.76);
 
-    const topRune = this.add.rectangle(config.x, config.y - config.height / 2 + 7, config.width - 42, 1, accent, 0.24)
-      .setDepth(12);
-    const bottomRune = this.add.rectangle(config.x, config.y + config.height / 2 - 7, config.width - 42, 2, accent, config.highlighted ? 0.32 : 0.22)
-      .setDepth(12);
-    const leftBracket = this.add.rectangle(left + 7, config.y, 3, config.height - 18, accent, 0.42)
-      .setDepth(13);
-    const rightBracket = this.add.rectangle(right - 7, config.y, 3, config.height - 18, accent, 0.3)
-      .setDepth(13);
-    const gateRune = this.add.text(right - 50, config.y - config.height * 0.27, 'ᛟ', {
-      fontFamily: UI.font.title,
-      fontSize: config.layout.veryCompact ? '10px' : '13px',
-      color: config.highlighted ? '#a7dfad' : '#b99257',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(13).setAlpha(0.5);
+    const topLine = this.add.rectangle(0, -config.height / 2 + 7, config.width - 46, 1, accent, 0.22);
+    const bottomLine = this.add.rectangle(0, config.height / 2 - 7, config.width - 46, 2, accent, config.highlighted ? 0.28 : 0.2);
+    container.add([shade, iconGlow, iconNest, icon, title, status, arrow, topLine, bottomLine]);
+    this.createSubtleBrackets(container, config.width, config.height, accent, 0.42, 8);
 
-    const cornerMarks = this.createActionCornerMarks(config.x, config.y, config.width, config.height, accent, 0.76, 13);
-
-    const objects = [panel.shadow, panel.panel, innerShade, glow, iconFrame, icon, titleText, statusText, arrow, topRune, bottomRune, leftBracket, rightBracket, gateRune, ...cornerMarks];
-    this.playActionIntro(objects, config.delay);
-    this.createActionPressZone({
+    this.playContainerIntro(container, config.delay);
+    this.createPressableZone({
+      board: config.board,
+      target: container,
       x: config.x,
       y: config.y,
       width: config.width,
       height: config.height,
-      onClick: config.onClick,
-      titleText,
+      titleText: title,
       normalColor: titleColor,
-      pressTargets: [innerShade, glow, iconFrame, icon, titleText, statusText, arrow, bottomRune, leftBracket, rightBracket, gateRune],
+      onClick: config.onClick,
     });
 
     this.tweens.add({
-      targets: [glow, bottomRune, arrow],
-      alpha: config.highlighted ? '+=0.08' : '+=0.04',
+      targets: [iconGlow, bottomLine, arrow],
+      alpha: config.highlighted ? '+=0.08' : '+=0.045',
       scale: { from: 0.98, to: config.highlighted ? 1.06 : 1.035 },
       duration: config.highlighted ? 900 : 1450,
       yoyo: true,
@@ -1152,8 +761,9 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createPairedActionTile(config: {
+  private createCampLocationTile(config: {
     layout: CampLayout;
+    board: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
@@ -1166,143 +776,76 @@ export class CampScene extends Phaser.Scene {
     onClick: () => void;
     delay: number;
   }): CampActionButton {
+    const container = this.add.container(config.x, config.y).setAlpha(0);
+    container.setY(config.y + 8);
+    config.board.add(container);
+
     const titleColor = config.highlighted ? '#ead694' : '#d8c088';
-    const mutedColor = config.highlighted ? '#c8bd9c' : '#a09688';
-    const left = config.x - config.width / 2;
-    const right = config.x + config.width / 2;
-    const radius = config.layout.veryCompact ? 16 : config.layout.compact ? 20 : 22;
-    const iconBox = Phaser.Math.Clamp(config.height * 0.54, 28, 42);
-    const iconX = left + iconBox / 2 + (config.layout.veryCompact ? 8 : 10);
-    const textX = left + iconBox + (config.layout.veryCompact ? 17 : 21);
-    const textWidth = Math.max(70, right - textX - 12);
-    const titleFont = config.height <= 54
-      ? '13px'
-      : config.layout.compact
-        ? '15px'
-        : '17px';
-    const statusFont = config.height <= 54 ? '10px' : '11px';
+    const statusColor = config.highlighted ? '#cfc29e' : '#a09688';
+    const iconBox = Phaser.Math.Clamp(config.height * 0.56, 27, 38);
+    const iconX = -config.width / 2 + iconBox / 2 + (config.layout.veryCompact ? 8 : 10);
+    const textX = iconX + iconBox / 2 + (config.layout.veryCompact ? 10 : 13);
+    const textWidth = Math.max(64, config.width / 2 - textX + config.width / 2 - 10);
 
-    const panel = this.createRoundedPanel({
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      radius,
-      color: config.highlighted ? 0x11130e : 0x0b0d10,
-      alpha: config.highlighted ? 0.98 : 0.95,
-      strokeColor: config.accentColor,
-      strokeAlpha: config.highlighted ? 0.74 : 0.48,
-      strokeWidth: config.highlighted ? 2 : 1,
-      depth: 8,
-    });
-
-    const innerShade = this.add.rectangle(
-      config.x,
-      config.y + config.height * 0.15,
-      config.width - 12,
-      Math.max(8, config.height * 0.42),
-      0x000000,
-      0.12
-    ).setDepth(10);
-
-    const iconGlow = this.add.circle(
-      iconX,
-      config.y,
-      iconBox * 0.72,
-      config.accentColor,
-      config.highlighted ? 0.16 : 0.08
-    ).setDepth(11);
-
-    const iconNest = this.add.rectangle(iconX, config.y, iconBox, iconBox, 0x050506, 0.42)
-      .setStrokeStyle(1, config.accentColor, config.highlighted ? 0.72 : 0.46)
-      .setDepth(12);
-
-    const icon = this.add.text(iconX, config.y, config.icon, {
+    this.createLocalPanel(container, config.width, config.height, config.layout.veryCompact ? 15 : 19, config.highlighted ? 0x11130e : 0x0b0d10, config.highlighted ? 0.98 : 0.94, config.accentColor, config.highlighted ? 0.58 : 0.34, config.highlighted ? 2 : 1);
+    const shade = this.add.rectangle(0, config.height * 0.16, config.width - 12, Math.max(10, config.height * 0.34), 0x000000, 0.12);
+    const iconGlow = this.add.circle(iconX, 0, iconBox * 0.74, config.accentColor, config.highlighted ? 0.14 : 0.07);
+    const iconNest = this.add.rectangle(iconX, 0, iconBox, iconBox, 0x050506, 0.44).setStrokeStyle(1, config.accentColor, config.highlighted ? 0.62 : 0.36);
+    const icon = this.add.text(iconX, 0, config.icon, {
       fontFamily: UI.font.title,
-      fontSize: config.height <= 54 ? '17px' : '20px',
+      fontSize: config.layout.veryCompact ? '16px' : '19px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
-    }).setOrigin(0.5).setDepth(13);
+    }).setOrigin(0.5);
 
-    const titleText = this.add.text(textX, config.y - config.height * 0.16, config.title, {
+    const title = this.add.text(textX, -config.height * 0.17, config.title, {
       fontFamily: UI.font.title,
-      fontSize: titleFont,
+      fontSize: config.layout.veryCompact ? '12px' : config.layout.compact ? '14px' : '16px',
       color: titleColor,
       stroke: '#000000',
       strokeThickness: 3,
-      wordWrap: {
-        width: textWidth,
-        useAdvancedWrap: true,
-      },
+      wordWrap: { width: textWidth, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(13);
+    }).setOrigin(0, 0.5);
 
-    const statusText = this.add.text(textX, config.y + config.height * 0.2, config.status, {
+    const status = this.add.text(textX, config.height * 0.2, config.status, {
       fontFamily: UI.font.body,
-      fontSize: statusFont,
-      color: mutedColor,
-      wordWrap: {
-        width: textWidth,
-        useAdvancedWrap: true,
-      },
+      fontSize: config.layout.veryCompact ? '9px' : '11px',
+      color: statusColor,
+      wordWrap: { width: textWidth, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(13);
+    }).setOrigin(0, 0.5);
 
-    const topPin = this.add.rectangle(left + 8, config.y - config.height / 2 + 6, 18, 2, config.accentColor, config.highlighted ? 0.42 : 0.22)
-      .setDepth(12);
-    const bottomLine = this.add.rectangle(config.x, config.y + config.height / 2 - 5, config.width - 22, 1, config.accentColor, config.highlighted ? 0.26 : 0.12)
-      .setDepth(12);
-    const runeMark = this.add.text(right - 10, config.y - config.height * 0.26, '᛫', {
+    const line = this.add.rectangle(0, config.height / 2 - 5, config.width - 22, 1, config.accentColor, config.highlighted ? 0.22 : 0.1);
+    const marker = this.add.text(config.width / 2 - 10, -config.height * 0.24, '᛫', {
       fontFamily: UI.font.title,
-      fontSize: config.height <= 54 ? '9px' : '11px',
+      fontSize: config.layout.veryCompact ? '8px' : '10px',
       color: '#8f7650',
       stroke: '#000000',
       strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(13).setAlpha(config.highlighted ? 0.58 : 0.28);
+    }).setOrigin(0.5).setAlpha(config.highlighted ? 0.5 : 0.22);
 
-    const cornerMarks = this.createActionCornerMarks(
-      config.x,
-      config.y,
-      config.width,
-      config.height,
-      config.accentColor,
-      config.highlighted ? 0.48 : 0.24,
-      config.layout.veryCompact ? 6 : 8
-    );
+    container.add([shade, iconGlow, iconNest, icon, title, status, line, marker]);
+    this.createSubtleBrackets(container, config.width, config.height, config.accentColor, config.highlighted ? 0.3 : 0.16, 6);
 
-    const objects = [
-      panel.shadow,
-      panel.panel,
-      innerShade,
-      iconGlow,
-      iconNest,
-      icon,
-      titleText,
-      statusText,
-      topPin,
-      bottomLine,
-      runeMark,
-      ...cornerMarks,
-    ];
-
-    this.playActionIntro(objects, config.delay);
-
-    this.createActionPressZone({
+    this.playContainerIntro(container, config.delay);
+    this.createPressableZone({
+      board: config.board,
+      target: container,
       x: config.x,
       y: config.y,
       width: config.width,
       height: config.height,
-      onClick: config.onClick,
-      titleText,
+      titleText: title,
       normalColor: titleColor,
-      pressTargets: [innerShade, iconGlow, iconNest, icon, titleText, statusText, topPin, bottomLine, runeMark],
+      onClick: config.onClick,
     });
 
     if (config.highlighted) {
       this.tweens.add({
-        targets: [iconGlow, titleText, bottomLine],
+        targets: [iconGlow, line, marker],
         alpha: '+=0.07',
         scale: { from: 0.99, to: 1.045 },
         duration: 920,
@@ -1313,159 +856,152 @@ export class CampScene extends Phaser.Scene {
     }
 
     return {
-      titleText,
-      descriptionText: statusText,
+      titleText: title,
+      descriptionText: status,
     };
   }
-  private createActionCornerMarks(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    color: number,
-    alpha: number,
-    size: number
-  ) {
-    const left = x - width / 2;
-    const right = x + width / 2;
-    const top = y - height / 2;
-    const bottom = y + height / 2;
+
+  private createMapConnectors(board: Phaser.GameObjects.Container, width: number, primaryY: number, row1Y: number, row2Y: number, row3Y: number, color: number) {
+    const alpha = 0.08;
+    [row1Y, row2Y, row3Y].forEach(y => {
+      board.add(this.add.rectangle(0, y, width * 0.35, 1, color, alpha));
+    });
+    board.add(this.add.rectangle(0, (primaryY + row3Y) / 2, 2, row3Y - primaryY, color, alpha));
+  }
+
+  private createSubtleBrackets(container: Phaser.GameObjects.Container, width: number, height: number, color: number, alpha: number, size: number) {
+    const left = -width / 2;
+    const right = width / 2;
+    const top = -height / 2;
+    const bottom = height / 2;
     const marks = [
-      this.add.rectangle(left + size / 2 + 4, top + 5, size, 2, color, alpha),
-      this.add.rectangle(left + 5, top + size / 2 + 4, 2, size, color, alpha),
-      this.add.rectangle(right - size / 2 - 4, top + 5, size, 2, color, alpha),
-      this.add.rectangle(right - 5, top + size / 2 + 4, 2, size, color, alpha),
-      this.add.rectangle(left + size / 2 + 4, bottom - 5, size, 2, color, alpha * 0.7),
-      this.add.rectangle(left + 5, bottom - size / 2 - 4, 2, size, color, alpha * 0.7),
-      this.add.rectangle(right - size / 2 - 4, bottom - 5, size, 2, color, alpha * 0.7),
-      this.add.rectangle(right - 5, bottom - size / 2 - 4, 2, size, color, alpha * 0.7),
+      this.add.rectangle(left + size / 2 + 5, top + 5, size, 2, color, alpha),
+      this.add.rectangle(left + 5, top + size / 2 + 5, 2, size, color, alpha),
+      this.add.rectangle(right - size / 2 - 5, top + 5, size, 2, color, alpha),
+      this.add.rectangle(right - 5, top + size / 2 + 5, 2, size, color, alpha),
+      this.add.rectangle(left + size / 2 + 5, bottom - 5, size, 2, color, alpha * 0.7),
+      this.add.rectangle(left + 5, bottom - size / 2 - 5, 2, size, color, alpha * 0.7),
+      this.add.rectangle(right - size / 2 - 5, bottom - 5, size, 2, color, alpha * 0.7),
+      this.add.rectangle(right - 5, bottom - size / 2 - 5, 2, size, color, alpha * 0.7),
     ];
-
-    marks.forEach(mark => mark.setDepth(15));
-    return marks;
+    container.add(marks);
   }
 
-  private playActionIntro(objects: Phaser.GameObjects.GameObject[], delay: number) {
-    objects.forEach(object => {
-      const alphaObject = object as unknown as { setAlpha?: (value: number) => void };
-      if (typeof alphaObject.setAlpha === 'function') {
-        alphaObject.setAlpha(0);
-      }
-
-      const transformObject = object as unknown as { y?: number; setY?: (value: number) => void };
-      if (typeof transformObject.setY === 'function' && typeof transformObject.y === 'number') {
-        transformObject.setY(transformObject.y + 8);
-      }
-    });
-
-    this.tweens.add({
-      targets: objects,
-      alpha: 1,
-      y: '-=8',
-      duration: 270,
-      delay,
-      ease: 'Cubic.easeOut',
-    });
-  }
-
-  private createActionPressZone(config: {
+  private createPressableZone(config: {
+    board: Phaser.GameObjects.Container;
+    target: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
     height: number;
+    titleText: Phaser.GameObjects.Text;
+    normalColor: string;
     onClick: () => void;
-    titleText?: Phaser.GameObjects.Text;
-    normalColor?: string;
-    pressTargets: Phaser.GameObjects.GameObject[];
   }) {
-    const normalColor = config.normalColor ?? UI.colors.goldText;
     let isPressed = false;
     let isLocked = false;
-
     const zone = this.add.zone(config.x, config.y, config.width, config.height)
-      .setDepth(30)
-      .setInteractive({
-        useHandCursor: true,
-      });
+      .setInteractive({ useHandCursor: true })
+      .setDepth(40);
 
-    const resetTargets = (duration = 90) => {
-      this.tweens.add({
-        targets: config.pressTargets,
-        scaleX: 1,
-        scaleY: 1,
-        duration,
-        ease: 'Sine.easeOut',
-      });
-    };
+    config.board.add(zone);
+    this.trackActionObject(zone);
 
     zone.on('pointerover', () => {
-      if (isLocked) {
-        return;
+      if (!isLocked) {
+        config.titleText.setColor('#f1dfb2');
       }
-
-      config.titleText?.setColor('#eee1c6');
     });
 
     zone.on('pointerout', () => {
       isPressed = false;
-      config.titleText?.setColor(normalColor);
-      resetTargets();
+      config.titleText.setColor(config.normalColor);
+      this.tweens.add({ targets: config.target, scaleX: 1, scaleY: 1, duration: 90, ease: 'Sine.easeOut' });
     });
 
     zone.on('pointerdown', () => {
       if (isLocked) {
         return;
       }
-
       isPressed = true;
-      config.titleText?.setColor('#fff0c4');
-      this.tweens.add({
-        targets: config.pressTargets,
-        scaleX: 0.985,
-        scaleY: 0.985,
-        duration: 70,
-        ease: 'Sine.easeOut',
-      });
+      config.titleText.setColor('#fff0c4');
+      this.tweens.add({ targets: config.target, scaleX: 0.982, scaleY: 0.982, duration: 70, ease: 'Sine.easeOut' });
     });
 
     zone.on('pointerupoutside', () => {
       isPressed = false;
-      config.titleText?.setColor(normalColor);
-      resetTargets();
+      config.titleText.setColor(config.normalColor);
+      this.tweens.add({ targets: config.target, scaleX: 1, scaleY: 1, duration: 90, ease: 'Sine.easeOut' });
     });
 
     zone.on('pointerup', () => {
       if (!isPressed || isLocked) {
         return;
       }
-
       isPressed = false;
       isLocked = true;
-      config.titleText?.setColor('#fff0c4');
-
-      this.time.delayedCall(350, () => {
-        isLocked = false;
-      });
-
+      config.titleText.setColor('#fff0c4');
       this.tweens.add({
-        targets: config.pressTargets,
+        targets: config.target,
         scaleX: 1,
         scaleY: 1,
-        duration: 90,
+        duration: 105,
         ease: 'Back.easeOut',
         onComplete: () => {
           config.onClick();
+          this.time.delayedCall(260, () => {
+            isLocked = false;
+          });
         },
       });
     });
+  }
 
-    return zone;
+  private playContainerIntro(container: Phaser.GameObjects.Container, delay: number) {
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      y: container.y - 8,
+      duration: 260,
+      delay,
+      ease: 'Cubic.easeOut',
+    });
+  }
+
+  private trackActionObject(object: Phaser.GameObjects.GameObject) {
+    this.actionBoardObjects.push(object);
+  }
+
+  private clearActionBoard() {
+    this.actionBoardObjects.forEach(object => {
+      if (object.active) {
+        object.destroy();
+      }
+    });
+    this.actionBoardObjects = [];
+    this.restButtonLabel = undefined;
+    this.restButtonDescription = undefined;
+  }
+
+  private refreshActionBoard() {
+    this.createMainActions(this.getLayout());
+  }
+
+  private getActionBoardStateKey() {
+    const checkpoint = getActiveCampfireBattleCheckpoint();
+    const cityState = this.getCityCampfireState();
+    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
+    return [
+      hasActiveRun ? `run:${gameState.floorRun.currentFloor}` : 'run:none',
+      checkpoint ? `checkpoint:${checkpoint.id}` : 'checkpoint:none',
+      cityState.active ? `campfire:${cityState.flintType}` : 'campfire:none',
+      this.hasClaimableQuests() ? 'quest:reward' : 'quest:none',
+      `points:${this.getAvailableAscensionPoints()}`,
+    ].join('|');
   }
 
   private hasClaimableQuests() {
-    return getQuests().some(quest => {
-      return isQuestCompleted(quest) && !isQuestClaimed(quest.id);
-    });
+    return getQuests().some(quest => isQuestCompleted(quest) && !isQuestClaimed(quest.id));
   }
 
   private getAvailableAscensionPoints() {
@@ -1474,7 +1010,7 @@ export class CampScene extends Phaser.Scene {
 
   private getCityCampfireButtonDescription() {
     if (!this.isCityCampfireActive()) {
-      return 'Скрафти обычное/среднее огниво или используй донатное, чтобы зажечь костёр.';
+      return 'Костёр не горит. Зажги его через огниво, чтобы восстановить силы.';
     }
 
     const state = this.getCityCampfireState();
@@ -1503,15 +1039,18 @@ export class CampScene extends Phaser.Scene {
   private updateCampfireButtonText() {
     this.extinguishCityCampfireIfExpired();
 
+    const nextKey = this.getActionBoardStateKey();
+    if (nextKey !== this.actionBoardStateKey) {
+      this.refreshActionBoard();
+      return;
+    }
+
     this.restButtonLabel?.setText('Костёр');
     this.restButtonDescription?.setText(this.getCityCampfireButtonStatus());
   }
 
   private startCampfireTimer() {
-    if (this.campfireTimerEvent) {
-      this.campfireTimerEvent.remove(false);
-    }
-
+    this.campfireTimerEvent?.remove(false);
     this.updateCampfireButtonText();
 
     this.campfireTimerEvent = this.time.addEvent({
@@ -1524,123 +1063,66 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createSmallBar(config: {
-    x: number;
-    y: number;
-    width: number;
-    label: string;
-    value: string;
-    progress: number;
-    color: number;
-  }) {
-    const progress = Phaser.Math.Clamp(config.progress, 0, 1);
-    const barHeight = 10;
-
-    this.add.text(config.x - config.width / 2, config.y - 13, config.label, {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#8f887b',
-    }).setOrigin(0, 0.5).setDepth(9);
-
-    this.add.text(config.x + config.width / 2, config.y - 13, config.value, {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#d1c7b4',
-    }).setOrigin(1, 0.5).setDepth(9);
-
-    this.add.rectangle(config.x, config.y + 8, config.width, barHeight, 0x030303, 0.92)
-      .setDepth(8);
-
-    this.add.rectangle(
-      config.x - config.width / 2,
-      config.y + 8,
-      Math.max(0, config.width * progress),
-      barHeight,
-      config.color,
-      0.88
-    ).setOrigin(0, 0.5).setDepth(9);
-
-    this.add.rectangle(config.x, config.y + 8, config.width, barHeight)
-      .setStrokeStyle(1, 0x5c503d, 0.5)
-      .setDepth(10);
-  }
-
-  private createSanityBar(config: {
-    x: number;
-    y: number;
-    width: number;
-  }) {
-    restoreSanityByTime();
-
-    const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
-    const barHeight = 12;
-    const left = config.x - config.width / 2;
-    const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
-    const fillWidth = Math.max(0, config.width * progress);
-
-    this.add.text(left, config.y - 15, '☾ Рассудок', {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#a99bc6',
-      stroke: '#000000',
-      strokeThickness: 2,
-      wordWrap: {
-        width: Math.floor(config.width * 0.58),
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(9);
-
-    this.sanityValueText = this.add.text(left + config.width, config.y - 15, `${player.sanity}/${player.maxSanity}`, {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#d8d0e8',
-      stroke: '#000000',
-      strokeThickness: 2,
-      wordWrap: {
-        width: Math.floor(config.width * 0.38),
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(1, 0.5).setDepth(9);
-
-    this.add.rectangle(config.x, config.y + 6, config.width, barHeight, 0x030305, 0.94)
-      .setDepth(8);
-
-    const glow = this.add.rectangle(left, config.y + 6, Math.max(1, fillWidth), barHeight + 4, fillColor, 0.16)
-      .setOrigin(0, 0.5)
-      .setDepth(8);
-
-    this.sanityFill = this.add.rectangle(left, config.y + 6, Math.max(1, fillWidth), barHeight, fillColor, 0.9)
-      .setOrigin(0, 0.5)
-      .setDepth(9)
-      .setScale(0.01, 1);
-
-    this.sanityFillWidth = config.width;
-
-    this.add.rectangle(config.x, config.y + 6, config.width, barHeight)
-      .setStrokeStyle(1, 0x6b5a7f, 0.62)
-      .setDepth(10);
-
-    this.sanityHintText = this.add.text(config.x, config.y + 24, this.formatSanityTimeToFull(), {
+  private createHeroMeter(container: Phaser.GameObjects.Container, x: number, y: number, width: number, label: string, value: string, progress: number, color: number) {
+    const pct = Phaser.Math.Clamp(progress, 0, 1);
+    const labelText = this.add.text(x - width / 2, y - 9, label, {
       fontFamily: UI.font.body,
       fontSize: '10px',
+      color: '#908778',
+      wordWrap: { width: width * 0.46, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(0, 0.5);
+    const valueText = this.add.text(x + width / 2, y - 9, value, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#d1c7b4',
+      wordWrap: { width: width * 0.5, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(1, 0.5);
+    const bg = this.add.rectangle(x, y + 5, width, 8, 0x030303, 0.9);
+    const fill = this.add.rectangle(x - width / 2, y + 5, Math.max(1, width * pct), 8, color, 0.86).setOrigin(0, 0.5).setScale(0.01, 1);
+    const stroke = this.add.rectangle(x, y + 5, width, 8).setStrokeStyle(1, 0x5c503d, 0.42);
+    container.add([labelText, valueText, bg, fill, stroke]);
+    this.tweens.add({ targets: fill, scaleX: 1, duration: 380, delay: 150, ease: 'Cubic.easeOut' });
+  }
+
+  private createSanityBarInContainer(container: Phaser.GameObjects.Container, x: number, y: number, width: number) {
+    restoreSanityByTime();
+    const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
+    const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
+    const left = x - width / 2;
+
+    const label = this.add.text(left, y - 10, '☾ Рассудок', {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#a99bc6',
+      wordWrap: { width: width * 0.52, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(0, 0.5);
+
+    this.sanityValueText = this.add.text(left + width, y - 10, `${player.sanity}/${player.maxSanity}`, {
+      fontFamily: UI.font.body,
+      fontSize: '10px',
+      color: '#d8d0e8',
+      wordWrap: { width: width * 0.4, useAdvancedWrap: true },
+      maxLines: 1,
+    }).setOrigin(1, 0.5);
+
+    const bg = this.add.rectangle(x, y + 5, width, 8, 0x030305, 0.94);
+    this.sanityFill = this.add.rectangle(left, y + 5, Math.max(1, width * progress), 8, fillColor, 0.9).setOrigin(0, 0.5).setScale(0.01, 1);
+    const stroke = this.add.rectangle(x, y + 5, width, 8).setStrokeStyle(1, 0x6b5a7f, 0.56);
+    this.sanityHintText = this.add.text(x, y + 18, this.formatSanityTimeToFull(), {
+      fontFamily: UI.font.body,
+      fontSize: '9px',
       color: '#817891',
       align: 'center',
-      wordWrap: {
-        width: config.width,
-        useAdvancedWrap: true,
-      },
+      wordWrap: { width, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(9);
+    }).setOrigin(0.5);
 
-    this.tweens.add({
-      targets: [this.sanityFill, glow],
-      scaleX: 1,
-      duration: 430,
-      delay: 170,
-      ease: 'Cubic.easeOut',
-    });
+    this.sanityFillWidth = width;
+    container.add([label, this.sanityValueText, bg, this.sanityFill, stroke, this.sanityHintText]);
+    this.tweens.add({ targets: this.sanityFill, scaleX: 1, duration: 420, delay: 170, ease: 'Cubic.easeOut' });
   }
 
   private startSanityTimer() {
@@ -1711,45 +1193,26 @@ export class CampScene extends Phaser.Scene {
     );
   }
 
-  private createTinyResource(
-    x: number,
-    y: number,
-    icon: string,
-    value: string,
-    width: number
-  ) {
-    this.createRoundedPanel({
-      x,
-      y,
-      width,
-      height: 34,
-      radius: 15,
-      color: 0x101012,
-      alpha: 0.95,
-      strokeColor: 0x4b4031,
-      strokeAlpha: 0.42,
-      strokeWidth: 1,
-      depth: 8,
-    });
+  private createTinyResourceLocal(container: Phaser.GameObjects.Container, x: number, y: number, icon: string, value: string, width: number) {
+    this.createLocalChip(container, x, y, width, 28, `${icon} ${value}`, 0x6e5634);
+  }
 
-    this.add.text(x - width / 2 + 31, y, icon, {
+  private createLocalChip(container: Phaser.GameObjects.Container, x: number, y: number, width: number, height: number, text: string, accentColor: number) {
+    const chip = this.add.graphics();
+    chip.fillStyle(0x101012, 0.94);
+    chip.fillRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
+    chip.lineStyle(1, accentColor, 0.38);
+    chip.strokeRoundedRect(x - width / 2, y - height / 2, width, height, height / 2);
+    const label = this.add.text(x, y, text, {
       fontFamily: UI.font.body,
-      fontSize: '14px',
-      color: '#b99257',
-    }).setOrigin(0.5).setDepth(10);
-
-    this.add.text(x - width / 2 + 52, y, value, {
-      fontFamily: UI.font.title,
-      fontSize: '15px',
+      fontSize: height <= 24 ? '10px' : '12px',
       color: '#d1c7b4',
-      stroke: '#000000',
-      strokeThickness: 2,
-      wordWrap: {
-        width: width - 62,
-        useAdvancedWrap: true,
-      },
+      align: 'center',
+      wordWrap: { width: width - 12, useAdvancedWrap: true },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
+    }).setOrigin(0.5);
+    container.add([chip, label]);
+    return { chip, label };
   }
 
   private createDarkTag(config: {
@@ -1762,109 +1225,26 @@ export class CampScene extends Phaser.Scene {
     accentColor: number;
     depth: number;
   }) {
-    this.createRoundedPanel({
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      radius: config.height / 2,
-      color: 0x0d0d0f,
-      alpha: 0.96,
-      strokeColor: config.accentColor,
-      strokeAlpha: 0.42,
-      strokeWidth: 1,
-      depth: config.depth,
-    });
-
-    const textX = config.icon ? config.x - config.width / 2 + 42 : config.x;
-    const originX = config.icon ? 0 : 0.5;
-
-    if (config.icon) {
-      this.add.text(config.x - config.width / 2 + 24, config.y, config.icon, {
-        fontFamily: UI.font.body,
-        fontSize: '12px',
-        color: '#b99257',
-      }).setOrigin(0.5).setDepth(config.depth + 2);
-    }
-
-    this.add.text(textX, config.y, config.text, {
-      fontFamily: UI.font.body,
-      fontSize: '12px',
-      color: '#9f9788',
-      align: 'center',
-      wordWrap: {
-        width: config.icon ? config.width - 54 : config.width - 20,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(originX, 0.5).setDepth(config.depth + 2);
+    const container = this.add.container(config.x, config.y).setDepth(config.depth).setAlpha(0);
+    this.createLocalChip(container, 0, 0, config.width, config.height, `${config.icon ? `${config.icon} ` : ''}${config.text}`, config.accentColor);
+    this.tweens.add({ targets: container, alpha: 1, duration: 240, delay: 110, ease: 'Sine.easeOut' });
   }
 
-  private createRoundedPanel(config: {
-    parent?: Phaser.GameObjects.Container;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    radius?: number;
-    color?: number;
-    alpha?: number;
-    strokeColor?: number;
-    strokeAlpha?: number;
-    strokeWidth?: number;
-    depth?: number;
-  }) {
-    const radius = config.radius ?? 24;
-    const color = config.color ?? 0x111113;
-    const alpha = config.alpha ?? 0.92;
-    const strokeColor = config.strokeColor ?? 0x4b4031;
-    const strokeAlpha = config.strokeAlpha ?? 0.45;
-    const strokeWidth = config.strokeWidth ?? 2;
-    const depth = config.depth ?? 1;
-
-    const safeWidth = Math.min(config.width, this.scale.width - 24);
-    const safeHeight = Math.min(config.height, this.scale.height - 24);
-
+  private createLocalPanel(container: Phaser.GameObjects.Container, width: number, height: number, radius: number, color: number, alpha: number, strokeColor: number, strokeAlpha: number, strokeWidth: number) {
     const shadow = this.add.graphics();
-    shadow.fillStyle(0x000000, 0.34);
-    shadow.fillRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2 + 6,
-      safeWidth,
-      safeHeight,
-      radius
-    );
-    shadow.setDepth(depth);
+    shadow.fillStyle(0x000000, 0.3);
+    shadow.fillRoundedRect(-width / 2, -height / 2 + 5, width, height, radius);
 
     const panel = this.add.graphics();
     panel.fillStyle(color, alpha);
-    panel.fillRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2,
-      safeWidth,
-      safeHeight,
-      radius
-    );
-
+    panel.fillRoundedRect(-width / 2, -height / 2, width, height, radius);
+    panel.fillStyle(0xffffff, 0.025);
+    panel.fillRoundedRect(-width / 2 + 6, -height / 2 + 5, width - 12, Math.max(8, height * 0.28), Math.max(4, radius - 6));
     panel.lineStyle(strokeWidth, strokeColor, strokeAlpha);
-    panel.strokeRoundedRect(
-      config.x - safeWidth / 2,
-      config.y - safeHeight / 2,
-      safeWidth,
-      safeHeight,
-      radius
-    );
+    panel.strokeRoundedRect(-width / 2, -height / 2, width, height, radius);
 
-    panel.setDepth(depth + 1);
-
-    if (config.parent) {
-      config.parent.add([shadow, panel]);
-    }
-
-    return {
-      shadow,
-      panel,
-    };
+    container.add([shadow, panel]);
+    return panel;
   }
 
   private getDefaultCityCampfireState(): CityCampfireState {
