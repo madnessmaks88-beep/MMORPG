@@ -578,32 +578,45 @@ export class CampScene extends Phaser.Scene {
 
     this.createPixelFloor(layout, panelY, panelHeight);
 
-    const pad = layout.veryCompact ? 10 : 13;
-    const baseGap = layout.veryCompact ? 7 : 9;
-    const baseGridGap = layout.veryCompact ? 7 : 9;
+    const pad = layout.veryCompact ? 9 : layout.compact ? 12 : 14;
     const innerWidth = layout.contentWidth - pad * 2;
-    const availableHeight = Math.max(220, panelHeight - pad * 2);
+    const availableHeight = Math.max(236, panelHeight - pad * 2);
+
+    const baseGap = layout.veryCompact ? 6 : layout.compact ? 8 : 10;
     const primaryHeight = Phaser.Math.Clamp(
-      Math.round(availableHeight * 0.22),
-      layout.veryCompact ? 52 : 58,
-      layout.veryCompact ? 64 : layout.compact ? 74 : 78
+      Math.round(availableHeight * (layout.veryCompact ? 0.18 : 0.16)),
+      layout.veryCompact ? 52 : 62,
+      layout.veryCompact ? 62 : layout.compact ? 76 : 82
     );
-    const tileHeight = Phaser.Math.Clamp(
-      Math.floor((availableHeight - primaryHeight - baseGap - baseGridGap * 2) / 3),
-      layout.veryCompact ? 48 : 54,
-      layout.veryCompact ? 62 : layout.compact ? 78 : 84
+    const smallTileHeight = Phaser.Math.Clamp(
+      Math.round(availableHeight * (layout.veryCompact ? 0.155 : 0.14)),
+      layout.veryCompact ? 46 : 54,
+      layout.veryCompact ? 58 : layout.compact ? 66 : 68
     );
-    const compactContentHeight = primaryHeight + baseGap + tileHeight * 3 + baseGridGap * 2;
+    const wideHeight = Phaser.Math.Clamp(
+      Math.round(availableHeight * (layout.veryCompact ? 0.16 : 0.145)),
+      layout.veryCompact ? 48 : 58,
+      layout.veryCompact ? 60 : layout.compact ? 72 : 76
+    );
+
+    const compactContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
     const extraHeight = Math.max(0, availableHeight - compactContentHeight);
-    const gap = baseGap + Math.min(layout.veryCompact ? 8 : 16, Math.floor(extraHeight / 10));
-    const gridGap = baseGridGap + Math.min(layout.veryCompact ? 8 : 18, Math.floor(extraHeight / 8));
-    const contentHeight = primaryHeight + gap + tileHeight * 3 + gridGap * 2;
+    const gap = Phaser.Math.Clamp(baseGap + Math.floor(extraHeight / 8), baseGap, layout.veryCompact ? 9 : 13);
+    const contentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + gap * 4;
     const topPad = pad + Math.max(0, Math.floor((availableHeight - contentHeight) / 2));
-    const tileWidth = Math.floor((innerWidth - gridGap) / 2);
-    const leftX = layout.centerX - tileWidth / 2 - gridGap / 2;
-    const rightX = layout.centerX + tileWidth / 2 + gridGap / 2;
+
+    const pairGap = layout.veryCompact ? 8 : 10;
+    const tileWidth = Math.floor((innerWidth - pairGap) / 2);
+    const leftX = layout.centerX - tileWidth / 2 - pairGap / 2;
+    const rightX = layout.centerX + tileWidth / 2 + pairGap / 2;
+
     const primaryY = layout.actionsTop + topPad + primaryHeight / 2;
-    const firstRowY = primaryY + primaryHeight / 2 + gap + tileHeight / 2;
+    const rowOneY = primaryY + primaryHeight / 2 + gap + smallTileHeight / 2;
+    const rowTwoY = rowOneY + smallTileHeight + gap;
+    const marketY = rowTwoY + smallTileHeight / 2 + gap + wideHeight / 2;
+    const homeY = marketY + wideHeight + gap;
+    const decorationTop = homeY + wideHeight / 2 + Math.max(5, gap - 2);
+    const decorationHeight = Math.max(0, layout.actionsBottom - pad - decorationTop);
 
     const dungeonTitle = hasActiveRun || hasActiveCheckpoint
       ? 'Продолжить спуск'
@@ -640,10 +653,10 @@ export class CampScene extends Phaser.Scene {
       delay: 120,
     });
 
-    const tiles = [
+    const pairedTiles = [
       {
         x: leftX,
-        y: firstRowY,
+        y: rowOneY,
         icon: '♨',
         title: 'Костёр',
         status: this.getCityCampfireButtonStatus(),
@@ -661,7 +674,7 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: rightX,
-        y: firstRowY,
+        y: rowOneY,
         icon: hasAscensionPoints ? '!' : '✦',
         title: 'Храм',
         status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
@@ -679,7 +692,7 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: leftX,
-        y: firstRowY + tileHeight + gridGap,
+        y: rowTwoY,
         icon: '☕',
         title: 'Таверна',
         status: 'Отдых',
@@ -697,7 +710,7 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: rightX,
-        y: firstRowY + tileHeight + gridGap,
+        y: rowTwoY,
         icon: hasQuestReward ? '!' : '◆',
         title: 'Задания',
         status: hasQuestReward ? 'Есть награда' : 'Награды',
@@ -713,51 +726,15 @@ export class CampScene extends Phaser.Scene {
           this.scene.start('QuestScene');
         },
       },
-      {
-        x: leftX,
-        y: firstRowY + (tileHeight + gridGap) * 2,
-        icon: '¤',
-        title: 'Рынок',
-        status: 'Торговцы',
-        baseColor: 0x7e6120,
-        topColor: 0xc19a3e,
-        bottomColor: 0x332509,
-        borderColor: 0x111008,
-        innerBorderColor: 0xe5c267,
-        textColor: '#fff0b5',
-        statusColor: '#e7d090',
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('MarketScene');
-        },
-      },
-      {
-        x: rightX,
-        y: firstRowY + (tileHeight + gridGap) * 2,
-        icon: '⌂',
-        title: 'Дом',
-        status: 'Убежище',
-        baseColor: 0x24354c,
-        topColor: 0x4f6687,
-        bottomColor: 0x111a28,
-        borderColor: 0x070b10,
-        innerBorderColor: 0x9eb2cf,
-        textColor: '#e8f0ff',
-        statusColor: '#bfcbdb',
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('HomeScene');
-        },
-      },
     ];
 
-    tiles.forEach((tile, index) => {
+    pairedTiles.forEach((tile, index) => {
       const created = this.createPixelLocationButton({
         layout,
         x: tile.x,
         y: tile.y,
         width: tileWidth,
-        height: tileHeight,
+        height: smallTileHeight,
         icon: tile.icon,
         title: tile.title,
         status: tile.status,
@@ -779,8 +756,128 @@ export class CampScene extends Phaser.Scene {
       }
     });
 
+    this.createPixelWideLocationButton({
+      layout,
+      x: layout.centerX,
+      y: marketY,
+      width: innerWidth,
+      height: wideHeight,
+      icon: '¤',
+      title: 'Рынок',
+      status: 'Торговцы',
+      baseColor: 0x7e6120,
+      topColor: 0xc19a3e,
+      bottomColor: 0x332509,
+      borderColor: 0x111008,
+      innerBorderColor: 0xe5c267,
+      textColor: '#fff0b5',
+      statusColor: '#e7d090',
+      highlighted: false,
+      onClick: () => {
+        this.scene.start('MarketScene');
+      },
+      delay: 350,
+    });
+
+    this.createPixelWideLocationButton({
+      layout,
+      x: layout.centerX,
+      y: homeY,
+      width: innerWidth,
+      height: wideHeight,
+      icon: '⌂',
+      title: 'Дом',
+      status: 'Убежище',
+      baseColor: 0x24354c,
+      topColor: 0x4f6687,
+      bottomColor: 0x111a28,
+      borderColor: 0x070b10,
+      innerBorderColor: 0x9eb2cf,
+      textColor: '#e8f0ff',
+      statusColor: '#bfcbdb',
+      highlighted: false,
+      onClick: () => {
+        this.scene.start('HomeScene');
+      },
+      delay: 395,
+    });
+
+    if (decorationHeight >= 18) {
+      this.createPixelCampGroundDecoration(layout, decorationTop, decorationHeight);
+    }
+
     this.playPixelIntro([panel.shadow, panel.panel], 80);
     this.startCampfireTimer();
+  }
+  private createPixelWideLocationButton(config: {
+    layout: CampLayout;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    icon: string;
+    title: string;
+    status: string;
+    baseColor: number;
+    topColor: number;
+    bottomColor: number;
+    borderColor: number;
+    innerBorderColor: number;
+    textColor: string;
+    statusColor: string;
+    highlighted: boolean;
+    onClick: () => void;
+    delay: number;
+  }): CampActionButton {
+    return this.createPixelRpgButton({
+      ...config,
+      iconBoxSize: Phaser.Math.Clamp(config.height - 16, 34, 46),
+      titleFontSize: config.layout.veryCompact ? '15px' : config.layout.compact ? '18px' : '20px',
+      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
+      primary: true,
+    });
+  }
+
+  private createPixelCampGroundDecoration(
+    layout: CampLayout,
+    top: number,
+    height: number
+  ) {
+    const centerY = top + height / 2;
+    const usableWidth = layout.contentWidth - (layout.veryCompact ? 54 : 74);
+    const stoneColor = 0x2b241b;
+    const glowColor = 0xb06a2f;
+
+    this.add.rectangle(layout.centerX, centerY, usableWidth, Math.max(6, height * 0.18), 0x000000, 0.12)
+      .setDepth(6);
+
+    const tileCount = layout.veryCompact ? 5 : 7;
+    for (let i = 0; i < tileCount; i += 1) {
+      const tileX = layout.centerX - usableWidth / 2 + 16 + i * (usableWidth - 32) / Math.max(1, tileCount - 1);
+      const tileY = top + Phaser.Math.Clamp(height * (0.42 + (i % 2) * 0.14), 8, Math.max(10, height - 8));
+      this.add.rectangle(tileX, tileY, layout.veryCompact ? 18 : 24, 3, stoneColor, 0.26).setDepth(7);
+      this.add.rectangle(tileX + 5, tileY + 5, layout.veryCompact ? 10 : 14, 2, stoneColor, 0.18).setDepth(7);
+    }
+
+    if (height >= 30) {
+      const fireX = layout.centerX;
+      const fireY = top + height * 0.58;
+      const ember = this.add.rectangle(fireX, fireY + 7, 42, 5, 0x000000, 0.22).setDepth(7);
+      const flameA = this.add.rectangle(fireX - 5, fireY, 5, 13, glowColor, 0.48).setDepth(8);
+      const flameB = this.add.rectangle(fireX + 2, fireY - 3, 5, 17, 0xd08b3e, 0.42).setDepth(8);
+      const flameC = this.add.rectangle(fireX + 8, fireY + 2, 4, 10, 0x7b391d, 0.5).setDepth(8);
+
+      this.tweens.add({
+        targets: [flameA, flameB, flameC],
+        alpha: { from: 0.28, to: 0.58 },
+        duration: 460,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Linear',
+      });
+
+      this.playPixelIntro([ember, flameA, flameB, flameC], 420);
+    }
   }
 
   private createPixelFloor(layout: CampLayout, panelY: number, panelHeight: number) {
