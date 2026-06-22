@@ -25,10 +25,7 @@ import {
   isQuestClaimed,
 } from '../systems/QuestSystem';
 
-import {
-  UI,
-  createSceneBackground,
-} from '../ui/theme';
+import { UI } from '../ui/theme';
 
 type CampLayout = {
   width: number;
@@ -95,14 +92,21 @@ export class CampScene extends Phaser.Scene {
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
   private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
 
+  private readonly CAMP_BACKGROUND_TEXTURE_KEY = 'campSceneBackground';
+  private readonly CAMP_BACKGROUND_ASSET_PATH = 'assets/images/camp/camp_background.png';
+
   constructor() {
     super('CampScene');
   }
 
+  preload() {
+    if (!this.textures.exists(this.CAMP_BACKGROUND_TEXTURE_KEY)) {
+      this.load.image(this.CAMP_BACKGROUND_TEXTURE_KEY, this.CAMP_BACKGROUND_ASSET_PATH);
+    }
+  }
+
   async create() {
     const layout = this.getLayout();
-
-    createSceneBackground(this);
 
     await this.prepareStartupOnce();
       
@@ -202,147 +206,61 @@ export class CampScene extends Phaser.Scene {
 
   private createCampBackdrop(layout: CampLayout) {
     const { width, height, centerX } = layout;
-    const cryptY = Phaser.Math.Clamp(height * 0.31, 250, 380);
-    const fireY = Phaser.Math.Clamp(height * 0.51, 330, 520);
 
     this.cameras.main.fadeIn(260, 0, 0, 0);
 
-    this.add.rectangle(centerX, height / 2, width, height, 0x030405, 0.95).setDepth(0);
-    this.add.rectangle(centerX, height * 0.28, width, height * 0.58, 0x07101a, 0.2).setDepth(0);
-    this.add.rectangle(centerX, height - 140, width, 320, 0x030202, 0.7).setDepth(0);
+    if (this.textures.exists(this.CAMP_BACKGROUND_TEXTURE_KEY)) {
+      const background = this.add.image(centerX, height / 2, this.CAMP_BACKGROUND_TEXTURE_KEY)
+        .setOrigin(0.5)
+        .setDepth(0);
 
-    const farGlow = this.add.circle(centerX, cryptY + 12, width * 0.56, 0x1d2741, 0.13).setDepth(0);
-    this.tweens.add({
-      targets: farGlow,
-      alpha: { from: 0.08, to: 0.16 },
-      scale: { from: 0.98, to: 1.04 },
-      duration: 2400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+      const sourceImage = this.textures
+        .get(this.CAMP_BACKGROUND_TEXTURE_KEY)
+        .getSourceImage() as HTMLImageElement;
 
-    const gateWidth = Math.min(layout.contentWidth * 0.76, 450);
-    const gateHeight = layout.veryCompact ? 132 : layout.compact ? 154 : 184;
-    const gateX = centerX;
-    const gateY = cryptY + 26;
+      const scale = Math.max(
+        width / Math.max(1, sourceImage.width),
+        height / Math.max(1, sourceImage.height)
+      );
 
-    this.add.rectangle(gateX, gateY + 35, gateWidth, gateHeight, 0x050608, 0.84)
-      .setStrokeStyle(2, 0x332a20, 0.72)
+      background.setScale(scale);
+    } else {
+      this.add.rectangle(centerX, height / 2, width, height, 0x05070a, 1)
+        .setDepth(0);
+    }
+
+    // Затемнение поверх изображения, чтобы интерфейс оставался читаемым.
+    this.add.rectangle(centerX, height / 2, width, height, 0x010203, 0.34)
       .setDepth(1);
 
-    this.add.rectangle(gateX, gateY - gateHeight / 2 + 10, gateWidth + 30, 18, 0x18130e, 0.96)
-      .setStrokeStyle(1, 0x6b5431, 0.58)
-      .setDepth(2);
+    // Виньетка: сохраняет атмосферу и отделяет UI от фона.
+    this.add.rectangle(centerX, 26, width, 62, 0x000000, 0.28)
+      .setDepth(1);
+    this.add.rectangle(centerX, height - 118, width, 236, 0x000000, 0.46)
+      .setDepth(1);
+    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.22)
+      .setDepth(1);
+    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.22)
+      .setDepth(1);
 
-    this.add.rectangle(gateX, gateY + gateHeight / 2 + 36, gateWidth + 46, 24, 0x12100d, 0.96)
-      .setStrokeStyle(1, 0x594d3d, 0.5)
-      .setDepth(2);
-
-    const columnOffset = gateWidth / 2 + 15;
-    this.createStoneColumn(gateX - columnOffset, gateY + 18, gateHeight + 58);
-    this.createStoneColumn(gateX + columnOffset, gateY + 18, gateHeight + 58);
-
-    this.add.ellipse(gateX, gateY - 16, gateWidth * 0.68, gateHeight * 0.76, 0x17130f, 0.42)
-      .setStrokeStyle(2, 0x4d4030, 0.32)
-      .setDepth(2);
-
-    const fireGlow = this.add.circle(centerX, fireY, width * 0.28, 0xb86b2e, 0.09).setDepth(2);
-    const fireCore = this.add.circle(centerX, fireY + 8, 38, 0xb86b2e, 0.14).setDepth(2);
+    // Тёплый акцент в зоне лагеря.
+    const campGlow = this.add.circle(
+      centerX,
+      height * 0.58,
+      Math.min(width * 0.28, 118),
+      0xd8903f,
+      0.055
+    ).setDepth(2);
 
     this.tweens.add({
-      targets: [fireGlow, fireCore],
-      alpha: { from: 0.07, to: 0.18 },
-      scale: { from: 0.94, to: 1.08 },
-      duration: 760,
+      targets: campGlow,
+      alpha: { from: 0.035, to: 0.085 },
+      scale: { from: 0.96, to: 1.04 },
+      duration: 1600,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-
-    this.add.text(centerX, fireY, '♨', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '32px' : layout.compact ? '38px' : '46px',
-      color: '#c09155',
-      stroke: '#000000',
-      strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(3);
-
-    const shrineX = centerX + Math.min(layout.contentWidth * 0.27, 138);
-    const shrineY = fireY + (layout.veryCompact ? 6 : 2);
-    const shrineGlow = this.add.circle(shrineX, shrineY - 22, layout.veryCompact ? 46 : 56, 0x6b4a8c, 0.09)
-      .setDepth(2);
-    const shrineRune = this.add.text(shrineX, shrineY - 6, '✦', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '16px' : '19px',
-      color: '#d6c08a',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setAlpha(0.56).setDepth(3);
-
-    this.tweens.add({
-      targets: [shrineGlow, shrineRune],
-      alpha: { from: 0.07, to: 0.18 },
-      scale: { from: 0.97, to: 1.05 },
-      duration: 1900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
-    for (let i = 0; i < 24; i += 1) {
-      const x = Phaser.Math.Between(layout.safeX, width - layout.safeX);
-      const y = Phaser.Math.Between(layout.safeTop + 60, height - layout.safeBottom - 40);
-      const ash = this.add.circle(x, y, Phaser.Math.Between(1, 2), i % 4 === 0 ? 0xb99257 : 0x8b8578, 0.045)
-        .setDepth(1)
-        .setAlpha(0.02);
-
-      this.tweens.add({
-        targets: ash,
-        alpha: { from: 0.018, to: 0.075 },
-        y: y - Phaser.Math.Between(16, 40),
-        x: x + Phaser.Math.Between(-10, 10),
-        duration: Phaser.Math.Between(1800, 3400),
-        yoyo: true,
-        repeat: -1,
-        delay: i * 80,
-        ease: 'Sine.easeInOut',
-      });
-    }
-
-    for (let i = 0; i < 9; i += 1) {
-      const y = layout.safeTop + 90 + i * 64;
-      this.add.line(0, 0, layout.safeX, y, width - layout.safeX, y + (i % 2) * 12, 0x2a2119, 0.14)
-        .setOrigin(0, 0)
-        .setDepth(1);
-    }
-
-    this.add.text(centerX, cryptY - (layout.veryCompact ? 72 : 92), 'КАТАКОМБЫ', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '12px' : '15px',
-      color: '#6f6655',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setAlpha(0.28).setDepth(2);
-  }
-
-  private createStoneColumn(x: number, y: number, height: number) {
-    this.add.rectangle(x, y, 26, height, 0x121315, 0.9)
-      .setStrokeStyle(1, 0x4d473b, 0.5)
-      .setDepth(2);
-
-    this.add.rectangle(x, y - height / 2 + 10, 40, 18, 0x17130f, 0.95)
-      .setStrokeStyle(1, 0x5b513e, 0.44)
-      .setDepth(3);
-
-    this.add.rectangle(x, y + height / 2 - 10, 44, 20, 0x17130f, 0.95)
-      .setStrokeStyle(1, 0x5b513e, 0.44)
-      .setDepth(3);
-
-    for (let i = 0; i < 4; i += 1) {
-      this.add.rectangle(x, y - height / 2 + 42 + i * 42, 22, 2, 0x303030, 0.5)
-        .setDepth(3);
-    }
   }
 
   private createHeader(layout: CampLayout) {
