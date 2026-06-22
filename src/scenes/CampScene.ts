@@ -93,7 +93,7 @@ export class CampScene extends Phaser.Scene {
   private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
 
   private readonly CAMP_BACKGROUND_TEXTURE_KEY = 'campSceneBackground';
-  private readonly CAMP_BACKGROUND_ASSET_PATH = 'assets/images/camp/camp_background.png';
+  private readonly CAMP_BACKGROUND_ASSET_URL = new URL('../assets/images/camp/camp_background.png', import.meta.url).href;
 
   constructor() {
     super('CampScene');
@@ -101,7 +101,7 @@ export class CampScene extends Phaser.Scene {
 
   preload() {
     if (!this.textures.exists(this.CAMP_BACKGROUND_TEXTURE_KEY)) {
-      this.load.image(this.CAMP_BACKGROUND_TEXTURE_KEY, this.CAMP_BACKGROUND_ASSET_PATH);
+      this.load.image(this.CAMP_BACKGROUND_TEXTURE_KEY, this.CAMP_BACKGROUND_ASSET_URL);
     }
   }
 
