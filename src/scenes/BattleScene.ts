@@ -583,8 +583,8 @@ export class BattleScene extends Phaser.Scene {
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
     const attackButtonY = actionTop + actionPanelHeight * 0.27;
-    const firstRowY = actionTop + actionPanelHeight * 0.485;
-    const secondRowY = actionTop + actionPanelHeight * 0.755;
+    const firstRowY = actionTop + actionPanelHeight * 0.515;
+    const secondRowY = actionTop + actionPanelHeight * 0.745;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -1825,8 +1825,8 @@ private getDebuffShortDescription(id: string, power: number) {
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
-    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.20, 58, layout.veryCompact ? 70 : 82);
-    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.20, 58, layout.veryCompact ? 70 : 82);
+    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.22, 62, layout.veryCompact ? 74 : 86);
+    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.22, 62, layout.veryCompact ? 74 : 86);
 
     this.actionButtons.push(
       ...this.createSpriteBattleButton({
