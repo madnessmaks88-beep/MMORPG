@@ -582,9 +582,9 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.25;
-    const firstRowY = actionTop + actionPanelHeight * 0.455;
-    const secondRowY = actionTop + actionPanelHeight * 0.555;
+    const attackButtonY = actionTop + actionPanelHeight * 0.27;
+    const firstRowY = actionTop + actionPanelHeight * 0.485;
+    const secondRowY = actionTop + actionPanelHeight * 0.755;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -610,8 +610,8 @@ export class BattleScene extends Phaser.Scene {
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
     // sideButtonWidth — ширина маленьких кнопок во 2 и 3 ряду.
-    const mainButtonWidth = Math.min(actionPanelWidth * 0.90, 600);
-    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 300);
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.88, 585);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 290);
 
     return {
       width,
