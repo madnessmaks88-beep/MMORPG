@@ -582,9 +582,9 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.205;
-    const firstRowY = actionTop + actionPanelHeight * 0.545;
-    const secondRowY = actionTop + actionPanelHeight * 0.785;
+    const attackButtonY = actionTop + actionPanelHeight * 0.25;
+    const firstRowY = actionTop + actionPanelHeight * 0.455;
+    const secondRowY = actionTop + actionPanelHeight * 0.555;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -610,8 +610,8 @@ export class BattleScene extends Phaser.Scene {
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
     // sideButtonWidth — ширина маленьких кнопок во 2 и 3 ряду.
-    const mainButtonWidth = Math.min(actionPanelWidth * 0.88, 570);
-    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 20 : 24)) / 2, 278);
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.90, 600);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 300);
 
     return {
       width,
@@ -1825,8 +1825,8 @@ private getDebuffShortDescription(id: string, power: number) {
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
-    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.165, 48, layout.veryCompact ? 58 : 68);
-    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.145, 42, layout.veryCompact ? 52 : 60);
+    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.19, 56, layout.veryCompact ? 68 : 80);
+    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.17, 50, layout.veryCompact ? 62 : 72);
 
     this.actionButtons.push(
       ...this.createSpriteBattleButton({
