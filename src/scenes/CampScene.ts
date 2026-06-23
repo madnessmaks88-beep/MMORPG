@@ -152,6 +152,13 @@ export class CampScene extends Phaser.Scene {
   create() {
     console.info('[CampScene] create started');
 
+    this.add.text(20, 20, 'CAMP OK', {
+      fontFamily: 'monospace',
+      fontSize: '26px',
+      color: '#00ff00',
+      backgroundColor: '#000000',
+    }).setDepth(99999).setScrollFactor(0);
+    
     const layout = this.getLayout();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
