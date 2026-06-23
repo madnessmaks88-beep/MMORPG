@@ -6,6 +6,7 @@ import { getRaceById } from '../data/races';
 
 import { getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
 import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
+import { initVKBridge } from '../systems/VKBridgeSystem';
 import {
   SANITY_COST_PER_FLOOR,
   getSanityTimeToFullMs,
@@ -150,15 +151,10 @@ export class CampScene extends Phaser.Scene {
   }
 
   create() {
+    this.notifyVKAppReady();
+
     console.info('[CampScene] create started');
 
-    this.add.text(20, 20, 'CAMP OK', {
-      fontFamily: 'monospace',
-      fontSize: '26px',
-      color: '#00ff00',
-      backgroundColor: '#000000',
-    }).setDepth(99999).setScrollFactor(0);
-    
     const layout = this.getLayout();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -210,6 +206,16 @@ export class CampScene extends Phaser.Scene {
       })
       .catch(error => {
         console.warn('[CampScene] save startup skipped:', error);
+      });
+  }
+
+  private notifyVKAppReady() {
+    void initVKBridge()
+      .then(isReady => {
+        console.info(`[CampScene] VKWebAppInit ${isReady ? 'sent' : 'skipped/failed'}`);
+      })
+      .catch(error => {
+        console.warn('[CampScene] VKWebAppInit failed:', error);
       });
   }
 
