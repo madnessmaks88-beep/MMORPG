@@ -813,7 +813,7 @@ export class CampScene extends Phaser.Scene {
     if (CampScene.startupPrepared) {
       return;
     }
-
+  
     if (!CampScene.startupPromise) {
       CampScene.startupPromise = this.prepareStartup()
         .catch(error => {
@@ -823,20 +823,20 @@ export class CampScene extends Phaser.Scene {
           CampScene.startupPrepared = true;
         });
     }
-
+  
     await CampScene.startupPromise;
   }
-
+  
   private async prepareStartup() {
     let timeoutId: number | undefined;
-
+  
     const timeoutPromise = new Promise<void>((resolve) => {
       timeoutId = window.setTimeout(() => {
         console.warn('CampScene startup timeout. Continue without blocking scene.');
         resolve();
       }, 2500);
     });
-
+  
     try {
       await Promise.race([
         loadGameAsync(),
