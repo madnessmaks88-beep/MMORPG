@@ -599,7 +599,7 @@ export class BattleScene extends Phaser.Scene {
 
     // Горизонтальная RPG-композиция: герой слева, враг справа.
     const fighterY = combatTop + combatHeight * (veryCompact ? 0.56 : compact ? 0.55 : 0.54);
-    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.255, veryCompact ? 118 : 142, 176);
+    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.285, veryCompact ? 126 : 152, 194);
     const playerX = width / 2 - horizontalSpread;
     const enemyX = width / 2 + horizontalSpread;
 
@@ -607,8 +607,11 @@ export class BattleScene extends Phaser.Scene {
     const enemyY = fighterY;
     const playerY = fighterY;
 
-    const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 570);
-    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 278);
+    // НАСТРОЙКА ШИРИНЫ КНОПОК:
+    // mainButtonWidth — ширина верхней кнопки атаки.
+    // sideButtonWidth — ширина маленьких кнопок во 2 и 3 ряду.
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 600);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 308);
 
     return {
       width,
@@ -1811,6 +1814,12 @@ private getDebuffShortDescription(id: string, power: number) {
     energyBadge.add([energyBadgeBg, energyHint]);
     this.actionButtons.push(energyBadge);
 
+    // НАСТРОЙКА РАЗМЕРОВ КНОПОК:
+    // gap — расстояние между двумя маленькими кнопками.
+    // sideWidth — ширина маленьких кнопок.
+    // layout.mainButtonWidth — ширина верхней большой кнопки.
+    // primaryHeight — высота верхней большой кнопки.
+    // gridButtonHeight — высота маленьких кнопок 2x2.
     const gap = layout.veryCompact ? 10 : 14;
     const sideWidth = layout.sideButtonWidth;
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
@@ -2183,7 +2192,7 @@ private getDebuffShortDescription(id: string, power: number) {
       .setOrigin(0.5, 0.58)
       .setFlipX(false);
 
-    this.fitImageToBox(sprite, maxWidth * 1.12, maxHeight * 1.22, 1);
+    this.fitImageToBox(sprite, maxWidth * 1.26, maxHeight * 1.38, 1);
 
     container.add([platform, platformGlow, sprite]);
 
@@ -2220,7 +2229,7 @@ private getDebuffShortDescription(id: string, power: number) {
       .setOrigin(0.5, 0.55)
       .setFlipX(false);
 
-    this.fitImageToBox(sprite, maxWidth * 1.10, maxHeight * 1.24, 1);
+    this.fitImageToBox(sprite, maxWidth * 1.24, maxHeight * 1.38, 1);
 
     container.add([platform, platformGlow, sprite]);
 
@@ -3620,7 +3629,7 @@ private createFighterSpriteCard(config: {
     config.isBoss ? 344 : 318
   );
 
-  const cardHeight = layout.veryCompact ? 240 : layout.compact ? 272 : 304;
+  const cardHeight = layout.veryCompact ? 258 : layout.compact ? 296 : 330;
   const container = this.add.container(config.x, config.y).setDepth(config.isEnemy ? 19 : 20);
 
   container.setData('baseX', config.x);
@@ -3635,9 +3644,10 @@ private createFighterSpriteCard(config: {
   const accentColor = config.isEnemy ? (config.isBoss ? 0xff8a5f : 0xff6b6b) : UI.colors.gold;
   const titleColor = config.isEnemy ? (config.isBoss ? '#ffd0aa' : '#ffb0a8') : UI.colors.goldText;
 
-  const spriteMaxWidth = cardWidth * (config.isEnemy ? 0.92 : 0.86);
-  const spriteMaxHeight = cardHeight * (config.isEnemy ? 0.78 : 0.74);
-  const spriteY = -cardHeight * 0.18;
+  // Размеры PNG-бойцов. Здесь можно менять крупность героя и врага.
+  const spriteMaxWidth = cardWidth * (config.isEnemy ? 1.08 : 1.00);
+  const spriteMaxHeight = cardHeight * (config.isEnemy ? 0.90 : 0.86);
+  const spriteY = -cardHeight * 0.24;
 
   const aura = this.add.circle(
     0,
@@ -3654,7 +3664,7 @@ private createFighterSpriteCard(config: {
   const infoWidth = cardWidth;
   const infoHeight = layout.veryCompact ? 88 : layout.compact ? 98 : 106;
   const infoX = 0;
-  const infoY = cardHeight * 0.31;
+  const infoY = cardHeight * 0.35;
   const infoLeft = infoX - infoWidth / 2;
   const infoTop = infoY - infoHeight / 2;
 
