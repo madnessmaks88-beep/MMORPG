@@ -276,6 +276,12 @@ export class BattleScene extends Phaser.Scene {
       key: 'battle_panel_actions',
       url: new URL('../assets/images/battle/battle_panel_actions.png', import.meta.url).href,
     },
+    enemySprites: {
+      kosteglod: {
+        key: 'enemy_kosteglod',
+        url: new URL('../assets/images/battle/kosteglod.png', import.meta.url).href,
+      },
+    },
     buttons: {
       attack: {
         key: 'battle_btn_attack',
@@ -354,6 +360,7 @@ export class BattleScene extends Phaser.Scene {
   preload() {
     const assetsToLoad = [
       this.BATTLE_ASSETS.actionPanel,
+      ...Object.values(this.BATTLE_ASSETS.enemySprites),
       ...Object.values(this.BATTLE_ASSETS.buttons),
       ...Object.values(this.BATTLE_ASSETS.raceSprites),
     ];
@@ -495,7 +502,7 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.enemyCard = this.createFighterCard(
-      layout.centerX,
+      layout.centerX + (layout.veryCompact ? 8 : 22),
       layout.enemyY,
       this.enemy.name,
       isBoss ? '♛' : '☠',
@@ -505,7 +512,7 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.playerCard = this.createFighterCard(
-      layout.centerX,
+      layout.centerX - (layout.veryCompact ? 8 : 22),
       layout.playerY,
       player.name,
       '🗡',
@@ -2083,6 +2090,10 @@ private getDebuffShortDescription(id: string, power: number) {
     return this.BATTLE_ASSETS.buttons.human.key;
   }
 
+  private getEnemySpriteKey() {
+    return this.BATTLE_ASSETS.enemySprites.kosteglod.key;
+  }
+
   private getPlayerRaceSpriteKey() {
     if (player.raceId === 'tainted_halfblood') return this.BATTLE_ASSETS.raceSprites.tainted.key;
     if (player.raceId === 'goblin') return this.BATTLE_ASSETS.raceSprites.goblin.key;
@@ -2106,6 +2117,43 @@ private getDebuffShortDescription(id: string, power: number) {
     image.setScale(scale);
 
     return image;
+  }
+
+  private createEnemySprite(
+    x: number,
+    y: number,
+    maxWidth: number,
+    maxHeight: number,
+    isBoss = false
+  ) {
+    const container = this.add.container(x, y);
+
+    const platform = this.add.ellipse(
+      0,
+      maxHeight * 0.35,
+      maxWidth * 0.78,
+      Math.max(12, maxHeight * 0.16),
+      0x000000,
+      0.46
+    );
+
+    const platformGlow = this.add.ellipse(
+      0,
+      maxHeight * 0.32,
+      maxWidth * 0.58,
+      Math.max(8, maxHeight * 0.10),
+      isBoss ? 0xff6b35 : 0xff6b6b,
+      isBoss ? 0.12 : 0.08
+    );
+
+    const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
+      .setOrigin(0.5, 0.58);
+
+    this.fitImageToBox(sprite, maxWidth * 1.30, maxHeight * 1.34, 1);
+
+    container.add([platform, platformGlow, sprite]);
+
+    return container;
   }
 
   private createPlayerRaceSprite(
@@ -2147,6 +2195,7 @@ private getDebuffShortDescription(id: string, power: number) {
   private applyNearestFilterToBattleTextures() {
     const keys = [
       this.BATTLE_ASSETS.actionPanel.key,
+      ...Object.values(this.BATTLE_ASSETS.enemySprites).map(asset => asset.key),
       ...Object.values(this.BATTLE_ASSETS.buttons).map(asset => asset.key),
       ...Object.values(this.BATTLE_ASSETS.raceSprites).map(asset => asset.key),
     ];
@@ -3504,101 +3553,106 @@ private getSkillCostPenalty() {
   x: number,
   y: number,
   name: string,
-  icon: string,
+  _icon: string,
   color: number,
   isEnemy: boolean,
   isBoss = false
 ) {
+  return this.createFighterSpriteCard({
+    x,
+    y,
+    name,
+    color,
+    isEnemy,
+    isBoss,
+  });
+}
+
+private createFighterSpriteCard(config: {
+  x: number;
+  y: number;
+  name: string;
+  color: number;
+  isEnemy: boolean;
+  isBoss: boolean;
+}) {
   const layout = this.getBattleLayout();
-  const cardWidth = Math.min(layout.contentWidth, isBoss ? 650 : 620);
-  const cardHeight = isEnemy
-    ? isBoss
-      ? layout.veryCompact ? 132 : layout.compact ? 154 : 178
-      : layout.veryCompact ? 118 : layout.compact ? 138 : 160
-    : layout.veryCompact ? 128 : layout.compact ? 150 : 174;
+  const cardWidth = Math.min(layout.contentWidth, config.isBoss ? 650 : 620);
+  const cardHeight = config.isEnemy
+    ? config.isBoss
+      ? layout.veryCompact ? 162 : layout.compact ? 190 : 218
+      : layout.veryCompact ? 150 : layout.compact ? 176 : 204
+    : layout.veryCompact ? 160 : layout.compact ? 188 : 216;
 
-  const container = this.add.container(x, y).setDepth(isEnemy ? 18 : 19);
-
-  const left = -cardWidth / 2;
-  const right = cardWidth / 2;
-  const top = -cardHeight / 2;
+  const container = this.add.container(config.x, config.y).setDepth(config.isEnemy ? 18 : 19);
   const bottom = cardHeight / 2;
 
-  const strokeColor = isEnemy
-    ? isBoss
+  const strokeColor = config.isEnemy
+    ? config.isBoss
       ? 0xb84a2f
       : 0x8d2f2f
     : 0x6b5134;
-  const accentColor = isEnemy ? (isBoss ? 0xff8a5f : 0xff6b6b) : UI.colors.gold;
-  const titleColor = isEnemy ? (isBoss ? '#ffd0aa' : '#ffb0a8') : UI.colors.goldText;
-  const baseColor = isEnemy ? (isBoss ? 0x170706 : 0x10090a) : 0x0b1018;
+  const accentColor = config.isEnemy ? (config.isBoss ? 0xff8a5f : 0xff6b6b) : UI.colors.gold;
+  const titleColor = config.isEnemy ? (config.isBoss ? '#ffd0aa' : '#ffb0a8') : UI.colors.goldText;
 
-  const shadow = this.add.graphics();
-  shadow.fillStyle(0x000000, 0.46);
-  shadow.fillRoundedRect(left, top + 10, cardWidth, cardHeight, 28);
+  const spriteX = config.isEnemy
+    ? cardWidth * (layout.veryCompact ? 0.20 : 0.23)
+    : -cardWidth * (layout.veryCompact ? 0.22 : 0.25);
+  const spriteY = config.isEnemy
+    ? cardHeight * (layout.veryCompact ? 0.05 : 0.04)
+    : cardHeight * (layout.veryCompact ? 0.07 : 0.06);
+  const spriteMaxWidth = config.isEnemy
+    ? cardWidth * (layout.veryCompact ? 0.48 : 0.50)
+    : cardWidth * (layout.veryCompact ? 0.43 : 0.46);
+  const spriteMaxHeight = config.isEnemy
+    ? cardHeight * (layout.veryCompact ? 1.18 : 1.20)
+    : cardHeight * (layout.veryCompact ? 1.12 : 1.16);
 
-  const bg = this.add.graphics();
-  bg.fillStyle(baseColor, 0.975);
-  bg.fillRoundedRect(left, top, cardWidth, cardHeight, 28);
-  bg.fillStyle(color, isEnemy ? 0.30 : 0.28);
-  bg.fillRoundedRect(left + 9, top + 9, cardWidth - 18, cardHeight - 18, 20);
-  bg.fillStyle(0x000000, 0.12);
-  bg.fillRoundedRect(left + 18, top + cardHeight * 0.56, cardWidth - 36, cardHeight * 0.34, 16);
-  bg.lineStyle(isBoss ? 3 : 2, strokeColor, isBoss ? 0.9 : 0.66);
-  bg.strokeRoundedRect(left, top, cardWidth, cardHeight, 28);
-  bg.lineStyle(1, 0xf0d58a, isBoss ? 0.22 : 0.12);
-  bg.strokeRoundedRect(left + 8, top + 8, cardWidth - 16, cardHeight - 16, 20);
+  const infoWidth = cardWidth * (layout.veryCompact ? 0.52 : 0.50);
+  const infoHeight = cardHeight * (layout.veryCompact ? 0.64 : 0.60);
+  const infoX = config.isEnemy
+    ? -cardWidth * (layout.veryCompact ? 0.19 : 0.22)
+    : cardWidth * (layout.veryCompact ? 0.20 : 0.22);
+  const infoY = cardHeight * (layout.veryCompact ? 0.09 : 0.08);
+  const infoLeft = infoX - infoWidth / 2;
+  const infoTop = infoY - infoHeight / 2;
+  const infoRight = infoX + infoWidth / 2;
 
-  const sideBar = this.add.rectangle(left + 8, 0, 8, cardHeight - 28, strokeColor, isBoss ? 0.82 : 0.50);
-  const glow = this.add.circle(left + 62, top + (layout.veryCompact ? 42 : 52), layout.veryCompact ? 50 : 64, accentColor, isBoss ? 0.10 : 0.055);
+  const aura = this.add.circle(
+    spriteX,
+    spriteY - cardHeight * 0.12,
+    Math.max(spriteMaxWidth, spriteMaxHeight) * 0.38,
+    accentColor,
+    config.isBoss ? 0.10 : 0.055
+  );
 
-  const iconX = left + (layout.veryCompact ? 56 : 64);
-  const iconY = top + (layout.veryCompact ? 43 : 52);
-  const iconRadius = isBoss ? (layout.veryCompact ? 31 : 37) : (layout.veryCompact ? 27 : 32);
+  const fighterSprite = config.isEnemy
+    ? this.createEnemySprite(spriteX, spriteY, spriteMaxWidth, spriteMaxHeight, config.isBoss)
+    : this.createPlayerRaceSprite(spriteX, spriteY, spriteMaxWidth, spriteMaxHeight);
 
-  const identityObjects: Phaser.GameObjects.GameObject[] = [];
+  const infoShadow = this.add.graphics();
+  infoShadow.fillStyle(0x000000, 0.34);
+  infoShadow.fillRoundedRect(infoLeft, infoTop + 5, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
 
-  if (isEnemy) {
-    const iconBg = this.add.circle(iconX, iconY, iconRadius, 0x230c0a, 0.96)
-      .setStrokeStyle(2, strokeColor, isBoss ? 0.88 : 0.62);
+  const infoPanel = this.add.graphics();
+  infoPanel.fillStyle(config.isEnemy ? 0x10090a : 0x0b1018, 0.84);
+  infoPanel.fillRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
+  infoPanel.fillStyle(config.color, config.isEnemy ? 0.18 : 0.16);
+  infoPanel.fillRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 12 : 16);
+  infoPanel.lineStyle(config.isBoss ? 2 : 1.5, strokeColor, config.isBoss ? 0.78 : 0.56);
+  infoPanel.strokeRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
+  infoPanel.lineStyle(1, 0xf0d58a, config.isBoss ? 0.18 : 0.10);
+  infoPanel.strokeRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 12 : 16);
 
-    const iconText = this.add.text(iconX, iconY, icon, {
-      fontFamily: UI.font.body,
-      fontSize: isBoss ? (layout.veryCompact ? '25px' : '31px') : (layout.veryCompact ? '21px' : '26px'),
-      color: titleColor,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5);
+  const nameTextWidth = Math.max(120, infoWidth - (layout.veryCompact ? 78 : 92));
+  const titleX = infoLeft + (layout.veryCompact ? 14 : 18);
+  const titleY = infoTop + (layout.veryCompact ? 20 : 24);
 
-    identityObjects.push(iconBg, iconText);
-  } else {
-    identityObjects.push(
-      this.createPlayerRaceSprite(
-        left + (layout.veryCompact ? 60 : 72),
-        top + cardHeight * 0.53,
-        layout.veryCompact ? 118 : 148,
-        layout.veryCompact ? 126 : 154
-      )
-    );
-  }
-
-  const titleX = isEnemy
-    ? left + (layout.veryCompact ? 98 : 112)
-    : left + (layout.veryCompact ? 128 : 154);
-  const contentRight = right - (layout.veryCompact ? 24 : 28);
-  const topBadgeWidth = layout.veryCompact ? 86 : 98;
-  const topBadgeHeight = layout.veryCompact ? 24 : 28;
-  const topBadgeX = contentRight - topBadgeWidth / 2;
-  const nameTextWidth = Math.max(160, topBadgeX - topBadgeWidth / 2 - titleX - 10);
-  const infoWidth = Math.max(210, contentRight - titleX);
-
-  const nameText = this.add.text(titleX, top + (layout.veryCompact ? 25 : 31), name, {
+  const nameText = this.add.text(titleX, titleY, config.name, {
     fontFamily: UI.font.title,
-    fontSize: isEnemy
-      ? isBoss
-        ? layout.veryCompact ? '16px' : layout.compact ? '19px' : '22px'
-        : layout.veryCompact ? '15px' : layout.compact ? '18px' : '21px'
-      : layout.veryCompact ? '16px' : layout.compact ? '19px' : '22px',
+    fontSize: config.isBoss
+      ? layout.veryCompact ? '14px' : layout.compact ? '17px' : '20px'
+      : layout.veryCompact ? '13px' : layout.compact ? '16px' : '18px',
     color: titleColor,
     stroke: '#000000',
     strokeThickness: 4,
@@ -3606,61 +3660,69 @@ private getSkillCostPenalty() {
       width: nameTextWidth,
       useAdvancedWrap: true,
     },
-    maxLines: isEnemy ? 2 : 1,
+    maxLines: config.isEnemy ? 2 : 1,
     lineSpacing: -3,
   }).setOrigin(0, 0.5);
 
-  const topBadge = this.add.rectangle(
-    topBadgeX,
-    top + (layout.veryCompact ? 25 : 31),
-    topBadgeWidth,
-    topBadgeHeight,
-    isEnemy ? 0x1a0907 : 0x101722,
-    0.92
-  ).setStrokeStyle(1, isEnemy ? accentColor : 0x70a6ff, isEnemy ? 0.48 : 0.42);
+  const badgeWidth = layout.veryCompact ? 66 : 78;
+  const badgeHeight = layout.veryCompact ? 20 : 24;
+  const badgeX = infoRight - badgeWidth / 2 - (layout.veryCompact ? 10 : 12);
+  const badge = this.add.rectangle(
+    badgeX,
+    titleY,
+    badgeWidth,
+    badgeHeight,
+    config.isEnemy ? 0x1a0907 : 0x101722,
+    0.9
+  ).setStrokeStyle(1, config.isEnemy ? accentColor : 0x70a6ff, config.isEnemy ? 0.44 : 0.4);
 
-  const topBadgeText = this.add.text(topBadgeX, topBadge.y, isEnemy ? (isBoss ? 'БОСС' : 'ОПАСНО') : `Зелья: ${player.potions}`, {
-    fontFamily: UI.font.title,
-    fontSize: layout.veryCompact ? '10px' : '11px',
-    color: isEnemy ? '#ffb08a' : '#b9d8ff',
-    stroke: '#000000',
-    strokeThickness: 2,
-    align: 'center',
-    wordWrap: {
-      width: topBadgeWidth - 10,
-      useAdvancedWrap: true,
-    },
-    maxLines: 1,
-  }).setOrigin(0.5);
+  const badgeText = this.add.text(
+    badgeX,
+    titleY,
+    config.isEnemy ? (config.isBoss ? 'БОСС' : 'ВРАГ') : `Зелья: ${player.potions}`,
+    {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '8px' : '10px',
+      color: config.isEnemy ? '#ffb08a' : '#b9d8ff',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'center',
+      wordWrap: {
+        width: badgeWidth - 8,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }
+  ).setOrigin(0.5);
 
-  const hpText = this.add.text(titleX, top + (layout.veryCompact ? 55 : 67), '', {
-    fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px',
-    color: isEnemy ? '#ffd0c2' : UI.colors.text,
-    wordWrap: {
-      width: infoWidth,
-      useAdvancedWrap: true,
-    },
-    maxLines: 1,
-  }).setOrigin(0, 0.5);
-
-  const extraText = this.add.text(titleX, top + (layout.veryCompact ? 74 : 91), '', {
+  const hpText = this.add.text(titleX, infoTop + infoHeight * 0.43, '', {
     fontFamily: UI.font.body,
     fontSize: layout.veryCompact ? '10px' : layout.compact ? '12px' : '14px',
-    color: '#9f9788',
+    color: config.isEnemy ? '#ffd0c2' : UI.colors.text,
     wordWrap: {
-      width: infoWidth,
+      width: infoWidth - 28,
       useAdvancedWrap: true,
     },
     maxLines: 1,
   }).setOrigin(0, 0.5);
 
-  const barWidth = Math.max(190, infoWidth);
+  const extraText = this.add.text(titleX, infoTop + infoHeight * 0.61, '', {
+    fontFamily: UI.font.body,
+    fontSize: layout.veryCompact ? '9px' : layout.compact ? '11px' : '12px',
+    color: '#b8aa91',
+    wordWrap: {
+      width: infoWidth - 28,
+      useAdvancedWrap: true,
+    },
+    maxLines: 1,
+  }).setOrigin(0, 0.5);
+
+  const barWidth = Math.max(120, infoWidth - (layout.veryCompact ? 26 : 34));
   const barCenterX = titleX + barWidth / 2;
-  const barY = bottom - (layout.veryCompact ? 31 : 39);
-  const energyBarY = barY + (layout.veryCompact ? 15 : 19);
-  const hpBarHeight = layout.veryCompact ? 10 : 12;
-  const energyBarHeight = layout.veryCompact ? 7 : 8;
+  const barY = infoTop + infoHeight * 0.78;
+  const energyBarY = barY + (layout.veryCompact ? 13 : 16);
+  const hpBarHeight = layout.veryCompact ? 8 : 10;
+  const energyBarHeight = layout.veryCompact ? 6 : 7;
 
   const barBack = this.add.rectangle(barCenterX, barY, barWidth, hpBarHeight, 0x020202, 0.96)
     .setStrokeStyle(1, 0x000000, 0.85);
@@ -3670,7 +3732,7 @@ private getSkillCostPenalty() {
     barY,
     barWidth,
     hpBarHeight,
-    isEnemy ? 0xff6b6b : 0x75d184,
+    config.isEnemy ? 0xff6b6b : 0x75d184,
     0.98
   ).setOrigin(0, 0.5);
 
@@ -3686,19 +3748,29 @@ private getSkillCostPenalty() {
   const hpBarFrame = this.add.rectangle(barCenterX, barY, barWidth, hpBarHeight)
     .setStrokeStyle(1, 0x000000, 0.9);
 
-  const energyBack = this.add.rectangle(barCenterX, energyBarY, barWidth, energyBarHeight, 0x020202, isEnemy ? 0 : 0.96);
-  const energyBar = this.add.rectangle(titleX, energyBarY, barWidth, energyBarHeight, 0x70a6ff, isEnemy ? 0 : 0.96)
+  const energyBack = this.add.rectangle(barCenterX, energyBarY, barWidth, energyBarHeight, 0x020202, config.isEnemy ? 0 : 0.96);
+  const energyBar = this.add.rectangle(titleX, energyBarY, barWidth, energyBarHeight, 0x70a6ff, config.isEnemy ? 0 : 0.96)
     .setOrigin(0, 0.5);
 
+  const hoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
+    .setInteractive({ useHandCursor: true });
+
+  hoverZone.on('pointerup', () => {
+    if (config.isEnemy) {
+      this.showEnemyTooltip();
+    } else {
+      this.showPlayerTooltip();
+    }
+  });
+
   container.add([
-    shadow,
-    bg,
-    sideBar,
-    glow,
-    ...identityObjects,
+    aura,
+    fighterSprite,
+    infoShadow,
+    infoPanel,
     nameText,
-    topBadge,
-    topBadgeText,
+    badge,
+    badgeText,
     hpText,
     extraText,
     barBack,
@@ -3709,18 +3781,19 @@ private getSkillCostPenalty() {
     energyBar,
   ]);
 
-  if (isBoss) {
-    const bossBanner = this.add.rectangle(0, top - (layout.veryCompact ? 15 : 17), 220, layout.veryCompact ? 28 : 32, 0x3a0907, 0.98)
-      .setStrokeStyle(2, 0xff6b35, 0.86);
-    const bossLabel = this.add.text(0, bossBanner.y, 'БОСС • УГРОЗА ЯРУСА', {
+  if (config.isBoss) {
+    const bossBanner = this.add.rectangle(infoX, infoTop - (layout.veryCompact ? 13 : 16), Math.min(infoWidth, 230), layout.veryCompact ? 24 : 30, 0x3a0907, 0.98)
+      .setStrokeStyle(2, 0xff6b35, 0.82);
+
+    const bossLabel = this.add.text(infoX, bossBanner.y, 'БОСС • УГРОЗА ЯРУСА', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '11px' : '13px',
+      fontSize: layout.veryCompact ? '9px' : '11px',
       color: '#ffb36b',
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
       wordWrap: {
-        width: 204,
+        width: Math.min(infoWidth - 16, 210),
       },
       maxLines: 1,
     }).setOrigin(0.5);
@@ -3736,22 +3809,15 @@ private getSkillCostPenalty() {
     });
   }
 
-  if (isEnemy) {
+  if (config.isEnemy) {
     this.enemyHpText = hpText;
     this.enemyHpBar = hpBar;
     this.enemyHpPreviewBar = hpPreviewBar;
     this.enemyHpBarMaxWidth = barWidth;
 
-    extraText.setText(`АТК ${this.enemy.attack}  •  ЗАЩ ${this.enemy.defense}`);
+    extraText.setText(`АТК ${this.enemy.attack} • ЗАЩ ${this.enemy.defense}`);
 
-    const enemyHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
-      .setInteractive({ useHandCursor: true });
-
-    enemyHoverZone.on('pointerup', () => {
-      this.showEnemyTooltip();
-    });
-
-    container.add(enemyHoverZone);
+    container.add(hoverZone);
   } else {
     this.playerHpText = hpText;
     this.playerHpBar = hpBar;
@@ -3760,38 +3826,31 @@ private getSkillCostPenalty() {
     this.energyBar = energyBar;
     this.energyBarMaxWidth = barWidth;
     this.energyText = extraText;
-    this.potionText = topBadgeText;
+    this.potionText = badgeText;
 
     const stats = this.getBattleStats();
-    const statLine = this.add.text(titleX, top + (layout.veryCompact ? 92 : 112), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
+    const statLine = this.add.text(titleX, bottom - (layout.veryCompact ? 13 : 16), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : layout.compact ? '11px' : '12px',
+      fontSize: layout.veryCompact ? '8px' : layout.compact ? '10px' : '11px',
       color: '#b8aa91',
       wordWrap: {
-        width: infoWidth,
+        width: infoWidth - 20,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    this.playerDebuffText = this.add.text(titleX, bottom - (layout.veryCompact ? 12 : 16), '', {
+    this.playerDebuffText = this.add.text(titleX, bottom - (layout.veryCompact ? 28 : 34), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : '11px',
+      fontSize: layout.veryCompact ? '8px' : '10px',
       color: '#c084fc',
       wordWrap: {
-        width: infoWidth,
+        width: infoWidth - 20,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setVisible(false);
 
-    const playerHoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
-      .setInteractive({ useHandCursor: true });
-
-    playerHoverZone.on('pointerup', () => {
-      this.showPlayerTooltip();
-    });
-
-    container.add([statLine, this.playerDebuffText, playerHoverZone]);
+    container.add([statLine, this.playerDebuffText, hoverZone]);
   }
 
   return container;
