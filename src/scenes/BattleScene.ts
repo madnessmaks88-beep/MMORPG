@@ -610,8 +610,8 @@ export class BattleScene extends Phaser.Scene {
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
     // sideButtonWidth — ширина маленьких кнопок во 2 и 3 ряду.
-    const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 600);
-    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 308);
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.88, 570);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 20 : 24)) / 2, 278);
 
     return {
       width,
