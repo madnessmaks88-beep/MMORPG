@@ -149,29 +149,10 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  async create() {
+  create() {
+    console.info('[CampScene] create started');
+
     const layout = this.getLayout();
-    const fontLoadPromise = this.loadPixelFontOnce();
-
-    await this.prepareStartupOnce();
-    await fontLoadPromise;
-      
-    this.grantStartGoldOnce();
-    this.extinguishCityCampfireIfExpired();
-    this.restoreSanityAndSaveIfValueChanged();
-      
-    this.createCampBackdrop(layout);
-    this.createCityCampfireVisualState(layout);
-
-    this.createHeader(layout);
-    this.createHeroStatusCard(layout);
-    this.createMainActions(layout);
-
-    createBottomNav(this, {
-      activeScene: 'CampScene',
-    });
-
-    this.applyPixelFontToSceneTexts();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.campfireTimerEvent?.remove(false);
@@ -184,6 +165,45 @@ export class CampScene extends Phaser.Scene {
       this.sanityHintText = undefined;
       this.sanityFill = undefined;
     });
+
+    try {
+      this.grantStartGoldOnce();
+      this.extinguishCityCampfireIfExpired();
+      this.restoreSanityAndSaveIfValueChanged();
+
+      this.createCampBackdrop(layout);
+      this.createCityCampfireVisualState(layout);
+
+      this.createHeader(layout);
+      this.createHeroStatusCard(layout);
+      this.createMainActions(layout);
+
+      createBottomNav(this, {
+        activeScene: 'CampScene',
+      });
+
+      console.info('[CampScene] UI rendered');
+    } catch (error) {
+      console.error('[CampScene] render failed:', error);
+      this.showCampSceneFatalError(error);
+      return;
+    }
+
+    void this.loadPixelFontOnce()
+      .then(() => {
+        this.applyPixelFontToSceneTexts();
+      })
+      .catch(error => {
+        console.warn('[CampScene] font apply failed:', error);
+      });
+
+    void this.prepareStartupOnce()
+      .then(() => {
+        console.info('[CampScene] save startup finished');
+      })
+      .catch(error => {
+        console.warn('[CampScene] save startup skipped:', error);
+      });
   }
 
   private async loadPixelFontOnce() {
@@ -267,6 +287,48 @@ export class CampScene extends Phaser.Scene {
         applyToObject(child);
       });
     });
+  }
+
+  private async prepareStartupOnce() {
+    if (CampScene.startupPrepared) {
+      return;
+    }
+
+    if (!CampScene.startupPromise) {
+      CampScene.startupPromise = this.prepareStartup()
+        .catch(error => {
+          console.warn('CampScene startup failed:', error);
+        })
+        .finally(() => {
+          CampScene.startupPrepared = true;
+        });
+    }
+
+    await CampScene.startupPromise;
+  }
+
+  private async prepareStartup() {
+    let timeoutId: number | undefined;
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = window.setTimeout(() => {
+        console.warn('CampScene startup timeout. Continue without blocking scene.');
+        resolve();
+      }, 2500);
+    });
+
+    try {
+      await Promise.race([
+        loadGameAsync(),
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      console.warn('CampScene loadGameAsync failed. Continue with current/local data:', error);
+    } finally {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    }
   }
 
   private getLayout(): CampLayout {
@@ -809,48 +871,6 @@ export class CampScene extends Phaser.Scene {
     this.startCampfireTimer();
   }
 
-  private async prepareStartupOnce() {
-    if (CampScene.startupPrepared) {
-      return;
-    }
-  
-    if (!CampScene.startupPromise) {
-      CampScene.startupPromise = this.prepareStartup()
-        .catch(error => {
-          console.warn('CampScene startup failed:', error);
-        })
-        .finally(() => {
-          CampScene.startupPrepared = true;
-        });
-    }
-  
-    await CampScene.startupPromise;
-  }
-  
-  private async prepareStartup() {
-    let timeoutId: number | undefined;
-  
-    const timeoutPromise = new Promise<void>((resolve) => {
-      timeoutId = window.setTimeout(() => {
-        console.warn('CampScene startup timeout. Continue without blocking scene.');
-        resolve();
-      }, 2500);
-    });
-  
-    try {
-      await Promise.race([
-        loadGameAsync(),
-        timeoutPromise,
-      ]);
-    } catch (error) {
-      console.warn('CampScene loadGameAsync failed. Continue with current/local data:', error);
-    } finally {
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    }
-  }
-
   private createImageActionButton(config: {
     board: Phaser.GameObjects.Container;
     x: number;
@@ -1018,6 +1038,40 @@ export class CampScene extends Phaser.Scene {
         isLocked = false;
       });
     });
+  }
+
+  private showCampSceneFatalError(error: unknown) {
+    const { width, height } = this.scale;
+    const message = error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error);
+
+    this.add.rectangle(width / 2, height / 2, Math.min(width - 32, 620), 190, 0x140606, 0.94)
+      .setDepth(5000)
+      .setStrokeStyle(2, 0xff4c4c, 0.85);
+
+    this.add.text(width / 2, height / 2 - 48, 'CampScene не смогла отрисоваться', {
+      fontFamily: 'monospace',
+      fontSize: '18px',
+      color: '#ffd0d0',
+      align: 'center',
+      wordWrap: {
+        width: Math.min(width - 64, 560),
+        useAdvancedWrap: true,
+      },
+    }).setOrigin(0.5).setDepth(5001);
+
+    this.add.text(width / 2, height / 2 + 24, message, {
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#ffffff',
+      align: 'center',
+      wordWrap: {
+        width: Math.min(width - 70, 550),
+        useAdvancedWrap: true,
+      },
+      maxLines: 5,
+    }).setOrigin(0.5).setDepth(5001);
   }
 
   private playPixelContainerIntro(container: Phaser.GameObjects.Container, delay: number) {
