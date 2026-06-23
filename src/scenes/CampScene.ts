@@ -649,7 +649,7 @@ export class CampScene extends Phaser.Scene {
     const bigButtonWidth = innerWidth;
     const smallButtonWidth = Math.floor((innerWidth - columnGap) / 2);
 
-    const dungeonHeight = layout.veryCompact ? 108 : layout.compact ? 116 : 122;
+    const dungeonHeight = layout.veryCompact ? 120 : layout.compact ? 128 : 134;
     const smallHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 118;
     const wideHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 120;
 
@@ -659,7 +659,7 @@ export class CampScene extends Phaser.Scene {
     // Центры слотов подобраны под саму картинку oblast1.png.
     // Так область не меняет размер, а кнопки попадают в готовые места.
     const topSlot = -boardHeight * (layout.veryCompact ? 0.260 : 0.265);
-    const row1Y = -boardHeight * (layout.veryCompact ? 0.120 : 0.125);
+    const row1Y = -boardHeight * (layout.veryCompact ? 0.115 : 0.120);
     const row2Y = boardHeight * (layout.veryCompact ? 0.020 : 0.015);
     const marketY = boardHeight * (layout.veryCompact ? 0.160 : 0.155);
     const homeY = boardHeight * (layout.veryCompact ? 0.300 : 0.295);
@@ -689,7 +689,7 @@ export class CampScene extends Phaser.Scene {
       status: dungeonStatus,
       titleFontSize: layout.veryCompact ? '17px' : layout.compact ? '20px' : '21px',
       statusFontSize: layout.veryCompact ? '10px' : '12px',
-      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 108 : layout.compact ? 126 : 140),
+      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 114 : layout.compact ? 132 : 146),
       rightPadding: 50,
       titleColor: '#fff0c2',
       statusColor: '#e7c89a',
@@ -767,7 +767,7 @@ export class CampScene extends Phaser.Scene {
         status: button.status,
         titleFontSize: layout.veryCompact ? '13px' : layout.compact ? '15px' : '16px',
         statusFontSize: layout.veryCompact ? '9px' : '10px',
-        textX: -smallButtonWidth / 2 + (layout.veryCompact ? 98 : layout.compact ? 110 : 118),
+        textX: -smallButtonWidth / 2 + (layout.veryCompact ? 102 : layout.compact ? 114 : 122),
         rightPadding: 14,
         titleColor: button.titleColor,
         statusColor: button.statusColor,
