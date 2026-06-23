@@ -6,7 +6,7 @@ import { getRaceById } from '../data/races';
 
 import { getPlayerStats, restorePlayerVitalsToMaximum } from '../systems/InventorySystem';
 import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
-import { initVKBridge } from '../systems/VKBridgeSystem';
+import {getVKUser, initVKBridge} from '../systems/VKBridgeSystem';
 import {
   SANITY_COST_PER_FLOOR,
   getSanityTimeToFullMs,
@@ -232,7 +232,7 @@ export class CampScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5);
 
-    const subtitle = this.add.text(0, 18, 'получаем сохранение аккаунта...', {
+    const subtitle = this.add.text(0, 18, 'получаем сохранение Supabase...', {
       fontFamily: 'monospace',
       fontSize: '12px',
       color: '#9f9078',
@@ -371,20 +371,35 @@ export class CampScene extends Phaser.Scene {
   private async prepareStartup() {
     let timeoutId: number | undefined;
 
-    const timeoutPromise = new Promise<void>((resolve) => {
+    const timeoutPromise = new Promise<void>((_, reject) => {
       timeoutId = window.setTimeout(() => {
-        console.warn('CampScene startup timeout. Continue with local/current data.');
-        resolve();
-      }, 6000);
+        reject(new Error('CampScene startup timeout: server save was not loaded in time.'));
+      }, 9000);
     });
 
     try {
-      await Promise.race([
-        loadGameAsync(),
+      await initVKBridge();
+
+      const vkUser = await getVKUser();
+
+      if (!vkUser?.id) {
+        throw new Error('VK user id is missing. Supabase save cannot be loaded safely.');
+      }
+
+      console.info('[CampScene] Loading Supabase save for VK user:', vkUser.id);
+
+      const result = await Promise.race([
+        loadGameAsync({
+          preferVK: true,
+          blockLocalFallback: true,
+        }),
         timeoutPromise,
       ]);
+
+      console.info('[CampScene] save loaded', result);
     } catch (error) {
-      console.warn('CampScene loadGameAsync failed. Continue with current/local data:', error);
+      console.warn('CampScene cloud save loading failed. Local fallback is blocked to avoid wrong account:', error);
+      throw error;
     } finally {
       if (timeoutId !== undefined) {
         window.clearTimeout(timeoutId);

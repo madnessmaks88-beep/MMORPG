@@ -854,21 +854,25 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
         throw new Error('Server save belongs to another account. Loading is blocked.');
       }
 
-      const saveChoice = chooseAccountSafeNewestSave(rawServerSave, localRawSaveAtStart);
-      const loaded = tryApplyRawSave(saveChoice.raw);
+      // Supabase должен быть главным источником аккаунта.
+      // Раньше здесь chooseAccountSafeNewestSave мог выбрать локальный backup,
+      // если он новее серверного. Из-за этого открывался "странный" локальный аккаунт,
+      // хотя в Supabase лежал правильный профиль.
+      const serverOwnedSave = withCurrentVKOwner(rawServerSave);
+      const loaded = tryApplyRawSave(serverOwnedSave);
 
       if (loaded) {
         try {
-          localStorage.setItem(SAVE_KEY, saveChoice.raw);
-          localStorage.setItem(LOCAL_BACKUP_KEY, saveChoice.raw);
-          localStorage.setItem(LAST_GOOD_SAVE_KEY, saveChoice.raw);
+          localStorage.setItem(SAVE_KEY, serverOwnedSave);
+          localStorage.setItem(LOCAL_BACKUP_KEY, serverOwnedSave);
+          localStorage.setItem(LAST_GOOD_SAVE_KEY, serverOwnedSave);
 
           const currentVKUserId = getCurrentVKUserId();
 
           if (currentVKUserId) {
-            localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), saveChoice.raw);
-            localStorage.setItem(getAccountLastGoodKey(currentVKUserId), saveChoice.raw);
-            writeActiveRunBackup(saveChoice.raw);
+            localStorage.setItem(getAccountLocalBackupKey(currentVKUserId), serverOwnedSave);
+            localStorage.setItem(getAccountLastGoodKey(currentVKUserId), serverOwnedSave);
+            writeActiveRunBackup(serverOwnedSave);
           }
         } catch (error) {
           console.warn('Local server save mirror update failed.', error);
@@ -879,10 +883,7 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
         vkSaveConfirmedEmptyThisSession = false;
         cloudSaveWriteBlocked = false;
 
-        if (saveChoice.usedLocalBackup || getSaveOwnerId(saveChoice.raw) === undefined) {
-          // Серверный сейв отстал от локального аварийного backup — синхронизируем обратно.
-          void saveGameAsync();
-        }
+        console.info('Save loaded from Supabase server. Local backup override was ignored.');
 
         return {
           source: 'server',
@@ -898,8 +899,22 @@ export async function loadGameAsync(options: LoadGameOptions = {}): Promise<Load
         throw new Error('Server save exists but could not be parsed. Local fallback is blocked to protect progress.');
       }
     } else if (serverResult.cloudFailed) {
-      console.warn('Server save unavailable, trying VK Storage backup:', serverResult.reason);
+      console.warn('Server save unavailable:', serverResult.reason);
+
+      if (blockLocalFallback) {
+        cloudSaveWriteBlocked = true;
+        throw new Error(`Supabase save unavailable. Local/VK fallback is blocked to avoid loading the wrong account: ${serverResult.reason ?? 'unknown reason'}`);
+      }
+
+      console.warn('Trying VK Storage backup because local fallback is allowed.');
     }
+  }
+
+  if (preferVK && getCurrentVKUserId() && blockLocalFallback) {
+    // Если Supabase ответил, но сохранения там нет, не берём чужой/старый локальный или VK backup.
+    // Так игрок сразу увидит проблему в базе, а не другой аккаунт.
+    cloudSaveWriteBlocked = true;
+    throw new Error('Supabase returned no save for this VK account. Local/VK fallback is blocked to avoid loading the wrong account.');
   }
 
   if (preferVK && isVKBridgeReady()) {
