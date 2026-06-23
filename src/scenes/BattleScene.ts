@@ -126,6 +126,9 @@ type BattleLayout = {
   safeTop: number;
   safeBottom: number;
   contentWidth: number;
+  playerX: number;
+  enemyX: number;
+  fighterY: number;
   enemyY: number;
   playerY: number;
   logY: number;
@@ -502,8 +505,8 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.enemyCard = this.createFighterCard(
-      layout.centerX + (layout.veryCompact ? 8 : 22),
-      layout.enemyY,
+      layout.enemyX,
+      layout.fighterY,
       this.enemy.name,
       isBoss ? '♛' : '☠',
       isBoss ? 0x3a120c : 0x241515,
@@ -512,8 +515,8 @@ export class BattleScene extends Phaser.Scene {
     );
 
     this.playerCard = this.createFighterCard(
-      layout.centerX - (layout.veryCompact ? 8 : 22),
-      layout.playerY,
+      layout.playerX,
+      layout.fighterY,
       player.name,
       '🗡',
       0x151b24,
@@ -558,65 +561,76 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private getBattleLayout(): BattleLayout {
-  const { width, height } = this.scale;
+    const { width, height } = this.scale;
 
-  const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 34);
-  const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 30);
-  const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.03), 24, 42);
-  const contentWidth = Math.min(width - safeX * 2, 660);
-  const compact = height < 1120;
-  const veryCompact = height < 940;
+    const safeX = Phaser.Math.Clamp(Math.round(width * 0.045), 18, 34);
+    const safeTop = Phaser.Math.Clamp(Math.round(height * 0.022), 16, 30);
+    const safeBottom = Phaser.Math.Clamp(Math.round(height * 0.03), 24, 42);
+    const contentWidth = Math.min(width - safeX * 2, 660);
+    const compact = height < 1120;
+    const veryCompact = height < 940;
 
-  const actionPanelWidth = contentWidth;
-  const naturalPanelHeight = actionPanelWidth * (941 / 1672);
-  const maxPanelHeight = veryCompact ? 266 : compact ? 306 : 342;
-  const actionPanelHeight = Math.min(maxPanelHeight, naturalPanelHeight);
-  const actionPanelY = height - safeBottom - actionPanelHeight / 2;
-  const actionTop = actionPanelY - actionPanelHeight / 2;
+    const actionPanelWidth = contentWidth;
+    const naturalPanelHeight = actionPanelWidth * (941 / 1672);
+    const maxPanelHeight = veryCompact ? 266 : compact ? 306 : 342;
+    const actionPanelHeight = Math.min(maxPanelHeight, naturalPanelHeight);
+    const actionPanelY = height - safeBottom - actionPanelHeight / 2;
+    const actionTop = actionPanelY - actionPanelHeight / 2;
 
-  const attackButtonY = actionTop + actionPanelHeight * 0.205;
-  const firstRowY = actionTop + actionPanelHeight * 0.545;
-  const secondRowY = actionTop + actionPanelHeight * 0.785;
+    const attackButtonY = actionTop + actionPanelHeight * 0.205;
+    const firstRowY = actionTop + actionPanelHeight * 0.545;
+    const secondRowY = actionTop + actionPanelHeight * 0.785;
 
-  const logHeight = veryCompact ? 100 : compact ? 126 : 154;
-  const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
+    const logHeight = veryCompact ? 100 : compact ? 126 : 154;
+    const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
 
-  const headerBottom = safeTop + (this.isBossBattle
-    ? veryCompact ? 86 : compact ? 102 : 118
-    : veryCompact ? 72 : compact ? 86 : 98);
-  const combatTop = headerBottom + (veryCompact ? 8 : 12);
-  const combatBottom = logY - logHeight / 2 - (veryCompact ? 10 : 16);
-  const combatHeight = Math.max(250, combatBottom - combatTop);
+    const headerBottom = safeTop + (this.isBossBattle
+      ? veryCompact ? 86 : compact ? 102 : 118
+      : veryCompact ? 72 : compact ? 86 : 98);
 
-  const enemyY = combatTop + combatHeight * (this.isBossBattle ? 0.27 : 0.25);
-  const playerY = combatTop + combatHeight * (veryCompact ? 0.74 : 0.75);
+    const combatTop = headerBottom + (veryCompact ? 8 : 12);
+    const combatBottom = logY - logHeight / 2 - (veryCompact ? 10 : 16);
+    const combatHeight = Math.max(250, combatBottom - combatTop);
 
-  const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 570);
-  const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 278);
+    // Горизонтальная RPG-композиция: герой слева, враг справа.
+    const fighterY = combatTop + combatHeight * (veryCompact ? 0.56 : compact ? 0.55 : 0.54);
+    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.255, veryCompact ? 118 : 142, 176);
+    const playerX = width / 2 - horizontalSpread;
+    const enemyX = width / 2 + horizontalSpread;
 
-  return {
-    width,
-    height,
-    centerX: width / 2,
-    safeX,
-    safeTop,
-    safeBottom,
-    contentWidth,
-    enemyY,
-    playerY,
-    logY,
-    logHeight,
-    actionPanelY,
-    actionPanelHeight,
-    attackButtonY,
-    firstRowY,
-    secondRowY,
-    mainButtonWidth,
-    sideButtonWidth,
-    compact,
-    veryCompact,
-  };
-}
+    // Старые поля оставлены для совместимости с фоном/эффектами.
+    const enemyY = fighterY;
+    const playerY = fighterY;
+
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 570);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 278);
+
+    return {
+      width,
+      height,
+      centerX: width / 2,
+      safeX,
+      safeTop,
+      safeBottom,
+      contentWidth,
+      playerX,
+      enemyX,
+      fighterY,
+      enemyY,
+      playerY,
+      logY,
+      logHeight,
+      actionPanelY,
+      actionPanelHeight,
+      attackButtonY,
+      firstRowY,
+      secondRowY,
+      mainButtonWidth,
+      sideButtonWidth,
+      compact,
+      veryCompact,
+    };
+  }
 
   private getCurrentWeaponType() {
     const equippedWeapon = getEquippedWeapon(player);
@@ -1722,7 +1736,10 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private createActionButtons() {
-    this.actionButtons.forEach(object => object.destroy());
+    this.actionButtons.forEach(object => {
+      this.tweens.killTweensOf(object);
+      object.destroy();
+    });
     this.actionButtons = [];
 
     if (this.isBattleEnded) {
@@ -2034,28 +2051,32 @@ private getDebuffShortDescription(id: string, power: number) {
     });
 
     zone.on('pointerup', () => {
-      if (!isPressed || isLocked) {
+      if (!isPressed || isLocked || this.isBusy || this.isBattleEnded) {
         return;
       }
 
       isPressed = false;
       isLocked = true;
 
+      this.tweens.killTweensOf(container);
       this.tweens.add({
         targets: container,
         y: baseY,
         scaleX: 1,
         scaleY: 1,
-        duration: 80,
+        duration: 55,
         ease: 'Linear',
         onComplete: () => {
           buttonImage.setAlpha(1);
           titleText.setColor(UI.colors.goldText);
-          config.onClick();
+
+          if (!this.isBusy && !this.isBattleEnded) {
+            config.onClick();
+          }
         },
       });
 
-      this.time.delayedCall(260, () => {
+      this.time.delayedCall(220, () => {
         isLocked = false;
       });
     });
@@ -2147,9 +2168,10 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
-      .setOrigin(0.5, 0.58);
+      .setOrigin(0.5, 0.58)
+      .setFlipX(false);
 
-    this.fitImageToBox(sprite, maxWidth * 1.30, maxHeight * 1.34, 1);
+    this.fitImageToBox(sprite, maxWidth * 1.12, maxHeight * 1.22, 1);
 
     container.add([platform, platformGlow, sprite]);
 
@@ -2183,9 +2205,10 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     const sprite = this.add.image(0, -maxHeight * 0.08, this.getPlayerRaceSpriteKey())
-      .setOrigin(0.5, 0.55);
+      .setOrigin(0.5, 0.55)
+      .setFlipX(false);
 
-    this.fitImageToBox(sprite, maxWidth * 1.35, maxHeight * 1.45, 1);
+    this.fitImageToBox(sprite, maxWidth * 1.10, maxHeight * 1.24, 1);
 
     container.add([platform, platformGlow, sprite]);
 
@@ -2313,6 +2336,7 @@ private handleRaceSkill() {
 
 private handleHumanSkill() {
   this.isBusy = true;
+  this.playSkillCastAnimation('player');
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.setRaceSkillCooldown();
@@ -2373,7 +2397,7 @@ private handleTaintedSkill() {
 
   const weaknessText = this.getEnemyWeaknessText();
 
-  this.animatePlayerAttack();
+  this.animatePlayerAttack('skill');
   this.damageEnemy(damage);
 
   this.taintedCorruptionTurns = Math.max(this.taintedCorruptionTurns, 2);
@@ -2393,6 +2417,7 @@ private handleTaintedSkill() {
 
 private handleStonebornSkill() {
   this.isBusy = true;
+  this.playSkillCastAnimation('player');
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.setRaceSkillCooldown();
@@ -2413,6 +2438,7 @@ private handleStonebornSkill() {
 
 private handleNightElfSkill() {
   this.isBusy = true;
+  this.playSkillCastAnimation('player');
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.setRaceSkillCooldown();
@@ -2433,6 +2459,7 @@ private handleNightElfSkill() {
 
 private handleGoblinSkill() {
   this.isBusy = true;
+  this.playSkillCastAnimation('enemy');
 
   player.energy -= this.getRaceSkillEnergyCost() + this.getSkillCostPenalty();
   this.setRaceSkillCooldown();
@@ -2476,7 +2503,7 @@ private handleDemonSkill() {
 
   const weaknessText = this.getEnemyWeaknessText();
 
-  this.animatePlayerAttack();
+  this.animatePlayerAttack('skill');
   this.damageEnemy(damage);
 
   this.demonHellfireBurnTurns = Math.max(this.demonHellfireBurnTurns, 2);
@@ -2534,7 +2561,7 @@ private handleDemonSkill() {
     const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.5)) : damage;
     const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
@@ -2558,6 +2585,7 @@ private handleDemonSkill() {
     }
 
     this.isBusy = true;
+    this.playDefendAnimation();
 
     const restoredNow = restoreEnergy(player, 1);
     const playerActionText = `Ты занял защитную стойку.\n${this.createEnergyRestoreText(restoredNow)}`;
@@ -3457,7 +3485,7 @@ private getSkillCostPenalty() {
       });
     });
 
-    const floorTopY = layout.playerY + (layout.veryCompact ? 44 : 58);
+    const floorTopY = layout.fighterY + (layout.veryCompact ? 54 : 70);
     const floorBottomY = Math.min(height - 206, layout.logY - layout.logHeight / 2 - 10);
     const floorHeight = Math.max(76, floorBottomY - floorTopY);
 
@@ -3475,9 +3503,9 @@ private getSkillCostPenalty() {
         .setDepth(5);
     }
 
-    const enemyShadow = this.add.ellipse(width / 2, layout.enemyY + (layout.veryCompact ? 42 : 58), arenaWidth * 0.42, layout.veryCompact ? 72 : 96, 0x000000, 0.42)
+    const enemyShadow = this.add.ellipse(layout.enemyX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.42)
       .setDepth(4);
-    const playerShadow = this.add.ellipse(width / 2, layout.playerY + (layout.veryCompact ? 54 : 68), arenaWidth * 0.46, layout.veryCompact ? 74 : 102, 0x000000, 0.38)
+    const playerShadow = this.add.ellipse(layout.playerX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.38)
       .setDepth(4);
 
     this.tweens.add({
@@ -3577,15 +3605,18 @@ private createFighterSpriteCard(config: {
   isBoss: boolean;
 }) {
   const layout = this.getBattleLayout();
-  const cardWidth = Math.min(layout.contentWidth, config.isBoss ? 650 : 620);
-  const cardHeight = config.isEnemy
-    ? config.isBoss
-      ? layout.veryCompact ? 162 : layout.compact ? 190 : 218
-      : layout.veryCompact ? 150 : layout.compact ? 176 : 204
-    : layout.veryCompact ? 160 : layout.compact ? 188 : 216;
 
-  const container = this.add.container(config.x, config.y).setDepth(config.isEnemy ? 18 : 19);
-  const bottom = cardHeight / 2;
+  const cardWidth = Math.min(
+    (layout.contentWidth - (layout.veryCompact ? 18 : 26)) / 2,
+    config.isBoss ? 344 : 318
+  );
+
+  const cardHeight = layout.veryCompact ? 240 : layout.compact ? 272 : 304;
+  const container = this.add.container(config.x, config.y).setDepth(config.isEnemy ? 19 : 20);
+
+  container.setData('baseX', config.x);
+  container.setData('baseY', config.y);
+  container.setData('side', config.isEnemy ? 'enemy' : 'player');
 
   const strokeColor = config.isEnemy
     ? config.isBoss
@@ -3595,85 +3626,72 @@ private createFighterSpriteCard(config: {
   const accentColor = config.isEnemy ? (config.isBoss ? 0xff8a5f : 0xff6b6b) : UI.colors.gold;
   const titleColor = config.isEnemy ? (config.isBoss ? '#ffd0aa' : '#ffb0a8') : UI.colors.goldText;
 
-  const spriteX = config.isEnemy
-    ? cardWidth * (layout.veryCompact ? 0.20 : 0.23)
-    : -cardWidth * (layout.veryCompact ? 0.22 : 0.25);
-  const spriteY = config.isEnemy
-    ? cardHeight * (layout.veryCompact ? 0.05 : 0.04)
-    : cardHeight * (layout.veryCompact ? 0.07 : 0.06);
-  const spriteMaxWidth = config.isEnemy
-    ? cardWidth * (layout.veryCompact ? 0.48 : 0.50)
-    : cardWidth * (layout.veryCompact ? 0.43 : 0.46);
-  const spriteMaxHeight = config.isEnemy
-    ? cardHeight * (layout.veryCompact ? 1.18 : 1.20)
-    : cardHeight * (layout.veryCompact ? 1.12 : 1.16);
-
-  const infoWidth = cardWidth * (layout.veryCompact ? 0.52 : 0.50);
-  const infoHeight = cardHeight * (layout.veryCompact ? 0.64 : 0.60);
-  const infoX = config.isEnemy
-    ? -cardWidth * (layout.veryCompact ? 0.19 : 0.22)
-    : cardWidth * (layout.veryCompact ? 0.20 : 0.22);
-  const infoY = cardHeight * (layout.veryCompact ? 0.09 : 0.08);
-  const infoLeft = infoX - infoWidth / 2;
-  const infoTop = infoY - infoHeight / 2;
-  const infoRight = infoX + infoWidth / 2;
+  const spriteMaxWidth = cardWidth * (config.isEnemy ? 0.92 : 0.86);
+  const spriteMaxHeight = cardHeight * (config.isEnemy ? 0.78 : 0.74);
+  const spriteY = -cardHeight * 0.18;
 
   const aura = this.add.circle(
-    spriteX,
-    spriteY - cardHeight * 0.12,
-    Math.max(spriteMaxWidth, spriteMaxHeight) * 0.38,
+    0,
+    spriteY - cardHeight * 0.05,
+    Math.max(spriteMaxWidth, spriteMaxHeight) * 0.32,
     accentColor,
-    config.isBoss ? 0.10 : 0.055
+    config.isBoss ? 0.105 : 0.058
   );
 
   const fighterSprite = config.isEnemy
-    ? this.createEnemySprite(spriteX, spriteY, spriteMaxWidth, spriteMaxHeight, config.isBoss)
-    : this.createPlayerRaceSprite(spriteX, spriteY, spriteMaxWidth, spriteMaxHeight);
+    ? this.createEnemySprite(0, spriteY, spriteMaxWidth, spriteMaxHeight, config.isBoss)
+    : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
+
+  const infoWidth = cardWidth;
+  const infoHeight = layout.veryCompact ? 88 : layout.compact ? 98 : 106;
+  const infoX = 0;
+  const infoY = cardHeight * 0.31;
+  const infoLeft = infoX - infoWidth / 2;
+  const infoTop = infoY - infoHeight / 2;
 
   const infoShadow = this.add.graphics();
-  infoShadow.fillStyle(0x000000, 0.34);
-  infoShadow.fillRoundedRect(infoLeft, infoTop + 5, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
+  infoShadow.fillStyle(0x000000, 0.42);
+  infoShadow.fillRoundedRect(infoLeft, infoTop + 5, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
 
   const infoPanel = this.add.graphics();
-  infoPanel.fillStyle(config.isEnemy ? 0x10090a : 0x0b1018, 0.84);
-  infoPanel.fillRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
-  infoPanel.fillStyle(config.color, config.isEnemy ? 0.18 : 0.16);
-  infoPanel.fillRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 12 : 16);
-  infoPanel.lineStyle(config.isBoss ? 2 : 1.5, strokeColor, config.isBoss ? 0.78 : 0.56);
-  infoPanel.strokeRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 16 : 20);
+  infoPanel.fillStyle(config.isEnemy ? 0x10090a : 0x0b1018, 0.86);
+  infoPanel.fillRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
+  infoPanel.fillStyle(config.color, config.isEnemy ? 0.16 : 0.14);
+  infoPanel.fillRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 10 : 14);
+  infoPanel.lineStyle(config.isBoss ? 2 : 1.5, strokeColor, config.isBoss ? 0.78 : 0.58);
+  infoPanel.strokeRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
   infoPanel.lineStyle(1, 0xf0d58a, config.isBoss ? 0.18 : 0.10);
-  infoPanel.strokeRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 12 : 16);
+  infoPanel.strokeRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 10 : 14);
 
-  const nameTextWidth = Math.max(120, infoWidth - (layout.veryCompact ? 78 : 92));
-  const titleX = infoLeft + (layout.veryCompact ? 14 : 18);
-  const titleY = infoTop + (layout.veryCompact ? 20 : 24);
+  const titleX = infoLeft + (layout.veryCompact ? 10 : 12);
+  const titleY = infoTop + (layout.veryCompact ? 15 : 18);
+  const badgeWidth = layout.veryCompact ? 54 : 64;
+  const badgeHeight = layout.veryCompact ? 18 : 22;
+  const badgeX = infoLeft + infoWidth - badgeWidth / 2 - 8;
 
   const nameText = this.add.text(titleX, titleY, config.name, {
     fontFamily: UI.font.title,
     fontSize: config.isBoss
-      ? layout.veryCompact ? '14px' : layout.compact ? '17px' : '20px'
-      : layout.veryCompact ? '13px' : layout.compact ? '16px' : '18px',
+      ? layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px'
+      : layout.veryCompact ? '10px' : layout.compact ? '12px' : '14px',
     color: titleColor,
     stroke: '#000000',
-    strokeThickness: 4,
+    strokeThickness: 3,
     wordWrap: {
-      width: nameTextWidth,
+      width: Math.max(92, infoWidth - badgeWidth - 28),
       useAdvancedWrap: true,
     },
     maxLines: config.isEnemy ? 2 : 1,
     lineSpacing: -3,
   }).setOrigin(0, 0.5);
 
-  const badgeWidth = layout.veryCompact ? 66 : 78;
-  const badgeHeight = layout.veryCompact ? 20 : 24;
-  const badgeX = infoRight - badgeWidth / 2 - (layout.veryCompact ? 10 : 12);
   const badge = this.add.rectangle(
     badgeX,
     titleY,
     badgeWidth,
     badgeHeight,
     config.isEnemy ? 0x1a0907 : 0x101722,
-    0.9
+    0.92
   ).setStrokeStyle(1, config.isEnemy ? accentColor : 0x70a6ff, config.isEnemy ? 0.44 : 0.4);
 
   const badgeText = this.add.text(
@@ -3682,47 +3700,47 @@ private createFighterSpriteCard(config: {
     config.isEnemy ? (config.isBoss ? 'БОСС' : 'ВРАГ') : `Зелья: ${player.potions}`,
     {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '8px' : '10px',
+      fontSize: layout.veryCompact ? '7px' : '9px',
       color: config.isEnemy ? '#ffb08a' : '#b9d8ff',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
       wordWrap: {
-        width: badgeWidth - 8,
+        width: badgeWidth - 6,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }
   ).setOrigin(0.5);
 
-  const hpText = this.add.text(titleX, infoTop + infoHeight * 0.43, '', {
+  const hpText = this.add.text(titleX, infoTop + infoHeight * 0.42, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '10px' : layout.compact ? '12px' : '14px',
+    fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '12px',
     color: config.isEnemy ? '#ffd0c2' : UI.colors.text,
     wordWrap: {
-      width: infoWidth - 28,
+      width: infoWidth - 24,
       useAdvancedWrap: true,
     },
     maxLines: 1,
   }).setOrigin(0, 0.5);
 
-  const extraText = this.add.text(titleX, infoTop + infoHeight * 0.61, '', {
+  const extraText = this.add.text(titleX, infoTop + infoHeight * 0.59, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '9px' : layout.compact ? '11px' : '12px',
+    fontSize: layout.veryCompact ? '8px' : layout.compact ? '9px' : '10px',
     color: '#b8aa91',
     wordWrap: {
-      width: infoWidth - 28,
+      width: infoWidth - 24,
       useAdvancedWrap: true,
     },
     maxLines: 1,
   }).setOrigin(0, 0.5);
 
-  const barWidth = Math.max(120, infoWidth - (layout.veryCompact ? 26 : 34));
+  const barWidth = Math.max(112, infoWidth - (layout.veryCompact ? 22 : 28));
   const barCenterX = titleX + barWidth / 2;
-  const barY = infoTop + infoHeight * 0.78;
-  const energyBarY = barY + (layout.veryCompact ? 13 : 16);
-  const hpBarHeight = layout.veryCompact ? 8 : 10;
-  const energyBarHeight = layout.veryCompact ? 6 : 7;
+  const barY = infoTop + infoHeight * 0.76;
+  const energyBarY = barY + (layout.veryCompact ? 11 : 13);
+  const hpBarHeight = layout.veryCompact ? 7 : 8;
+  const energyBarHeight = layout.veryCompact ? 5 : 6;
 
   const barBack = this.add.rectangle(barCenterX, barY, barWidth, hpBarHeight, 0x020202, 0.96)
     .setStrokeStyle(1, 0x000000, 0.85);
@@ -3752,7 +3770,7 @@ private createFighterSpriteCard(config: {
   const energyBar = this.add.rectangle(titleX, energyBarY, barWidth, energyBarHeight, 0x70a6ff, config.isEnemy ? 0 : 0.96)
     .setOrigin(0, 0.5);
 
-  const hoverZone = this.add.zone(0, 0, cardWidth, cardHeight)
+  const hoverZone = this.add.zone(0, cardHeight * 0.03, cardWidth, cardHeight * 0.94)
     .setInteractive({ useHandCursor: true });
 
   hoverZone.on('pointerup', () => {
@@ -3782,19 +3800,16 @@ private createFighterSpriteCard(config: {
   ]);
 
   if (config.isBoss) {
-    const bossBanner = this.add.rectangle(infoX, infoTop - (layout.veryCompact ? 13 : 16), Math.min(infoWidth, 230), layout.veryCompact ? 24 : 30, 0x3a0907, 0.98)
+    const bossBanner = this.add.rectangle(0, infoTop - (layout.veryCompact ? 11 : 14), Math.min(infoWidth, 190), layout.veryCompact ? 20 : 24, 0x3a0907, 0.98)
       .setStrokeStyle(2, 0xff6b35, 0.82);
 
-    const bossLabel = this.add.text(infoX, bossBanner.y, 'БОСС • УГРОЗА ЯРУСА', {
+    const bossLabel = this.add.text(0, bossBanner.y, 'БОСС', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '9px' : '11px',
+      fontSize: layout.veryCompact ? '8px' : '10px',
       color: '#ffb36b',
       stroke: '#000000',
       strokeThickness: 3,
       align: 'center',
-      wordWrap: {
-        width: Math.min(infoWidth - 16, 210),
-      },
       maxLines: 1,
     }).setOrigin(0.5);
 
@@ -3829,23 +3844,27 @@ private createFighterSpriteCard(config: {
     this.potionText = badgeText;
 
     const stats = this.getBattleStats();
-    const statLine = this.add.text(titleX, bottom - (layout.veryCompact ? 13 : 16), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
+    const statLine = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 7 : 9), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '8px' : layout.compact ? '10px' : '11px',
+      fontSize: layout.veryCompact ? '7px' : layout.compact ? '8px' : '9px',
       color: '#b8aa91',
+      stroke: '#000000',
+      strokeThickness: 2,
       wordWrap: {
-        width: infoWidth - 20,
+        width: infoWidth - 16,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    this.playerDebuffText = this.add.text(titleX, bottom - (layout.veryCompact ? 28 : 34), '', {
+    this.playerDebuffText = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 20 : 24), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '8px' : '10px',
+      fontSize: layout.veryCompact ? '7px' : '9px',
       color: '#c084fc',
+      stroke: '#000000',
+      strokeThickness: 2,
       wordWrap: {
-        width: infoWidth - 20,
+        width: infoWidth - 16,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setVisible(false);
@@ -4846,67 +4865,7 @@ private renderEnemyEffectChips() {
     });
   }
 
-  private animatePlayerAttack() {
-    const baseX =
-      typeof this.playerCard.getData('baseX') === 'number'
-        ? this.playerCard.getData('baseX')
-        : this.playerCard.x;
-
-    const baseY =
-      typeof this.playerCard.getData('baseY') === 'number'
-        ? this.playerCard.getData('baseY')
-        : this.playerCard.y;
-
-    this.playerCard.setData('baseX', baseX);
-    this.playerCard.setData('baseY', baseY);
-
-    this.tweens.killTweensOf(this.playerCard);
-
-    this.playerCard.setPosition(baseX, baseY);
-
-    this.tweens.add({
-      targets: this.playerCard,
-      y: baseY - 28,
-      duration: 100,
-      yoyo: true,
-      ease: 'Power2',
-      onComplete: () => {
-        this.playerCard.setPosition(baseX, baseY);
-      },
-    });
-  }
-
-  private animateEnemyAttack() {
-    const baseX =
-      typeof this.enemyCard.getData('baseX') === 'number'
-        ? this.enemyCard.getData('baseX')
-        : this.enemyCard.x;
-
-    const baseY =
-      typeof this.enemyCard.getData('baseY') === 'number'
-        ? this.enemyCard.getData('baseY')
-        : this.enemyCard.y;
-
-    this.enemyCard.setData('baseX', baseX);
-    this.enemyCard.setData('baseY', baseY);
-
-    this.tweens.killTweensOf(this.enemyCard);
-
-    this.enemyCard.setPosition(baseX, baseY);
-
-    this.tweens.add({
-      targets: this.enemyCard,
-      y: baseY + 28,
-      duration: 100,
-      yoyo: true,
-      ease: 'Power2',
-      onComplete: () => {
-        this.enemyCard.setPosition(baseX, baseY);
-      },
-    });
-  }
-
-  private animateHit(target: Phaser.GameObjects.Container) {
+  private getCardBasePosition(target: Phaser.GameObjects.Container) {
     const baseX =
       typeof target.getData('baseX') === 'number'
         ? target.getData('baseX')
@@ -4920,20 +4879,255 @@ private renderEnemyEffectChips() {
     target.setData('baseX', baseX);
     target.setData('baseY', baseY);
 
-    this.tweens.killTweensOf(target);
+    return {
+      x: baseX,
+      y: baseY,
+    };
+  }
 
-    target.setPosition(baseX, baseY);
+  private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal') {
+    if (!this.playerCard || !this.enemyCard || this.isBattleEnded) {
+      return;
+    }
+
+    const playerBase = this.getCardBasePosition(this.playerCard);
+    const enemyBase = this.getCardBasePosition(this.enemyCard);
+
+    this.tweens.killTweensOf(this.playerCard);
+    this.tweens.killTweensOf(this.enemyCard);
+
+    this.playerCard.setPosition(playerBase.x, playerBase.y);
+    this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
+
+    const dashDistance = kind === 'power' ? 40 : kind === 'skill' ? 34 : 30;
+    const tilt = kind === 'power' ? 2.5 : 1.6;
+
+    await new Promise<void>(resolve => {
+      this.tweens.add({
+        targets: this.playerCard,
+        x: playerBase.x + dashDistance,
+        y: playerBase.y - 4,
+        angle: tilt,
+        duration: kind === 'power' ? 120 : 95,
+        ease: 'Quad.easeOut',
+        onComplete: () => resolve(),
+      });
+    });
+
+    if (this.isBattleEnded) {
+      return;
+    }
+
+    this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
+    this.tweens.add({
+      targets: this.enemyCard,
+      x: enemyBase.x + (kind === 'power' ? 18 : 12),
+      duration: 70,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
+      },
+    });
+
+    await new Promise<void>(resolve => {
+      this.tweens.add({
+        targets: this.playerCard,
+        x: playerBase.x,
+        y: playerBase.y,
+        angle: 0,
+        duration: 115,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.playerCard?.setPosition(playerBase.x, playerBase.y);
+          this.playerCard?.setAngle(0);
+          resolve();
+        },
+      });
+    });
+  }
+
+  private async playEnemyAttackAnimation() {
+    if (!this.enemyCard || !this.playerCard || this.isBattleEnded) {
+      return;
+    }
+
+    const enemyBase = this.getCardBasePosition(this.enemyCard);
+    const playerBase = this.getCardBasePosition(this.playerCard);
+
+    this.tweens.killTweensOf(this.enemyCard);
+    this.tweens.killTweensOf(this.playerCard);
+
+    this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
+    this.playerCard.setPosition(playerBase.x, playerBase.y);
+
+    await new Promise<void>(resolve => {
+      this.tweens.add({
+        targets: this.enemyCard,
+        x: enemyBase.x - 34,
+        y: enemyBase.y - 2,
+        angle: -1.6,
+        duration: 105,
+        ease: 'Quad.easeOut',
+        onComplete: () => resolve(),
+      });
+    });
+
+    if (this.isBattleEnded) {
+      return;
+    }
+
+    this.createImpactFlash(this.playerCard.x + 8, this.playerCard.y - 32, 0xff6b6b);
+    this.tweens.add({
+      targets: this.playerCard,
+      x: playerBase.x - 12,
+      duration: 70,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.playerCard?.setPosition(playerBase.x, playerBase.y);
+      },
+    });
+
+    await new Promise<void>(resolve => {
+      this.tweens.add({
+        targets: this.enemyCard,
+        x: enemyBase.x,
+        y: enemyBase.y,
+        angle: 0,
+        duration: 115,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
+          this.enemyCard?.setAngle(0);
+          resolve();
+        },
+      });
+    });
+  }
+
+  private playDefendAnimation() {
+    if (!this.playerCard || this.isBattleEnded) {
+      return;
+    }
+
+    const base = this.getCardBasePosition(this.playerCard);
+    this.tweens.killTweensOf(this.playerCard);
+    this.playerCard.setPosition(base.x, base.y);
+
+    this.createImpactFlash(base.x, base.y - 38, 0x70a6ff, 0.18);
+
+    this.tweens.add({
+      targets: this.playerCard,
+      x: base.x - 8,
+      scaleX: 1.025,
+      scaleY: 1.025,
+      duration: 90,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.playerCard?.setPosition(base.x, base.y);
+        this.playerCard?.setScale(1);
+      },
+    });
+  }
+
+  private playPotionAnimation() {
+    if (!this.playerCard || this.isBattleEnded) {
+      return;
+    }
+
+    const base = this.getCardBasePosition(this.playerCard);
+    this.createImpactFlash(base.x, base.y - 42, 0x75d184, 0.16, true);
+  }
+
+  private playSkillCastAnimation(target: 'player' | 'enemy' = 'enemy') {
+    const card = target === 'player' ? this.playerCard : this.enemyCard;
+
+    if (!card || this.isBattleEnded) {
+      return;
+    }
+
+    const base = this.getCardBasePosition(card);
+    this.createImpactFlash(base.x, base.y - 40, 0xc084fc, 0.16);
+  }
+
+  private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal') {
+    void this.playPlayerAttackAnimation(kind);
+  }
+
+  private animateEnemyAttack() {
+    void this.playEnemyAttackAnimation();
+  }
+
+  private animateHit(target: Phaser.GameObjects.Container) {
+    const base = this.getCardBasePosition(target);
+    const isPlayerTarget = target === this.playerCard;
+    const pushX = isPlayerTarget ? -12 : 12;
+
+    this.tweens.killTweensOf(target);
+    target.setPosition(base.x, base.y);
 
     this.tweens.add({
       targets: target,
-      x: baseX + 12,
+      x: base.x + pushX,
       duration: 55,
       yoyo: true,
-      repeat: 2,
+      repeat: 1,
+      ease: 'Sine.easeInOut',
       onComplete: () => {
-        target.setPosition(baseX, baseY);
+        target.setPosition(base.x, base.y);
+        target.setAngle(0);
+        target.setScale(1);
       },
     });
+  }
+
+  private createImpactFlash(
+    x: number,
+    y: number,
+    color: number,
+    alpha = 0.14,
+    isHeal = false
+  ) {
+    const ring = this.add.circle(x, y, isHeal ? 18 : 22, color, alpha)
+      .setDepth(255)
+      .setScale(0.35);
+
+    this.tweens.add({
+      targets: ring,
+      scale: 1.35,
+      alpha: 0,
+      duration: 180,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    const sparks = isHeal ? 5 : 6;
+
+    for (let i = 0; i < sparks; i += 1) {
+      const angle = Phaser.Math.DegToRad(Phaser.Math.Between(0, 360));
+      const distance = Phaser.Math.Between(16, isHeal ? 34 : 42);
+      const particle = this.add.rectangle(
+        x,
+        y,
+        Phaser.Math.Between(3, 5),
+        Phaser.Math.Between(3, 5),
+        color,
+        isHeal ? 0.45 : 0.56
+      ).setDepth(256);
+
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.35,
+        duration: Phaser.Math.Between(180, 300),
+        ease: 'Quad.easeOut',
+        onComplete: () => particle.destroy(),
+      });
+    }
   }
 
   private shakeBattle(power = 0.006, duration = 180) {
@@ -5027,7 +5221,7 @@ private renderEnemyEffectChips() {
       ? '\nГлубинный выпад пробил часть защиты врага.'
       : '';
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('normal');
     this.damageEnemy(critDamage);
 
     const playerActionText = isCrit
@@ -5065,7 +5259,7 @@ private renderEnemyEffectChips() {
       ? '\nХватка чёрной воды: следующая атака героя нанесёт на 10% больше урона.'
       : '';
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
@@ -5098,7 +5292,7 @@ private renderEnemyEffectChips() {
 Преимущество меча: враг крупнее, урон +${swordBonus.bonusPercent}%.`
       : '';
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
@@ -5184,7 +5378,7 @@ ${daggerTreeCritTexts.join('\n')}`
         return;
       }
 
-      this.animatePlayerAttack();
+      this.animatePlayerAttack('normal');
       this.damageEnemy(hit.damage);
 
       totalDamage += hit.damage;
@@ -5254,7 +5448,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
    const weaknessText = this.getEnemyWeaknessText();
 
-   this.animatePlayerAttack();
+   this.animatePlayerAttack('normal');
    this.damageEnemy(finalDamage);
 
    let playerActionText = isCrit
@@ -5290,7 +5484,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
     const weaknessText = this.getEnemyWeaknessText();
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
@@ -5322,7 +5516,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
     const weaknessText = this.getEnemyWeaknessText();
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
     this.shakeBattle(0.008, 220);
 
@@ -5358,7 +5552,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
     const weaknessText = this.getEnemyWeaknessText();
 
-    this.animatePlayerAttack();
+    this.animatePlayerAttack('power');
     this.damageEnemy(finalDamage);
 
     const playerActionText = isCrit
@@ -5970,6 +6164,7 @@ ${daggerTreeCritTexts.join('\n')}`
     }
 
     this.isBusy = true;
+    this.playPotionAnimation();
 
     player.potions = Math.max(0, player.potions - 1);
     this.potionCooldown = 2;
