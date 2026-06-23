@@ -150,12 +150,12 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  create() {
+  async create() {
     this.notifyVKAppReady();
 
     console.info('[CampScene] create started');
 
-    const layout = this.getLayout();
+    const loadingOverlay = this.createInternalLoadingScreen();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.campfireTimerEvent?.remove(false);
@@ -168,6 +168,23 @@ export class CampScene extends Phaser.Scene {
       this.sanityHintText = undefined;
       this.sanityFill = undefined;
     });
+
+    try {
+      await Promise.all([
+        this.prepareStartupOnce(),
+        this.loadPixelFontOnce(),
+      ]);
+    } catch (error) {
+      console.warn('[CampScene] startup/load finished with fallback:', error);
+    }
+
+    if (!this.scene.isActive()) {
+      return;
+    }
+
+    loadingOverlay.destroy();
+
+    const layout = this.getLayout();
 
     try {
       this.grantStartGoldOnce();
@@ -185,28 +202,59 @@ export class CampScene extends Phaser.Scene {
         activeScene: 'CampScene',
       });
 
-      console.info('[CampScene] UI rendered');
+      this.applyPixelFontToSceneTexts();
+
+      console.info('[CampScene] UI rendered after save load', {
+        name: player.name,
+        level: player.level,
+        raceId: player.raceId,
+        gold: player.gold,
+      });
     } catch (error) {
       console.error('[CampScene] render failed:', error);
       this.showCampSceneFatalError(error);
       return;
     }
+  }
 
-    void this.loadPixelFontOnce()
-      .then(() => {
-        this.applyPixelFontToSceneTexts();
-      })
-      .catch(error => {
-        console.warn('[CampScene] font apply failed:', error);
-      });
+  private createInternalLoadingScreen() {
+    const { width, height } = this.scale;
+    const container = this.add.container(width / 2, height / 2).setDepth(9999);
 
-    void this.prepareStartupOnce()
-      .then(() => {
-        console.info('[CampScene] save startup finished');
-      })
-      .catch(error => {
-        console.warn('[CampScene] save startup skipped:', error);
-      });
+    const bg = this.add.rectangle(0, 0, width, height, 0x050607, 0.94);
+    const panel = this.add.rectangle(0, 0, Math.min(width - 44, 420), 132, 0x090b0f, 0.96)
+      .setStrokeStyle(2, 0x8b6a3f, 0.75);
+
+    const title = this.add.text(0, -24, 'Загрузка героя', {
+      fontFamily: 'monospace',
+      fontSize: '18px',
+      color: '#e0c585',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    const subtitle = this.add.text(0, 18, 'получаем сохранение аккаунта...', {
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      color: '#9f9078',
+      align: 'center',
+      wordWrap: {
+        width: Math.min(width - 82, 360),
+        useAdvancedWrap: true,
+      },
+    }).setOrigin(0.5);
+
+    container.add([bg, panel, title, subtitle]);
+
+    this.tweens.add({
+      targets: subtitle,
+      alpha: { from: 0.45, to: 1 },
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    return container;
   }
 
   private notifyVKAppReady() {
@@ -325,9 +373,9 @@ export class CampScene extends Phaser.Scene {
 
     const timeoutPromise = new Promise<void>((resolve) => {
       timeoutId = window.setTimeout(() => {
-        console.warn('CampScene startup timeout. Continue without blocking scene.');
+        console.warn('CampScene startup timeout. Continue with local/current data.');
         resolve();
-      }, 2500);
+      }, 6000);
     });
 
     try {
