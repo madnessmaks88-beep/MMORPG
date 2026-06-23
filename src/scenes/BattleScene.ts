@@ -270,9 +270,105 @@ export class BattleScene extends Phaser.Scene {
   
 
 
+
+  private readonly BATTLE_ASSETS = {
+    actionPanel: {
+      key: 'battle_panel_actions',
+      url: new URL('../assets/images/battle/battle_panel_actions.png', import.meta.url).href,
+    },
+    buttons: {
+      attack: {
+        key: 'battle_btn_attack',
+        url: new URL('../assets/images/battle/attack.png', import.meta.url).href,
+      },
+      power: {
+        key: 'battle_btn_power',
+        url: new URL('../assets/images/battle/power.png', import.meta.url).href,
+      },
+      defence: {
+        key: 'battle_btn_defence',
+        url: new URL('../assets/images/battle/defence.png', import.meta.url).href,
+      },
+      heal: {
+        key: 'battle_btn_heal',
+        url: new URL('../assets/images/battle/heal.png', import.meta.url).href,
+      },
+      human: {
+        key: 'battle_btn_skill_human',
+        url: new URL('../assets/images/battle/peopleatt.png', import.meta.url).href,
+      },
+      tainted: {
+        key: 'battle_btn_skill_tainted',
+        url: new URL('../assets/images/battle/pol.png', import.meta.url).href,
+      },
+      goblin: {
+        key: 'battle_btn_skill_goblin',
+        url: new URL('../assets/images/battle/goblinatt.png', import.meta.url).href,
+      },
+      stone: {
+        key: 'battle_btn_skill_stone',
+        url: new URL('../assets/images/battle/stoneatt.png', import.meta.url).href,
+      },
+      elf: {
+        key: 'battle_btn_skill_elf',
+        url: new URL('../assets/images/battle/elfatt.png', import.meta.url).href,
+      },
+      demon: {
+        key: 'battle_btn_skill_demon',
+        url: new URL('../assets/images/battle/Demonarr.png', import.meta.url).href,
+      },
+    },
+    raceSprites: {
+      human: {
+        key: 'race_sprite_human',
+        url: new URL('../assets/images/battle/People.png', import.meta.url).href,
+      },
+      tainted: {
+        key: 'race_sprite_tainted',
+        url: new URL('../assets/images/battle/Skwerna.png', import.meta.url).href,
+      },
+      goblin: {
+        key: 'race_sprite_goblin',
+        url: new URL('../assets/images/battle/Goblin.png', import.meta.url).href,
+      },
+      stone: {
+        key: 'race_sprite_stone',
+        url: new URL('../assets/images/battle/Stone.png', import.meta.url).href,
+      },
+      elf: {
+        key: 'race_sprite_elf',
+        url: new URL('../assets/images/battle/elf.png', import.meta.url).href,
+      },
+      demon: {
+        key: 'race_sprite_demon',
+        url: new URL('../assets/images/battle/demon.png', import.meta.url).href,
+      },
+    },
+  } as const;
+
   constructor() {
     super('BattleScene');
   }
+
+
+  preload() {
+    const assetsToLoad = [
+      this.BATTLE_ASSETS.actionPanel,
+      ...Object.values(this.BATTLE_ASSETS.buttons),
+      ...Object.values(this.BATTLE_ASSETS.raceSprites),
+    ];
+
+    assetsToLoad.forEach(asset => {
+      if (!this.textures.exists(asset.key)) {
+        this.load.image(asset.key, asset.url);
+      }
+    });
+
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.applyNearestFilterToBattleTextures();
+    });
+  }
+
 
   init(data?: {
     enemyId?: string;
@@ -388,6 +484,8 @@ export class BattleScene extends Phaser.Scene {
 
     this.cameras.main.fadeIn(260, 0, 0, 0);
 
+    this.applyNearestFilterToBattleTextures();
+
     this.createBattleBackground(isBoss);
 
     this.createBattleHeader(
@@ -462,16 +560,19 @@ export class BattleScene extends Phaser.Scene {
   const compact = height < 1120;
   const veryCompact = height < 940;
 
-  const actionPanelHeight = veryCompact ? 254 : compact ? 286 : 324;
+  const actionPanelWidth = contentWidth;
+  const naturalPanelHeight = actionPanelWidth * (941 / 1672);
+  const maxPanelHeight = veryCompact ? 266 : compact ? 306 : 342;
+  const actionPanelHeight = Math.min(maxPanelHeight, naturalPanelHeight);
   const actionPanelY = height - safeBottom - actionPanelHeight / 2;
   const actionTop = actionPanelY - actionPanelHeight / 2;
 
-  const attackButtonY = actionTop + (veryCompact ? 68 : compact ? 78 : 90);
-  const firstRowY = attackButtonY + (veryCompact ? 62 : compact ? 72 : 82);
-  const secondRowY = firstRowY + (veryCompact ? 48 : compact ? 58 : 66);
+  const attackButtonY = actionTop + actionPanelHeight * 0.205;
+  const firstRowY = actionTop + actionPanelHeight * 0.545;
+  const secondRowY = actionTop + actionPanelHeight * 0.785;
 
-  const logHeight = veryCompact ? 104 : compact ? 130 : 158;
-  const logY = actionTop - logHeight / 2 - (veryCompact ? 10 : 14);
+  const logHeight = veryCompact ? 100 : compact ? 126 : 154;
+  const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
 
   const headerBottom = safeTop + (this.isBossBattle
     ? veryCompact ? 86 : compact ? 102 : 118
@@ -483,8 +584,8 @@ export class BattleScene extends Phaser.Scene {
   const enemyY = combatTop + combatHeight * (this.isBossBattle ? 0.27 : 0.25);
   const playerY = combatTop + combatHeight * (veryCompact ? 0.74 : 0.75);
 
-  const mainButtonWidth = Math.min(contentWidth - 42, 570);
-  const sideButtonWidth = Math.min((mainButtonWidth - 12) / 2, 278);
+  const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 570);
+  const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 278);
 
   return {
     width,
@@ -1621,6 +1722,8 @@ private getDebuffShortDescription(id: string, power: number) {
       return;
     }
 
+    this.applyNearestFilterToBattleTextures();
+
     const layout = this.getBattleLayout();
     const canUseRaceSkill = !this.isRaceSkillDisabled();
     const canUsePower =
@@ -1629,125 +1732,83 @@ private getDebuffShortDescription(id: string, power: number) {
       player.energy >= this.powerAttackEnergyCost + this.getSkillCostPenalty();
     const canUsePotion = !this.isPotionDisabled() && player.hp < this.getBattleStats().maxHp;
 
-    const panelObjects = this.createRoundedPanel({
-      x: layout.centerX,
-      y: layout.actionPanelY,
-      width: layout.contentWidth,
-      height: layout.actionPanelHeight,
-      radius: layout.veryCompact ? 24 : 34,
-      color: 0x050608,
-      alpha: 0.98,
-      strokeColor: 0x6b5134,
-      strokeAlpha: 0.76,
-      strokeWidth: 2,
-      depth: 18,
-    });
+    const panelWidth = layout.contentWidth;
+    const panelHeight = layout.actionPanelHeight;
 
-    const topY = layout.actionPanelY - layout.actionPanelHeight / 2;
-    const panelLeft = layout.centerX - layout.contentWidth / 2;
-    const panelRight = layout.centerX + layout.contentWidth / 2;
-    const titleY = topY + (layout.veryCompact ? 23 : 29);
+    const panel = this.add.image(
+      layout.centerX,
+      layout.actionPanelY,
+      this.BATTLE_ASSETS.actionPanel.key
+    )
+      .setOrigin(0.5)
+      .setDisplaySize(panelWidth, panelHeight)
+      .setDepth(18)
+      .setAlpha(0.985);
 
-    const altar = this.add.graphics().setDepth(20);
-    altar.fillStyle(0x0d0a08, 0.96);
-    altar.fillRoundedRect(panelLeft + 12, topY + 12, layout.contentWidth - 24, layout.actionPanelHeight - 24, layout.veryCompact ? 18 : 26);
-    altar.fillStyle(0x111722, 0.34);
-    altar.fillRoundedRect(panelLeft + 20, topY + 48, layout.contentWidth - 40, layout.actionPanelHeight - 64, layout.veryCompact ? 14 : 20);
-    altar.lineStyle(1, 0xb9985b, 0.22);
-    altar.strokeRoundedRect(panelLeft + 18, topY + 18, layout.contentWidth - 36, layout.actionPanelHeight - 36, layout.veryCompact ? 15 : 22);
+    this.actionButtons.push(panel);
 
-    const topLine = this.add.rectangle(layout.centerX, titleY + (layout.veryCompact ? 22 : 25), layout.contentWidth - 70, 1, UI.colors.goldDark, 0.32)
-      .setDepth(22);
+    const top = layout.actionPanelY - panelHeight / 2;
+    const panelRight = layout.centerX + panelWidth / 2;
 
-    const actionTitle = this.add.text(layout.centerX, titleY, 'командный алтарь', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '13px' : '16px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'center',
-      letterSpacing: 1,
-      wordWrap: {
-        width: layout.contentWidth - 180,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(23);
+    const energyBadge = this.add.container(
+      panelRight - (layout.veryCompact ? 58 : 66),
+      top + panelHeight * 0.055
+    ).setDepth(29);
 
-    const energyPill = this.add.rectangle(panelRight - (layout.veryCompact ? 58 : 66), titleY, layout.veryCompact ? 82 : 92, layout.veryCompact ? 28 : 32, 0x07121f, 0.96)
-      .setStrokeStyle(1, 0x70a6ff, 0.58)
-      .setDepth(22);
+    const energyBadgeBg = this.add.rectangle(
+      0,
+      0,
+      layout.veryCompact ? 82 : 96,
+      layout.veryCompact ? 24 : 28,
+      0x07121f,
+      0.88
+    ).setStrokeStyle(1, 0x70a6ff, 0.52);
 
-    const energyHint = this.add.text(energyPill.x, titleY, `✦ ${player.energy}`, {
+    const energyHint = this.add.text(0, 0, `✦ ${player.energy}`, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '11px' : '13px',
+      fontSize: layout.veryCompact ? '10px' : '12px',
       color: '#b9d8ff',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
-      wordWrap: {
-        width: energyPill.width - 12,
-      },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(23);
+    }).setOrigin(0.5);
 
-    const leftSigil = this.add.text(panelLeft + (layout.veryCompact ? 34 : 42), titleY, '☾', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '18px' : '22px',
-      color: '#6b4a8c',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(23).setAlpha(0.5);
+    energyBadge.add([energyBadgeBg, energyHint]);
+    this.actionButtons.push(energyBadge);
 
-    const rightSigil = this.add.text(panelRight - (layout.veryCompact ? 116 : 132), titleY, '☾', {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '18px' : '22px',
-      color: '#6b4a8c',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(23).setAlpha(0.5);
+    const gap = layout.veryCompact ? 10 : 14;
+    const sideWidth = layout.sideButtonWidth;
+    const leftX = layout.centerX - sideWidth / 2 - gap / 2;
+    const rightX = layout.centerX + sideWidth / 2 + gap / 2;
+
+    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.165, 48, layout.veryCompact ? 58 : 68);
+    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.145, 42, layout.veryCompact ? 52 : 60);
 
     this.actionButtons.push(
-      panelObjects.shadow,
-      panelObjects.panel,
-      altar,
-      topLine,
-      actionTitle,
-      energyPill,
-      energyHint,
-      leftSigil,
-      rightSigil
-    );
-
-    const primaryHeight = layout.veryCompact ? 56 : layout.compact ? 64 : 72;
-    const gridButtonHeight = layout.veryCompact ? 44 : layout.compact ? 52 : 60;
-    const gap = layout.veryCompact ? 8 : 10;
-    const sideWidth = Math.min((layout.mainButtonWidth - gap) / 2, layout.sideButtonWidth);
-
-    this.actionButtons.push(
-      ...this.createBattleActionButton({
+      ...this.createSpriteBattleButton({
         x: layout.centerX,
         y: layout.attackButtonY,
         width: layout.mainButtonWidth,
         height: primaryHeight,
-        icon: '⚔',
+        textureKey: this.BATTLE_ASSETS.buttons.attack.key,
         title: 'Атака оружием',
         subtitle: 'основное действие',
-        accentColor: UI.colors.gold,
         variant: 'primary',
+        disabled: this.isBusy || this.isBattleEnded,
         onClick: () => this.handleAttack(),
       })
     );
 
     this.actionButtons.push(
-      ...this.createBattleActionButton({
-        x: layout.centerX - sideWidth / 2 - gap / 2,
+      ...this.createSpriteBattleButton({
+        x: leftX,
         y: layout.firstRowY,
         width: sideWidth,
         height: gridButtonHeight,
-        icon: '✦',
+        textureKey: this.BATTLE_ASSETS.buttons.power.key,
         title: 'Сильный удар',
         subtitle: `${this.powerAttackEnergyCost + this.getSkillCostPenalty()} эн.`,
-        accentColor: 0xd08a3b,
         variant: 'heavy',
         disabled: !canUsePower,
         onClick: () => this.handlePowerAttack(),
@@ -1755,30 +1816,29 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     this.actionButtons.push(
-      ...this.createBattleActionButton({
-        x: layout.centerX + sideWidth / 2 + gap / 2,
+      ...this.createSpriteBattleButton({
+        x: rightX,
         y: layout.firstRowY,
         width: sideWidth,
         height: gridButtonHeight,
-        icon: '▣',
+        textureKey: this.BATTLE_ASSETS.buttons.defence.key,
         title: 'Защита',
         subtitle: '+1 энергия',
-        accentColor: 0x70a6ff,
         variant: 'defense',
+        disabled: this.isBusy || this.isBattleEnded,
         onClick: () => this.handleDefend(),
       })
     );
 
     this.actionButtons.push(
-      ...this.createBattleActionButton({
-        x: layout.centerX - sideWidth / 2 - gap / 2,
+      ...this.createSpriteBattleButton({
+        x: leftX,
         y: layout.secondRowY,
         width: sideWidth,
         height: gridButtonHeight,
-        icon: '◆',
+        textureKey: this.getRaceSkillButtonSpriteKey(),
         title: 'Навык расы',
         subtitle: this.getRaceSkillSubtitle(),
-        accentColor: 0xc084fc,
         variant: 'magic',
         disabled: !canUseRaceSkill,
         onClick: () => this.handleRaceSkill(),
@@ -1786,15 +1846,14 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     this.actionButtons.push(
-      ...this.createBattleActionButton({
-        x: layout.centerX + sideWidth / 2 + gap / 2,
+      ...this.createSpriteBattleButton({
+        x: rightX,
         y: layout.secondRowY,
         width: sideWidth,
         height: gridButtonHeight,
-        icon: '✚',
+        textureKey: this.BATTLE_ASSETS.buttons.heal.key,
         title: 'Зелье',
         subtitle: this.getPotionButtonSubtitle(),
-        accentColor: 0x75d184,
         variant: 'heal',
         disabled: !canUsePotion,
         onClick: () => this.handlePotion(),
@@ -1841,209 +1900,119 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
 
-    private createBattleActionButton(config: {
+  private createSpriteBattleButton(config: {
   x: number;
   y: number;
   width: number;
   height: number;
-  icon: string;
+  textureKey: string;
   title: string;
   subtitle: string;
-  accentColor: number;
   disabled?: boolean;
   variant?: 'primary' | 'heavy' | 'defense' | 'magic' | 'heal';
   onClick: () => void;
 }) {
   const disabled = config.disabled ?? false;
-  const variant = config.variant ?? 'primary';
-  const isPrimary = variant === 'primary';
-  const compactButton = config.height <= 52;
-  const radius = isPrimary ? Math.min(24, config.height / 2) : Math.min(16, config.height / 2);
-  const left = config.x - config.width / 2;
-  const top = config.y - config.height / 2;
+  const isPrimary = config.variant === 'primary';
+  const container = this.add.container(config.x, config.y).setDepth(24);
 
-  const baseColor =
-    variant === 'defense'
-      ? 0x071220
-      : variant === 'magic'
-        ? 0x13091f
-        : variant === 'heal'
-          ? 0x07160d
-          : variant === 'heavy'
-            ? 0x1a0d06
-            : 0x17110b;
+  const shadow = this.add.rectangle(
+    0,
+    4,
+    config.width * 0.94,
+    config.height * 0.72,
+    0x000000,
+    disabled ? 0.18 : 0.36
+  );
 
-  const hoverColor =
-    variant === 'defense'
-      ? 0x0c2036
-      : variant === 'magic'
-        ? 0x24133a
-        : variant === 'heal'
-          ? 0x0d2a18
-          : variant === 'heavy'
-            ? 0x2c160a
-            : 0x2b1d10;
+  const buttonImage = this.add.image(0, 0, config.textureKey)
+    .setOrigin(0.5)
+    .setDisplaySize(config.width, config.height)
+    .setAlpha(disabled ? 0.56 : 1);
 
-  const pressedColor =
-    variant === 'defense'
-      ? 0x102b45
-      : variant === 'magic'
-        ? 0x32194f
-        : variant === 'heal'
-          ? 0x123820
-          : variant === 'heavy'
-            ? 0x3b1d0c
-            : 0x3b2814;
+  if (disabled) {
+    buttonImage.setTint(0x6f6f6f);
+  }
 
-  const textColor = disabled ? '#5d5850' : isPrimary ? UI.colors.goldText : UI.colors.text;
-  const subtitleColor = disabled ? '#403d38' : '#9f9788';
+  const textX = -config.width / 2 + (isPrimary
+    ? config.width * 0.185
+    : config.width * 0.245);
+  const rightPadding = isPrimary ? 28 : 16;
+  const textWidth = Math.max(70, config.width / 2 - textX - rightPadding);
+  const titleSize = this.getButtonTitleFontSize(config.width, isPrimary);
+  const subtitleSize = this.getButtonSubtitleFontSize(config.width, isPrimary);
 
-  const objects: Phaser.GameObjects.GameObject[] = [];
+  const titleY = isPrimary ? -config.height * 0.14 : -config.height * 0.16;
+  const subtitleY = isPrimary ? config.height * 0.19 : config.height * 0.20;
 
-  const shadow = this.add.graphics().setDepth(21);
-  const glow = this.add.graphics().setDepth(22);
-  const bg = this.add.graphics().setDepth(23);
-  const trim = this.add.graphics().setDepth(24);
-
-  const drawButton = (
-    fillColor: number,
-    fillAlpha: number,
-    borderAlpha: number,
-    offsetY = 0
-  ) => {
-    shadow.clear();
-    shadow.fillStyle(0x000000, disabled ? 0.18 : 0.4);
-    shadow.fillRoundedRect(left, top + 6 + offsetY, config.width, config.height, radius);
-
-    glow.clear();
-    glow.fillStyle(config.accentColor, disabled ? 0.01 : isPrimary ? 0.14 : 0.045);
-    glow.fillRoundedRect(left - 2, top + 2 + offsetY, config.width + 4, config.height + 4, radius + 2);
-
-    bg.clear();
-    bg.fillStyle(disabled ? 0x09090a : fillColor, disabled ? 0.72 : fillAlpha);
-    bg.fillRoundedRect(left, top + offsetY, config.width, config.height, radius);
-    bg.fillStyle(0x000000, disabled ? 0.26 : 0.18);
-    bg.fillRoundedRect(left + 6, top + 6 + offsetY, config.width - 12, config.height - 12, Math.max(8, radius - 6));
-    bg.fillStyle(config.accentColor, disabled ? 0.025 : isPrimary ? 0.14 : 0.09);
-    bg.fillRoundedRect(left + 8, top + 8 + offsetY, isPrimary ? 54 : 38, config.height - 16, Math.max(8, radius - 8));
-
-    trim.clear();
-    trim.lineStyle(isPrimary ? 2 : 1.5, config.accentColor, disabled ? 0.18 : borderAlpha);
-    trim.strokeRoundedRect(left, top + offsetY, config.width, config.height, radius);
-    trim.lineStyle(1, 0xf0d58a, disabled ? 0.04 : isPrimary ? 0.34 : 0.18);
-    trim.strokeRoundedRect(left + 4, top + 4 + offsetY, config.width - 8, config.height - 8, Math.max(8, radius - 4));
-
-    const corner = isPrimary ? 16 : 12;
-    const inset = isPrimary ? 11 : 9;
-    trim.lineStyle(2, config.accentColor, disabled ? 0.08 : isPrimary ? 0.54 : 0.34);
-    trim.lineBetween(left + inset, top + inset + offsetY, left + inset + corner, top + inset + offsetY);
-    trim.lineBetween(left + inset, top + inset + offsetY, left + inset, top + inset + corner + offsetY);
-    trim.lineBetween(left + config.width - inset, top + inset + offsetY, left + config.width - inset - corner, top + inset + offsetY);
-    trim.lineBetween(left + config.width - inset, top + inset + offsetY, left + config.width - inset, top + inset + corner + offsetY);
-    trim.lineBetween(left + inset, top + config.height - inset + offsetY, left + inset + corner, top + config.height - inset + offsetY);
-    trim.lineBetween(left + inset, top + config.height - inset + offsetY, left + inset, top + config.height - inset - corner + offsetY);
-    trim.lineBetween(left + config.width - inset, top + config.height - inset + offsetY, left + config.width - inset - corner, top + config.height - inset + offsetY);
-    trim.lineBetween(left + config.width - inset, top + config.height - inset + offsetY, left + config.width - inset, top + config.height - inset - corner + offsetY);
-  };
-
-  drawButton(baseColor, 0.98, isPrimary ? 0.94 : 0.68);
-
-  const iconX = left + (isPrimary ? 35 : 26);
-  const iconRadius = isPrimary ? (compactButton ? 18 : 22) : compactButton ? 13 : 16;
-
-  const iconBg = this.add.circle(iconX, config.y, iconRadius, config.accentColor, disabled ? 0.07 : isPrimary ? 0.18 : 0.13)
-    .setStrokeStyle(1, config.accentColor, disabled ? 0.22 : 0.55)
-    .setDepth(25);
-
-  const icon = this.add.text(iconX, config.y, config.icon, {
-    fontFamily: UI.font.body,
-    fontSize: isPrimary ? (compactButton ? '17px' : '20px') : compactButton ? '12px' : '14px',
-    color: disabled ? '#58544d' : UI.colors.goldText,
+  const titleText = this.add.text(textX, titleY, config.title, {
+    fontFamily: UI.font.title,
+    fontSize: titleSize,
+    color: disabled ? '#6d6860' : UI.colors.goldText,
     stroke: '#000000',
     strokeThickness: 3,
-    align: 'center',
-  }).setOrigin(0.5).setDepth(26);
-
-  const textX = left + (isPrimary ? 70 : 50);
-  const textWidth = config.width - (isPrimary ? 94 : 60);
-
-  const title = this.add.text(textX, config.y - (isPrimary ? compactButton ? 8 : 11 : compactButton ? 7 : 9), config.title, {
-    fontFamily: UI.font.title,
-    fontSize: isPrimary
-      ? compactButton ? '17px' : '20px'
-      : config.width < 210
-        ? compactButton ? '10px' : '12px'
-        : compactButton ? '12px' : '14px',
-    color: textColor,
-    stroke: '#000000',
-    strokeThickness: isPrimary ? 4 : 3,
+    align: 'left',
     wordWrap: {
       width: textWidth,
       useAdvancedWrap: true,
     },
     maxLines: 1,
-  }).setOrigin(0, 0.5).setDepth(26);
+  }).setOrigin(0, 0.5);
 
-  const subtitle = this.add.text(textX, config.y + (isPrimary ? compactButton ? 11 : 14 : compactButton ? 9 : 11), config.subtitle, {
+  const subtitleText = this.add.text(textX, subtitleY, config.subtitle, {
     fontFamily: UI.font.body,
-    fontSize: isPrimary
-      ? compactButton ? '10px' : '12px'
-      : config.width < 210
-        ? '9px'
-        : compactButton ? '10px' : '11px',
-    color: subtitleColor,
+    fontSize: subtitleSize,
+    color: disabled ? '#4b4740' : '#b8aa91',
+    stroke: '#000000',
+    strokeThickness: 2,
+    align: 'left',
     wordWrap: {
       width: textWidth,
       useAdvancedWrap: true,
     },
     maxLines: 1,
-  }).setOrigin(0, 0.5).setDepth(26);
+  }).setOrigin(0, 0.5);
 
-  const zone = this.add.zone(config.x, config.y, config.width, config.height).setDepth(30);
-  objects.push(shadow, glow, bg, trim, iconBg, icon, title, subtitle, zone);
+  const zone = this.add.zone(0, 0, config.width, config.height)
+    .setInteractive({ useHandCursor: !disabled });
 
-  const alphaTargets = [shadow, glow, bg, trim, iconBg, icon, title, subtitle];
-  alphaTargets.forEach(object => {
-    object.setAlpha(0);
-    object.y += 4;
-  });
-
-  this.tweens.add({
-    targets: alphaTargets,
-    alpha: disabled ? 0.68 : 1,
-    y: '-=4',
-    duration: 170,
-    ease: 'Sine.easeOut',
-  });
+  container.add([
+    shadow,
+    buttonImage,
+    titleText,
+    subtitleText,
+    zone,
+  ]);
 
   if (!disabled) {
     let isPressed = false;
     let isLocked = false;
+    const baseY = config.y;
 
-    zone.setInteractive({
-      useHandCursor: true,
-    });
-
-    zone.on('pointerover', () => {
-      if (isPressed || isLocked) {
-        return;
-      }
-
-      drawButton(hoverColor, 1, isPrimary ? 1 : 0.86);
-      title.setColor(UI.colors.goldText);
-      glow.setAlpha(1);
-    });
-
-    zone.on('pointerout', () => {
-      isPressed = false;
-
+    const reset = () => {
       if (isLocked) {
         return;
       }
 
-      drawButton(baseColor, 0.98, isPrimary ? 0.94 : 0.68);
-      title.setColor(textColor);
+      isPressed = false;
+      container.setY(baseY);
+      container.setScale(1);
+      buttonImage.setAlpha(1);
+      titleText.setColor(UI.colors.goldText);
+    };
+
+    zone.on('pointerover', () => {
+      if (isLocked) {
+        return;
+      }
+
+      container.setScale(1.015);
+      buttonImage.setAlpha(0.96);
     });
+
+    zone.on('pointerout', reset);
+    zone.on('pointerupoutside', reset);
+    zone.on('pointercancel', reset);
 
     zone.on('pointerdown', () => {
       if (isLocked) {
@@ -2051,15 +2020,10 @@ private getDebuffShortDescription(id: string, power: number) {
       }
 
       isPressed = true;
-      drawButton(pressedColor, 0.96, 1, 2);
-
-      this.tweens.add({
-        targets: [iconBg, icon, title, subtitle],
-        scaleX: 0.97,
-        scaleY: 0.97,
-        duration: 70,
-        ease: 'Sine.easeOut',
-      });
+      container.setY(baseY + 2);
+      container.setScale(0.995);
+      buttonImage.setAlpha(0.86);
+      titleText.setColor('#fff0b8');
     });
 
     zone.on('pointerup', () => {
@@ -2069,60 +2033,142 @@ private getDebuffShortDescription(id: string, power: number) {
 
       isPressed = false;
       isLocked = true;
-      drawButton(hoverColor, 1, 1);
 
       this.tweens.add({
-        targets: [iconBg, icon, title, subtitle],
+        targets: container,
+        y: baseY,
         scaleX: 1,
         scaleY: 1,
-        duration: 90,
-        ease: 'Back.easeOut',
+        duration: 80,
+        ease: 'Linear',
+        onComplete: () => {
+          buttonImage.setAlpha(1);
+          titleText.setColor(UI.colors.goldText);
+          config.onClick();
+        },
       });
 
-      this.time.delayedCall(45, () => {
-        config.onClick();
+      this.time.delayedCall(260, () => {
+        isLocked = false;
       });
-    });
-
-    zone.on('pointerupoutside', () => {
-      isPressed = false;
-
-      if (isLocked) {
-        return;
-      }
-
-      drawButton(baseColor, 0.98, isPrimary ? 0.94 : 0.68);
-      title.setColor(textColor);
-    });
-
-    zone.on('pointercancel', () => {
-      isPressed = false;
-
-      if (isLocked) {
-        return;
-      }
-
-      drawButton(baseColor, 0.98, isPrimary ? 0.94 : 0.68);
-      title.setColor(textColor);
     });
   }
 
-
-  if (isPrimary && !disabled) {
-    this.tweens.add({
-      targets: glow,
-      alpha: 0.68,
-      duration: 1050,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-  }
-
-  return objects;
+  return [container];
 }
 
-private getRaceSkillEnergyCost() {
+  private getButtonTitleFontSize(width: number, isPrimary: boolean) {
+    if (isPrimary) {
+      return width < 430 ? '15px' : width < 520 ? '17px' : '19px';
+    }
+
+    return width < 230 ? '10px' : width < 270 ? '11px' : '13px';
+  }
+
+  private getButtonSubtitleFontSize(width: number, isPrimary: boolean) {
+    if (isPrimary) {
+      return width < 430 ? '10px' : width < 520 ? '11px' : '12px';
+    }
+
+    return width < 230 ? '8px' : width < 270 ? '9px' : '10px';
+  }
+
+  private getRaceSkillButtonSpriteKey() {
+    if (player.raceId === 'tainted_halfblood') return this.BATTLE_ASSETS.buttons.tainted.key;
+    if (player.raceId === 'goblin') return this.BATTLE_ASSETS.buttons.goblin.key;
+    if (player.raceId === 'stoneborn') return this.BATTLE_ASSETS.buttons.stone.key;
+    if (player.raceId === 'night_elf') return this.BATTLE_ASSETS.buttons.elf.key;
+    if (player.raceId === 'demon') return this.BATTLE_ASSETS.buttons.demon.key;
+
+    return this.BATTLE_ASSETS.buttons.human.key;
+  }
+
+  private getPlayerRaceSpriteKey() {
+    if (player.raceId === 'tainted_halfblood') return this.BATTLE_ASSETS.raceSprites.tainted.key;
+    if (player.raceId === 'goblin') return this.BATTLE_ASSETS.raceSprites.goblin.key;
+    if (player.raceId === 'stoneborn') return this.BATTLE_ASSETS.raceSprites.stone.key;
+    if (player.raceId === 'night_elf') return this.BATTLE_ASSETS.raceSprites.elf.key;
+    if (player.raceId === 'demon') return this.BATTLE_ASSETS.raceSprites.demon.key;
+
+    return this.BATTLE_ASSETS.raceSprites.human.key;
+  }
+
+  private fitImageToBox(
+    image: Phaser.GameObjects.Image,
+    maxWidth: number,
+    maxHeight: number,
+    fillMultiplier = 1
+  ) {
+    const frameWidth = image.frame?.realWidth || image.width || 1;
+    const frameHeight = image.frame?.realHeight || image.height || 1;
+    const scale = Math.min(maxWidth / frameWidth, maxHeight / frameHeight) * fillMultiplier;
+
+    image.setScale(scale);
+
+    return image;
+  }
+
+  private createPlayerRaceSprite(
+    x: number,
+    y: number,
+    maxWidth: number,
+    maxHeight: number
+  ) {
+    const container = this.add.container(x, y);
+
+    const platform = this.add.ellipse(
+      0,
+      maxHeight * 0.34,
+      maxWidth * 0.78,
+      Math.max(12, maxHeight * 0.16),
+      0x000000,
+      0.42
+    );
+
+    const platformGlow = this.add.ellipse(
+      0,
+      maxHeight * 0.32,
+      maxWidth * 0.58,
+      Math.max(8, maxHeight * 0.10),
+      UI.colors.gold,
+      0.08
+    );
+
+    const sprite = this.add.image(0, -maxHeight * 0.08, this.getPlayerRaceSpriteKey())
+      .setOrigin(0.5, 0.55);
+
+    this.fitImageToBox(sprite, maxWidth * 1.35, maxHeight * 1.45, 1);
+
+    container.add([platform, platformGlow, sprite]);
+
+    return container;
+  }
+
+  private applyNearestFilterToBattleTextures() {
+    const keys = [
+      this.BATTLE_ASSETS.actionPanel.key,
+      ...Object.values(this.BATTLE_ASSETS.buttons).map(asset => asset.key),
+      ...Object.values(this.BATTLE_ASSETS.raceSprites).map(asset => asset.key),
+    ];
+
+    keys.forEach(key => {
+      const texture = this.textures.get(key);
+
+      if (!texture) {
+        return;
+      }
+
+      try {
+        (texture as any).setFilter?.(Phaser.Textures.FilterMode.NEAREST);
+      } catch {
+        // Phaser версии отличаются по API фильтрации. Если setFilter недоступен,
+        // игра продолжит работать, а pixelArt обычно уже включён в config.
+      }
+    });
+  }
+
+
+  private getRaceSkillEnergyCost() {
   if (player.raceId === 'human') return 3;
   if (player.raceId === 'tainted_halfblood') return 2;
   if (player.raceId === 'stoneborn') return 2;
@@ -3510,18 +3556,35 @@ private getSkillCostPenalty() {
   const iconY = top + (layout.veryCompact ? 43 : 52);
   const iconRadius = isBoss ? (layout.veryCompact ? 31 : 37) : (layout.veryCompact ? 27 : 32);
 
-  const iconBg = this.add.circle(iconX, iconY, iconRadius, isEnemy ? 0x230c0a : 0x21170f, 0.96)
-    .setStrokeStyle(2, strokeColor, isBoss ? 0.88 : 0.62);
+  const identityObjects: Phaser.GameObjects.GameObject[] = [];
 
-  const iconText = this.add.text(iconX, iconY, icon, {
-    fontFamily: UI.font.body,
-    fontSize: isBoss ? (layout.veryCompact ? '25px' : '31px') : (layout.veryCompact ? '21px' : '26px'),
-    color: titleColor,
-    stroke: '#000000',
-    strokeThickness: 3,
-  }).setOrigin(0.5);
+  if (isEnemy) {
+    const iconBg = this.add.circle(iconX, iconY, iconRadius, 0x230c0a, 0.96)
+      .setStrokeStyle(2, strokeColor, isBoss ? 0.88 : 0.62);
 
-  const titleX = left + (layout.veryCompact ? 98 : 112);
+    const iconText = this.add.text(iconX, iconY, icon, {
+      fontFamily: UI.font.body,
+      fontSize: isBoss ? (layout.veryCompact ? '25px' : '31px') : (layout.veryCompact ? '21px' : '26px'),
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
+    identityObjects.push(iconBg, iconText);
+  } else {
+    identityObjects.push(
+      this.createPlayerRaceSprite(
+        left + (layout.veryCompact ? 60 : 72),
+        top + cardHeight * 0.53,
+        layout.veryCompact ? 118 : 148,
+        layout.veryCompact ? 126 : 154
+      )
+    );
+  }
+
+  const titleX = isEnemy
+    ? left + (layout.veryCompact ? 98 : 112)
+    : left + (layout.veryCompact ? 128 : 154);
   const contentRight = right - (layout.veryCompact ? 24 : 28);
   const topBadgeWidth = layout.veryCompact ? 86 : 98;
   const topBadgeHeight = layout.veryCompact ? 24 : 28;
@@ -3632,8 +3695,7 @@ private getSkillCostPenalty() {
     bg,
     sideBar,
     glow,
-    iconBg,
-    iconText,
+    ...identityObjects,
     nameText,
     topBadge,
     topBadgeText,
