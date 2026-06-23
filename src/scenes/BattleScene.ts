@@ -1826,7 +1826,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
     const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.20, 58, layout.veryCompact ? 70 : 82);
-    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.185, 54, layout.veryCompact ? 66 : 76);
+    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.20, 58, layout.veryCompact ? 70 : 82);
 
     this.actionButtons.push(
       ...this.createSpriteBattleButton({
