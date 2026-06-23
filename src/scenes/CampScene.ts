@@ -12,7 +12,6 @@ import {
   hasEnoughSanityForFloor,
   restoreSanityByTime,
 } from '../systems/SanitySystem';
-import { getCachedVKUser, getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
 
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
@@ -99,14 +98,39 @@ export class CampScene extends Phaser.Scene {
     url: new URL('../assets/images/camp/camp_background.png', import.meta.url).href,
   } as const;
 
-  private readonly CAMP_BUTTON_ASSETS = {
-    dungeon: { key: 'campButtonDungeon', url: new URL('../assets/images/camp/buttons/button_dungeon.png', import.meta.url).href },
-    campfire: { key: 'campButtonCampfire', url: new URL('../assets/images/camp/buttons/button_campfire.png', import.meta.url).href },
-    temple: { key: 'campButtonTemple', url: new URL('../assets/images/camp/buttons/button_temple.png', import.meta.url).href },
-    tavern: { key: 'campButtonTavern', url: new URL('../assets/images/camp/buttons/button_tavern.png', import.meta.url).href },
-    quests: { key: 'campButtonQuests', url: new URL('../assets/images/camp/buttons/button_quests.png', import.meta.url).href },
-    market: { key: 'campButtonMarket', url: new URL('../assets/images/camp/buttons/button_market.png', import.meta.url).href },
-    home: { key: 'campButtonHome', url: new URL('../assets/images/camp/buttons/button_home.png', import.meta.url).href },
+  private readonly CAMP_ACTION_ASSETS = {
+    board: {
+      key: 'campActionBoard',
+      url: new URL('../assets/images/camp/ui/oblast1.png', import.meta.url).href,
+    },
+    dungeon: {
+      key: 'campButtonDungeon',
+      url: new URL('../assets/images/camp/ui/VHOD1.png', import.meta.url).href,
+    },
+    campfire: {
+      key: 'campButtonCampfire',
+      url: new URL('../assets/images/camp/ui/KOSTER1.png', import.meta.url).href,
+    },
+    temple: {
+      key: 'campButtonTemple',
+      url: new URL('../assets/images/camp/ui/XRAM1.png', import.meta.url).href,
+    },
+    tavern: {
+      key: 'campButtonTavern',
+      url: new URL('../assets/images/camp/ui/taverna1.png', import.meta.url).href,
+    },
+    quests: {
+      key: 'campButtonQuests',
+      url: new URL('../assets/images/camp/ui/zadania1.png', import.meta.url).href,
+    },
+    market: {
+      key: 'campButtonMarket',
+      url: new URL('../assets/images/camp/ui/rinok1.png', import.meta.url).href,
+    },
+    home: {
+      key: 'campButtonHome',
+      url: new URL('../assets/images/camp/ui/home1.png', import.meta.url).href,
+    },
   } as const;
 
   constructor() {
@@ -118,7 +142,7 @@ export class CampScene extends Phaser.Scene {
       this.load.image(this.CAMP_BACKGROUND_ASSET.key, this.CAMP_BACKGROUND_ASSET.url);
     }
 
-    Object.values(this.CAMP_BUTTON_ASSETS).forEach(asset => {
+    Object.values(this.CAMP_ACTION_ASSETS).forEach(asset => {
       if (!this.textures.exists(asset.key)) {
         this.load.image(asset.key, asset.url);
       }
@@ -140,7 +164,6 @@ export class CampScene extends Phaser.Scene {
     this.createCityCampfireVisualState(layout);
 
     this.createHeader(layout);
-    this.createPlayerLine(layout);
     this.createHeroStatusCard(layout);
     this.createMainActions(layout);
 
@@ -261,8 +284,6 @@ export class CampScene extends Phaser.Scene {
 
   private async prepareStartup() {
     try {
-      await initVKBridge();
-      await getVKUser();
       await loadGameAsync();
     } catch (error) {
       console.warn('CampScene startup failed:', error);
@@ -439,24 +460,6 @@ export class CampScene extends Phaser.Scene {
     this.playPixelIntro([panel.shadow, panel.panel, topLine, bottomLine, title, subtitle], 40);
   }
 
-  private createPlayerLine(layout: CampLayout) {
-    const vkUser = getCachedVKUser();
-    const vkName = vkUser ? vkUser.first_name : 'локальный режим';
-    const y = layout.safeTop + layout.headerHeight - (layout.veryCompact ? 11 : 14);
-    const width = Math.min(layout.contentWidth - 92, 340);
-
-    this.createDarkTag({
-      x: layout.centerX,
-      y,
-      width,
-      height: layout.veryCompact ? 22 : 24,
-      icon: '◆',
-      text: `Игрок: ${vkName}`,
-      accentColor: 0x6e5634,
-      depth: 13,
-    });
-  }
-
   private createHeroStatusCard(layout: CampLayout) {
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
@@ -625,55 +628,43 @@ export class CampScene extends Phaser.Scene {
     const ascensionPoints = this.getAvailableAscensionPoints();
     const hasAscensionPoints = ascensionPoints > 0;
 
-    const panelHeight = layout.actionsHeight;
-    const panelY = layout.actionsTop + panelHeight / 2;
-    const panel = this.createPixelPanel({
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: panelHeight,
-      color: cityCampfireActive ? 0x0b0806 : 0x050608,
-      borderColor: 0x050505,
-      innerColor: cityCampfireActive ? 0x9b642f : 0x5b4932,
-      depth: 4,
-      cut: 12,
-    });
+    const boardWidth = layout.contentWidth + 20;
+    const boardHeight = layout.actionsHeight + 30;
+    const boardY = layout.actionsTop + boardHeight / 2;
+    const board = this.add.container(layout.centerX, boardY).setDepth(8);
 
-    this.createPixelFloor(layout, panelY, panelHeight);
+    const boardBg = this.add.image(0, 0, this.CAMP_ACTION_ASSETS.board.key)
+      .setDisplaySize(boardWidth, boardHeight)
+      .setOrigin(0.5)
+      .setAlpha(cityCampfireActive ? 1 : 0.96);
 
-    const padX = layout.veryCompact ? 8 : layout.compact ? 12 : 16;
-    const padY = layout.veryCompact ? 12 : layout.compact ? 14 : 16;
-    const innerWidth = layout.contentWidth - padX * 2;
-    const availableHeight = Math.max(250, panelHeight - padY * 2);
+    board.add(boardBg);
 
-    const baseGap = layout.veryCompact ? 9 : layout.compact ? 11 : 12;
-    const primaryHeight = layout.veryCompact ? 58 : layout.compact ? 64 : 66;
-    const smallTileHeight = layout.veryCompact ? 50 : layout.compact ? 56 : 58;
-    const wideHeight = layout.veryCompact ? 56 : layout.compact ? 62 : 64;
+    // oblast1.png остаётся прежнего размера. Меняем только кнопки:
+    // они становятся крупнее и попадают в нарисованные слоты области.
+    const sidePadding = layout.veryCompact ? 40 : layout.compact ? 44 : 48;
+    const innerWidth = boardWidth - sidePadding * 2;
+    const columnGap = layout.veryCompact ? 12 : layout.compact ? 16 : 18;
 
-    const fixedContentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + baseGap * 4;
-    const extraHeight = Math.max(0, availableHeight - fixedContentHeight);
-    const gap = Phaser.Math.Clamp(
-      baseGap + Math.floor(extraHeight / 10),
-      baseGap,
-      layout.veryCompact ? 12 : 14
-    );
-    const contentHeight = primaryHeight + smallTileHeight * 2 + wideHeight * 2 + gap * 4;
+    const bigButtonWidth = innerWidth;
+    const smallButtonWidth = Math.floor((innerWidth - columnGap) / 2);
 
-    const topPad = padY + Math.max(0, Math.floor((availableHeight - contentHeight) * 0.12));
+    const dungeonHeight = layout.veryCompact ? 108 : layout.compact ? 116 : 122;
+    const smallHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 118;
+    const wideHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 120;
 
-    const pairGap = layout.veryCompact ? 10 : layout.compact ? 12 : 14;
-    const tileWidth = Math.floor((innerWidth - pairGap) / 2);
-    const leftX = layout.centerX - tileWidth / 2 - pairGap / 2;
-    const rightX = layout.centerX + tileWidth / 2 + pairGap / 2;
+    const leftX = -bigButtonWidth / 2 + smallButtonWidth / 2;
+    const rightX = bigButtonWidth / 2 - smallButtonWidth / 2;
 
-    const primaryY = layout.actionsTop + topPad + primaryHeight / 2;
-    const rowOneY = primaryY + primaryHeight / 2 + gap + smallTileHeight / 2;
-    const rowTwoY = rowOneY + smallTileHeight + gap;
-    const marketY = rowTwoY + smallTileHeight / 2 + gap + wideHeight / 2;
-    const homeY = marketY + wideHeight + gap;
-    const decorationTop = homeY + wideHeight / 2 + Math.max(5, gap - 2);
-    const decorationHeight = Math.max(0, layout.actionsBottom - padY - decorationTop);
+    // Центры слотов подобраны под саму картинку oblast1.png.
+    // Так область не меняет размер, а кнопки попадают в готовые места.
+    const topSlot = -boardHeight * (layout.veryCompact ? 0.260 : 0.265);
+    const row1Y = -boardHeight * (layout.veryCompact ? 0.120 : 0.125);
+    const row2Y = boardHeight * (layout.veryCompact ? 0.020 : 0.015);
+    const marketY = boardHeight * (layout.veryCompact ? 0.160 : 0.155);
+    const homeY = boardHeight * (layout.veryCompact ? 0.300 : 0.295);
+
+    const dungeonY = topSlot;
 
     const dungeonTitle = hasActiveRun || hasActiveCheckpoint
       ? 'Продолжить спуск'
@@ -687,23 +678,21 @@ export class CampScene extends Phaser.Scene {
           ? `Рассудок -${SANITY_COST_PER_FLOOR}`
           : 'Мало рассудка';
 
-    this.createSpriteDungeonButton({
-      layout,
-      x: layout.centerX,
-      y: primaryY,
-      width: innerWidth,
-      height: primaryHeight,
-      textureKey: this.CAMP_BUTTON_ASSETS.dungeon.key,
+    this.createImageActionButton({
+      board,
+      x: 0,
+      y: dungeonY,
+      width: bigButtonWidth,
+      height: dungeonHeight,
+      textureKey: this.CAMP_ACTION_ASSETS.dungeon.key,
       title: dungeonTitle,
       status: dungeonStatus,
-      icon: '☠',
-      baseColor: 0x641f22,
-      topColor: 0xa7483f,
-      bottomColor: 0x2b0d10,
-      borderColor: 0x160708,
-      innerBorderColor: 0xd27a54,
-      textColor: '#ffe3b0',
-      statusColor: '#ffd0b6',
+      titleFontSize: layout.veryCompact ? '17px' : layout.compact ? '20px' : '21px',
+      statusFontSize: layout.veryCompact ? '10px' : '12px',
+      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 108 : layout.compact ? 126 : 140),
+      rightPadding: 50,
+      titleColor: '#fff0c2',
+      statusColor: '#e7c89a',
       highlighted: hasActiveRun || hasActiveCheckpoint,
       onClick: () => {
         this.tryEnterCatacombs();
@@ -711,21 +700,15 @@ export class CampScene extends Phaser.Scene {
       delay: 120,
     });
 
-    const pairedTiles = [
+    const smallButtons = [
       {
         x: leftX,
-        y: rowOneY,
-        textureKey: this.CAMP_BUTTON_ASSETS.campfire.key,
-        icon: '♨',
+        y: row1Y,
+        textureKey: this.CAMP_ACTION_ASSETS.campfire.key,
         title: 'Костёр',
         status: this.getCityCampfireButtonStatus(),
-        baseColor: 0x8f5a18,
-        topColor: 0xd89b35,
-        bottomColor: 0x3b2109,
-        borderColor: 0x151008,
-        innerBorderColor: 0xf0c06a,
-        textColor: '#fff0bd',
-        statusColor: '#ffe1a0',
+        titleColor: '#f6dfae',
+        statusColor: '#d8bd86',
         highlighted: cityCampfireActive,
         onClick: () => {
           this.restAtCampfire();
@@ -733,18 +716,12 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: rightX,
-        y: rowOneY,
-        textureKey: this.CAMP_BUTTON_ASSETS.temple.key,
-        icon: hasAscensionPoints ? '!' : '✦',
+        y: row1Y,
+        textureKey: this.CAMP_ACTION_ASSETS.temple.key,
         title: 'Храм',
         status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
-        baseColor: 0x313d85,
-        topColor: 0x5e6fc0,
-        bottomColor: 0x171b45,
-        borderColor: 0x090b1e,
-        innerBorderColor: 0xb5a1e8,
-        textColor: '#eef0ff',
-        statusColor: '#d8d5ff',
+        titleColor: '#e5ddff',
+        statusColor: '#c8bee8',
         highlighted: hasAscensionPoints,
         onClick: () => {
           this.scene.start('StatsTreeScene');
@@ -752,18 +729,12 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: leftX,
-        y: rowTwoY,
-        textureKey: this.CAMP_BUTTON_ASSETS.tavern.key,
-        icon: '☕',
+        y: row2Y,
+        textureKey: this.CAMP_ACTION_ASSETS.tavern.key,
         title: 'Таверна',
         status: 'Отдых',
-        baseColor: 0x65401e,
-        topColor: 0xa87537,
-        bottomColor: 0x2e1a0c,
-        borderColor: 0x100b08,
-        innerBorderColor: 0xd19a58,
-        textColor: '#ffe0b4',
-        statusColor: '#d7b88d',
+        titleColor: '#f1d0a5',
+        statusColor: '#c7aa80',
         highlighted: false,
         onClick: () => {
           this.scene.start('TavernScene');
@@ -771,18 +742,12 @@ export class CampScene extends Phaser.Scene {
       },
       {
         x: rightX,
-        y: rowTwoY,
-        textureKey: this.CAMP_BUTTON_ASSETS.quests.key,
-        icon: hasQuestReward ? '!' : '◆',
+        y: row2Y,
+        textureKey: this.CAMP_ACTION_ASSETS.quests.key,
         title: 'Задания',
         status: hasQuestReward ? 'Есть награда' : 'Награды',
-        baseColor: 0x255332,
-        topColor: 0x4c8956,
-        bottomColor: 0x102716,
-        borderColor: 0x071008,
-        innerBorderColor: 0xa4d078,
-        textColor: '#e7ffd6',
-        statusColor: '#cbe8ba',
+        titleColor: '#e5f4d5',
+        statusColor: '#bed8a8',
         highlighted: hasQuestReward,
         onClick: () => {
           this.scene.start('QuestScene');
@@ -790,52 +755,48 @@ export class CampScene extends Phaser.Scene {
       },
     ];
 
-    pairedTiles.forEach((tile, index) => {
-      const created = this.createSpriteLocationButton({
-        layout,
-        x: tile.x,
-        y: tile.y,
-        width: tileWidth,
-        height: smallTileHeight,
-        textureKey: tile.textureKey,
-        icon: tile.icon,
-        title: tile.title,
-        status: tile.status,
-        baseColor: tile.baseColor,
-        topColor: tile.topColor,
-        bottomColor: tile.bottomColor,
-        borderColor: tile.borderColor,
-        innerBorderColor: tile.innerBorderColor,
-        textColor: tile.textColor,
-        statusColor: tile.statusColor,
-        highlighted: tile.highlighted,
-        onClick: tile.onClick,
+    smallButtons.forEach((button, index) => {
+      const created = this.createImageActionButton({
+        board,
+        x: button.x,
+        y: button.y,
+        width: smallButtonWidth,
+        height: smallHeight,
+        textureKey: button.textureKey,
+        title: button.title,
+        status: button.status,
+        titleFontSize: layout.veryCompact ? '13px' : layout.compact ? '15px' : '16px',
+        statusFontSize: layout.veryCompact ? '9px' : '10px',
+        textX: -smallButtonWidth / 2 + (layout.veryCompact ? 98 : layout.compact ? 110 : 118),
+        rightPadding: 14,
+        titleColor: button.titleColor,
+        statusColor: button.statusColor,
+        highlighted: button.highlighted,
+        onClick: button.onClick,
         delay: 170 + index * 45,
       });
 
-      if (tile.title === 'Костёр') {
+      if (button.title === 'Костёр') {
         this.restButtonLabel = created.titleText;
         this.restButtonDescription = created.descriptionText;
       }
     });
 
-    this.createSpriteWideLocationButton({
-      layout,
-      x: layout.centerX,
+    this.createImageActionButton({
+      board,
+      x: 0,
       y: marketY,
-      width: innerWidth,
+      width: bigButtonWidth,
       height: wideHeight,
-      textureKey: this.CAMP_BUTTON_ASSETS.market.key,
-      icon: '¤',
+      textureKey: this.CAMP_ACTION_ASSETS.market.key,
       title: 'Рынок',
       status: 'Торговцы',
-      baseColor: 0x7e6120,
-      topColor: 0xc19a3e,
-      bottomColor: 0x332509,
-      borderColor: 0x111008,
-      innerBorderColor: 0xe5c267,
-      textColor: '#fff0b5',
-      statusColor: '#e7d090',
+      titleFontSize: layout.veryCompact ? '16px' : layout.compact ? '18px' : '19px',
+      statusFontSize: layout.veryCompact ? '10px' : '11px',
+      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 92 : layout.compact ? 110 : 124),
+      rightPadding: 50,
+      titleColor: '#f2dfac',
+      statusColor: '#ccb98a',
       highlighted: false,
       onClick: () => {
         this.scene.start('MarketScene');
@@ -843,23 +804,21 @@ export class CampScene extends Phaser.Scene {
       delay: 350,
     });
 
-    this.createSpriteWideLocationButton({
-      layout,
-      x: layout.centerX,
+    this.createImageActionButton({
+      board,
+      x: 0,
       y: homeY,
-      width: innerWidth,
+      width: bigButtonWidth,
       height: wideHeight,
-      textureKey: this.CAMP_BUTTON_ASSETS.home.key,
-      icon: '⌂',
+      textureKey: this.CAMP_ACTION_ASSETS.home.key,
       title: 'Дом',
       status: 'Убежище',
-      baseColor: 0x24354c,
-      topColor: 0x4f6687,
-      bottomColor: 0x111a28,
-      borderColor: 0x070b10,
-      innerBorderColor: 0x9eb2cf,
-      textColor: '#e8f0ff',
-      statusColor: '#bfcbdb',
+      titleFontSize: layout.veryCompact ? '16px' : layout.compact ? '18px' : '19px',
+      statusFontSize: layout.veryCompact ? '10px' : '11px',
+      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 92 : layout.compact ? 110 : 124),
+      rightPadding: 50,
+      titleColor: '#e4edf6',
+      statusColor: '#bcc9d6',
       highlighted: false,
       onClick: () => {
         this.scene.start('HomeScene');
@@ -867,104 +826,12 @@ export class CampScene extends Phaser.Scene {
       delay: 395,
     });
 
-    if (decorationHeight >= 18) {
-      this.createPixelCampGroundDecoration(layout, decorationTop, decorationHeight);
-    }
-
-    this.playPixelIntro([panel.shadow, panel.panel], 80);
+    this.playPixelContainerIntro(board, 80);
     this.startCampfireTimer();
   }
-  private createSpriteWideLocationButton(config: {
-    layout: CampLayout;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    textureKey: string;
-    icon: string;
-    title: string;
-    status: string;
-    baseColor: number;
-    topColor: number;
-    bottomColor: number;
-    borderColor: number;
-    innerBorderColor: number;
-    textColor: string;
-    statusColor: string;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-  }): CampActionButton {
-    return this.createSpriteRpgButton({
-      ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 38, 48),
-      titleFontSize: config.layout.veryCompact ? '16px' : config.layout.compact ? '18px' : '19px',
-      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
-      primary: true,
-    });
-  }
 
-  private createPixelCampGroundDecoration(
-    layout: CampLayout,
-    top: number,
-    height: number
-  ) {
-    const centerY = top + height / 2;
-    const usableWidth = layout.contentWidth - (layout.veryCompact ? 54 : 74);
-    const stoneColor = 0x2b241b;
-    const glowColor = 0xb06a2f;
-
-    this.add.rectangle(layout.centerX, centerY, usableWidth, Math.max(6, height * 0.18), 0x000000, 0.12)
-      .setDepth(6);
-
-    const tileCount = layout.veryCompact ? 5 : 7;
-    for (let i = 0; i < tileCount; i += 1) {
-      const tileX = layout.centerX - usableWidth / 2 + 16 + i * (usableWidth - 32) / Math.max(1, tileCount - 1);
-      const tileY = top + Phaser.Math.Clamp(height * (0.42 + (i % 2) * 0.14), 8, Math.max(10, height - 8));
-      this.add.rectangle(tileX, tileY, layout.veryCompact ? 18 : 24, 3, stoneColor, 0.26).setDepth(7);
-      this.add.rectangle(tileX + 5, tileY + 5, layout.veryCompact ? 10 : 14, 2, stoneColor, 0.18).setDepth(7);
-    }
-
-    if (height >= 30) {
-      const fireX = layout.centerX;
-      const fireY = top + height * 0.58;
-      const ember = this.add.rectangle(fireX, fireY + 7, 42, 5, 0x000000, 0.22).setDepth(7);
-      const flameA = this.add.rectangle(fireX - 5, fireY, 5, 13, glowColor, 0.48).setDepth(8);
-      const flameB = this.add.rectangle(fireX + 2, fireY - 3, 5, 17, 0xd08b3e, 0.42).setDepth(8);
-      const flameC = this.add.rectangle(fireX + 8, fireY + 2, 4, 10, 0x7b391d, 0.5).setDepth(8);
-
-      this.tweens.add({
-        targets: [flameA, flameB, flameC],
-        alpha: { from: 0.28, to: 0.58 },
-        duration: 460,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Linear',
-      });
-
-      this.playPixelIntro([ember, flameA, flameB, flameC], 420);
-    }
-  }
-
-  private createPixelFloor(layout: CampLayout, panelY: number, panelHeight: number) {
-    const top = panelY - panelHeight / 2 + 14;
-    const bottom = panelY + panelHeight / 2 - 14;
-    const left = layout.centerX - layout.contentWidth / 2 + 14;
-    const right = layout.centerX + layout.contentWidth / 2 - 14;
-
-    for (let y = top; y <= bottom; y += 22) {
-      this.add.rectangle(layout.centerX, y, right - left, 1, 0x2a2118, 0.12).setDepth(5);
-    }
-
-    for (let x = left; x <= right; x += 38) {
-      this.add.rectangle(x, panelY, 1, panelHeight - 32, 0x1f1812, 0.09).setDepth(5);
-    }
-
-    this.add.rectangle(layout.centerX, bottom - 16, right - left - 18, 6, 0x000000, 0.18).setDepth(5);
-  }
-
-  private createSpriteDungeonButton(config: {
-    layout: CampLayout;
+  private createImageActionButton(config: {
+    board: Phaser.GameObjects.Container;
     x: number;
     y: number;
     width: number;
@@ -972,115 +839,46 @@ export class CampScene extends Phaser.Scene {
     textureKey: string;
     title: string;
     status: string;
-    icon: string;
-    baseColor: number;
-    topColor: number;
-    bottomColor: number;
-    borderColor: number;
-    innerBorderColor: number;
-    textColor: string;
-    statusColor: string;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-  }) {
-    this.createSpriteRpgButton({
-      ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 12, 40, 50),
-      titleFontSize: config.layout.veryCompact ? '17px' : config.layout.compact ? '19px' : '20px',
-      statusFontSize: config.layout.veryCompact ? '10px' : '11px',
-      primary: true,
-    });
-  }
-
-  private createSpriteLocationButton(config: {
-    layout: CampLayout;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    textureKey: string;
-    icon: string;
-    title: string;
-    status: string;
-    baseColor: number;
-    topColor: number;
-    bottomColor: number;
-    borderColor: number;
-    innerBorderColor: number;
-    textColor: string;
-    statusColor: string;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-  }): CampActionButton {
-    return this.createSpriteRpgButton({
-      ...config,
-      iconBoxSize: Phaser.Math.Clamp(config.height - 14, 32, 40),
-      titleFontSize: config.layout.veryCompact ? '13px' : config.layout.compact ? '15px' : '16px',
-      statusFontSize: config.layout.veryCompact ? '9px' : '10px',
-      primary: false,
-    });
-  }
-
-  private createSpriteRpgButton(config: {
-    layout: CampLayout;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    textureKey: string;
-    icon: string;
-    title: string;
-    status: string;
-    baseColor: number;
-    topColor: number;
-    bottomColor: number;
-    borderColor: number;
-    innerBorderColor: number;
-    textColor: string;
-    statusColor: string;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-    iconBoxSize: number;
     titleFontSize: string;
     statusFontSize: string;
-    primary: boolean;
+    textX: number;
+    rightPadding: number;
+    titleColor: string;
+    statusColor: string;
+    highlighted: boolean;
+    onClick: () => void;
+    delay: number;
   }): CampActionButton {
-    const container = this.add.container(config.x, config.y).setDepth(9);
-    const shadow = this.add.image(0, 4, config.textureKey)
-      .setDisplaySize(config.width, config.height)
-      .setTint(0x000000)
-      .setAlpha(0.32);
+    const container = this.add.container(config.x, config.y);
 
-    const buttonImage = this.add.image(0, 0, config.textureKey)
-      .setDisplaySize(config.width, config.height)
-      .setAlpha(config.highlighted ? 1 : 0.96);
-
-    const accentGlow = this.add.rectangle(
+    const glow = this.add.rectangle(
       0,
       0,
-      config.width - 12,
-      Math.max(10, config.height - 12),
-      config.innerBorderColor,
-      config.highlighted ? 0.075 : 0.025
+      config.width - 16,
+      Math.max(10, config.height - 14),
+      0xf0a64a,
+      config.highlighted ? 0.045 : 0
     );
 
-    const textX = -config.width / 2 + (config.primary
-      ? Phaser.Math.Clamp(Math.round(config.width * 0.24), 88, 116)
-      : Phaser.Math.Clamp(Math.round(config.width * 0.34), 58, 78));
-    const textRightPad = config.primary ? 50 : 16;
-    const textWidth = Math.max(78, config.width / 2 - textX - textRightPad);
-    const titleOffsetY = -config.height * 0.16;
-    const statusOffsetY = config.height * 0.18;
+    const buttonImage = this.add.image(0, 0, config.textureKey)
+      .setOrigin(0.5)
+      .setDisplaySize(config.width, config.height)
+      .setAlpha(config.highlighted ? 1 : 0.97);
 
-    const titleText = this.add.text(textX, titleOffsetY, config.title, {
+    const textWidth = Math.max(
+      70,
+      config.width / 2 - config.textX - config.rightPadding
+    );
+
+    const titleY = -config.height * 0.15;
+    const statusY = config.height * 0.18;
+
+    const titleText = this.add.text(config.textX, titleY, config.title, {
       fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.titleFontSize,
-      color: config.textColor,
+      color: config.titleColor,
       stroke: '#000000',
-      strokeThickness: 1,
+      strokeThickness: 2,
       wordWrap: {
         width: textWidth,
         useAdvancedWrap: true,
@@ -1088,7 +886,7 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const statusText = this.add.text(textX, statusOffsetY, config.status, {
+    const statusText = this.add.text(config.textX, statusY, config.status, {
       fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.statusFontSize,
       color: config.statusColor,
@@ -1101,43 +899,38 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5);
 
-    const marker = this.add.text(config.width / 2 - (config.primary ? 24 : 12), 0, config.primary ? '›' : '▪', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: config.primary ? '25px' : '12px',
-      color: config.statusColor,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setAlpha(config.primary ? 0.8 : 0.55);
-
     container.add([
-      shadow,
+      glow,
       buttonImage,
-      accentGlow,
       titleText,
       statusText,
-      marker,
     ]);
 
-    this.playPixelContainerIntro(container, config.delay);
+    config.board.add(container);
 
-    this.createSpritePressZone({
+    // ВАЖНО:
+    // press zone создаётся ДО intro-анимации.
+    // Тогда baseY в createImagePressZone запоминается правильно,
+    // и кнопка не остаётся съехавшей вниз после pointerout.
+    this.createImagePressZone({
       container,
       width: config.width,
       height: config.height,
-      shadow,
       buttonImage,
-      accentGlow,
+      glow,
       onClick: config.onClick,
     });
 
+    this.playPixelContainerIntro(container, config.delay);
+
     if (config.highlighted) {
       this.tweens.add({
-        targets: [buttonImage, accentGlow, marker],
-        alpha: { from: 0.74, to: 1 },
-        duration: 520,
+        targets: [buttonImage, glow],
+        alpha: { from: 0.78, to: 1 },
+        duration: 560,
         yoyo: true,
         repeat: -1,
-        ease: 'Linear',
+        ease: 'Sine.easeInOut',
       });
     }
 
@@ -1147,18 +940,18 @@ export class CampScene extends Phaser.Scene {
     };
   }
 
-  private createSpritePressZone(config: {
+  private createImagePressZone(config: {
     container: Phaser.GameObjects.Container;
     width: number;
     height: number;
-    shadow: Phaser.GameObjects.Image;
     buttonImage: Phaser.GameObjects.Image;
-    accentGlow: Phaser.GameObjects.Rectangle;
+    glow: Phaser.GameObjects.Rectangle;
     onClick: () => void;
   }) {
     let isPressed = false;
     let isLocked = false;
     const baseY = config.container.y;
+
     const zone = this.add.zone(0, 0, config.width, config.height)
       .setInteractive({ useHandCursor: true });
 
@@ -1168,18 +961,16 @@ export class CampScene extends Phaser.Scene {
       if (isLocked) return;
       isPressed = false;
       config.container.setY(baseY);
-      config.shadow.setAlpha(0.32);
       config.buttonImage.setAlpha(1);
-      config.accentGlow.setAlpha(config.buttonImage.alpha >= 1 ? 0.05 : 0.025);
+      config.glow.setAlpha(0);
     };
 
     zone.on('pointerdown', () => {
       if (isLocked) return;
       isPressed = true;
       config.container.setY(baseY + 2);
-      config.shadow.setAlpha(0.14);
       config.buttonImage.setAlpha(0.9);
-      config.accentGlow.setAlpha(0.1);
+      config.glow.setAlpha(0.08);
     });
 
     zone.on('pointerout', reset);
@@ -1196,9 +987,8 @@ export class CampScene extends Phaser.Scene {
         duration: 90,
         ease: 'Linear',
         onComplete: () => {
-          config.shadow.setAlpha(0.32);
           config.buttonImage.setAlpha(1);
-          config.accentGlow.setAlpha(config.buttonImage.alpha >= 1 ? 0.05 : 0.025);
+          config.glow.setAlpha(0);
           config.onClick();
         },
       });
