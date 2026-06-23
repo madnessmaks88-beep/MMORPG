@@ -5083,7 +5083,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       .setStrokeStyle(3, 0xf0d58a);
 
     this.add.text(width / 2, 390, 'Путь открыт', {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.body,
       fontSize: '42px',
       color: '#f0d58a',
       stroke: '#000000',
@@ -5095,7 +5095,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
       500,
       `Ты снова победил финального босса прошлого яруса.\nТеперь можно начать ${targetTier}-й ярус с ${startFloor} этажа.`,
       {
-        fontFamily: 'Arial',
+        fontFamily: UI.font.body,
         fontSize: '23px',
         color: '#d8c7a3',
         align: 'center',

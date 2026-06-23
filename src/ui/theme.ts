@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
 
+export const GAME_FONT_FACE_NAME = 'PixeloidMono';
+export const GAME_FONT_FAMILY = `"${GAME_FONT_FACE_NAME}", monospace`;
+export const GAME_FONT_ASSET_URL = new URL('../assets/fonts/PixeloidMono.ttf', import.meta.url).href;
+
+let gameFontPromise: Promise<void> | undefined;
+
 export const UI = {
   colors: {
     bg: 0x070605,
@@ -27,10 +33,93 @@ export const UI = {
   },
 
   font: {
-    title: 'Arial',
-    body: 'Arial',
+    title: GAME_FONT_FAMILY,
+    body: GAME_FONT_FAMILY,
+    button: GAME_FONT_FAMILY,
   },
 };
+
+
+export async function loadGameUIFont() {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !document.fonts) {
+    return;
+  }
+
+  if (!gameFontPromise) {
+    gameFontPromise = new Promise<void>((resolve) => {
+      const styleId = 'catacombs-pixeloid-mono-font';
+
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+@font-face {
+  font-family: "${GAME_FONT_FACE_NAME}";
+  src: url("${GAME_FONT_ASSET_URL}") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}`;
+        document.head.appendChild(style);
+      }
+
+      const font = new FontFace(
+        GAME_FONT_FACE_NAME,
+        `url("${GAME_FONT_ASSET_URL}") format("truetype")`,
+        {
+          weight: '400',
+          style: 'normal',
+        }
+      );
+
+      font.load()
+        .then(loadedFont => {
+          document.fonts.add(loadedFont);
+          return document.fonts.load(`18px "${GAME_FONT_FACE_NAME}"`);
+        })
+        .then(() => document.fonts.ready)
+        .then(() => {
+          console.info(`[UI] Game font loaded: ${GAME_FONT_FACE_NAME}`);
+          resolve();
+        })
+        .catch(error => {
+          console.warn(
+            'Game UI font was not loaded. Check this file exists: src/assets/fonts/PixeloidMono.ttf',
+            error
+          );
+          resolve();
+        });
+    });
+  }
+
+  await gameFontPromise;
+}
+
+export function applyGameUIFontToScene(scene: Phaser.Scene) {
+  const applyToObject = (object: Phaser.GameObjects.GameObject) => {
+    if (object instanceof Phaser.GameObjects.Text) {
+      object.setFontFamily(GAME_FONT_FAMILY);
+      object.updateText();
+      return;
+    }
+
+    if (object instanceof Phaser.GameObjects.Container) {
+      object.list.forEach(child => {
+        applyToObject(child as Phaser.GameObjects.GameObject);
+      });
+    }
+  };
+
+  scene.children.list.forEach(child => {
+    applyToObject(child);
+  });
+
+  scene.time.delayedCall(80, () => {
+    scene.children.list.forEach(child => {
+      applyToObject(child);
+    });
+  });
+}
 
 export function createSceneBackground(scene: Phaser.Scene) {
   const { width, height } = scene.scale;

@@ -226,14 +226,14 @@ export class CampScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x8b6a3f, 0.75);
 
     const title = this.add.text(0, -24, 'Загрузка героя', {
-      fontFamily: 'monospace',
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '18px',
       color: '#e0c585',
       align: 'center',
     }).setOrigin(0.5);
 
     const subtitle = this.add.text(0, 18, 'получаем сохранение Supabase...', {
-      fontFamily: 'monospace',
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '12px',
       color: '#9f9078',
       align: 'center',
@@ -1127,7 +1127,7 @@ export class CampScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xff4c4c, 0.85);
 
     this.add.text(width / 2, height / 2 - 48, 'CampScene не смогла отрисоваться', {
-      fontFamily: 'monospace',
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '18px',
       color: '#ffd0d0',
       align: 'center',
@@ -1138,7 +1138,7 @@ export class CampScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(5001);
 
     this.add.text(width / 2, height / 2 + 24, message, {
-      fontFamily: 'monospace',
+      fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: '12px',
       color: '#ffffff',
       align: 'center',

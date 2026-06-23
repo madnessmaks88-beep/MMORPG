@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { player } from '../data/player';
 import { saveGameAsync } from '../systems/SaveSystem';
 import { restoreSanityByTime } from '../systems/SanitySystem';
+import { UI } from '../ui/theme';
 
 type TavernCategory = 'drinks' | 'food';
 
@@ -265,7 +266,7 @@ export class TavernScene extends Phaser.Scene {
 
   private createHeader(layout: TavernLayout) {
     const title = this.add.text(layout.centerX, layout.headerY - 10, 'Таверна у катакомб', {
-      fontFamily: 'Georgia, Times New Roman, serif',
+      fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '25px' : '29px',
       color: '#d2b87a',
       stroke: '#120b06',
@@ -276,7 +277,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(4).setAlpha(0);
 
     const subtitle = this.add.text(layout.centerX, layout.headerY + 22, 'тёплый свет перед холодом глубин', {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '12px' : '13px',
       color: '#8f887b',
       align: 'center',
@@ -323,7 +324,7 @@ export class TavernScene extends Phaser.Scene {
       .setDepth(6);
 
     this.sanityText = this.add.text(layout.centerX, barY - 1, `Рассудок ${player.sanity}/${player.maxSanity}`, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '11px' : '12px',
       color: '#d9d2c6',
       stroke: '#000000',
@@ -334,7 +335,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(7);
 
     this.sanityHintText = this.add.text(layout.centerX, barY + 21, this.getSanityHint(), {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: '#8f887b',
       align: 'center',
@@ -350,7 +351,7 @@ export class TavernScene extends Phaser.Scene {
     bg.setStrokeStyle(1, 0x4b3928, 0.72);
 
     const text = this.add.text(x, y, `${label}: ${value}`, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '12px',
       color: '#d1c7b4',
       align: 'center',
@@ -372,7 +373,7 @@ export class TavernScene extends Phaser.Scene {
     this.createCategoryTab(rightX, layout.tabsY, tabWidth, layout.tabHeight, 'Еда', 'food');
 
     this.categoryStatusText = this.add.text(layout.centerX, layout.tabsY + layout.tabHeight / 2 + 14, this.getCategoryStatusText(), {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: '#9d927f',
       align: 'center',
@@ -396,7 +397,7 @@ export class TavernScene extends Phaser.Scene {
     bg.setStrokeStyle(selected ? 2 : 1, selected ? 0xd2b87a : 0x4b3928, selected ? 0.84 : 0.54);
 
     const text = this.add.text(x, y, label, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '14px',
       color: selected ? '#f0d28a' : '#9f9585',
       align: 'center',
@@ -492,14 +493,14 @@ export class TavernScene extends Phaser.Scene {
     const titleY = y - height / 2 + (layout.veryCompact ? 16 : 18);
 
     const icon = this.add.text(iconX, y - 6, item.icon, {
-      fontFamily: 'Georgia, Times New Roman, serif',
+      fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '25px' : '30px',
       color: disabled ? '#6f675f' : '#d2b87a',
       align: 'center',
     }).setOrigin(0.5).setDepth(9);
 
     const title = this.add.text(titleX, titleY, item.name, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '14px' : '16px',
       color: disabled ? '#8f887b' : '#e0cfaa',
       fontStyle: 'bold',
@@ -508,7 +509,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(9);
 
     const description = this.add.text(titleX, titleY + (layout.veryCompact ? 18 : 21), item.description, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: disabled ? '#706b65' : '#9f9585',
       wordWrap: { width: width - 156, useAdvancedWrap: true },
@@ -516,7 +517,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(9);
 
     const effectText = this.add.text(titleX, y + height / 2 - (layout.veryCompact ? 23 : 27), this.getEffectLabel(item), {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: disabled ? '#726a7c' : '#b6a6d2',
       wordWrap: { width: width - 156, useAdvancedWrap: true },
@@ -524,7 +525,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(9);
 
     const price = this.add.text(left + width - 76, titleY, `${item.price} зол.`, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '11px' : '12px',
       color: canAfford ? '#d2b87a' : '#c05a4b',
       align: 'right',
@@ -550,7 +551,7 @@ export class TavernScene extends Phaser.Scene {
           : 'Мало зол.';
 
     const buyLabel = this.add.text(buttonX, buttonY, buyLabelText, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '10px' : '11px',
       color: disabled ? '#8f887b' : '#f0d28a',
       align: 'center',
@@ -566,7 +567,7 @@ export class TavernScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(10);
       cooldownText = this.add.text(x, y + height / 2 - 12, `Доступно через ${this.formatCooldown(this.getCategoryCooldownLeft(item.category))}`, {
-        fontFamily: 'Arial, sans-serif',
+        fontFamily: UI.font.body,
         fontSize: layout.veryCompact ? '10px' : '11px',
         color: '#c7b784',
         align: 'center',
@@ -661,7 +662,7 @@ export class TavernScene extends Phaser.Scene {
       .setDepth(31);
 
     const text = this.add.text(layout.centerX, layout.bottomButtonY, '← Вернуться в город', {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: layout.veryCompact ? '15px' : '16px',
       color: '#f0d28a',
       align: 'center',
@@ -767,7 +768,7 @@ export class TavernScene extends Phaser.Scene {
     panel.setStrokeStyle(2, 0xb9985b, 0.76);
 
     const title = this.add.text(0, -104, `Купить: ${item.name}?`, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '18px',
       color: '#f0d28a',
       align: 'center',
@@ -776,7 +777,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(52);
 
     const body = this.add.text(0, -28, `Цена: ${item.price} золота\nЭффект: ${this.getEffectLabel(item).toLowerCase()}\n\nПосле покупки категория будет закрыта на 4 часа.`, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '13px',
       color: '#d1c7b4',
       align: 'center',
@@ -863,7 +864,7 @@ export class TavernScene extends Phaser.Scene {
     panel.setStrokeStyle(2, 0xb9985b, 0.72);
 
     const title = this.add.text(0, -58, titleText, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '18px',
       color: '#f0d28a',
       align: 'center',
@@ -872,7 +873,7 @@ export class TavernScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(52);
 
     const body = this.add.text(0, -10, message, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '13px',
       color: '#d1c7b4',
       align: 'center',
@@ -931,7 +932,7 @@ export class TavernScene extends Phaser.Scene {
     bg.setStrokeStyle(1, strokeColor, 0.78);
 
     const text = this.add.text(x, y, label, {
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: UI.font.body,
       fontSize: '13px',
       color: '#f0d28a',
       align: 'center',

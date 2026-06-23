@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { player } from '../data/player';
 import { loadGameAsync } from '../systems/SaveSystem';
 import { getVKUser, initVKBridge } from '../systems/VKBridgeSystem';
+import { UI, applyGameUIFontToScene, loadGameUIFont } from '../ui/theme';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -10,7 +11,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create() {
+    const fontLoadPromise = loadGameUIFont();
+
     this.createLoadingText();
+
+    void fontLoadPromise.then(() => {
+      applyGameUIFontToScene(this);
+    });
 
     try {
       await initVKBridge();
@@ -27,10 +34,12 @@ export class BootScene extends Phaser.Scene {
       );
 
       if (loadResult.cloudFailed && !loadResult.hasSave && !isLocalDev) {
+        await fontLoadPromise;
         this.showCloudLoadError();
         return;
       }
 
+      await fontLoadPromise;
       this.goNext();
     } catch (error) {
       console.warn('Boot loading failed:', error);
@@ -44,7 +53,7 @@ export class BootScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height / 2, width, height, 0x050607, 1);
 
     this.add.text(width / 2, height / 2, 'Загрузка сохранения...', {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.title,
       fontSize: '22px',
       color: '#d8c088',
       align: 'center',
@@ -68,7 +77,7 @@ export class BootScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height / 2, width, height, 0x050607, 1);
 
     this.add.text(width / 2, height / 2 - 86, 'Не удалось загрузить сохранение', {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.title,
       fontSize: '25px',
       color: '#d8c088',
       align: 'center',
@@ -82,7 +91,7 @@ export class BootScene extends Phaser.Scene {
       height / 2 - 20,
       'VK Storage временно не ответил.\nЧтобы не сбросить прогресс, новая игра не запускается.\nПопробуй загрузить ещё раз.',
       {
-        fontFamily: 'Arial',
+        fontFamily: UI.font.body,
         fontSize: '17px',
         color: '#b8aa91',
         align: 'center',
@@ -101,7 +110,7 @@ export class BootScene extends Phaser.Scene {
       });
 
     const label = this.add.text(width / 2, buttonY, 'Загрузить ещё раз', {
-      fontFamily: 'Arial',
+      fontFamily: UI.font.body,
       fontSize: '20px',
       color: '#f0d58a',
     }).setOrigin(0.5);
