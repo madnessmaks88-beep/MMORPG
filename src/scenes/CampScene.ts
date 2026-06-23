@@ -269,27 +269,6 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private async prepareStartupOnce() {
-    if (CampScene.startupPrepared) {
-      return;
-    }
-
-    if (!CampScene.startupPromise) {
-      CampScene.startupPromise = this.prepareStartup();
-    }
-
-    await CampScene.startupPromise;
-    CampScene.startupPrepared = true;
-  }
-
-  private async prepareStartup() {
-    try {
-      await loadGameAsync();
-    } catch (error) {
-      console.warn('CampScene startup failed:', error);
-    }
-  }
-
   private getLayout(): CampLayout {
     const { width, height } = this.scale;
 
@@ -828,6 +807,48 @@ export class CampScene extends Phaser.Scene {
 
     this.playPixelContainerIntro(board, 80);
     this.startCampfireTimer();
+  }
+
+  private async prepareStartupOnce() {
+    if (CampScene.startupPrepared) {
+      return;
+    }
+
+    if (!CampScene.startupPromise) {
+      CampScene.startupPromise = this.prepareStartup()
+        .catch(error => {
+          console.warn('CampScene startup failed:', error);
+        })
+        .finally(() => {
+          CampScene.startupPrepared = true;
+        });
+    }
+
+    await CampScene.startupPromise;
+  }
+
+  private async prepareStartup() {
+    let timeoutId: number | undefined;
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = window.setTimeout(() => {
+        console.warn('CampScene startup timeout. Continue without blocking scene.');
+        resolve();
+      }, 2500);
+    });
+
+    try {
+      await Promise.race([
+        loadGameAsync(),
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      console.warn('CampScene loadGameAsync failed. Continue with current/local data:', error);
+    } finally {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    }
   }
 
   private createImageActionButton(config: {
