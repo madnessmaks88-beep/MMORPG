@@ -199,6 +199,9 @@ export class BattleScene extends Phaser.Scene {
   private returnToDungeon = false;
   private isBattleEnded = false;
   private isBusy = false;
+  private combatAnimationLocked = false;
+  private lastBattleUiSaveAt = 0;
+  private readonly battleUiSaveMinIntervalMs = 1400;
 
   private humanPassiveActivated = false;
 
@@ -389,6 +392,8 @@ export class BattleScene extends Phaser.Scene {
   this.returnToDungeon = data?.returnToDungeon ?? false;
   this.isBattleEnded = false;
   this.isBusy = false;
+  this.combatAnimationLocked = false;
+  this.lastBattleUiSaveAt = 0;
   this.battleLogLines = [];
   this.battleLogLineObjects = [];
   this.battleLogDragging = false;
@@ -1738,6 +1743,11 @@ private getDebuffShortDescription(id: string, power: number) {
   private createActionButtons() {
     this.actionButtons.forEach(object => {
       this.tweens.killTweensOf(object);
+
+      if ('removeAllListeners' in object && typeof (object as any).removeAllListeners === 'function') {
+        (object as any).removeAllListeners();
+      }
+
       object.destroy();
     });
     this.actionButtons = [];
@@ -1884,15 +1894,17 @@ private getDebuffShortDescription(id: string, power: number) {
       })
     );
 
-    this.tweens.add({
-      targets: this.actionButtons,
-      alpha: {
-        from: 0,
-        to: 1,
-      },
-      duration: 190,
-      ease: 'Sine.easeOut',
-    });
+    if (!this.isBusy) {
+      this.tweens.add({
+        targets: this.actionButtons,
+        alpha: {
+          from: 0,
+          to: 1,
+        },
+        duration: 150,
+        ease: 'Sine.easeOut',
+      });
+    }
   }
 
   private getPotionButtonSubtitle() {
@@ -2366,7 +2378,6 @@ private handleHumanSkill() {
 
   this.appendBattleLog(playerActionText);
   this.updateTexts();
-  this.createActionButtons();
 
   this.time.delayedCall(450, () => {
     this.enemyTurn(playerActionText, false);
@@ -2429,7 +2440,6 @@ private handleStonebornSkill() {
 
   this.appendBattleLog(playerActionText);
   this.updateTexts();
-  this.createActionButtons();
 
   this.time.delayedCall(450, () => {
     this.enemyTurn(playerActionText, false);
@@ -2450,7 +2460,6 @@ private handleNightElfSkill() {
 
   this.appendBattleLog(playerActionText);
   this.updateTexts();
-  this.createActionButtons();
 
   this.time.delayedCall(450, () => {
     this.enemyTurn(playerActionText, false);
@@ -2472,7 +2481,6 @@ private handleGoblinSkill() {
 
   this.appendBattleLog(playerActionText);
   this.updateTexts();
-  this.createActionButtons();
 
   this.time.delayedCall(450, () => {
     this.enemyTurn(playerActionText, false);
@@ -3302,7 +3310,9 @@ private getSkillCostPenalty() {
       '#ff6b6b'
     );
 
-    this.animateHit(this.enemyCard);
+    if (!this.combatAnimationLocked) {
+      this.animateHit(this.enemyCard);
+    }
   }
 
   private afterPlayerAttack(
@@ -3318,7 +3328,6 @@ private getSkillCostPenalty() {
     }
 
     this.updateTexts();
-    this.createActionButtons();
 
     if (this.enemy.hp <= 0) {
       this.handleVictory(playerActionText);
@@ -4886,9 +4895,11 @@ private renderEnemyEffectChips() {
   }
 
   private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal') {
-    if (!this.playerCard || !this.enemyCard || this.isBattleEnded) {
+    if (!this.playerCard || !this.enemyCard || this.isBattleEnded || this.combatAnimationLocked) {
       return;
     }
+
+    this.combatAnimationLocked = true;
 
     const playerBase = this.getCardBasePosition(this.playerCard);
     const enemyBase = this.getCardBasePosition(this.enemyCard);
@@ -4915,6 +4926,7 @@ private renderEnemyEffectChips() {
     });
 
     if (this.isBattleEnded) {
+      this.combatAnimationLocked = false;
       return;
     }
 
@@ -4941,6 +4953,7 @@ private renderEnemyEffectChips() {
         onComplete: () => {
           this.playerCard?.setPosition(playerBase.x, playerBase.y);
           this.playerCard?.setAngle(0);
+          this.combatAnimationLocked = false;
           resolve();
         },
       });
@@ -4948,9 +4961,11 @@ private renderEnemyEffectChips() {
   }
 
   private async playEnemyAttackAnimation() {
-    if (!this.enemyCard || !this.playerCard || this.isBattleEnded) {
+    if (!this.enemyCard || !this.playerCard || this.isBattleEnded || this.combatAnimationLocked) {
       return;
     }
+
+    this.combatAnimationLocked = true;
 
     const enemyBase = this.getCardBasePosition(this.enemyCard);
     const playerBase = this.getCardBasePosition(this.playerCard);
@@ -4974,6 +4989,7 @@ private renderEnemyEffectChips() {
     });
 
     if (this.isBattleEnded) {
+      this.combatAnimationLocked = false;
       return;
     }
 
@@ -5000,6 +5016,7 @@ private renderEnemyEffectChips() {
         onComplete: () => {
           this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
           this.enemyCard?.setAngle(0);
+          this.combatAnimationLocked = false;
           resolve();
         },
       });
@@ -5053,11 +5070,19 @@ private renderEnemyEffectChips() {
   }
 
   private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal') {
-    void this.playPlayerAttackAnimation(kind);
+    void this.playPlayerAttackAnimation(kind)
+      .catch(error => {
+        console.warn('Player attack animation failed:', error);
+        this.combatAnimationLocked = false;
+      });
   }
 
   private animateEnemyAttack() {
-    void this.playEnemyAttackAnimation();
+    void this.playEnemyAttackAnimation()
+      .catch(error => {
+        console.warn('Enemy attack animation failed:', error);
+        this.combatAnimationLocked = false;
+      });
   }
 
   private animateHit(target: Phaser.GameObjects.Container) {
@@ -5148,7 +5173,6 @@ private renderEnemyEffectChips() {
     }
 
     this.isBusy = true;
-    this.createActionButtons();
 
     const equippedWeapon = getEquippedWeapon(player);
     const weapon = equippedWeapon?.item;
@@ -6189,7 +6213,6 @@ ${daggerTreeCritTexts.join('\n')}`
     );
 
     this.updateTexts();
-    this.createActionButtons();
 
     void saveGameAsync();
 
@@ -6347,7 +6370,9 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
         isDefending ? '#70a6ff' : '#ff6b6b'
       );
 
-      this.animateHit(this.playerCard);
+      if (!this.combatAnimationLocked) {
+        this.animateHit(this.playerCard);
+      }
       this.shakeBattle();
 
       const energyBlocked = this.hasPlayerDebuff('energy_block');
@@ -6404,6 +6429,22 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
     }
   }
 
+  private requestThrottledBattleAutoSave(reason: string) {
+    if (this.isBattleEnded || !this.enemy || player.hp <= 0 || this.enemy.hp <= 0) {
+      return;
+    }
+
+    const now = this.time.now;
+
+    if (now - this.lastBattleUiSaveAt < this.battleUiSaveMinIntervalMs) {
+      return;
+    }
+
+    this.lastBattleUiSaveAt = now;
+    this.rememberBattleResumePoint(reason);
+    requestAutoSave(reason);
+  }
+
   private updateTexts() {
    const stats = this.getBattleStats();
 
@@ -6452,9 +6493,6 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
     this.renderEnemyEffectChips();
     this.updateStatusText();
 
-    if (!this.isBattleEnded && player.hp > 0 && this.enemy.hp > 0) {
-      this.rememberBattleResumePoint('battle-update');
-      requestAutoSave('battle-update');
-    }
+    this.requestThrottledBattleAutoSave('battle-update');
   }
 }
