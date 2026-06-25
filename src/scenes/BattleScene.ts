@@ -496,14 +496,10 @@ export class BattleScene extends Phaser.Scene {
 
 
   private configurePixelSpriteRendering() {
+    // Важно: НЕ ставим canvas.style.imageRendering = 'pixelated'.
+    // Иначе пикселизируется весь canvas, включая Phaser Text, и текст становится ребристым.
+    // Pixel-perfect для PNG делаем через texture.setFilter(NEAREST) в applyNearestFilterToBattleTextures().
     this.cameras.main.roundPixels = true;
-
-    const canvas = this.game.canvas;
-
-    if (canvas) {
-      canvas.style.imageRendering = 'pixelated';
-      canvas.style.setProperty('image-rendering', 'pixelated');
-    }
   }
 
   preload() {
@@ -726,9 +722,9 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.40;
-    const firstRowY = actionTop + actionPanelHeight * 0.715;
-    const secondRowY = actionTop + actionPanelHeight * 0.895;
+    const attackButtonY = actionTop + actionPanelHeight * 0.27;
+    const firstRowY = actionTop + actionPanelHeight * 0.515;
+    const secondRowY = actionTop + actionPanelHeight * 0.745;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -2398,7 +2394,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
       // Враг стоит справа, поэтому разворачиваем его влево, к герою.
-      .setFlipX(true);
+      .setFlipX(false);
 
     this.fitImageToBox(
       sprite,
@@ -3933,7 +3929,7 @@ private createFighterSpriteCard(config: {
     config.isEnemy ? (config.isBoss ? 'БОСС' : 'ВРАГ') : `Зелья: ${player.potions}`,
     {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '7px' : '9px',
+      fontSize: layout.veryCompact ? '9px' : '10px',
       color: config.isEnemy ? '#ffb08a' : '#b9d8ff',
       stroke: '#000000',
       strokeThickness: 2,
@@ -3959,7 +3955,7 @@ private createFighterSpriteCard(config: {
 
   const extraText = this.add.text(titleX, infoTop + infoHeight * 0.59, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '8px' : layout.compact ? '9px' : '10px',
+    fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '11px',
     color: '#b8aa91',
     wordWrap: {
       width: infoWidth - 24,
@@ -4038,7 +4034,7 @@ private createFighterSpriteCard(config: {
 
     const bossLabel = this.add.text(0, bossBanner.y, 'БОСС', {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '8px' : '10px',
+      fontSize: layout.veryCompact ? '9px' : '10px',
       color: '#ffb36b',
       stroke: '#000000',
       strokeThickness: 3,
@@ -4079,7 +4075,7 @@ private createFighterSpriteCard(config: {
     const stats = this.getBattleStats();
     const statLine = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 7 : 9), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '7px' : layout.compact ? '8px' : '9px',
+      fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '11px',
       color: '#b8aa91',
       stroke: '#000000',
       strokeThickness: 2,
@@ -4092,7 +4088,7 @@ private createFighterSpriteCard(config: {
 
     this.playerDebuffText = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 20 : 24), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '7px' : '9px',
+      fontSize: layout.veryCompact ? '9px' : '10px',
       color: '#c084fc',
       stroke: '#000000',
       strokeThickness: 2,
