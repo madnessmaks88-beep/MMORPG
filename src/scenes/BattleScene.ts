@@ -714,9 +714,11 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.205;
-    const firstRowY = actionTop + actionPanelHeight * 0.545;
-    const secondRowY = actionTop + actionPanelHeight * 0.785;
+
+
+    const attackButtonY = actionTop + actionPanelHeight * 0.27;
+    const firstRowY = actionTop + actionPanelHeight * 0.515;
+    const secondRowY = actionTop + actionPanelHeight * 0.745;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -1954,6 +1956,7 @@ private getDebuffShortDescription(id: string, power: number) {
     // gridButtonHeight — высота маленьких кнопок 2x2.
     const gap = layout.veryCompact ? 10 : 14;
     const sideWidth = layout.sideButtonWidth;
+      
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
@@ -2378,7 +2381,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
       // Враг стоит справа, поэтому разворачиваем его влево, к герою.
-      .setFlipX(true);
+      .setFlipX(false);
 
     this.fitImageToBox(
       sprite,
