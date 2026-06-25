@@ -498,7 +498,8 @@ export class BattleScene extends Phaser.Scene {
   private configurePixelSpriteRendering() {
     // Важно: НЕ ставим canvas.style.imageRendering = 'pixelated'.
     // Иначе пикселизируется весь canvas, включая Phaser Text, и текст становится ребристым.
-    // Текст оставляем гладким: не включаем pixelated/roundPixels на весь canvas/камеру.
+    // Не включаем pixelated/roundPixels на весь canvas/камеру.
+    // PixeloidMono остаётся пиксельным как шрифт, но без принудительного рваного canvas-фильтра.
     // Pixel-perfect для PNG делаем только через texture.setFilter(NEAREST)
     // в applyNearestFilterToBattleTextures().
     this.cameras.main.roundPixels = false;

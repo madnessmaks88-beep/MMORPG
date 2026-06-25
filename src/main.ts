@@ -23,9 +23,9 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 1280,
   backgroundColor: '#090909',
   parent: 'app',
-  // Текст должен рендериться гладко, поэтому глобальную pixel-art фильтрацию
-  // не включаем на весь canvas. PNG-спрайты пикселизируются отдельно
-  // через texture.setFilter(NEAREST) в сценах, где они загружаются.
+  // Не включаем pixel-art фильтрацию на весь canvas.
+  // Шрифт PixeloidMono остаётся пиксельным через theme.ts,
+  // а PNG-спрайты пикселизируются отдельно через texture.setFilter(NEAREST).
   render: {
     antialias: true,
     roundPixels: false,
