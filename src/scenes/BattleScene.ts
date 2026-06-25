@@ -495,6 +495,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
 
+  private configurePixelSpriteRendering() {
+    this.cameras.main.roundPixels = true;
+
+    const canvas = this.game.canvas;
+
+    if (canvas) {
+      canvas.style.imageRendering = 'pixelated';
+      canvas.style.setProperty('image-rendering', 'pixelated');
+    }
+  }
+
   preload() {
     const assetsToLoad = [
       this.BATTLE_ASSETS.actionPanel,
@@ -510,7 +521,8 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      this.applyNearestFilterToBattleTextures();
+      this.configurePixelSpriteRendering();
+    this.applyNearestFilterToBattleTextures();
     });
   }
 
@@ -713,8 +725,6 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelHeight = Math.min(maxPanelHeight, naturalPanelHeight);
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
-
-
 
     const attackButtonY = actionTop + actionPanelHeight * 0.27;
     const firstRowY = actionTop + actionPanelHeight * 0.515;
@@ -1956,12 +1966,19 @@ private getDebuffShortDescription(id: string, power: number) {
     // gridButtonHeight — высота маленьких кнопок 2x2.
     const gap = layout.veryCompact ? 10 : 14;
     const sideWidth = layout.sideButtonWidth;
-      
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
-    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.165, 48, layout.veryCompact ? 58 : 68);
-    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.145, 42, layout.veryCompact ? 52 : 60);
+    const primaryHeight = Phaser.Math.Clamp(
+      panelHeight * 0.22,
+      62,
+      layout.veryCompact ? 74 : 86
+    );
+    const gridButtonHeight = Phaser.Math.Clamp(
+      panelHeight * 0.22,
+      62,
+      layout.veryCompact ? 74 : 86
+    );
 
     this.actionButtons.push(
       ...this.createSpriteBattleButton({
@@ -2381,7 +2398,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
       // Враг стоит справа, поэтому разворачиваем его влево, к герою.
-      .setFlipX(false);
+      .setFlipX(true);
 
     this.fitImageToBox(
       sprite,

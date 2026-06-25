@@ -23,6 +23,14 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 1280,
   backgroundColor: '#090909',
   parent: 'app',
+  pixelArt: true,
+  roundPixels: true,
+
+  render: {
+    antialias: false,
+    pixelArt: true,
+    roundPixels: true,
+  },
   scene: [
     CampScene,
     RaceSelectScene,
