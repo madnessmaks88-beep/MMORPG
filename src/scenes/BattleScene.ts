@@ -283,9 +283,141 @@ export class BattleScene extends Phaser.Scene {
       url: new URL('../assets/images/battle/battle_panel_actions.png', import.meta.url).href,
     },
     enemySprites: {
-      kosteglod: {
-        key: 'enemy_kosteglod',
-        url: new URL('../assets/images/battle/kosteglod.png', import.meta.url).href,
+      bone_gnawer: {
+        key: 'enemy_bone_gnawer',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_gnawer.png', import.meta.url).href,
+      },
+      crypt_crawler: {
+        key: 'enemy_crypt_crawler',
+        url: new URL('../assets/images/battle/enemies/tier1/crypt_crawler.png', import.meta.url).href,
+      },
+      grave_worm: {
+        key: 'enemy_grave_worm',
+        url: new URL('../assets/images/battle/enemies/tier1/grave_worm.png', import.meta.url).href,
+      },
+      corpse_eater: {
+        key: 'enemy_corpse_eater',
+        url: new URL('../assets/images/battle/enemies/tier1/corpse_eater.png', import.meta.url).href,
+      },
+      rotten_servant: {
+        key: 'enemy_rotten_servant',
+        url: new URL('../assets/images/battle/enemies/tier1/rotten_servant.png', import.meta.url).href,
+      },
+      bone_guard: {
+        key: 'enemy_bone_guard',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_guard.png', import.meta.url).href,
+      },
+      mold_dead: {
+        key: 'enemy_mold_dead',
+        url: new URL('../assets/images/battle/enemies/tier1/mold_dead.png', import.meta.url).href,
+      },
+      sarcophagus_rat: {
+        key: 'enemy_sarcophagus_rat',
+        url: new URL('../assets/images/battle/enemies/tier1/sarcophagus_rat.png', import.meta.url).href,
+      },
+      carrion_spider: {
+        key: 'enemy_carrion_spider',
+        url: new URL('../assets/images/battle/enemies/tier1/carrion_spider.png', import.meta.url).href,
+      },
+      crypt_minion: {
+        key: 'enemy_crypt_minion',
+        url: new URL('../assets/images/battle/enemies/tier1/crypt_minion.png', import.meta.url).href,
+      },
+      deadskin: {
+        key: 'enemy_deadskin',
+        url: new URL('../assets/images/battle/enemies/tier1/deadskin.png', import.meta.url).href,
+      },
+      funeral_beetle: {
+        key: 'enemy_funeral_beetle',
+        url: new URL('../assets/images/battle/enemies/tier1/funeral_beetle.png', import.meta.url).href,
+      },
+      bone_breaker: {
+        key: 'enemy_bone_breaker',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_breaker.png', import.meta.url).href,
+      },
+      coffin_scraper: {
+        key: 'enemy_coffin_scraper',
+        url: new URL('../assets/images/battle/enemies/tier1/coffin_scraper.png', import.meta.url).href,
+      },
+      infected_acolyte: {
+        key: 'enemy_infected_acolyte',
+        url: new URL('../assets/images/battle/enemies/tier1/infected_acolyte.png', import.meta.url).href,
+      },
+      sarcophagus_keeper: {
+        key: 'enemy_sarcophagus_keeper',
+        url: new URL('../assets/images/battle/enemies/tier1/sarcophagus_keeper.png', import.meta.url).href,
+      },
+      bone_executioner: {
+        key: 'enemy_bone_executioner',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_executioner.png', import.meta.url).href,
+      },
+      crypt_butcher: {
+        key: 'enemy_crypt_butcher',
+        url: new URL('../assets/images/battle/enemies/tier1/crypt_butcher.png', import.meta.url).href,
+      },
+      buried_knight: {
+        key: 'enemy_buried_knight',
+        url: new URL('../assets/images/battle/enemies/tier1/buried_knight.png', import.meta.url).href,
+      },
+      bone_armored_guard: {
+        key: 'enemy_bone_armored_guard',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_armored_guard.png', import.meta.url).href,
+      },
+      dead_standard_bearer: {
+        key: 'enemy_dead_standard_bearer',
+        url: new URL('../assets/images/battle/enemies/tier1/dead_standard_bearer.png', import.meta.url).href,
+      },
+      rotten_chaplain: {
+        key: 'enemy_rotten_chaplain',
+        url: new URL('../assets/images/battle/enemies/tier1/rotten_chaplain.png', import.meta.url).href,
+      },
+      leper_guard: {
+        key: 'enemy_leper_guard',
+        url: new URL('../assets/images/battle/enemies/tier1/leper_guard.png', import.meta.url).href,
+      },
+      crypt_torturer: {
+        key: 'enemy_crypt_torturer',
+        url: new URL('../assets/images/battle/enemies/tier1/crypt_torturer.png', import.meta.url).href,
+      },
+      bloody_gravedigger: {
+        key: 'enemy_bloody_gravedigger',
+        url: new URL('../assets/images/battle/enemies/tier1/bloody_gravedigger.png', import.meta.url).href,
+      },
+      bone_abbot: {
+        key: 'enemy_bone_abbot',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_abbot.png', import.meta.url).href,
+      },
+      sarcophagus_lord: {
+        key: 'enemy_sarcophagus_lord',
+        url: new URL('../assets/images/battle/enemies/tier1/sarcophagus_lord.png', import.meta.url).href,
+      },
+      lower_crypt_executioner: {
+        key: 'enemy_lower_crypt_executioner',
+        url: new URL('../assets/images/battle/enemies/tier1/lower_crypt_executioner.png', import.meta.url).href,
+      },
+      funeral_champion: {
+        key: 'enemy_funeral_champion',
+        url: new URL('../assets/images/battle/enemies/tier1/funeral_champion.png', import.meta.url).href,
+      },
+      bone_collector: {
+        key: 'enemy_bone_collector',
+        url: new URL('../assets/images/battle/enemies/tier1/bone_collector.png', import.meta.url).href,
+      },
+      dead_knight_varn: {
+        key: 'enemy_dead_knight_varn',
+        url: new URL('../assets/images/battle/enemies/tier1/dead_knight_varn.png', import.meta.url).href,
+      },
+      rotten_bishop: {
+        key: 'enemy_rotten_bishop',
+        url: new URL('../assets/images/battle/enemies/tier1/rotten_bishop.png', import.meta.url).href,
+      },
+      black_tomb_guardian: {
+        key: 'enemy_black_tomb_guardian',
+        url: new URL('../assets/images/battle/enemies/tier1/black_tomb_guardian.png', import.meta.url).href,
+      },
+      morvein_sealed_crypt_lord: {
+        key: 'enemy_morvein_sealed_crypt_lord',
+        url: new URL('../assets/images/battle/enemies/tier1/morvein_sealed_crypt_lord.png', import.meta.url).href,
       },
     },
     buttons: {
@@ -333,27 +465,27 @@ export class BattleScene extends Phaser.Scene {
     raceSprites: {
       human: {
         key: 'race_sprite_human',
-        url: new URL('../assets/images/battle/People.png', import.meta.url).href,
+        url: new URL('../assets/images/battle/races/human.png', import.meta.url).href,
       },
       tainted: {
         key: 'race_sprite_tainted',
-        url: new URL('../assets/images/battle/Skwerna.png', import.meta.url).href,
+        url: new URL('../assets/images/battle/races/tainted_halfblood.png', import.meta.url).href,
       },
       goblin: {
         key: 'race_sprite_goblin',
-        url: new URL('../assets/images/battle/Goblin.png', import.meta.url).href,
+        url: new URL('../assets/images/battle/races/goblin.png', import.meta.url).href,
       },
       stone: {
-        key: 'race_sprite_stone',
-        url: new URL('../assets/images/battle/Stone.png', import.meta.url).href,
+        key: 'race_sprite_stoneborn',
+        url: new URL('../assets/images/battle/races/stoneborn.png', import.meta.url).href,
       },
       elf: {
-        key: 'race_sprite_elf',
-        url: new URL('../assets/images/battle/elf.png', import.meta.url).href,
+        key: 'race_sprite_night_elf',
+        url: new URL('../assets/images/battle/races/night_elf.png', import.meta.url).href,
       },
       demon: {
         key: 'race_sprite_demon',
-        url: new URL('../assets/images/battle/demon.png', import.meta.url).href,
+        url: new URL('../assets/images/battle/races/demon.png', import.meta.url).href,
       },
     },
   } as const;
@@ -582,9 +714,9 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.27;
-    const firstRowY = actionTop + actionPanelHeight * 0.515;
-    const secondRowY = actionTop + actionPanelHeight * 0.745;
+    const attackButtonY = actionTop + actionPanelHeight * 0.205;
+    const firstRowY = actionTop + actionPanelHeight * 0.545;
+    const secondRowY = actionTop + actionPanelHeight * 0.785;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
@@ -610,8 +742,8 @@ export class BattleScene extends Phaser.Scene {
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
     // sideButtonWidth — ширина маленьких кнопок во 2 и 3 ряду.
-    const mainButtonWidth = Math.min(actionPanelWidth * 0.88, 585);
-    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 290);
+    const mainButtonWidth = Math.min(actionPanelWidth * 0.83, 570);
+    const sideButtonWidth = Math.min((mainButtonWidth - (veryCompact ? 10 : 14)) / 2, 278);
 
     return {
       width,
@@ -1825,8 +1957,8 @@ private getDebuffShortDescription(id: string, power: number) {
     const leftX = layout.centerX - sideWidth / 2 - gap / 2;
     const rightX = layout.centerX + sideWidth / 2 + gap / 2;
 
-    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.22, 62, layout.veryCompact ? 74 : 86);
-    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.22, 62, layout.veryCompact ? 74 : 86);
+    const primaryHeight = Phaser.Math.Clamp(panelHeight * 0.165, 48, layout.veryCompact ? 58 : 68);
+    const gridButtonHeight = Phaser.Math.Clamp(panelHeight * 0.145, 42, layout.veryCompact ? 52 : 60);
 
     this.actionButtons.push(
       ...this.createSpriteBattleButton({
@@ -2133,17 +2265,68 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private getEnemySpriteKey() {
-    return this.BATTLE_ASSETS.enemySprites.kosteglod.key;
+    const enemySprites = this.BATTLE_ASSETS.enemySprites;
+    const enemyId = this.enemy?.id as keyof typeof enemySprites | undefined;
+
+    if (enemyId && enemySprites[enemyId]) {
+      return enemySprites[enemyId].key;
+    }
+
+    return enemySprites.bone_gnawer.key;
   }
 
   private getPlayerRaceSpriteKey() {
-    if (player.raceId === 'tainted_halfblood') return this.BATTLE_ASSETS.raceSprites.tainted.key;
-    if (player.raceId === 'goblin') return this.BATTLE_ASSETS.raceSprites.goblin.key;
-    if (player.raceId === 'stoneborn') return this.BATTLE_ASSETS.raceSprites.stone.key;
-    if (player.raceId === 'night_elf') return this.BATTLE_ASSETS.raceSprites.elf.key;
-    if (player.raceId === 'demon') return this.BATTLE_ASSETS.raceSprites.demon.key;
+    const raceSprites = this.BATTLE_ASSETS.raceSprites;
 
-    return this.BATTLE_ASSETS.raceSprites.human.key;
+    if (player.raceId === 'tainted_halfblood') return raceSprites.tainted.key;
+    if (player.raceId === 'goblin') return raceSprites.goblin.key;
+    if (player.raceId === 'stoneborn') return raceSprites.stone.key;
+    if (player.raceId === 'night_elf') return raceSprites.elf.key;
+    if (player.raceId === 'demon') return raceSprites.demon.key;
+
+    return raceSprites.human.key;
+  }
+
+  private getEnemySpriteSizeMultiplier() {
+    const enemyId = this.enemy?.id;
+
+    if (enemyId === 'morvein_sealed_crypt_lord') {
+      return 1.22;
+    }
+
+    const miniBossIds = new Set<string>([
+      'bone_abbot',
+      'sarcophagus_lord',
+      'lower_crypt_executioner',
+      'funeral_champion',
+      'bone_collector',
+      'dead_knight_varn',
+      'rotten_bishop',
+      'black_tomb_guardian',
+    ]);
+
+    if (enemyId && miniBossIds.has(enemyId)) {
+      return 1.12;
+    }
+
+    const eliteIds = new Set<string>([
+      'sarcophagus_keeper',
+      'bone_executioner',
+      'crypt_butcher',
+      'buried_knight',
+      'bone_armored_guard',
+      'dead_standard_bearer',
+      'rotten_chaplain',
+      'leper_guard',
+      'crypt_torturer',
+      'bloody_gravedigger',
+    ]);
+
+    if (enemyId && eliteIds.has(enemyId)) {
+      return 1.06;
+    }
+
+    return 1;
   }
 
   private fitImageToBox(
@@ -2169,11 +2352,15 @@ private getDebuffShortDescription(id: string, power: number) {
     isBoss = false
   ) {
     const container = this.add.container(x, y);
+    const sizeMultiplier = this.getEnemySpriteSizeMultiplier();
+    const glowAlpha = isBoss || this.enemy?.id === 'morvein_sealed_crypt_lord'
+      ? 0.16
+      : 0.08;
 
     const platform = this.add.ellipse(
       0,
       maxHeight * 0.35,
-      maxWidth * 0.78,
+      maxWidth * 0.78 * sizeMultiplier,
       Math.max(12, maxHeight * 0.16),
       0x000000,
       0.46
@@ -2182,17 +2369,23 @@ private getDebuffShortDescription(id: string, power: number) {
     const platformGlow = this.add.ellipse(
       0,
       maxHeight * 0.32,
-      maxWidth * 0.58,
+      maxWidth * 0.58 * sizeMultiplier,
       Math.max(8, maxHeight * 0.10),
-      isBoss ? 0xff6b35 : 0xff6b6b,
-      isBoss ? 0.12 : 0.08
+      isBoss || this.enemy?.id === 'morvein_sealed_crypt_lord' ? 0xff6b35 : 0xff6b6b,
+      glowAlpha
     );
 
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
-      .setFlipX(false);
+      // Враг стоит справа, поэтому разворачиваем его влево, к герою.
+      .setFlipX(true);
 
-    this.fitImageToBox(sprite, maxWidth * 1.26, maxHeight * 1.38, 1);
+    this.fitImageToBox(
+      sprite,
+      maxWidth * 1.26 * sizeMultiplier,
+      maxHeight * 1.38 * sizeMultiplier,
+      1
+    );
 
     container.add([platform, platformGlow, sprite]);
 
@@ -2227,6 +2420,7 @@ private getDebuffShortDescription(id: string, power: number) {
 
     const sprite = this.add.image(0, -maxHeight * 0.08, this.getPlayerRaceSpriteKey())
       .setOrigin(0.5, 0.55)
+      // Герой стоит слева и смотрит вправо, к врагу.
       .setFlipX(false);
 
     this.fitImageToBox(sprite, maxWidth * 1.24, maxHeight * 1.38, 1);
