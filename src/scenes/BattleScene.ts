@@ -726,9 +726,9 @@ export class BattleScene extends Phaser.Scene {
     const actionPanelY = height - safeBottom - actionPanelHeight / 2;
     const actionTop = actionPanelY - actionPanelHeight / 2;
 
-    const attackButtonY = actionTop + actionPanelHeight * 0.27;
-    const firstRowY = actionTop + actionPanelHeight * 0.515;
-    const secondRowY = actionTop + actionPanelHeight * 0.745;
+    const attackButtonY = actionTop + actionPanelHeight * 0.40;
+    const firstRowY = actionTop + actionPanelHeight * 0.715;
+    const secondRowY = actionTop + actionPanelHeight * 0.895;
 
     const logHeight = veryCompact ? 100 : compact ? 126 : 154;
     const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
