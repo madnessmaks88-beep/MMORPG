@@ -498,8 +498,10 @@ export class BattleScene extends Phaser.Scene {
   private configurePixelSpriteRendering() {
     // Важно: НЕ ставим canvas.style.imageRendering = 'pixelated'.
     // Иначе пикселизируется весь canvas, включая Phaser Text, и текст становится ребристым.
-    // Pixel-perfect для PNG делаем через texture.setFilter(NEAREST) в applyNearestFilterToBattleTextures().
-    this.cameras.main.roundPixels = true;
+    // Текст оставляем гладким: не включаем pixelated/roundPixels на весь canvas/камеру.
+    // Pixel-perfect для PNG делаем только через texture.setFilter(NEAREST)
+    // в applyNearestFilterToBattleTextures().
+    this.cameras.main.roundPixels = false;
   }
 
   preload() {
@@ -2394,7 +2396,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
       // Враг стоит справа, поэтому разворачиваем его влево, к герою.
-      .setFlipX(false);
+      .setFlipX(true);
 
     this.fitImageToBox(
       sprite,
@@ -2465,7 +2467,7 @@ private getDebuffShortDescription(id: string, power: number) {
         (texture as any).setFilter?.(Phaser.Textures.FilterMode.NEAREST);
       } catch {
         // Phaser версии отличаются по API фильтрации. Если setFilter недоступен,
-        // игра продолжит работать, а pixelArt обычно уже включён в config.
+        // игра продолжит работать, но глобальную пикселизацию текста всё равно не включаем.
       }
     });
   }

@@ -23,13 +23,12 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 1280,
   backgroundColor: '#090909',
   parent: 'app',
-  pixelArt: true,
-  roundPixels: true,
-
+  // Текст должен рендериться гладко, поэтому глобальную pixel-art фильтрацию
+  // не включаем на весь canvas. PNG-спрайты пикселизируются отдельно
+  // через texture.setFilter(NEAREST) в сценах, где они загружаются.
   render: {
-    antialias: false,
-    pixelArt: true,
-    roundPixels: true,
+    antialias: true,
+    roundPixels: false,
   },
   scene: [
     CampScene,

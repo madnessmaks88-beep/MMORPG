@@ -90,9 +90,9 @@ export class CampScene extends Phaser.Scene {
   private readonly CITY_CAMPFIRE_KEY = 'catacombs_city_campfire_v1';
   private readonly CITY_COMMON_FLINT_MS = 60 * 60 * 1000;
   private readonly CITY_RARE_FLINT_MS = 24 * 60 * 60 * 1000;
-  private readonly PIXEL_FONT_FACE_NAME = 'PixeloidMono';
-  private readonly PIXEL_FONT_FAMILY = '"PixeloidMono", monospace';
-  private readonly PIXEL_FONT_ASSET_URL = new URL('../assets/fonts/PixeloidMono.ttf', import.meta.url).href;
+  // Название оставлено, чтобы не переписывать всю сцену,
+  // но теперь это гладкий системный шрифт, а не пиксельный PixeloidMono.
+  private readonly PIXEL_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
 
   private readonly CAMP_BACKGROUND_ASSET = {
     key: 'campBackground',
@@ -148,6 +148,27 @@ export class CampScene extends Phaser.Scene {
         this.load.image(asset.key, asset.url);
       }
     });
+
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.applyNearestFilterToCampTextures();
+    });
+  }
+
+  private applyNearestFilterToCampTextures() {
+    const keys = [
+      this.CAMP_BACKGROUND_ASSET.key,
+      ...Object.values(this.CAMP_ACTION_ASSETS).map(asset => asset.key),
+    ];
+
+    keys.forEach(key => {
+      const texture = this.textures.get(key);
+
+      try {
+        (texture as any).setFilter?.(Phaser.Textures.FilterMode.NEAREST);
+      } catch {
+        // Фильтр нужен только PNG-текстурам. Текст не трогаем.
+      }
+    });
   }
 
   async create() {
@@ -191,6 +212,7 @@ export class CampScene extends Phaser.Scene {
       this.extinguishCityCampfireIfExpired();
       this.restoreSanityAndSaveIfValueChanged();
 
+      this.applyNearestFilterToCampTextures();
       this.createCampBackdrop(layout);
       this.createCityCampfireVisualState(layout);
 
@@ -268,57 +290,9 @@ export class CampScene extends Phaser.Scene {
   }
 
   private async loadPixelFontOnce() {
-    if (typeof window === 'undefined' || typeof document === 'undefined' || !document.fonts) {
-      return;
-    }
-
-    if (!CampScene.pixelFontPromise) {
-      CampScene.pixelFontPromise = new Promise<void>((resolve) => {
-        const styleId = 'camp-scene-pixeloid-mono-font';
-
-        if (!document.getElementById(styleId)) {
-          const style = document.createElement('style');
-          style.id = styleId;
-          style.textContent = `
-@font-face {
-  font-family: "${this.PIXEL_FONT_FACE_NAME}";
-  src: url("${this.PIXEL_FONT_ASSET_URL}") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: block;
-}`;
-          document.head.appendChild(style);
-        }
-
-        const font = new FontFace(
-          this.PIXEL_FONT_FACE_NAME,
-          `url("${this.PIXEL_FONT_ASSET_URL}") format("truetype")`,
-          {
-            weight: '400',
-            style: 'normal',
-          }
-        );
-
-        font.load()
-          .then(loadedFont => {
-            document.fonts.add(loadedFont);
-            return document.fonts.load(`18px "${this.PIXEL_FONT_FACE_NAME}"`);
-          })
-          .then(() => document.fonts.ready)
-          .then(() => {
-            console.info(`[CampScene] Pixel font loaded: ${this.PIXEL_FONT_FACE_NAME}`);
-            resolve();
-          })
-          .catch(error => {
-            console.warn(
-              'CampScene pixel font was not loaded. Check this file exists: src/assets/fonts/PixeloidMono.ttf',
-              error
-            );
-            resolve();
-          });
-      });
-    }
-
+    // Больше не грузим PixeloidMono. Текст должен быть сглаженным.
+    // Promise оставлен только для совместимости с текущим async create().
+    CampScene.pixelFontPromise ??= Promise.resolve();
     await CampScene.pixelFontPromise;
   }
 

@@ -1,10 +1,7 @@
 import Phaser from 'phaser';
 
-export const GAME_FONT_FACE_NAME = 'PixeloidMono';
-export const GAME_FONT_FAMILY = `"${GAME_FONT_FACE_NAME}", monospace`;
-export const GAME_FONT_ASSET_URL = new URL('../assets/fonts/PixeloidMono.ttf', import.meta.url).href;
-
-let gameFontPromise: Promise<void> | undefined;
+export const GAME_FONT_FACE_NAME = 'SystemSmooth';
+export const GAME_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
 
 export const UI = {
   colors: {
@@ -41,58 +38,9 @@ export const UI = {
 
 
 export async function loadGameUIFont() {
-  if (typeof window === 'undefined' || typeof document === 'undefined' || !document.fonts) {
-    return;
-  }
-
-  if (!gameFontPromise) {
-    gameFontPromise = new Promise<void>((resolve) => {
-      const styleId = 'catacombs-pixeloid-mono-font';
-
-      if (!document.getElementById(styleId)) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-@font-face {
-  font-family: "${GAME_FONT_FACE_NAME}";
-  src: url("${GAME_FONT_ASSET_URL}") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: block;
-}`;
-        document.head.appendChild(style);
-      }
-
-      const font = new FontFace(
-        GAME_FONT_FACE_NAME,
-        `url("${GAME_FONT_ASSET_URL}") format("truetype")`,
-        {
-          weight: '400',
-          style: 'normal',
-        }
-      );
-
-      font.load()
-        .then(loadedFont => {
-          document.fonts.add(loadedFont);
-          return document.fonts.load(`18px "${GAME_FONT_FACE_NAME}"`);
-        })
-        .then(() => document.fonts.ready)
-        .then(() => {
-          console.info(`[UI] Game font loaded: ${GAME_FONT_FACE_NAME}`);
-          resolve();
-        })
-        .catch(error => {
-          console.warn(
-            'Game UI font was not loaded. Check this file exists: src/assets/fonts/PixeloidMono.ttf',
-            error
-          );
-          resolve();
-        });
-    });
-  }
-
-  await gameFontPromise;
+  // Больше не грузим пиксельный TTF-шрифт.
+  // Текст должен оставаться сглаженным, а pixel art применяется только к PNG-текстурам.
+  return;
 }
 
 export function applyGameUIFontToScene(scene: Phaser.Scene) {
