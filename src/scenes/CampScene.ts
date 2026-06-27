@@ -9,7 +9,6 @@ import { loadGameAsync, saveGameAsync } from '../systems/SaveSystem';
 import {getVKUser, initVKBridge} from '../systems/VKBridgeSystem';
 import {
   SANITY_COST_PER_FLOOR,
-  getSanityTimeToFullMs,
   hasEnoughSanityForFloor,
   restoreSanityByTime,
 } from '../systems/SanitySystem';
@@ -107,6 +106,7 @@ export class CampScene extends Phaser.Scene {
   private cityCampfireVisualTweens: Phaser.Tweens.Tween[] = [];
 
   private campMapContainer?: Phaser.GameObjects.Container;
+
   private campMapMaskGraphics?: Phaser.GameObjects.Graphics;
   private campMapViewport?: CampMapViewport;
   private campMapHotspots: CampMapHotspot[] = [];
@@ -141,7 +141,6 @@ export class CampScene extends Phaser.Scene {
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
   private sanityTimerEvent?: Phaser.Time.TimerEvent;
   private sanityValueText?: Phaser.GameObjects.Text;
-  private sanityHintText?: Phaser.GameObjects.Text;
   private sanityFill?: Phaser.GameObjects.Rectangle;
   private sanityFillWidth = 0;
   private cityCampfireIsVisuallyActive = false;
@@ -218,7 +217,6 @@ export class CampScene extends Phaser.Scene {
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
       this.sanityValueText = undefined;
-      this.sanityHintText = undefined;
       this.sanityFill = undefined;
     });
 
@@ -248,8 +246,7 @@ export class CampScene extends Phaser.Scene {
       this.createCampBackdrop(layout);
       this.createCityCampfireVisualState(layout);
 
-      this.createHeader(layout);
-      this.createHeroStatusCard(layout);
+      this.createCompactTopHud(layout);
       this.createMainActions(layout);
 
       createBottomNav(this, {
@@ -491,12 +488,15 @@ export class CampScene extends Phaser.Scene {
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    const headerHeight = veryCompact ? 62 : compact ? 74 : 86;
-    const heroTop = safeTop + headerHeight + (veryCompact ? 6 : 8);
-    const heroHeight = veryCompact ? 136 : compact ? 154 : 172;
-    const actionsTop = heroTop + heroHeight + (veryCompact ? 7 : 10);
-    const actionsBottom = bottomNavTop - (veryCompact ? 8 : 12);
-    const actionsHeight = Math.max(236, actionsBottom - actionsTop);
+    // Теперь верх сцены занимает только компактный HUD.
+    // Поля headerHeight/heroTop/heroHeight оставлены в layout для совместимости
+    // с существующей логикой свечения костра, но больше не создают большие панели.
+    const headerHeight = veryCompact ? 64 : compact ? 72 : 80;
+    const heroTop = safeTop;
+    const heroHeight = headerHeight;
+    const actionsTop = safeTop + headerHeight + 2;
+    const actionsBottom = bottomNavTop;
+    const actionsHeight = Math.max(320, actionsBottom - actionsTop);
 
     return {
       width,
@@ -589,125 +589,135 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createHeader(layout: CampLayout) {
-    const panelY = layout.safeTop + layout.headerHeight / 2;
-    const panel = this.createPixelPanel({
-      x: layout.centerX,
-      y: panelY,
-      width: layout.contentWidth,
-      height: layout.headerHeight,
-      color: 0x0a0b0d,
-      borderColor: 0x111111,
-      innerColor: 0x8b6a3f,
-      depth: 8,
-      cut: layout.veryCompact ? 8 : 10,
-    });
+  // REAL COMPACT HUD: replaces old createHeader/createHeroStatusCard panels.
+  private createCompactTopHud(layout: CampLayout) {
+    restoreSanityByTime();
 
-    const topLine = this.add.rectangle(layout.centerX, panelY - layout.headerHeight / 2 + 10, layout.contentWidth - 42, 2, 0xb99257, 0.46).setDepth(11);
-    const bottomLine = this.add.rectangle(layout.centerX, panelY + layout.headerHeight / 2 - 10, layout.contentWidth - 68, 2, 0x453220, 0.64).setDepth(11);
-
-    const title = this.add.text(layout.centerX, panelY - (layout.veryCompact ? 12 : 16), 'Убежище у катакомб', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '20px' : layout.compact ? '24px' : '28px',
-      color: '#e0c585',
-      stroke: '#000000',
-      strokeThickness: 2,
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 44,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(12);
-
-    const subtitle = this.add.text(layout.centerX, panelY + (layout.veryCompact ? 14 : 18), 'последний пиксельный огонь перед тьмой', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '10px' : '12px',
-      color: '#9f9078',
-      align: 'center',
-      wordWrap: {
-        width: layout.contentWidth - 60,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(12);
-
-    ['▪', '▪'].forEach((mark, index) => {
-      this.add.text(
-        index === 0 ? layout.centerX - layout.contentWidth / 2 + 26 : layout.centerX + layout.contentWidth / 2 - 26,
-        panelY,
-        mark,
-        {
-          fontFamily: this.PIXEL_FONT_FAMILY,
-          fontSize: '14px',
-          color: '#b99257',
-          stroke: '#000000',
-          strokeThickness: 1,
-        }
-      ).setOrigin(0.5).setDepth(12);
-    });
-
-    this.playPixelIntro([panel.shadow, panel.panel, topLine, bottomLine, title, subtitle], 40);
-  }
-
-  private createHeroStatusCard(layout: CampLayout) {
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
-    const cardY = layout.heroTop + layout.heroHeight / 2;
+    const hudHeight = layout.headerHeight;
+    const hudWidth = layout.width - layout.safeX * 2;
+    const hudX = layout.centerX;
+    const hudY = layout.safeTop + hudHeight / 2;
+    const hudTop = layout.safeTop;
 
     const panel = this.createPixelPanel({
-      x: layout.centerX,
-      y: cardY,
-      width: layout.contentWidth,
-      height: layout.heroHeight,
-      color: 0x08090b,
-      borderColor: 0x0e0e0f,
-      innerColor: 0x65513a,
-      depth: 6,
-      cut: layout.veryCompact ? 8 : 10,
+      x: hudX,
+      y: hudY,
+      width: hudWidth,
+      height: hudHeight,
+      color: 0x07080b,
+      alpha: 0.72,
+      borderColor: 0x050505,
+      innerColor: 0x8b6a3f,
+      innerAlpha: 0.36,
+      depth: 26,
+      cut: layout.veryCompact ? 7 : 9,
+      shadowOffset: 2,
     });
 
-    const left = layout.centerX - layout.contentWidth / 2 + 16;
-    const right = layout.centerX + layout.contentWidth / 2 - 16;
-    const top = layout.heroTop;
-    const portraitSize = layout.veryCompact ? 44 : 52;
-    const portraitX = left + portraitSize / 2 + 4;
-    const portraitY = top + (layout.veryCompact ? 34 : 42);
+    const topShade = this.add.rectangle(
+      hudX,
+      hudTop + 8,
+      hudWidth - 12,
+      10,
+      0xffffff,
+      0.025
+    ).setDepth(29);
 
-    this.createPixelPanel({
+    const bottomShade = this.add.rectangle(
+      hudX,
+      hudTop + hudHeight - 7,
+      hudWidth - 18,
+      8,
+      0x000000,
+      0.24
+    ).setDepth(29);
+
+    const portraitSize = layout.veryCompact ? 38 : layout.compact ? 42 : 46;
+    const portraitX = layout.safeX + portraitSize / 2 + 6;
+    const portraitY = hudY;
+
+    const portraitFrame = this.createPixelPanel({
       x: portraitX,
       y: portraitY,
       width: portraitSize,
       height: portraitSize,
-      color: 0x12100d,
-      borderColor: 0x020202,
-      innerColor: 0x8b6a3f,
-      depth: 9,
+      color: 0x111016,
+      alpha: 0.95,
+      borderColor: 0x020203,
+      innerColor: race?.id === 'night_elf' ? 0x6f5a91 : 0x8b6a3f,
+      innerAlpha: 0.72,
+      depth: 30,
       cut: 6,
       shadowOffset: 2,
     });
 
-    this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
+    const raceTextureKey = player.raceId ? `race_${player.raceId}` : undefined;
+    let avatarObject: Phaser.GameObjects.GameObject;
+
+    if (raceTextureKey && this.textures.exists(raceTextureKey)) {
+      avatarObject = this.add.image(portraitX, portraitY, raceTextureKey)
+        .setOrigin(0.5)
+        .setDisplaySize(portraitSize - 10, portraitSize - 10)
+        .setDepth(33);
+    } else {
+      avatarObject = this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
+        fontFamily: this.PIXEL_FONT_FAMILY,
+        fontSize: layout.veryCompact ? '22px' : '26px',
+        color: '#d8b56d',
+        stroke: '#000000',
+        strokeThickness: 2,
+        align: 'center',
+      }).setOrigin(0.5).setDepth(33);
+    }
+
+    const goldPanelWidth = layout.veryCompact ? 82 : layout.compact ? 96 : 108;
+    const goldPanelHeight = layout.veryCompact ? 22 : 24;
+    const goldPanelX = layout.width - layout.safeX - goldPanelWidth / 2;
+    const goldPanelY = hudTop + (layout.veryCompact ? 17 : 19);
+
+    this.createPixelPanel({
+      x: goldPanelX,
+      y: goldPanelY,
+      width: goldPanelWidth,
+      height: goldPanelHeight,
+      color: 0x11100d,
+      alpha: 0.9,
+      borderColor: 0x050403,
+      innerColor: 0xb99257,
+      innerAlpha: 0.62,
+      depth: 31,
+      cut: 5,
+      shadowOffset: 1,
+    });
+
+    const goldText = this.add.text(goldPanelX, goldPanelY, `◆ ${player.gold}`, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '22px' : '26px',
-      color: '#d8b56d',
+      fontSize: layout.veryCompact ? '9px' : '11px',
+      color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
-    }).setOrigin(0.5).setDepth(12);
+      wordWrap: {
+        width: goldPanelWidth - 12,
+        useAdvancedWrap: true,
+      },
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(34);
 
-    const heroName = race
-      ? player.name === race.name
-        ? player.name
-        : `${player.name} • ${race.name}`
-      : player.name;
+    const titleX = portraitX + portraitSize / 2 + (layout.veryCompact ? 9 : 12);
+    const goldLeft = goldPanelX - goldPanelWidth / 2;
+    const titleWidth = Math.max(96, goldLeft - titleX - 10);
+    const raceTitle = race
+      ? player.name && player.name !== 'Безымянный'
+        ? `${player.name} • ${race.name}`
+        : race.name
+      : player.name || 'Безымянный';
 
-    const titleX = portraitX + portraitSize / 2 + 12;
-    const titleWidth = Math.max(130, right - titleX - 72);
-
-    this.add.text(titleX, top + (layout.veryCompact ? 22 : 28), heroName, {
+    const titleText = this.add.text(titleX, hudTop + (layout.veryCompact ? 14 : 16), raceTitle, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '15px' : layout.compact ? '18px' : '20px',
+      fontSize: layout.veryCompact ? '12px' : layout.compact ? '13px' : '15px',
       color: '#e0c585',
       stroke: '#000000',
       strokeThickness: 2,
@@ -716,69 +726,159 @@ export class CampScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
+    }).setOrigin(0, 0.5).setDepth(34);
 
-    this.add.text(titleX, top + (layout.veryCompact ? 45 : 54), race ? race.description : 'Путь ещё не выбран.', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '9px' : '11px',
-      color: '#9b9283',
-      wordWrap: {
-        width: titleWidth,
-        useAdvancedWrap: true,
-      },
-      maxLines: layout.veryCompact ? 1 : 2,
-      lineSpacing: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
+    const barAreaWidth = Math.max(132, goldLeft - titleX - 10);
+    const firstBarY = hudTop + (layout.veryCompact ? 34 : 38);
+    const rowGap = layout.veryCompact ? 9 : 11;
 
-    this.createDarkTag({
-      x: right - 34,
-      y: top + (layout.veryCompact ? 24 : 30),
-      width: 66,
-      height: 26,
-      icon: '',
-      text: `Ур. ${player.level}`,
-      accentColor: 0x4f6b4b,
-      depth: 10,
-    });
-
-    const barWidth = Math.min((layout.contentWidth - 48) / 2, 260);
-    const barGap = layout.veryCompact ? 8 : 12;
-    const barY = top + layout.heroHeight - (layout.veryCompact ? 72 : 86);
-
-    this.createSmallBar({
-      x: layout.centerX - barWidth / 2 - barGap / 2,
-      y: barY,
-      width: barWidth,
+    this.createCompactHudBar({
+      x: titleX,
+      y: firstBarY,
+      width: barAreaWidth,
       label: 'HP',
       value: `${player.hp}/${stats.maxHp}`,
       progress: stats.maxHp > 0 ? player.hp / stats.maxHp : 1,
       color: 0x9f3535,
+      textColor: '#f0b1a8',
+      depth: 34,
+      veryCompact: layout.veryCompact,
     });
 
-    this.createSmallBar({
-      x: layout.centerX + barWidth / 2 + barGap / 2,
-      y: barY,
-      width: barWidth,
-      label: 'Энергия',
+    this.createCompactHudBar({
+      x: titleX,
+      y: firstBarY + rowGap,
+      width: barAreaWidth,
+      label: 'ЭН',
       value: `${player.energy}/${stats.maxEnergy}`,
       progress: stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1,
       color: 0x356ea6,
+      textColor: '#b9d8ff',
+      depth: 34,
+      veryCompact: layout.veryCompact,
     });
 
-    this.createSanityBar({
-      x: layout.centerX,
-      y: top + layout.heroHeight - (layout.veryCompact ? 46 : 54),
-      width: Math.min(layout.contentWidth - 42, 520),
+    const sanityBar = this.createCompactHudBar({
+      x: titleX,
+      y: firstBarY + rowGap * 2,
+      width: barAreaWidth,
+      label: 'РАЗ',
+      value: `${player.sanity}/${player.maxSanity}`,
+      progress: player.maxSanity > 0 ? player.sanity / player.maxSanity : 1,
+      color: player.sanity <= player.maxSanity * 0.25 ? 0x8f3d67 : 0x6f5a91,
+      textColor: '#d7cbff',
+      depth: 34,
+      veryCompact: layout.veryCompact,
     });
 
-    const resourceY = top + layout.heroHeight - 16;
-    const resourceWidth = Math.min((layout.contentWidth - 38) / 3, 152);
-    this.createTinyResource(layout.centerX - resourceWidth - 6, resourceY, '◆', `${player.gold}`, resourceWidth);
-    this.createTinyResource(layout.centerX, resourceY, '✚', `${player.potions}`, resourceWidth);
-    this.createTinyResource(layout.centerX + resourceWidth + 6, resourceY, '★', `${player.relicIds.length}`, resourceWidth);
+    this.sanityFill = sanityBar.fill;
+    this.sanityFillWidth = sanityBar.maxFillWidth;
+    this.sanityValueText = sanityBar.valueText;
 
-    this.playPixelIntro([panel.shadow, panel.panel], 95);
+    if (player.maxSanity > 0 && player.sanity / player.maxSanity <= 0.25) {
+      this.tweens.add({
+        targets: this.sanityFill,
+        alpha: { from: 0.72, to: 1 },
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    const introObjects: Phaser.GameObjects.GameObject[] = [
+      panel.shadow,
+      panel.panel,
+      topShade,
+      bottomShade,
+      portraitFrame.shadow,
+      portraitFrame.panel,
+      avatarObject,
+      goldText,
+      titleText,
+    ];
+
+    this.playPixelIntro(introObjects, 35);
+
+    this.tweens.add({
+      targets: avatarObject,
+      scale: { from: 0.88, to: 1 },
+      duration: 180,
+      delay: 80,
+      ease: 'Back.easeOut',
+    });
+
     this.startSanityTimer();
+  }
+
+  private createCompactHudBar(config: {
+    x: number;
+    y: number;
+    width: number;
+    label: string;
+    value: string;
+    progress: number;
+    color: number;
+    textColor: string;
+    depth: number;
+    veryCompact: boolean;
+  }) {
+    const progress = Phaser.Math.Clamp(config.progress, 0, 1);
+    const labelWidth = config.veryCompact ? 24 : 30;
+    const valueWidth = config.veryCompact ? 42 : 54;
+    const gap = config.veryCompact ? 4 : 6;
+    const barHeight = config.veryCompact ? 4 : 5;
+    const barLeft = config.x + labelWidth + gap;
+    const barWidth = Math.max(36, config.width - labelWidth - valueWidth - gap * 2);
+    const valueX = barLeft + barWidth + gap + valueWidth;
+
+    this.add.text(config.x, config.y, config.label, {
+      fontFamily: this.PIXEL_FONT_FAMILY,
+      fontSize: config.veryCompact ? '7px' : '8px',
+      color: config.textColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+      maxLines: 1,
+    }).setOrigin(0, 0.5).setDepth(config.depth);
+
+    const barBack = this.add.rectangle(barLeft, config.y, barWidth, barHeight, 0x020204, 0.98)
+      .setOrigin(0, 0.5)
+      .setStrokeStyle(1, 0x151111, 0.95)
+      .setDepth(config.depth);
+
+    const fill = this.add.rectangle(barLeft, config.y, Math.max(1, barWidth * progress), Math.max(2, barHeight - 2), config.color, 0.94)
+      .setOrigin(0, 0.5)
+      .setDepth(config.depth + 1);
+
+    const highlight = this.add.rectangle(barLeft, config.y - Math.max(1, barHeight / 4), Math.max(1, barWidth * progress), 1, 0xffffff, 0.16)
+      .setOrigin(0, 0.5)
+      .setDepth(config.depth + 2);
+
+    const valueText = this.add.text(valueX, config.y, config.value, {
+      fontFamily: this.PIXEL_FONT_FAMILY,
+      fontSize: config.veryCompact ? '7px' : '8px',
+      color: '#d8c7a3',
+      stroke: '#000000',
+      strokeThickness: 2,
+      align: 'right',
+      maxLines: 1,
+    }).setOrigin(1, 0.5).setDepth(config.depth);
+
+    this.tweens.add({
+      targets: [fill, highlight],
+      scaleX: { from: 0.01, to: 1 },
+      duration: 240,
+      delay: 90,
+      ease: 'Sine.easeOut',
+    });
+
+    return {
+      fill,
+      highlight,
+      barBack,
+      valueText,
+      maxFillWidth: barWidth,
+    };
   }
 
   private getRaceIcon(id: string) {
@@ -829,7 +929,7 @@ export class CampScene extends Phaser.Scene {
     const viewportCenterX = viewport.x + viewport.width / 2;
     const viewportCenterY = viewport.y + viewport.height / 2;
 
-    this.add.rectangle(viewportCenterX, viewportCenterY, viewport.width, viewport.height, 0x020304, 0.76)
+    this.add.rectangle(viewportCenterX, viewportCenterY, viewport.width, viewport.height, 0x020304, 0.35)
       .setDepth(2);
 
     const mapContainer = this.add.container(0, 0).setDepth(3);
@@ -891,19 +991,6 @@ export class CampScene extends Phaser.Scene {
     this.add.rectangle(viewport.x + viewport.width - 10, centerY, 20, viewport.height, 0x000000, 0.34)
       .setDepth(4);
 
-    this.add.text(centerX, viewport.y + 18, 'Перетаскивай карту и нажимай на здания', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: this.getLayout().veryCompact ? '9px' : '11px',
-      color: '#b8aa91',
-      stroke: '#000000',
-      strokeThickness: 2,
-      align: 'center',
-      wordWrap: {
-        width: Math.min(viewport.width - 42, 430),
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(10).setAlpha(0.78);
   }
 
   private createCampMapHotspots(mapContainer: Phaser.GameObjects.Container) {
@@ -1393,7 +1480,7 @@ export class CampScene extends Phaser.Scene {
         visible?: boolean;
         depth?: number;
       };
-      
+
       return (
         displayObject.active &&
         displayObject.visible === true &&
@@ -1519,114 +1606,6 @@ export class CampScene extends Phaser.Scene {
     });
   }
 
-  private createSmallBar(config: {
-    x: number;
-    y: number;
-    width: number;
-    label: string;
-    value: string;
-    progress: number;
-    color: number;
-  }) {
-    const progress = Phaser.Math.Clamp(config.progress, 0, 1);
-    const barHeight = 9;
-    const left = config.x - config.width / 2;
-    const fillWidth = Math.max(1, config.width * progress);
-
-    this.add.text(left, config.y - 12, config.label, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '10px',
-      color: '#a99d8a',
-      wordWrap: { width: config.width * 0.45, useAdvancedWrap: true },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
-
-    this.add.text(left + config.width, config.y - 12, config.value, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '10px',
-      color: '#d8c7a3',
-      wordWrap: { width: config.width * 0.5, useAdvancedWrap: true },
-      maxLines: 1,
-    }).setOrigin(1, 0.5).setDepth(10);
-
-    this.add.rectangle(config.x, config.y + 4, config.width, barHeight, 0x010101, 1)
-      .setStrokeStyle(2, 0x121212, 1)
-      .setDepth(9);
-    this.add.rectangle(left, config.y + 4, fillWidth, barHeight - 4, config.color, 0.95)
-      .setOrigin(0, 0.5)
-      .setDepth(10);
-
-    const segments = 8;
-    for (let i = 1; i < segments; i += 1) {
-      this.add.rectangle(left + (config.width / segments) * i, config.y + 4, 1, barHeight, 0x000000, 0.38).setDepth(11);
-    }
-  }
-
-  private createSanityBar(config: {
-    x: number;
-    y: number;
-    width: number;
-  }) {
-    restoreSanityByTime();
-
-    const progress = Phaser.Math.Clamp(player.maxSanity > 0 ? player.sanity / player.maxSanity : 1, 0, 1);
-    const barHeight = 10;
-    const left = config.x - config.width / 2;
-    const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
-    const fillWidth = Math.max(1, config.width * progress);
-
-    this.add.text(left, config.y - 12, '☾ Рассудок', {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '10px',
-      color: '#b8aee0',
-      wordWrap: { width: config.width * 0.55, useAdvancedWrap: true },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
-
-    this.sanityValueText = this.add.text(left + config.width, config.y - 12, `${player.sanity}/${player.maxSanity}`, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '10px',
-      color: '#ded5ff',
-      wordWrap: { width: config.width * 0.42, useAdvancedWrap: true },
-      maxLines: 1,
-    }).setOrigin(1, 0.5).setDepth(10);
-
-    this.add.rectangle(config.x, config.y + 4, config.width, barHeight, 0x020204, 1)
-      .setStrokeStyle(2, 0x141018, 1)
-      .setDepth(9);
-
-    this.sanityFill = this.add.rectangle(left, config.y + 4, fillWidth, barHeight - 4, fillColor, 0.95)
-      .setOrigin(0, 0.5)
-      .setDepth(10)
-      .setScale(0.01, 1);
-
-    this.sanityFillWidth = config.width;
-
-    for (let i = 1; i < 12; i += 1) {
-      this.add.rectangle(left + (config.width / 12) * i, config.y + 4, 1, barHeight, 0x000000, 0.35).setDepth(11);
-    }
-
-    this.sanityHintText = this.add.text(config.x, config.y + 18, this.formatSanityTimeToFull(), {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '9px',
-      color: '#817891',
-      align: 'center',
-      wordWrap: {
-        width: config.width,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(10);
-
-    this.tweens.add({
-      targets: this.sanityFill,
-      scaleX: 1,
-      duration: 260,
-      delay: 120,
-      ease: 'Linear',
-    });
-  }
-
   private startSanityTimer() {
     this.sanityTimerEvent?.remove(false);
 
@@ -1660,32 +1639,19 @@ export class CampScene extends Phaser.Scene {
     const fillColor = progress <= 0.25 ? 0x8f3d67 : 0x6f5a91;
 
     this.sanityValueText?.setText(`${player.sanity}/${player.maxSanity}`);
-    this.sanityHintText?.setText(this.formatSanityTimeToFull());
 
     if (this.sanityFill) {
       this.sanityFill.setFillStyle(fillColor, 0.95);
-      this.sanityFill.setDisplaySize(fillWidth, this.sanityFill.displayHeight);
-      this.sanityFill.setScale(1, 1);
       this.sanityFill.setAlpha(player.sanity <= 0 ? 0.2 : 1);
+
+      this.tweens.killTweensOf(this.sanityFill);
+      this.tweens.add({
+        targets: this.sanityFill,
+        displayWidth: fillWidth,
+        duration: 180,
+        ease: 'Sine.easeOut',
+      });
     }
-  }
-
-  private formatSanityTimeToFull() {
-    const timeLeftMs = getSanityTimeToFullMs();
-
-    if (timeLeftMs <= 0) {
-      return 'Рассудок полон';
-    }
-
-    const totalMinutes = Math.ceil(timeLeftMs / 60000);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours <= 0) {
-      return `До полного: ${minutes} мин`;
-    }
-
-    return `До полного: ${hours} ч ${minutes} мин`;
   }
 
   private showNotEnoughSanityMessage() {
@@ -1693,95 +1659,6 @@ export class CampScene extends Phaser.Scene {
       'Недостаточно рассудка',
       `Для прохождения этажа нужно ${SANITY_COST_PER_FLOOR} рассудка. Рассудок восстанавливается со временем: 1 единица в минуту.`
     );
-  }
-
-  private createTinyResource(
-    x: number,
-    y: number,
-    icon: string,
-    value: string,
-    width: number
-  ) {
-    this.createPixelPanel({
-      x,
-      y,
-      width,
-      height: 26,
-      color: 0x101012,
-      borderColor: 0x050505,
-      innerColor: 0x4b4031,
-      depth: 8,
-      cut: 4,
-      shadowOffset: 2,
-    });
-
-    this.add.text(x - width / 2 + 20, y, icon, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '11px',
-      color: '#d8b56d',
-      stroke: '#000000',
-      strokeThickness: 1,
-    }).setOrigin(0.5).setDepth(10);
-
-    this.add.text(x - width / 2 + 35, y, value, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '12px',
-      color: '#d8c7a3',
-      stroke: '#000000',
-      strokeThickness: 1,
-      wordWrap: {
-        width: width - 42,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(10);
-  }
-
-  private createDarkTag(config: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    icon: string;
-    text: string;
-    accentColor: number;
-    depth: number;
-  }) {
-    this.createPixelPanel({
-      x: config.x,
-      y: config.y,
-      width: config.width,
-      height: config.height,
-      color: 0x0d0d0f,
-      borderColor: 0x040404,
-      innerColor: config.accentColor,
-      depth: config.depth,
-      cut: 4,
-      shadowOffset: 1,
-    });
-
-    const textX = config.icon ? config.x - config.width / 2 + 34 : config.x;
-    const originX = config.icon ? 0 : 0.5;
-
-    if (config.icon) {
-      this.add.text(config.x - config.width / 2 + 20, config.y, config.icon, {
-        fontFamily: this.PIXEL_FONT_FAMILY,
-        fontSize: '10px',
-        color: '#d8b56d',
-      }).setOrigin(0.5).setDepth(config.depth + 2);
-    }
-
-    this.add.text(textX, config.y, config.text, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: '10px',
-      color: '#9f9788',
-      align: 'center',
-      wordWrap: {
-        width: config.icon ? config.width - 44 : config.width - 16,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(originX, 0.5).setDepth(config.depth + 2);
   }
 
   private drawPixelButtonShape(
