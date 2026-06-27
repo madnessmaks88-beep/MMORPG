@@ -494,10 +494,8 @@ export class CampScene extends Phaser.Scene {
     const contentWidth = Math.min(width - safeX * 2, 620);
     const bottomNavTop = height - safeBottom;
 
-    // Теперь верх сцены занимает только компактный HUD.
-    // Поля headerHeight/heroTop/heroHeight оставлены в layout для совместимости
-    // с существующей логикой свечения костра, но больше не создают большие панели.
-    const headerHeight = veryCompact ? 64 : compact ? 72 : 80;
+    // Верх сцены теперь занимает только тонкий RPG HUD.
+    const headerHeight = veryCompact ? 56 : compact ? 60 : 64;
     const heroTop = safeTop;
     const heroHeight = headerHeight;
     const actionsTop = safeTop + headerHeight + 2;
@@ -565,14 +563,11 @@ export class CampScene extends Phaser.Scene {
     this.add.rectangle(centerX, height * 0.81, width, height * 0.42, 0x000000, 0.32)
       .setDepth(1);
 
-    // Виньетка по краям.
-    this.add.rectangle(8, height / 2, 16, height, 0x000000, 0.26)
+    // Мягкое затемнение только сверху и снизу. Боковые полосы убраны,
+    // чтобы карта не выглядела обрезанной по вертикальным краям.
+    this.add.rectangle(centerX, 12, width, 24, 0x000000, 0.24)
       .setDepth(1);
-    this.add.rectangle(width - 8, height / 2, 16, height, 0x000000, 0.26)
-      .setDepth(1);
-    this.add.rectangle(centerX, 12, width, 24, 0x000000, 0.32)
-      .setDepth(1);
-    this.add.rectangle(centerX, height - 12, width, 24, 0x000000, 0.38)
+    this.add.rectangle(centerX, height - 12, width, 24, 0x000000, 0.28)
       .setDepth(1);
 
     // Очень лёгкий тёплый акцент, чтобы костры на фоне поддерживали атмосферу.
@@ -601,129 +596,127 @@ export class CampScene extends Phaser.Scene {
 
     const race = player.raceId ? getRaceById(player.raceId) : undefined;
     const stats = getPlayerStats(player);
+
     const hudHeight = layout.headerHeight;
-    const hudWidth = layout.width - layout.safeX * 2;
-    const hudX = layout.centerX;
-    const hudY = layout.safeTop + hudHeight / 2;
     const hudTop = layout.safeTop;
+    const hudY = hudTop + hudHeight / 2;
+    const hudWidth = layout.width;
 
-    const panel = this.createPixelPanel({
-      x: hudX,
-      y: hudY,
-      width: hudWidth,
-      height: hudHeight,
-      color: 0x07080b,
-      alpha: 0.72,
-      borderColor: 0x050505,
-      innerColor: 0x8b6a3f,
-      innerAlpha: 0.36,
-      depth: 26,
-      cut: layout.veryCompact ? 7 : 9,
-      shadowOffset: 2,
-    });
+    // Единая лёгкая подложка HUD без тяжёлых панелей и блоков.
+    const hudBack = this.add.rectangle(
+      layout.centerX,
+      hudY,
+      hudWidth,
+      hudHeight + 8,
+      0x050608,
+      layout.veryCompact ? 0.50 : 0.46
+    ).setDepth(38);
 
-    const topShade = this.add.rectangle(
-      hudX,
-      hudTop + 8,
-      hudWidth - 12,
-      10,
-      0xffffff,
-      0.025
-    ).setDepth(29);
-
-    const bottomShade = this.add.rectangle(
-      hudX,
-      hudTop + hudHeight - 7,
-      hudWidth - 18,
+    const hudShadow = this.add.rectangle(
+      layout.centerX,
+      hudTop + hudHeight + 3,
+      hudWidth,
       8,
       0x000000,
-      0.24
-    ).setDepth(29);
+      0.22
+    ).setDepth(38);
 
-    const portraitSize = layout.veryCompact ? 38 : layout.compact ? 42 : 46;
-    const portraitX = layout.safeX + portraitSize / 2 + 6;
-    const portraitY = hudY;
+    const bronzeLine = this.add.rectangle(
+      layout.centerX,
+      hudTop + hudHeight,
+      hudWidth - layout.safeX * 1.4,
+      1,
+      0xb99257,
+      0.42
+    ).setDepth(39);
 
-    const portraitFrame = this.createPixelPanel({
-      x: portraitX,
-      y: portraitY,
-      width: portraitSize,
-      height: portraitSize,
-      color: 0x111016,
-      alpha: 0.95,
-      borderColor: 0x020203,
-      innerColor: race?.id === 'night_elf' ? 0x6f5a91 : 0x8b6a3f,
-      innerAlpha: 0.72,
-      depth: 30,
-      cut: 6,
-      shadowOffset: 2,
-    });
+    const avatarRadius = layout.veryCompact ? 20 : layout.compact ? 22 : 23;
+    const avatarX = layout.safeX + avatarRadius + 6;
+    const avatarY = hudY;
+
+    const avatarGlow = this.add.circle(avatarX, avatarY, avatarRadius + 5, 0x7d55ff, 0.06)
+      .setDepth(39)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const avatarBack = this.add.circle(avatarX, avatarY, avatarRadius, 0x09090d, 0.96)
+      .setStrokeStyle(2, 0xb99257, 0.76)
+      .setDepth(40);
+
+    const avatarInner = this.add.circle(avatarX, avatarY, Math.max(4, avatarRadius - 5), 0x131018, 0.78)
+      .setDepth(40);
 
     const raceTextureKey = player.raceId ? `race_${player.raceId}` : undefined;
     let avatarObject: Phaser.GameObjects.GameObject;
 
     if (raceTextureKey && this.textures.exists(raceTextureKey)) {
-      avatarObject = this.add.image(portraitX, portraitY, raceTextureKey)
+      const avatarImage = this.add.image(avatarX, avatarY, raceTextureKey)
         .setOrigin(0.5)
-        .setDisplaySize(portraitSize - 10, portraitSize - 10)
-        .setDepth(33);
+        .setDisplaySize(avatarRadius * 1.65, avatarRadius * 1.65)
+        .setDepth(41);
+
+      const avatarMask = this.add.graphics();
+      avatarMask.fillStyle(0xffffff, 1);
+      avatarMask.fillCircle(avatarX, avatarY, avatarRadius - 3);
+      avatarMask.setVisible(false);
+      avatarImage.setMask(avatarMask.createGeometryMask());
+
+      avatarObject = avatarImage;
     } else {
-      avatarObject = this.add.text(portraitX, portraitY, race ? this.getRaceIcon(race.id) : '◆', {
+      avatarObject = this.add.text(avatarX, avatarY, race ? this.getRaceIcon(race.id) : '◆', {
         fontFamily: this.PIXEL_FONT_FAMILY,
-        fontSize: layout.veryCompact ? '22px' : '26px',
+        fontSize: layout.veryCompact ? '21px' : '24px',
         color: '#d8b56d',
         stroke: '#000000',
         strokeThickness: 2,
         align: 'center',
-      }).setOrigin(0.5).setDepth(33);
+      }).setOrigin(0.5).setDepth(41);
     }
 
-    const goldPanelWidth = layout.veryCompact ? 82 : layout.compact ? 96 : 108;
-    const goldPanelHeight = layout.veryCompact ? 22 : 24;
-    const goldPanelX = layout.width - layout.safeX - goldPanelWidth / 2;
-    const goldPanelY = hudTop + (layout.veryCompact ? 17 : 19);
+    const goldPanelWidth = layout.veryCompact ? 76 : layout.compact ? 86 : 92;
+    const goldPanelHeight = 20;
+    const goldPanelX = layout.width - layout.safeX - goldPanelWidth / 2 - 2;
+    const goldPanelY = hudTop + (layout.veryCompact ? 14 : 15);
 
-    this.createPixelPanel({
-      x: goldPanelX,
-      y: goldPanelY,
-      width: goldPanelWidth,
-      height: goldPanelHeight,
-      color: 0x11100d,
-      alpha: 0.9,
-      borderColor: 0x050403,
-      innerColor: 0xb99257,
-      innerAlpha: 0.62,
-      depth: 31,
-      cut: 5,
-      shadowOffset: 1,
-    });
+    const goldPill = this.add.graphics().setDepth(40);
+    goldPill.fillStyle(0x0b0908, 0.86);
+    goldPill.fillRoundedRect(
+      goldPanelX - goldPanelWidth / 2,
+      goldPanelY - goldPanelHeight / 2,
+      goldPanelWidth,
+      goldPanelHeight,
+      8
+    );
+    goldPill.lineStyle(1, 0xb99257, 0.58);
+    goldPill.strokeRoundedRect(
+      goldPanelX - goldPanelWidth / 2,
+      goldPanelY - goldPanelHeight / 2,
+      goldPanelWidth,
+      goldPanelHeight,
+      8
+    );
 
     const goldText = this.add.text(goldPanelX, goldPanelY, `◆ ${player.gold}`, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '9px' : '11px',
+      fontSize: layout.veryCompact ? '9px' : '10px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
       wordWrap: {
-        width: goldPanelWidth - 12,
+        width: goldPanelWidth - 10,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(34);
+    }).setOrigin(0.5).setDepth(41);
 
-    const titleX = portraitX + portraitSize / 2 + (layout.veryCompact ? 9 : 12);
+    const infoX = avatarX + avatarRadius + (layout.veryCompact ? 9 : 11);
     const goldLeft = goldPanelX - goldPanelWidth / 2;
-    const titleWidth = Math.max(96, goldLeft - titleX - 10);
-    const raceTitle = race
-      ? player.name && player.name !== 'Безымянный'
-        ? `${player.name} • ${race.name}`
-        : race.name
-      : player.name || 'Безымянный';
+    const titleWidth = Math.max(96, goldLeft - infoX - 10);
+    const raceTitle = race ? race.name : player.name || 'Безымянный';
 
-    const titleText = this.add.text(titleX, hudTop + (layout.veryCompact ? 14 : 16), raceTitle, {
+    const titleText = this.add.text(infoX, hudTop + (layout.veryCompact ? 12 : 13), raceTitle, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '12px' : layout.compact ? '13px' : '15px',
+      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
       color: '#e0c585',
       stroke: '#000000',
       strokeThickness: 2,
@@ -732,48 +725,57 @@ export class CampScene extends Phaser.Scene {
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5).setDepth(34);
+    }).setOrigin(0, 0.5).setDepth(41);
 
-    const barAreaWidth = Math.max(132, goldLeft - titleX - 10);
-    const firstBarY = hudTop + (layout.veryCompact ? 34 : 38);
-    const rowGap = layout.veryCompact ? 9 : 11;
+    const labelWidth = layout.veryCompact ? 22 : 26;
+    const valueWidth = layout.veryCompact ? 42 : 48;
+    const barGapX = layout.veryCompact ? 4 : 5;
+    const availableTotalWidth = Math.max(132, goldLeft - infoX - 10);
+    const maxBarWidth = Math.max(70, availableTotalWidth - labelWidth - valueWidth - barGapX * 2);
+
+    const hpBarWidth = maxBarWidth;
+    const energyBarWidth = Math.max(54, Math.floor(maxBarWidth * 0.78));
+    const sanityBarWidth = Math.max(48, Math.floor(maxBarWidth * 0.62));
+
+    const barsStartY = hudTop + (layout.veryCompact ? 28 : 30);
+    const rowGap = layout.veryCompact ? 8 : 9;
 
     this.createCompactHudBar({
-      x: titleX,
-      y: firstBarY,
-      width: barAreaWidth,
+      x: infoX,
+      y: barsStartY,
+      width: hpBarWidth,
       label: 'HP',
       value: `${player.hp}/${stats.maxHp}`,
       progress: stats.maxHp > 0 ? player.hp / stats.maxHp : 1,
       color: 0x9f3535,
       textColor: '#f0b1a8',
-      depth: 34,
+      depth: 41,
       veryCompact: layout.veryCompact,
     });
 
     this.createCompactHudBar({
-      x: titleX,
-      y: firstBarY + rowGap,
-      width: barAreaWidth,
+      x: infoX,
+      y: barsStartY + rowGap,
+      width: energyBarWidth,
       label: 'ЭН',
       value: `${player.energy}/${stats.maxEnergy}`,
       progress: stats.maxEnergy > 0 ? player.energy / stats.maxEnergy : 1,
       color: 0x356ea6,
       textColor: '#b9d8ff',
-      depth: 34,
+      depth: 41,
       veryCompact: layout.veryCompact,
     });
 
     const sanityBar = this.createCompactHudBar({
-      x: titleX,
-      y: firstBarY + rowGap * 2,
-      width: barAreaWidth,
+      x: infoX,
+      y: barsStartY + rowGap * 2,
+      width: sanityBarWidth,
       label: 'РАЗ',
       value: `${player.sanity}/${player.maxSanity}`,
       progress: player.maxSanity > 0 ? player.sanity / player.maxSanity : 1,
       color: player.sanity <= player.maxSanity * 0.25 ? 0x8f3d67 : 0x6f5a91,
       textColor: '#d7cbff',
-      depth: 34,
+      depth: 41,
       veryCompact: layout.veryCompact,
     });
 
@@ -784,7 +786,7 @@ export class CampScene extends Phaser.Scene {
     if (player.maxSanity > 0 && player.sanity / player.maxSanity <= 0.25) {
       this.tweens.add({
         targets: this.sanityFill,
-        alpha: { from: 0.72, to: 1 },
+        alpha: { from: 0.62, to: 1 },
         duration: 620,
         yoyo: true,
         repeat: -1,
@@ -793,25 +795,26 @@ export class CampScene extends Phaser.Scene {
     }
 
     const introObjects: Phaser.GameObjects.GameObject[] = [
-      panel.shadow,
-      panel.panel,
-      topShade,
-      bottomShade,
-      portraitFrame.shadow,
-      portraitFrame.panel,
+      hudBack,
+      hudShadow,
+      bronzeLine,
+      avatarGlow,
+      avatarBack,
+      avatarInner,
       avatarObject,
+      goldPill,
       goldText,
       titleText,
     ];
 
-    this.playPixelIntro(introObjects, 35);
+    this.playPixelIntro(introObjects, 20);
 
     this.tweens.add({
-      targets: avatarObject,
-      scale: { from: 0.88, to: 1 },
-      duration: 180,
-      delay: 80,
-      ease: 'Back.easeOut',
+      targets: [avatarGlow, avatarBack, avatarInner, avatarObject],
+      alpha: { from: 0.25, to: 1 },
+      duration: 170,
+      delay: 55,
+      ease: 'Sine.easeOut',
     });
 
     this.startSanityTimer();
@@ -830,15 +833,15 @@ export class CampScene extends Phaser.Scene {
     veryCompact: boolean;
   }) {
     const progress = Phaser.Math.Clamp(config.progress, 0, 1);
-    const labelWidth = config.veryCompact ? 24 : 30;
-    const valueWidth = config.veryCompact ? 42 : 54;
-    const gap = config.veryCompact ? 4 : 6;
+    const labelWidth = config.veryCompact ? 22 : 26;
+    const valueWidth = config.veryCompact ? 42 : 48;
+    const gap = config.veryCompact ? 4 : 5;
     const barHeight = config.veryCompact ? 4 : 5;
     const barLeft = config.x + labelWidth + gap;
-    const barWidth = Math.max(36, config.width - labelWidth - valueWidth - gap * 2);
+    const barWidth = Math.max(28, config.width);
     const valueX = barLeft + barWidth + gap + valueWidth;
 
-    this.add.text(config.x, config.y, config.label, {
+    const labelText = this.add.text(config.x, config.y, config.label, {
       fontFamily: this.PIXEL_FONT_FAMILY,
       fontSize: config.veryCompact ? '7px' : '8px',
       color: config.textColor,
@@ -847,16 +850,33 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(config.depth);
 
-    const barBack = this.add.rectangle(barLeft, config.y, barWidth, barHeight, 0x020204, 0.98)
+    const barBack = this.add.rectangle(barLeft, config.y, barWidth, barHeight, 0x030305, 0.88)
       .setOrigin(0, 0.5)
-      .setStrokeStyle(1, 0x151111, 0.95)
       .setDepth(config.depth);
 
-    const fill = this.add.rectangle(barLeft, config.y, Math.max(1, barWidth * progress), Math.max(2, barHeight - 2), config.color, 0.94)
+    const backLine = this.add.rectangle(barLeft, config.y + barHeight / 2 + 1, barWidth, 1, 0x000000, 0.55)
+      .setOrigin(0, 0.5)
+      .setDepth(config.depth);
+
+    const fill = this.add.rectangle(
+      barLeft,
+      config.y,
+      Math.max(1, barWidth * progress),
+      Math.max(2, barHeight - 1),
+      config.color,
+      0.96
+    )
       .setOrigin(0, 0.5)
       .setDepth(config.depth + 1);
 
-    const highlight = this.add.rectangle(barLeft, config.y - Math.max(1, barHeight / 4), Math.max(1, barWidth * progress), 1, 0xffffff, 0.16)
+    const highlight = this.add.rectangle(
+      barLeft,
+      config.y - Math.max(1, barHeight / 3),
+      Math.max(1, barWidth * progress),
+      1,
+      0xffffff,
+      0.16
+    )
       .setOrigin(0, 0.5)
       .setDepth(config.depth + 2);
 
@@ -873,8 +893,8 @@ export class CampScene extends Phaser.Scene {
     this.tweens.add({
       targets: [fill, highlight],
       scaleX: { from: 0.01, to: 1 },
-      duration: 240,
-      delay: 90,
+      duration: 220,
+      delay: 70,
       ease: 'Sine.easeOut',
     });
 
@@ -882,6 +902,8 @@ export class CampScene extends Phaser.Scene {
       fill,
       highlight,
       barBack,
+      backLine,
+      labelText,
       valueText,
       maxFillWidth: barWidth,
     };
@@ -952,7 +974,7 @@ export class CampScene extends Phaser.Scene {
 
     const mapImage = this.add.image(0, 0, this.CAMP_INTERACTIVE_MAP_ASSET.key)
       .setOrigin(0.5)
-      .setAlpha(0.98);
+      .setAlpha(1);
 
     this.campMapImageWidth = Math.max(1, mapImage.width);
     this.campMapImageHeight = Math.max(1, mapImage.height);
@@ -1001,17 +1023,20 @@ export class CampScene extends Phaser.Scene {
 
   private createCampMapVignette(viewport: CampMapViewport) {
     const centerX = viewport.x + viewport.width / 2;
-    const centerY = viewport.y + viewport.height / 2;
 
-    this.add.rectangle(centerX, viewport.y + 12, viewport.width, 24, 0x000000, 0.42)
-      .setDepth(4);
-    this.add.rectangle(centerX, viewport.y + viewport.height - 12, viewport.width, 24, 0x000000, 0.42)
-      .setDepth(4);
-    this.add.rectangle(viewport.x + 10, centerY, 20, viewport.height, 0x000000, 0.34)
-      .setDepth(4);
-    this.add.rectangle(viewport.x + viewport.width - 10, centerY, 20, viewport.height, 0x000000, 0.34)
+    // Только мягкое затемнение сверху/снизу. Боковые вертикальные полосы
+    // специально не рисуем, чтобы по краям карты не было серых линий.
+    this.add.rectangle(centerX, viewport.y + 10, viewport.width, 20, 0x000000, 0.22)
       .setDepth(4);
 
+    this.add.rectangle(
+      centerX,
+      viewport.y + viewport.height - 12,
+      viewport.width,
+      24,
+      0x000000,
+      0.28
+    ).setDepth(4);
   }
 
   private createCampMapHotspots(mapContainer: Phaser.GameObjects.Container) {
