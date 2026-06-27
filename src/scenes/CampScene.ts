@@ -999,8 +999,8 @@ export class CampScene extends Phaser.Scene {
         id: 'dungeon',
         label: 'Вход в подземелье',
         x: 462,
-        y: 92,
-        width: 260,
+        y: 128,
+        width: 250,
         height: 170,
         accentColor: 0x7f55ff,
         onClick: () => this.tryEnterCatacombs(),
@@ -1008,49 +1008,49 @@ export class CampScene extends Phaser.Scene {
       {
         id: 'temple',
         label: 'Храм',
-        x: 232,
-        y: 565,
-        width: 280,
-        height: 230,
+        x: 220,
+        y: 575,
+        width: 260,
+        height: 210,
         accentColor: 0x7d55ff,
         onClick: () => this.scene.start('StatsTreeScene'),
       },
       {
         id: 'campfire',
         label: 'Костёр',
-        x: 695,
-        y: 600,
-        width: 250,
-        height: 210,
+        x: 675,
+        y: 585,
+        width: 230,
+        height: 180,
         accentColor: 0xf08a3c,
         onClick: () => this.restAtCampfire(),
       },
       {
         id: 'quests',
         label: 'Доска заданий',
-        x: 238,
-        y: 905,
+        x: 250,
+        y: 935,
         width: 250,
-        height: 150,
+        height: 140,
         accentColor: 0xd8c088,
         onClick: () => this.scene.start('QuestScene'),
       },
       {
         id: 'tavern',
         label: 'Таверна',
-        x: 625,
-        y: 880,
-        width: 300,
-        height: 230,
+        x: 645,
+        y: 955,
+        width: 270,
+        height: 250,
         accentColor: 0xf1b76a,
         onClick: () => this.scene.start('TavernScene'),
       },
       {
         id: 'market',
         label: 'Рынок',
-        x: 410,
-        y: 1228,
-        width: 610,
+        x: 430,
+        y: 1275,
+        width: 690,
         height: 360,
         accentColor: 0xc98b55,
         onClick: () => this.scene.start('MarketScene'),
@@ -1058,10 +1058,10 @@ export class CampScene extends Phaser.Scene {
       {
         id: 'home',
         label: 'Дом',
-        x: 660,
-        y: 1760,
-        width: 330,
-        height: 270,
+        x: 640,
+        y: 1768,
+        width: 340,
+        height: 300,
         accentColor: 0xd8b56d,
         onClick: () => this.scene.start('HomeScene'),
       },
@@ -1158,22 +1158,22 @@ export class CampScene extends Phaser.Scene {
     const hasActiveCheckpoint = Boolean(getActiveCampfireBattleCheckpoint());
 
     if (hasActiveRun || hasActiveCheckpoint) {
-      return { x: 462, y: 92 };
+      return { x: 462, y: 128 };
     }
 
     if (this.hasClaimableQuests()) {
-      return { x: 238, y: 905 };
+      return { x: 250, y: 935 };
     }
 
     if (this.getAvailableAscensionPoints() > 0) {
-      return { x: 232, y: 565 };
+      return { x: 220, y: 575 };
     }
 
     if (this.isCityCampfireActive()) {
-      return { x: 695, y: 600 };
+      return { x: 675, y: 585 };
     }
 
-    return { x: 470, y: 1000 };
+    return { x: 430, y: 1275 };
   }
 
   private getCampMapPositionForFocus(mapX: number, mapY: number, viewport: CampMapViewport) {
