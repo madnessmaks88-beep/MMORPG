@@ -214,6 +214,12 @@ export class CampScene extends Phaser.Scene {
       this.campMapMaskGraphics?.destroy();
       this.campMapMaskGraphics = undefined;
       this.campMapContainer = undefined;
+      this.campMapClickLocked = false;
+      this.campMapDragging = false;
+      this.campMapDidDrag = false;
+      this.hoveredCampMapHotspotId = undefined;
+      this.campMapHotspots = [];
+      this.campMapHotspotVisuals.clear();
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
       this.sanityValueText = undefined;
@@ -917,6 +923,15 @@ export class CampScene extends Phaser.Scene {
     this.campMapMaskGraphics?.destroy();
     this.campMapMaskGraphics = undefined;
 
+    // ВАЖНО: сброс состояния при каждом новом входе в CampScene.
+    // Без этого после перехода на другую сцену и возврата hotspot могут остаться заблокированными.
+    this.campMapClickLocked = false;
+    this.campMapDragging = false;
+    this.campMapDidDrag = false;
+    this.hoveredCampMapHotspotId = undefined;
+    this.campMapTargetX = 0;
+    this.campMapTargetY = 0;
+
     const viewport: CampMapViewport = {
       x: 0,
       y: layout.actionsTop,
@@ -946,7 +961,7 @@ export class CampScene extends Phaser.Scene {
       viewport.width / this.campMapImageWidth,
       viewport.height / this.campMapImageHeight
     );
-    const zoom = layout.veryCompact ? 1.24 : layout.compact ? 1.18 : 1.1;
+    const zoom = layout.veryCompact ? 1.48 : layout.compact ? 1.42 : 1.34;
 
     this.campMapScale = baseScale * zoom;
     mapContainer.setScale(this.campMapScale);
@@ -969,6 +984,12 @@ export class CampScene extends Phaser.Scene {
     this.setCampMapPosition(startPosition.x, startPosition.y, true);
     this.installCampMapInputHandlers();
     this.updateCampMapHotspotStates();
+
+    console.info('[CampScene] interactive map recreated', {
+      scale: this.campMapScale,
+      hotspots: this.campMapHotspots.length,
+      clickLocked: this.campMapClickLocked,
+    });
 
     this.tweens.add({
       targets: mapContainer,
@@ -1323,6 +1344,8 @@ export class CampScene extends Phaser.Scene {
 
     this.campMapDragging = false;
     this.campMapDidDrag = false;
+    this.campMapClickLocked = false;
+    this.hoveredCampMapHotspotId = undefined;
   }
 
   private getCampMapHotspotAtPointer(pointer: Phaser.Input.Pointer): CampMapHotspot | undefined {
@@ -1342,32 +1365,48 @@ export class CampScene extends Phaser.Scene {
   }
 
   private triggerCampMapHotspot(hotspot: CampMapHotspot) {
-    if (this.campMapClickLocked) {
+    if (this.campMapClickLocked || this.hasBlockingModalOpen()) {
       return;
     }
 
     this.campMapClickLocked = true;
+    this.campMapDragging = false;
+    this.campMapDidDrag = false;
     this.setCampMapHoveredHotspot(hotspot.id);
 
     const visual = this.campMapHotspotVisuals.get(hotspot.id);
 
+    const runHotspotAction = () => {
+      // ВАЖНО: сбрасываем lock ДО scene.start / открытия модалки.
+      // Иначе после возврата в CampScene hotspot могут перестать работать.
+      this.campMapClickLocked = false;
+      this.campMapDragging = false;
+      this.campMapDidDrag = false;
+      this.setCampMapHoveredHotspot(undefined);
+
+      hotspot.onClick();
+    };
+
     if (visual) {
+      this.tweens.killTweensOf([visual.glow, visual.label]);
+
       this.tweens.add({
         targets: [visual.glow, visual.label],
         alpha: { from: 0.32, to: 0.12 },
         scale: { from: 1.05, to: 1 },
         duration: 110,
         ease: 'Sine.easeOut',
-        onComplete: () => {
-          hotspot.onClick();
-        },
+        onComplete: runHotspotAction,
       });
     } else {
-      hotspot.onClick();
+      runHotspotAction();
     }
 
-    this.time.delayedCall(420, () => {
-      this.campMapClickLocked = false;
+    // Дополнительная страховка, если hotspot не сменил сцену, а открыл модальное окно.
+    this.time.delayedCall(300, () => {
+      if (this.scene.isActive()) {
+        this.campMapClickLocked = false;
+      }
     });
   }
 
