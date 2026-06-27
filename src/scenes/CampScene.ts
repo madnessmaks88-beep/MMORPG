@@ -983,7 +983,7 @@ export class CampScene extends Phaser.Scene {
       viewport.width / this.campMapImageWidth,
       viewport.height / this.campMapImageHeight
     );
-    const zoom = layout.veryCompact ? 1.48 : layout.compact ? 1.42 : 1.34;
+    const zoom = layout.veryCompact ? 1.72 : layout.compact ? 1.64 : 1.56;
 
     this.campMapScale = baseScale * zoom;
     mapContainer.setScale(this.campMapScale);
