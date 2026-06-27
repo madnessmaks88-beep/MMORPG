@@ -2397,7 +2397,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
       // Враг стоит справа, поэтому разворачиваем его влево, к герою.
-      .setFlipX(true);
+      .setFlipX(false);
 
     this.fitImageToBox(
       sprite,

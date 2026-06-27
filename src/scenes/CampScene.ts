@@ -48,10 +48,6 @@ type CampLayout = {
   veryCompact: boolean;
 };
 
-type CampActionButton = {
-  titleText: Phaser.GameObjects.Text;
-  descriptionText: Phaser.GameObjects.Text;
-};
 
 type CityFlintType = 'common' | 'rare' | 'donate';
 
@@ -69,6 +65,36 @@ type CampfirePlayer = typeof player & {
   premiumFlintUnlocked?: boolean;
 };
 
+type CampMapHotspot = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  accentColor: number;
+  onClick: () => void;
+};
+
+type CampMapViewport = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type CampMapHotspotVisual = {
+  hotspot: CampMapHotspot;
+  glow: Phaser.GameObjects.Ellipse;
+  label: Phaser.GameObjects.Text;
+  zone: Phaser.GameObjects.Zone;
+  debugBox?: Phaser.GameObjects.Rectangle;
+  debugLabel?: Phaser.GameObjects.Text;
+  activeTween?: Phaser.Tweens.Tween;
+};
+
+const DEBUG_CAMP_HOTSPOTS = false;
+
 export class CampScene extends Phaser.Scene {
   private static startupPrepared = false;
   private static startupPromise?: Promise<void>;
@@ -79,6 +105,39 @@ export class CampScene extends Phaser.Scene {
   private cityCampfireWarmOverlay?: Phaser.GameObjects.Rectangle;
   private cityCampfireGlowObjects: Phaser.GameObjects.GameObject[] = [];
   private cityCampfireVisualTweens: Phaser.Tweens.Tween[] = [];
+
+  private campMapContainer?: Phaser.GameObjects.Container;
+  private campMapMaskGraphics?: Phaser.GameObjects.Graphics;
+  private campMapViewport?: CampMapViewport;
+  private campMapHotspots: CampMapHotspot[] = [];
+  private campMapHotspotVisuals = new Map<string, CampMapHotspotVisual>();
+  private hoveredCampMapHotspotId?: string;
+  private campMapScale = 1;
+  private campMapImageWidth = 0;
+  private campMapImageHeight = 0;
+  private campMapMinX = 0;
+  private campMapMaxX = 0;
+  private campMapMinY = 0;
+  private campMapMaxY = 0;
+  private campMapTargetX = 0;
+  private campMapTargetY = 0;
+  private campMapDragging = false;
+  private campMapDidDrag = false;
+  private campMapDragStartPointerX = 0;
+  private campMapDragStartPointerY = 0;
+  private campMapDragStartX = 0;
+  private campMapDragStartY = 0;
+  private campMapClickLocked = false;
+  private campMapPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private campMapPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private campMapPointerUpHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private campMapWheelHandler?: (
+    pointer: Phaser.Input.Pointer,
+    gameObjects: Phaser.GameObjects.GameObject[],
+    deltaX: number,
+    deltaY: number
+  ) => void;
+
   private campfireTimerEvent?: Phaser.Time.TimerEvent;
   private sanityTimerEvent?: Phaser.Time.TimerEvent;
   private sanityValueText?: Phaser.GameObjects.Text;
@@ -99,39 +158,9 @@ export class CampScene extends Phaser.Scene {
     url: new URL('../assets/images/camp/camp_background.png', import.meta.url).href,
   } as const;
 
-  private readonly CAMP_ACTION_ASSETS = {
-    board: {
-      key: 'campActionBoard',
-      url: new URL('../assets/images/camp/ui/oblast1.png', import.meta.url).href,
-    },
-    dungeon: {
-      key: 'campButtonDungeon',
-      url: new URL('../assets/images/camp/ui/VHOD1.png', import.meta.url).href,
-    },
-    campfire: {
-      key: 'campButtonCampfire',
-      url: new URL('../assets/images/camp/ui/KOSTER1.png', import.meta.url).href,
-    },
-    temple: {
-      key: 'campButtonTemple',
-      url: new URL('../assets/images/camp/ui/XRAM1.png', import.meta.url).href,
-    },
-    tavern: {
-      key: 'campButtonTavern',
-      url: new URL('../assets/images/camp/ui/taverna1.png', import.meta.url).href,
-    },
-    quests: {
-      key: 'campButtonQuests',
-      url: new URL('../assets/images/camp/ui/zadania1.png', import.meta.url).href,
-    },
-    market: {
-      key: 'campButtonMarket',
-      url: new URL('../assets/images/camp/ui/rinok1.png', import.meta.url).href,
-    },
-    home: {
-      key: 'campButtonHome',
-      url: new URL('../assets/images/camp/ui/home1.png', import.meta.url).href,
-    },
+  private readonly CAMP_INTERACTIVE_MAP_ASSET = {
+    key: 'campInteractiveMap',
+    url: new URL('../assets/images/camp/camp_interactive_map.png', import.meta.url).href,
   } as const;
 
   constructor() {
@@ -143,11 +172,9 @@ export class CampScene extends Phaser.Scene {
       this.load.image(this.CAMP_BACKGROUND_ASSET.key, this.CAMP_BACKGROUND_ASSET.url);
     }
 
-    Object.values(this.CAMP_ACTION_ASSETS).forEach(asset => {
-      if (!this.textures.exists(asset.key)) {
-        this.load.image(asset.key, asset.url);
-      }
-    });
+    if (!this.textures.exists(this.CAMP_INTERACTIVE_MAP_ASSET.key)) {
+      this.load.image(this.CAMP_INTERACTIVE_MAP_ASSET.key, this.CAMP_INTERACTIVE_MAP_ASSET.url);
+    }
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.applyNearestFilterToCampTextures();
@@ -157,7 +184,7 @@ export class CampScene extends Phaser.Scene {
   private applyNearestFilterToCampTextures() {
     const keys = [
       this.CAMP_BACKGROUND_ASSET.key,
-      ...Object.values(this.CAMP_ACTION_ASSETS).map(asset => asset.key),
+      this.CAMP_INTERACTIVE_MAP_ASSET.key,
     ];
 
     keys.forEach(key => {
@@ -183,6 +210,11 @@ export class CampScene extends Phaser.Scene {
       this.campfireTimerEvent = undefined;
       this.sanityTimerEvent?.remove(false);
       this.sanityTimerEvent = undefined;
+      this.cleanupCampMapInput();
+      this.clearCampMapHotspotVisuals();
+      this.campMapMaskGraphics?.destroy();
+      this.campMapMaskGraphics = undefined;
+      this.campMapContainer = undefined;
       this.cityCampfireVisualTweens.forEach(tween => tween.stop());
       this.cityCampfireVisualTweens = [];
       this.sanityValueText = undefined;
@@ -237,6 +269,25 @@ export class CampScene extends Phaser.Scene {
       this.showCampSceneFatalError(error);
       return;
     }
+  }
+
+  update() {
+    if (!this.campMapContainer || this.campMapDragging) {
+      return;
+    }
+
+    const dx = Math.abs(this.campMapContainer.x - this.campMapTargetX);
+    const dy = Math.abs(this.campMapContainer.y - this.campMapTargetY);
+
+    if (dx < 0.35 && dy < 0.35) {
+      this.campMapContainer.setPosition(this.campMapTargetX, this.campMapTargetY);
+      return;
+    }
+
+    this.campMapContainer.setPosition(
+      Phaser.Math.Linear(this.campMapContainer.x, this.campMapTargetX, 0.18),
+      Phaser.Math.Linear(this.campMapContainer.y, this.campMapTargetY, 0.18)
+    );
   }
 
   private createInternalLoadingScreen() {
@@ -756,386 +807,604 @@ export class CampScene extends Phaser.Scene {
   }
 
   private createMainActions(layout: CampLayout) {
-    const hasActiveRun =
-      gameState.floorRun.active &&
-      gameState.floorRun.rooms.length > 0;
-
-    const activeCheckpoint = getActiveCampfireBattleCheckpoint();
-    const hasActiveCheckpoint = Boolean(activeCheckpoint);
-    const hasQuestReward = this.hasClaimableQuests();
-    const cityCampfireActive = this.isCityCampfireActive();
-    const ascensionPoints = this.getAvailableAscensionPoints();
-    const hasAscensionPoints = ascensionPoints > 0;
-
-    const boardWidth = layout.contentWidth + 20;
-    const boardHeight = layout.actionsHeight + 30;
-    const boardY = layout.actionsTop + boardHeight / 2;
-    const board = this.add.container(layout.centerX, boardY).setDepth(8);
-
-    const boardBg = this.add.image(0, 0, this.CAMP_ACTION_ASSETS.board.key)
-      .setDisplaySize(boardWidth, boardHeight)
-      .setOrigin(0.5)
-      .setAlpha(cityCampfireActive ? 1 : 0.96);
-
-    board.add(boardBg);
-
-    // oblast1.png остаётся прежнего размера. Меняем только кнопки:
-    // они становятся крупнее и попадают в нарисованные слоты области.
-    const sidePadding = layout.veryCompact ? 40 : layout.compact ? 44 : 48;
-    const innerWidth = boardWidth - sidePadding * 2;
-    const columnGap = layout.veryCompact ? 12 : layout.compact ? 16 : 18;
-
-    const bigButtonWidth = innerWidth;
-    const smallButtonWidth = Math.floor((innerWidth - columnGap) / 2);
-
-    const dungeonHeight = layout.veryCompact ? 120 : layout.compact ? 128 : 134;
-    const smallHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 118;
-    const wideHeight = layout.veryCompact ? 106 : layout.compact ? 114 : 120;
-
-    const leftX = -bigButtonWidth / 2 + smallButtonWidth / 2;
-    const rightX = bigButtonWidth / 2 - smallButtonWidth / 2;
-
-    // Центры слотов подобраны под саму картинку oblast1.png.
-    // Так область не меняет размер, а кнопки попадают в готовые места.
-    const topSlot = -boardHeight * (layout.veryCompact ? 0.260 : 0.265);
-    const row1Y = -boardHeight * (layout.veryCompact ? 0.115 : 0.120);
-    const row2Y = boardHeight * (layout.veryCompact ? 0.020 : 0.015);
-    const marketY = boardHeight * (layout.veryCompact ? 0.160 : 0.155);
-    const homeY = boardHeight * (layout.veryCompact ? 0.300 : 0.295);
-
-    const dungeonY = topSlot;
-
-    const dungeonTitle = hasActiveRun || hasActiveCheckpoint
-      ? 'Продолжить спуск'
-      : 'Вход в подземелье';
-
-    const dungeonStatus = activeCheckpoint
-      ? `Эт. ${activeCheckpoint.floor}`
-      : hasActiveRun
-        ? `Этаж ${gameState.floorRun.currentFloor}`
-        : hasEnoughSanityForFloor()
-          ? `Рассудок -${SANITY_COST_PER_FLOOR}`
-          : 'Мало рассудка';
-
-    this.createImageActionButton({
-      board,
-      x: 0,
-      y: dungeonY,
-      width: bigButtonWidth,
-      height: dungeonHeight,
-      textureKey: this.CAMP_ACTION_ASSETS.dungeon.key,
-      title: dungeonTitle,
-      status: dungeonStatus,
-      titleFontSize: layout.veryCompact ? '17px' : layout.compact ? '20px' : '21px',
-      statusFontSize: layout.veryCompact ? '10px' : '12px',
-      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 114 : layout.compact ? 132 : 146),
-      rightPadding: 50,
-      titleColor: '#fff0c2',
-      statusColor: '#e7c89a',
-      highlighted: hasActiveRun || hasActiveCheckpoint,
-      onClick: () => {
-        this.tryEnterCatacombs();
-      },
-      delay: 120,
-    });
-
-    const smallButtons = [
-      {
-        x: leftX,
-        y: row1Y,
-        textureKey: this.CAMP_ACTION_ASSETS.campfire.key,
-        title: 'Костёр',
-        status: this.getCityCampfireButtonStatus(),
-        titleColor: '#f6dfae',
-        statusColor: '#d8bd86',
-        highlighted: cityCampfireActive,
-        onClick: () => {
-          this.restAtCampfire();
-        },
-      },
-      {
-        x: rightX,
-        y: row1Y,
-        textureKey: this.CAMP_ACTION_ASSETS.temple.key,
-        title: 'Храм',
-        status: hasAscensionPoints ? `Очки: ${ascensionPoints}` : 'Древо силы',
-        titleColor: '#e5ddff',
-        statusColor: '#c8bee8',
-        highlighted: hasAscensionPoints,
-        onClick: () => {
-          this.scene.start('StatsTreeScene');
-        },
-      },
-      {
-        x: leftX,
-        y: row2Y,
-        textureKey: this.CAMP_ACTION_ASSETS.tavern.key,
-        title: 'Таверна',
-        status: 'Отдых',
-        titleColor: '#f1d0a5',
-        statusColor: '#c7aa80',
-        highlighted: false,
-        onClick: () => {
-          this.scene.start('TavernScene');
-        },
-      },
-      {
-        x: rightX,
-        y: row2Y,
-        textureKey: this.CAMP_ACTION_ASSETS.quests.key,
-        title: 'Задания',
-        status: hasQuestReward ? 'Есть награда' : 'Награды',
-        titleColor: '#e5f4d5',
-        statusColor: '#bed8a8',
-        highlighted: hasQuestReward,
-        onClick: () => {
-          this.scene.start('QuestScene');
-        },
-      },
-    ];
-
-    smallButtons.forEach((button, index) => {
-      const created = this.createImageActionButton({
-        board,
-        x: button.x,
-        y: button.y,
-        width: smallButtonWidth,
-        height: smallHeight,
-        textureKey: button.textureKey,
-        title: button.title,
-        status: button.status,
-        titleFontSize: layout.veryCompact ? '13px' : layout.compact ? '15px' : '16px',
-        statusFontSize: layout.veryCompact ? '9px' : '10px',
-        textX: -smallButtonWidth / 2 + (layout.veryCompact ? 102 : layout.compact ? 114 : 122),
-        rightPadding: 14,
-        titleColor: button.titleColor,
-        statusColor: button.statusColor,
-        highlighted: button.highlighted,
-        onClick: button.onClick,
-        delay: 170 + index * 45,
-      });
-
-      if (button.title === 'Костёр') {
-        this.restButtonLabel = created.titleText;
-        this.restButtonDescription = created.descriptionText;
-      }
-    });
-
-    this.createImageActionButton({
-      board,
-      x: 0,
-      y: marketY,
-      width: bigButtonWidth,
-      height: wideHeight,
-      textureKey: this.CAMP_ACTION_ASSETS.market.key,
-      title: 'Рынок',
-      status: 'Торговцы',
-      titleFontSize: layout.veryCompact ? '16px' : layout.compact ? '18px' : '19px',
-      statusFontSize: layout.veryCompact ? '10px' : '11px',
-      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 92 : layout.compact ? 110 : 124),
-      rightPadding: 50,
-      titleColor: '#f2dfac',
-      statusColor: '#ccb98a',
-      highlighted: false,
-      onClick: () => {
-        this.scene.start('MarketScene');
-      },
-      delay: 350,
-    });
-
-    this.createImageActionButton({
-      board,
-      x: 0,
-      y: homeY,
-      width: bigButtonWidth,
-      height: wideHeight,
-      textureKey: this.CAMP_ACTION_ASSETS.home.key,
-      title: 'Дом',
-      status: 'Убежище',
-      titleFontSize: layout.veryCompact ? '16px' : layout.compact ? '18px' : '19px',
-      statusFontSize: layout.veryCompact ? '10px' : '11px',
-      textX: -bigButtonWidth / 2 + (layout.veryCompact ? 92 : layout.compact ? 110 : 124),
-      rightPadding: 50,
-      titleColor: '#e4edf6',
-      statusColor: '#bcc9d6',
-      highlighted: false,
-      onClick: () => {
-        this.scene.start('HomeScene');
-      },
-      delay: 395,
-    });
-
-    this.playPixelContainerIntro(board, 80);
+    this.createInteractiveCampMap(layout);
     this.startCampfireTimer();
   }
 
-  private createImageActionButton(config: {
-    board: Phaser.GameObjects.Container;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    textureKey: string;
-    title: string;
-    status: string;
-    titleFontSize: string;
-    statusFontSize: string;
-    textX: number;
-    rightPadding: number;
-    titleColor: string;
-    statusColor: string;
-    highlighted: boolean;
-    onClick: () => void;
-    delay: number;
-  }): CampActionButton {
-    const container = this.add.container(config.x, config.y);
+  private createInteractiveCampMap(layout: CampLayout) {
+    this.cleanupCampMapInput();
+    this.clearCampMapHotspotVisuals();
+    this.campMapMaskGraphics?.destroy();
+    this.campMapMaskGraphics = undefined;
 
-    const glow = this.add.rectangle(
-      0,
-      0,
-      config.width - 16,
-      Math.max(10, config.height - 14),
-      0xf0a64a,
-      config.highlighted ? 0.045 : 0
-    );
+    const viewport: CampMapViewport = {
+      x: 0,
+      y: layout.actionsTop,
+      width: layout.width,
+      height: layout.actionsHeight,
+    };
 
-    const buttonImage = this.add.image(0, 0, config.textureKey)
+    this.campMapViewport = viewport;
+
+    const viewportCenterX = viewport.x + viewport.width / 2;
+    const viewportCenterY = viewport.y + viewport.height / 2;
+
+    this.add.rectangle(viewportCenterX, viewportCenterY, viewport.width, viewport.height, 0x020304, 0.76)
+      .setDepth(2);
+
+    const mapContainer = this.add.container(0, 0).setDepth(3);
+    this.campMapContainer = mapContainer;
+
+    const mapImage = this.add.image(0, 0, this.CAMP_INTERACTIVE_MAP_ASSET.key)
       .setOrigin(0.5)
-      .setDisplaySize(config.width, config.height)
-      .setAlpha(config.highlighted ? 1 : 0.97);
+      .setAlpha(0.98);
 
-    const textWidth = Math.max(
-      70,
-      config.width / 2 - config.textX - config.rightPadding
+    this.campMapImageWidth = Math.max(1, mapImage.width);
+    this.campMapImageHeight = Math.max(1, mapImage.height);
+
+    const baseScale = Math.max(
+      viewport.width / this.campMapImageWidth,
+      viewport.height / this.campMapImageHeight
     );
+    const zoom = layout.veryCompact ? 1.24 : layout.compact ? 1.18 : 1.1;
 
-    const titleY = -config.height * 0.15;
-    const statusY = config.height * 0.18;
+    this.campMapScale = baseScale * zoom;
+    mapContainer.setScale(this.campMapScale);
+    mapContainer.add(mapImage);
 
-    const titleText = this.add.text(config.textX, titleY, config.title, {
+    const maskGraphics = this.add.graphics();
+    maskGraphics.fillStyle(0xffffff, 1);
+    maskGraphics.fillRect(viewport.x, viewport.y, viewport.width, viewport.height);
+    maskGraphics.setVisible(false);
+    this.campMapMaskGraphics = maskGraphics;
+    mapContainer.setMask(maskGraphics.createGeometryMask());
+
+    this.createCampMapVignette(viewport);
+    this.createCampMapHotspots(mapContainer);
+    this.calculateCampMapBounds(viewport);
+
+    const startFocus = this.getCampMapStartFocusPoint();
+    const startPosition = this.getCampMapPositionForFocus(startFocus.x, startFocus.y, viewport);
+
+    this.setCampMapPosition(startPosition.x, startPosition.y, true);
+    this.installCampMapInputHandlers();
+    this.updateCampMapHotspotStates();
+
+    this.tweens.add({
+      targets: mapContainer,
+      alpha: { from: 0, to: 1 },
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+  }
+
+  private createCampMapVignette(viewport: CampMapViewport) {
+    const centerX = viewport.x + viewport.width / 2;
+    const centerY = viewport.y + viewport.height / 2;
+
+    this.add.rectangle(centerX, viewport.y + 12, viewport.width, 24, 0x000000, 0.42)
+      .setDepth(4);
+    this.add.rectangle(centerX, viewport.y + viewport.height - 12, viewport.width, 24, 0x000000, 0.42)
+      .setDepth(4);
+    this.add.rectangle(viewport.x + 10, centerY, 20, viewport.height, 0x000000, 0.34)
+      .setDepth(4);
+    this.add.rectangle(viewport.x + viewport.width - 10, centerY, 20, viewport.height, 0x000000, 0.34)
+      .setDepth(4);
+
+    this.add.text(centerX, viewport.y + 18, 'Перетаскивай карту и нажимай на здания', {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: config.titleFontSize,
-      color: config.titleColor,
+      fontSize: this.getLayout().veryCompact ? '9px' : '11px',
+      color: '#b8aa91',
       stroke: '#000000',
       strokeThickness: 2,
+      align: 'center',
       wordWrap: {
-        width: textWidth,
+        width: Math.min(viewport.width - 42, 430),
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0.5).setDepth(10).setAlpha(0.78);
+  }
 
-    const statusText = this.add.text(config.textX, statusY, config.status, {
-      fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: config.statusFontSize,
-      color: config.statusColor,
-      stroke: '#000000',
-      strokeThickness: 1,
-      wordWrap: {
-        width: textWidth,
-        useAdvancedWrap: true,
+  private createCampMapHotspots(mapContainer: Phaser.GameObjects.Container) {
+    this.campMapHotspots = [
+      {
+        id: 'dungeon',
+        label: 'Вход в подземелье',
+        x: 462,
+        y: 92,
+        width: 260,
+        height: 170,
+        accentColor: 0x7f55ff,
+        onClick: () => this.tryEnterCatacombs(),
       },
-      maxLines: 1,
-    }).setOrigin(0, 0.5);
+      {
+        id: 'temple',
+        label: 'Храм',
+        x: 232,
+        y: 565,
+        width: 280,
+        height: 230,
+        accentColor: 0x7d55ff,
+        onClick: () => this.scene.start('StatsTreeScene'),
+      },
+      {
+        id: 'campfire',
+        label: 'Костёр',
+        x: 695,
+        y: 600,
+        width: 250,
+        height: 210,
+        accentColor: 0xf08a3c,
+        onClick: () => this.restAtCampfire(),
+      },
+      {
+        id: 'quests',
+        label: 'Доска заданий',
+        x: 238,
+        y: 905,
+        width: 250,
+        height: 150,
+        accentColor: 0xd8c088,
+        onClick: () => this.scene.start('QuestScene'),
+      },
+      {
+        id: 'tavern',
+        label: 'Таверна',
+        x: 625,
+        y: 880,
+        width: 300,
+        height: 230,
+        accentColor: 0xf1b76a,
+        onClick: () => this.scene.start('TavernScene'),
+      },
+      {
+        id: 'market',
+        label: 'Рынок',
+        x: 410,
+        y: 1228,
+        width: 610,
+        height: 360,
+        accentColor: 0xc98b55,
+        onClick: () => this.scene.start('MarketScene'),
+      },
+      {
+        id: 'home',
+        label: 'Дом',
+        x: 660,
+        y: 1760,
+        width: 330,
+        height: 270,
+        accentColor: 0xd8b56d,
+        onClick: () => this.scene.start('HomeScene'),
+      },
+    ];
 
-    container.add([
-      glow,
-      buttonImage,
-      titleText,
-      statusText,
-    ]);
+    this.campMapHotspots.forEach(hotspot => {
+      const localX = hotspot.x - this.campMapImageWidth / 2;
+      const localY = hotspot.y - this.campMapImageHeight / 2;
 
-    config.board.add(container);
+      const glow = this.add.ellipse(
+        localX,
+        localY,
+        hotspot.width,
+        hotspot.height,
+        hotspot.accentColor,
+        0
+      ).setBlendMode(Phaser.BlendModes.ADD);
 
-    // ВАЖНО:
-    // press zone создаётся ДО intro-анимации.
-    // Тогда baseY в createImagePressZone запоминается правильно,
-    // и кнопка не остаётся съехавшей вниз после pointerout.
-    this.createImagePressZone({
-      container,
-      width: config.width,
-      height: config.height,
-      buttonImage,
-      glow,
-      onClick: config.onClick,
+      const label = this.add.text(localX, localY - hotspot.height / 2 - 18, hotspot.label, {
+        fontFamily: this.PIXEL_FONT_FAMILY,
+        fontSize: '18px',
+        color: '#f2dfac',
+        stroke: '#000000',
+        strokeThickness: 5,
+        align: 'center',
+        wordWrap: {
+          width: Math.max(160, hotspot.width),
+          useAdvancedWrap: true,
+        },
+        maxLines: 1,
+      }).setOrigin(0.5).setAlpha(0);
+
+      const zone = this.add.zone(localX, localY, hotspot.width, hotspot.height)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+
+      const visual: CampMapHotspotVisual = {
+        hotspot,
+        glow,
+        label,
+        zone,
+      };
+
+      if (DEBUG_CAMP_HOTSPOTS) {
+        visual.debugBox = this.add.rectangle(
+          localX,
+          localY,
+          hotspot.width,
+          hotspot.height,
+          hotspot.accentColor,
+          0.16
+        ).setStrokeStyle(3, hotspot.accentColor, 0.85);
+
+        visual.debugLabel = this.add.text(localX, localY, hotspot.label, {
+          fontFamily: this.PIXEL_FONT_FAMILY,
+          fontSize: '20px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 5,
+          align: 'center',
+          wordWrap: {
+            width: hotspot.width - 12,
+            useAdvancedWrap: true,
+          },
+        }).setOrigin(0.5);
+      }
+
+      zone.on('pointerover', () => {
+        if (!this.isCampMapTouchDevice() && !this.campMapDragging) {
+          this.setCampMapHoveredHotspot(hotspot.id);
+        }
+      });
+
+      zone.on('pointerout', () => {
+        if (this.hoveredCampMapHotspotId === hotspot.id) {
+          this.setCampMapHoveredHotspot(undefined);
+        }
+      });
+
+      mapContainer.add([
+        glow,
+        label,
+        ...(visual.debugBox ? [visual.debugBox] : []),
+        ...(visual.debugLabel ? [visual.debugLabel] : []),
+        zone,
+      ]);
+
+      this.campMapHotspotVisuals.set(hotspot.id, visual);
     });
+  }
 
-    this.playPixelContainerIntro(container, config.delay);
+  private getCampMapStartFocusPoint() {
+    const hasActiveRun = gameState.floorRun.active && gameState.floorRun.rooms.length > 0;
+    const hasActiveCheckpoint = Boolean(getActiveCampfireBattleCheckpoint());
 
-    if (config.highlighted) {
+    if (hasActiveRun || hasActiveCheckpoint) {
+      return { x: 462, y: 92 };
+    }
+
+    if (this.hasClaimableQuests()) {
+      return { x: 238, y: 905 };
+    }
+
+    if (this.getAvailableAscensionPoints() > 0) {
+      return { x: 232, y: 565 };
+    }
+
+    if (this.isCityCampfireActive()) {
+      return { x: 695, y: 600 };
+    }
+
+    return { x: 470, y: 1000 };
+  }
+
+  private getCampMapPositionForFocus(mapX: number, mapY: number, viewport: CampMapViewport) {
+    const viewportCenterX = viewport.x + viewport.width / 2;
+    const viewportCenterY = viewport.y + viewport.height / 2;
+
+    return {
+      x: viewportCenterX - (mapX - this.campMapImageWidth / 2) * this.campMapScale,
+      y: viewportCenterY - (mapY - this.campMapImageHeight / 2) * this.campMapScale,
+    };
+  }
+
+  private calculateCampMapBounds(viewport: CampMapViewport) {
+    const displayWidth = this.campMapImageWidth * this.campMapScale;
+    const displayHeight = this.campMapImageHeight * this.campMapScale;
+    const viewportLeft = viewport.x;
+    const viewportRight = viewport.x + viewport.width;
+    const viewportTop = viewport.y;
+    const viewportBottom = viewport.y + viewport.height;
+
+    if (displayWidth <= viewport.width) {
+      this.campMapMinX = viewport.x + viewport.width / 2;
+      this.campMapMaxX = this.campMapMinX;
+    } else {
+      this.campMapMinX = viewportRight - displayWidth / 2;
+      this.campMapMaxX = viewportLeft + displayWidth / 2;
+    }
+
+    if (displayHeight <= viewport.height) {
+      this.campMapMinY = viewport.y + viewport.height / 2;
+      this.campMapMaxY = this.campMapMinY;
+    } else {
+      this.campMapMinY = viewportBottom - displayHeight / 2;
+      this.campMapMaxY = viewportTop + displayHeight / 2;
+    }
+  }
+
+  private setCampMapPosition(x: number, y: number, immediate = false) {
+    const clampedX = Phaser.Math.Clamp(x, this.campMapMinX, this.campMapMaxX);
+    const clampedY = Phaser.Math.Clamp(y, this.campMapMinY, this.campMapMaxY);
+
+    this.campMapTargetX = clampedX;
+    this.campMapTargetY = clampedY;
+
+    if (immediate) {
+      this.campMapContainer?.setPosition(clampedX, clampedY);
+    }
+  }
+
+  private installCampMapInputHandlers() {
+    this.cleanupCampMapInput();
+
+    this.campMapPointerDownHandler = (pointer) => {
+      if (!this.campMapContainer || !this.isPointerInsideCampMapViewport(pointer) || this.hasBlockingModalOpen()) {
+        return;
+      }
+
+      this.campMapDragging = true;
+      this.campMapDidDrag = false;
+      this.campMapDragStartPointerX = pointer.x;
+      this.campMapDragStartPointerY = pointer.y;
+      this.campMapDragStartX = this.campMapContainer.x;
+      this.campMapDragStartY = this.campMapContainer.y;
+    };
+
+    this.campMapPointerMoveHandler = (pointer) => {
+      if (!this.campMapContainer) {
+        return;
+      }
+
+      if (this.campMapDragging) {
+        const dx = pointer.x - this.campMapDragStartPointerX;
+        const dy = pointer.y - this.campMapDragStartPointerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 10) {
+          this.campMapDidDrag = true;
+          this.setCampMapHoveredHotspot(undefined);
+        }
+
+        this.setCampMapPosition(this.campMapDragStartX + dx, this.campMapDragStartY + dy, true);
+        return;
+      }
+
+      if (!this.isCampMapTouchDevice() && this.isPointerInsideCampMapViewport(pointer)) {
+        const hotspot = this.getCampMapHotspotAtPointer(pointer);
+        this.setCampMapHoveredHotspot(hotspot?.id);
+      }
+    };
+
+    this.campMapPointerUpHandler = (pointer) => {
+      if (!this.campMapDragging) {
+        return;
+      }
+
+      this.campMapDragging = false;
+
+      if (!this.campMapDidDrag && this.isPointerInsideCampMapViewport(pointer) && !this.hasBlockingModalOpen()) {
+        const hotspot = this.getCampMapHotspotAtPointer(pointer);
+
+        if (hotspot) {
+          this.triggerCampMapHotspot(hotspot);
+        }
+      }
+    };
+
+    this.campMapWheelHandler = (pointer, _gameObjects, _deltaX, deltaY) => {
+      if (!this.campMapContainer || !this.isPointerInsideCampMapViewport(pointer) || this.hasBlockingModalOpen()) {
+        return;
+      }
+
+      this.setCampMapPosition(
+        this.campMapTargetX,
+        this.campMapTargetY - deltaY * 0.42,
+        false
+      );
+    };
+
+    this.input.on('pointerdown', this.campMapPointerDownHandler);
+    this.input.on('pointermove', this.campMapPointerMoveHandler);
+    this.input.on('pointerup', this.campMapPointerUpHandler);
+    this.input.on('pointerupoutside', this.campMapPointerUpHandler);
+    this.input.on('wheel', this.campMapWheelHandler);
+  }
+
+  private cleanupCampMapInput() {
+    if (this.campMapPointerDownHandler) {
+      this.input.off('pointerdown', this.campMapPointerDownHandler);
+      this.campMapPointerDownHandler = undefined;
+    }
+
+    if (this.campMapPointerMoveHandler) {
+      this.input.off('pointermove', this.campMapPointerMoveHandler);
+      this.campMapPointerMoveHandler = undefined;
+    }
+
+    if (this.campMapPointerUpHandler) {
+      this.input.off('pointerup', this.campMapPointerUpHandler);
+      this.input.off('pointerupoutside', this.campMapPointerUpHandler);
+      this.campMapPointerUpHandler = undefined;
+    }
+
+    if (this.campMapWheelHandler) {
+      this.input.off('wheel', this.campMapWheelHandler);
+      this.campMapWheelHandler = undefined;
+    }
+
+    this.campMapDragging = false;
+    this.campMapDidDrag = false;
+  }
+
+  private getCampMapHotspotAtPointer(pointer: Phaser.Input.Pointer): CampMapHotspot | undefined {
+    if (!this.campMapContainer || this.campMapScale <= 0) {
+      return undefined;
+    }
+
+    const mapX = (pointer.x - this.campMapContainer.x) / this.campMapScale + this.campMapImageWidth / 2;
+    const mapY = (pointer.y - this.campMapContainer.y) / this.campMapScale + this.campMapImageHeight / 2;
+
+    return this.campMapHotspots.find(hotspot => (
+      mapX >= hotspot.x - hotspot.width / 2 &&
+      mapX <= hotspot.x + hotspot.width / 2 &&
+      mapY >= hotspot.y - hotspot.height / 2 &&
+      mapY <= hotspot.y + hotspot.height / 2
+    ));
+  }
+
+  private triggerCampMapHotspot(hotspot: CampMapHotspot) {
+    if (this.campMapClickLocked) {
+      return;
+    }
+
+    this.campMapClickLocked = true;
+    this.setCampMapHoveredHotspot(hotspot.id);
+
+    const visual = this.campMapHotspotVisuals.get(hotspot.id);
+
+    if (visual) {
       this.tweens.add({
-        targets: [buttonImage, glow],
-        alpha: { from: 0.78, to: 1 },
-        duration: 560,
+        targets: [visual.glow, visual.label],
+        alpha: { from: 0.32, to: 0.12 },
+        scale: { from: 1.05, to: 1 },
+        duration: 110,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          hotspot.onClick();
+        },
+      });
+    } else {
+      hotspot.onClick();
+    }
+
+    this.time.delayedCall(420, () => {
+      this.campMapClickLocked = false;
+    });
+  }
+
+  private setCampMapHoveredHotspot(hotspotId?: string) {
+    if (this.hoveredCampMapHotspotId === hotspotId) {
+      return;
+    }
+
+    const previousId = this.hoveredCampMapHotspotId;
+    this.hoveredCampMapHotspotId = hotspotId;
+
+    if (previousId) {
+      this.applyCampMapHotspotVisualState(previousId);
+    }
+
+    if (hotspotId) {
+      this.applyCampMapHotspotVisualState(hotspotId);
+    }
+  }
+
+  private updateCampMapHotspotStates() {
+    this.campMapHotspotVisuals.forEach((_visual, hotspotId) => {
+      this.applyCampMapHotspotVisualState(hotspotId);
+    });
+  }
+
+  private applyCampMapHotspotVisualState(hotspotId: string) {
+    const visual = this.campMapHotspotVisuals.get(hotspotId);
+
+    if (!visual) {
+      return;
+    }
+
+    const isHovered = this.hoveredCampMapHotspotId === hotspotId;
+    const isActive = this.isCampMapHotspotActive(hotspotId);
+    const targetAlpha = isHovered ? 0.22 : isActive ? 0.105 : 0;
+    const labelAlpha = isHovered && !this.isCampMapTouchDevice() ? 1 : 0;
+
+    visual.activeTween?.stop();
+    visual.activeTween = undefined;
+
+    visual.glow.setFillStyle(visual.hotspot.accentColor, targetAlpha);
+    visual.glow.setAlpha(targetAlpha);
+    visual.label.setAlpha(labelAlpha);
+
+    if (isActive && !isHovered) {
+      visual.activeTween = this.tweens.add({
+        targets: visual.glow,
+        alpha: { from: 0.06, to: 0.16 },
+        scale: { from: 0.96, to: 1.04 },
+        duration: hotspotId === 'campfire' ? 1150 : 1450,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
     }
-
-    return {
-      titleText,
-      descriptionText: statusText,
-    };
   }
 
-  private createImagePressZone(config: {
-    container: Phaser.GameObjects.Container;
-    width: number;
-    height: number;
-    buttonImage: Phaser.GameObjects.Image;
-    glow: Phaser.GameObjects.Rectangle;
-    onClick: () => void;
-  }) {
-    let isPressed = false;
-    let isLocked = false;
-    const baseY = config.container.y;
+  private isCampMapHotspotActive(hotspotId: string) {
+    if (hotspotId === 'dungeon') {
+      return (
+        gameState.floorRun.active &&
+        gameState.floorRun.rooms.length > 0
+      ) || Boolean(getActiveCampfireBattleCheckpoint());
+    }
 
-    const zone = this.add.zone(0, 0, config.width, config.height)
-      .setInteractive({ useHandCursor: true });
+    if (hotspotId === 'campfire') {
+      return this.isCityCampfireActive();
+    }
 
-    config.container.add(zone);
+    if (hotspotId === 'quests') {
+      return this.hasClaimableQuests();
+    }
 
-    const reset = () => {
-      if (isLocked) return;
-      isPressed = false;
-      config.container.setY(baseY);
-      config.buttonImage.setAlpha(1);
-      config.glow.setAlpha(0);
-    };
+    if (hotspotId === 'temple') {
+      return this.getAvailableAscensionPoints() > 0;
+    }
 
-    zone.on('pointerdown', () => {
-      if (isLocked) return;
-      isPressed = true;
-      config.container.setY(baseY + 2);
-      config.buttonImage.setAlpha(0.9);
-      config.glow.setAlpha(0.08);
+    return false;
+  }
+
+  private clearCampMapHotspotVisuals() {
+    this.campMapHotspotVisuals.forEach(visual => {
+      visual.activeTween?.stop();
     });
 
-    zone.on('pointerout', reset);
-    zone.on('pointerupoutside', reset);
+    this.campMapHotspotVisuals.clear();
+    this.campMapHotspots = [];
+    this.hoveredCampMapHotspotId = undefined;
+  }
 
-    zone.on('pointerup', () => {
-      if (!isPressed || isLocked) return;
-      isPressed = false;
-      isLocked = true;
+  private isPointerInsideCampMapViewport(pointer: Phaser.Input.Pointer) {
+    const viewport = this.campMapViewport;
 
-      this.tweens.add({
-        targets: config.container,
-        y: baseY,
-        duration: 90,
-        ease: 'Linear',
-        onComplete: () => {
-          config.buttonImage.setAlpha(1);
-          config.glow.setAlpha(0);
-          config.onClick();
-        },
-      });
+    if (!viewport) {
+      return false;
+    }
 
-      this.time.delayedCall(360, () => {
-        isLocked = false;
-      });
+    return (
+      pointer.x >= viewport.x &&
+      pointer.x <= viewport.x + viewport.width &&
+      pointer.y >= viewport.y &&
+      pointer.y <= viewport.y + viewport.height
+    );
+  }
+
+  private hasBlockingModalOpen() {
+    return this.children.list.some(object => {
+      const displayObject = object as Phaser.GameObjects.GameObject & {
+        visible?: boolean;
+        depth?: number;
+      };
+      
+      return (
+        displayObject.active &&
+        displayObject.visible === true &&
+        typeof displayObject.depth === 'number' &&
+        displayObject.depth >= 1000
+      );
     });
+  }
+
+  private isCampMapTouchDevice() {
+    return Boolean((this.sys.game.device.input as { touch?: boolean }).touch);
   }
 
   private showCampSceneFatalError(error: unknown) {
@@ -1170,20 +1439,6 @@ export class CampScene extends Phaser.Scene {
       },
       maxLines: 5,
     }).setOrigin(0.5).setDepth(5001);
-  }
-
-  private playPixelContainerIntro(container: Phaser.GameObjects.Container, delay: number) {
-    container.setAlpha(0);
-    container.setY(container.y + 6);
-
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      y: container.y - 6,
-      duration: 160,
-      delay,
-      ease: 'Linear',
-    });
   }
 
   private playPixelIntro(objects: Phaser.GameObjects.GameObject[], delay: number) {
@@ -1244,6 +1499,7 @@ export class CampScene extends Phaser.Scene {
 
     this.restButtonLabel?.setText('Костёр');
     this.restButtonDescription?.setText(this.getCityCampfireButtonStatus());
+    this.updateCampMapHotspotStates();
   }
 
   private startCampfireTimer() {
