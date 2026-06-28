@@ -1272,15 +1272,16 @@ private getDebuffShortDescription(id: string, power: number) {
       }
     ).setOrigin(0, 0).setDepth(544);
 
-    // Маска для обрезки текста по области контента
-    const maskShape = this.add.rectangle(
-      centerX,
-      contentTop + contentHeight / 2,
+    // Маска для обрезки текста по области контента (Graphics — стандартный способ)
+    const maskGraphics = this.add.graphics();
+    maskGraphics.fillStyle(0xffffff);
+    maskGraphics.fillRect(
+      centerX - modalWidth / 2 + 4,
+      contentTop,
       modalWidth - 8,
-      contentHeight,
-      0xffffff
-    ).setDepth(543).setVisible(false);
-    const mask = maskShape.createGeometryMask();
+      contentHeight
+    );
+    const mask = maskGraphics.createGeometryMask();
     this.battleLogPopupText.setMask(mask);
 
     // Полоса прокрутки
@@ -1395,7 +1396,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.input.off('pointermove', onPointerMove);
       this.input.off('pointerup', onPointerUp);
       mask.destroy();
-      maskShape.destroy();
+      maskGraphics.destroy();
     };
 
     const close = () => { this.hideTooltip(); };
