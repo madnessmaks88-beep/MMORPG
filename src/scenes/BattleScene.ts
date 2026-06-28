@@ -168,6 +168,8 @@ export class BattleScene extends Phaser.Scene {
   private battleLogButtonObjects: Phaser.GameObjects.GameObject[] = [];
   private battleLogButtonNewMessageText?: Phaser.GameObjects.Text;
   private battleLogPopupText?: Phaser.GameObjects.Text;
+  private battleLogPopupCleanup?: () => void;
+  private battleLogPopupScrollToBottom?: () => void;
   private battleLogLineObjects: Phaser.GameObjects.Text[] = [];
   private battleLogObjects: Phaser.GameObjects.GameObject[] = [];
   private battleLogScrollTween?: { stop: () => void };
@@ -741,13 +743,14 @@ export class BattleScene extends Phaser.Scene {
     const combatBottom = actionTop - (veryCompact ? 12 : 18);
     const combatHeight = Math.max(300, combatBottom - combatTop);
 
-    // Более RPG-композиция: враг правее и выше, герой левее и ниже.
-    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.255, veryCompact ? 112 : 136, 178);
+    // Бойцы стоят друг напротив друга на одном уровне.
+    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.28, veryCompact ? 100 : 115, 175);
     const playerX = width / 2 - horizontalSpread;
     const enemyX = width / 2 + horizontalSpread;
-    const enemyY = combatTop + combatHeight * (veryCompact ? 0.39 : compact ? 0.40 : 0.41);
-    const playerY = combatTop + combatHeight * (veryCompact ? 0.64 : compact ? 0.63 : 0.62);
-    const fighterY = (enemyY + playerY) / 2;
+    const fighterCenterY = combatTop + combatHeight * 0.52;
+    const enemyY = fighterCenterY;
+    const playerY = fighterCenterY;
+    const fighterY = fighterCenterY;
 
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
@@ -1190,7 +1193,6 @@ private getDebuffShortDescription(id: string, power: number) {
     }
 
     return this.battleLogLines
-      .slice(-28)
       .map(entry => `${this.getBattleLogIcon(entry.type)} ${entry.text}`)
       .join('\n\n');
   }
@@ -1206,6 +1208,13 @@ private getDebuffShortDescription(id: string, power: number) {
     const centerX = width / 2;
     const centerY = height / 2 + (layout.veryCompact ? 8 : 14);
     const top = centerY - modalHeight / 2;
+    const contentPadX = 28;
+    const contentTop = top + 82;
+    const closeBarH = 56;
+    const contentBottom = centerY + modalHeight / 2 - closeBarH;
+    const contentHeight = contentBottom - contentTop;
+    const scrollBarW = 6;
+    const scrollBarX = centerX + modalWidth / 2 - 18;
 
     const overlay = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.68)
       .setDepth(540)
@@ -1245,8 +1254,8 @@ private getDebuffShortDescription(id: string, power: number) {
     ).setDepth(544);
 
     this.battleLogPopupText = this.add.text(
-      centerX - modalWidth / 2 + 28,
-      top + 86,
+      centerX - modalWidth / 2 + contentPadX,
+      contentTop,
       this.formatBattleLogForPopup(),
       {
         fontFamily: UI.font.body,
@@ -1257,14 +1266,43 @@ private getDebuffShortDescription(id: string, power: number) {
         align: 'left',
         lineSpacing: layout.veryCompact ? 3 : 5,
         wordWrap: {
-          width: modalWidth - 56,
+          width: modalWidth - contentPadX * 2 - scrollBarW - 10,
           useAdvancedWrap: true,
         },
-        maxLines: layout.veryCompact ? 24 : 30,
       }
     ).setOrigin(0, 0).setDepth(544);
 
-    const closeButton = this.add.text(centerX, centerY + modalHeight / 2 - 34, 'Закрыть', {
+    // Маска для обрезки текста по области контента
+    const maskShape = this.add.rectangle(
+      centerX,
+      contentTop + contentHeight / 2,
+      modalWidth - 8,
+      contentHeight,
+      0xffffff
+    ).setDepth(543).setVisible(false);
+    const mask = maskShape.createGeometryMask();
+    this.battleLogPopupText.setMask(mask);
+
+    // Полоса прокрутки
+    const scrollTrack = this.add.rectangle(
+      scrollBarX,
+      contentTop + contentHeight / 2,
+      scrollBarW,
+      contentHeight,
+      0xffffff,
+      0.08
+    ).setDepth(545).setOrigin(0.5, 0.5);
+
+    const scrollThumb = this.add.rectangle(
+      scrollBarX,
+      contentTop,
+      scrollBarW,
+      40,
+      UI.colors.goldDark,
+      0.7
+    ).setDepth(546).setOrigin(0.5, 0);
+
+    const closeButton = this.add.text(centerX, centerY + modalHeight / 2 - 30, 'Закрыть', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '13px' : '15px',
       color: UI.colors.goldText,
@@ -1281,10 +1319,86 @@ private getDebuffShortDescription(id: string, power: number) {
       42
     ).setInteractive({ useHandCursor: true }).setDepth(546);
 
-    const close = () => {
-      this.hideTooltip();
+    // Скролл-состояние
+    let scrollY = 0;
+
+    const getTextHeight = () => this.battleLogPopupText!.height;
+
+    const getMaxScroll = () => Math.max(0, getTextHeight() - contentHeight);
+
+    const updateScrollThumb = () => {
+      const maxScroll = getMaxScroll();
+      const textH = getTextHeight();
+      if (textH <= contentHeight) {
+        scrollThumb.setVisible(false);
+        return;
+      }
+      scrollThumb.setVisible(true);
+      const thumbH = Math.max(30, (contentHeight / textH) * contentHeight);
+      const thumbY = contentTop + (scrollY / maxScroll) * (contentHeight - thumbH);
+      scrollThumb.setSize(scrollBarW, thumbH);
+      scrollThumb.setY(thumbY);
     };
 
+    const applyScroll = (newScrollY: number) => {
+      const maxScroll = getMaxScroll();
+      scrollY = Phaser.Math.Clamp(newScrollY, 0, maxScroll);
+      this.battleLogPopupText!.setY(contentTop - scrollY);
+      updateScrollThumb();
+    };
+
+    const scrollToBottom = () => applyScroll(getMaxScroll());
+    this.battleLogPopupScrollToBottom = scrollToBottom;
+
+    // Сразу прокручиваем вниз
+    scrollToBottom();
+
+    // Колёсико мыши
+    const onWheel = (_pointer: Phaser.Input.Pointer, _gx: number, _gy: number, _dx: number, dy: number) => {
+      applyScroll(scrollY + dy * 0.8);
+    };
+    this.input.on('wheel', onWheel);
+
+    // Тач/мышь-перетаскивание
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+    let isDragging = false;
+
+    const onPointerDown = (pointer: Phaser.Input.Pointer) => {
+      const px = pointer.x;
+      const py = pointer.y;
+      if (
+        px >= centerX - modalWidth / 2 + 4 &&
+        px <= centerX + modalWidth / 2 - 4 &&
+        py >= contentTop &&
+        py <= contentBottom
+      ) {
+        isDragging = true;
+        dragStartY = py;
+        dragStartScroll = scrollY;
+      }
+    };
+    const onPointerMove = (pointer: Phaser.Input.Pointer) => {
+      if (!isDragging) return;
+      const delta = dragStartY - pointer.y;
+      applyScroll(dragStartScroll + delta);
+    };
+    const onPointerUp = () => { isDragging = false; };
+
+    this.input.on('pointerdown', onPointerDown);
+    this.input.on('pointermove', onPointerMove);
+    this.input.on('pointerup', onPointerUp);
+
+    this.battleLogPopupCleanup = () => {
+      this.input.off('wheel', onWheel);
+      this.input.off('pointerdown', onPointerDown);
+      this.input.off('pointermove', onPointerMove);
+      this.input.off('pointerup', onPointerUp);
+      mask.destroy();
+      maskShape.destroy();
+    };
+
+    const close = () => { this.hideTooltip(); };
     overlay.on('pointerup', close);
     closeZone.on('pointerup', close);
 
@@ -1295,6 +1409,8 @@ private getDebuffShortDescription(id: string, power: number) {
       title,
       divider,
       this.battleLogPopupText!,
+      scrollTrack,
+      scrollThumb,
       closeButton,
       closeZone
     );
@@ -1364,6 +1480,7 @@ private getDebuffShortDescription(id: string, power: number) {
 
     if (this.battleLogPopupText) {
       this.battleLogPopupText.setText(this.formatBattleLogForPopup());
+      this.battleLogPopupScrollToBottom?.();
     } else if (this.battleLogLines.length > 1) {
       this.showBattleLogNewMessageIndicator();
     }
@@ -3798,14 +3915,13 @@ private createFighterSpriteCard(config: {
       : '#ffb0a8'
     : UI.colors.goldText;
 
-  // Компактная RPG-композиция без больших прямоугольных карточек.
-  const fighterBoxWidth = layout.veryCompact ? 142 : layout.compact ? 164 : 184;
-  const fighterBoxHeight = layout.veryCompact ? 174 : layout.compact ? 204 : 232;
-  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.02 : 0.9);
-  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.02 : 0.88);
+  const fighterBoxWidth = layout.veryCompact ? 178 : layout.compact ? 208 : 234;
+  const fighterBoxHeight = layout.veryCompact ? 218 : layout.compact ? 256 : 288;
+  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 0.94);
+  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 0.92);
   const spriteY = config.isEnemy
-    ? -(layout.veryCompact ? 28 : layout.compact ? 34 : 40)
-    : -(layout.veryCompact ? 18 : layout.compact ? 24 : 30);
+    ? -(layout.veryCompact ? 36 : layout.compact ? 46 : 54)
+    : -(layout.veryCompact ? 26 : layout.compact ? 34 : 40);
 
   const aura = this.add.circle(
     0,
@@ -3819,8 +3935,8 @@ private createFighterSpriteCard(config: {
     ? this.createEnemySprite(0, spriteY, spriteMaxWidth, spriteMaxHeight, config.isBoss)
     : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
 
-  const uiWidth = layout.veryCompact ? 146 : layout.compact ? 164 : 184;
-  const titleY = layout.veryCompact ? 74 : layout.compact ? 88 : 102;
+  const uiWidth = layout.veryCompact ? 156 : layout.compact ? 176 : 196;
+  const titleY = layout.veryCompact ? 92 : layout.compact ? 110 : 128;
   const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
   const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
   const labelWidth = layout.veryCompact ? 22 : 28;
@@ -4005,6 +4121,9 @@ private createFighterSpriteCard(config: {
 
 
   private hideTooltip() {
+    this.battleLogPopupCleanup?.();
+    this.battleLogPopupCleanup = undefined;
+    this.battleLogPopupScrollToBottom = undefined;
     this.tooltipObjects.forEach(object => object.destroy());
     this.tooltipObjects = [];
     this.battleLogPopupText = undefined;
