@@ -1272,8 +1272,9 @@ private getDebuffShortDescription(id: string, power: number) {
       }
     ).setOrigin(0, 0).setDepth(544);
 
-    // Маска для обрезки текста по области контента (Graphics — стандартный способ)
-    const maskGraphics = this.add.graphics();
+    // Маска: depth между overlay(540) и panel(541) — визуально скрыта панелью,
+    // но рендерится в display list (stencil буфер пишется корректно).
+    const maskGraphics = this.add.graphics().setDepth(540);
     maskGraphics.fillStyle(0xffffff);
     maskGraphics.fillRect(
       centerX - modalWidth / 2 + 4,
@@ -1396,7 +1397,6 @@ private getDebuffShortDescription(id: string, power: number) {
       this.input.off('pointermove', onPointerMove);
       this.input.off('pointerup', onPointerUp);
       mask.destroy();
-      maskGraphics.destroy();
     };
 
     const close = () => { this.hideTooltip(); };
@@ -1409,6 +1409,7 @@ private getDebuffShortDescription(id: string, power: number) {
       panel.panel,
       title,
       divider,
+      maskGraphics,
       this.battleLogPopupText!,
       scrollTrack,
       scrollThumb,
