@@ -153,7 +153,7 @@ export class BattleScene extends Phaser.Scene {
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
   private energyText!: Phaser.GameObjects.Text;
-  private potionText!: Phaser.GameObjects.Text;
+  private potionText?: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
 
   private battleLogLines: BattleLogEntry[] = [];
@@ -165,6 +165,9 @@ export class BattleScene extends Phaser.Scene {
   private battleLogTopFade?: Phaser.GameObjects.Graphics;
   private battleLogBottomFade?: Phaser.GameObjects.Graphics;
   private battleLogNewMessageText?: Phaser.GameObjects.Text;
+  private battleLogButtonObjects: Phaser.GameObjects.GameObject[] = [];
+  private battleLogButtonNewMessageText?: Phaser.GameObjects.Text;
+  private battleLogPopupText?: Phaser.GameObjects.Text;
   private battleLogLineObjects: Phaser.GameObjects.Text[] = [];
   private battleLogObjects: Phaser.GameObjects.GameObject[] = [];
   private battleLogScrollTween?: { stop: () => void };
@@ -182,9 +185,6 @@ export class BattleScene extends Phaser.Scene {
   private battleLogScrollY = 0;
   private battleLogTargetScrollY = 0;
   private battleLogMaxScroll = 0;
-  private battleLogDragging = false;
-  private battleLogDragStartY = 0;
-  private battleLogDragStartScrollY = 0;
   private readonly maxBattleLogEntries = 100;
 
   private actionButtons: Phaser.GameObjects.GameObject[] = [];
@@ -539,7 +539,6 @@ export class BattleScene extends Phaser.Scene {
   this.lastBattleUiSaveAt = 0;
   this.battleLogLines = [];
   this.battleLogLineObjects = [];
-  this.battleLogDragging = false;
   this.battleLogScrollY = 0;
   this.battleLogTargetScrollY = 0;
   this.battleLogMaxScroll = 0;
@@ -654,7 +653,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.enemyCard = this.createFighterCard(
       layout.enemyX,
-      layout.fighterY,
+      layout.enemyY,
       this.enemy.name,
       isBoss ? '♛' : '☠',
       isBoss ? 0x3a120c : 0x241515,
@@ -664,7 +663,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.playerCard = this.createFighterCard(
       layout.playerX,
-      layout.fighterY,
+      layout.playerY,
       player.name,
       '🗡',
       0x151b24,
@@ -729,26 +728,26 @@ export class BattleScene extends Phaser.Scene {
     const firstRowY = actionTop + actionPanelHeight * 0.515;
     const secondRowY = actionTop + actionPanelHeight * 0.745;
 
-    const logHeight = veryCompact ? 100 : compact ? 126 : 154;
-    const logY = actionTop - logHeight / 2 - (veryCompact ? 8 : 12);
+    // Постоянная летопись больше не занимает место в боевой сцене.
+    // Эти поля оставлены только для совместимости со старыми helper-методами.
+    const logHeight = 0;
+    const logY = actionTop - (veryCompact ? 42 : 54);
 
     const headerBottom = safeTop + (this.isBossBattle
       ? veryCompact ? 86 : compact ? 102 : 118
       : veryCompact ? 72 : compact ? 86 : 98);
 
-    const combatTop = headerBottom + (veryCompact ? 8 : 12);
-    const combatBottom = logY - logHeight / 2 - (veryCompact ? 10 : 16);
-    const combatHeight = Math.max(250, combatBottom - combatTop);
+    const combatTop = headerBottom + (veryCompact ? 6 : 10);
+    const combatBottom = actionTop - (veryCompact ? 12 : 18);
+    const combatHeight = Math.max(300, combatBottom - combatTop);
 
-    // Горизонтальная RPG-композиция: герой слева, враг справа.
-    const fighterY = combatTop + combatHeight * (veryCompact ? 0.56 : compact ? 0.55 : 0.54);
-    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.285, veryCompact ? 126 : 152, 194);
+    // Более RPG-композиция: враг правее и выше, герой левее и ниже.
+    const horizontalSpread = Phaser.Math.Clamp(contentWidth * 0.255, veryCompact ? 112 : 136, 178);
     const playerX = width / 2 - horizontalSpread;
     const enemyX = width / 2 + horizontalSpread;
-
-    // Старые поля оставлены для совместимости с фоном/эффектами.
-    const enemyY = fighterY;
-    const playerY = fighterY;
+    const enemyY = combatTop + combatHeight * (veryCompact ? 0.39 : compact ? 0.40 : 0.41);
+    const playerY = combatTop + combatHeight * (veryCompact ? 0.64 : compact ? 0.63 : 0.62);
+    const fighterY = (enemyY + playerY) / 2;
 
     // НАСТРОЙКА ШИРИНЫ КНОПОК:
     // mainButtonWidth — ширина верхней кнопки атаки.
@@ -1073,284 +1072,245 @@ private getDebuffShortDescription(id: string, power: number) {
 
   private createBattleLogPanel() {
     this.destroyBattleLogObjects();
-
-    const layout = this.getBattleLayout();
-    const panelWidth = layout.contentWidth;
-    const panelHeight = layout.logHeight;
-    const panelX = layout.centerX;
-    const panelY = layout.logY;
-    const panelLeft = panelX - panelWidth / 2;
-    const panelTop = panelY - panelHeight / 2;
-
-    const radius = layout.veryCompact ? 18 : 24;
-    const headerHeight = layout.veryCompact ? 34 : 38;
-    const horizontalPadding = layout.veryCompact ? 18 : 22;
-    const bottomPadding = layout.veryCompact ? 14 : 16;
-    const scrollbarWidth = 4;
-    const scrollbarGap = 10;
-
-    this.battleLogViewportLeft = panelLeft + horizontalPadding;
-    this.battleLogViewportTop = panelTop + headerHeight + (layout.veryCompact ? 12 : 14);
-    this.battleLogViewportWidth = panelWidth - horizontalPadding * 2 - scrollbarGap - scrollbarWidth;
-    this.battleLogViewportHeight = Math.max(
-      40,
-      panelTop + panelHeight - bottomPadding - this.battleLogViewportTop
-    );
+    this.destroyBattleLogOpenButton();
 
     this.battleLogScrollY = 0;
     this.battleLogTargetScrollY = 0;
     this.battleLogMaxScroll = 0;
     this.battleLogContentHeight = 0;
-    this.battleLogDragging = false;
-
-    const panel = this.createRoundedPanel({
-      x: panelX,
-      y: panelY,
-      width: panelWidth,
-      height: panelHeight,
-      radius,
-      color: 0x06080b,
-      alpha: 0.96,
-      strokeColor: 0x5f4630,
-      strokeAlpha: 0.54,
-      strokeWidth: 2,
-      depth: 8,
-    });
-
-    panel.panel.setAlpha(0);
-    panel.shadow.setAlpha(0);
-
-    const titleText = this.add.text(
-      panelLeft + horizontalPadding,
-      panelTop + (layout.veryCompact ? 18 : 20),
-      'Летопись боя',
-      {
-        fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '12px' : '14px',
-        color: UI.colors.goldText,
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'left',
-      }
-    ).setOrigin(0, 0.5).setDepth(12).setAlpha(0);
-
-    this.statusText = this.add.text(
-      panelLeft + panelWidth - horizontalPadding,
-      titleText.y,
-      'Нет эффектов',
-      {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '9px' : '10px',
-        color: '#8aa9c5',
-        align: 'right',
-        wordWrap: {
-          width: Math.max(100, panelWidth - 200),
-          useAdvancedWrap: true,
-        },
-        maxLines: 1,
-      }
-    ).setOrigin(1, 0.5).setDepth(12).setAlpha(0);
-
-    const headerLine = this.add.rectangle(
-      panelX,
-      panelTop + headerHeight,
-      panelWidth - horizontalPadding * 2,
-      1,
-      UI.colors.goldDark,
-      0.22
-    ).setDepth(11).setAlpha(0);
-
-    const viewportBg = this.add.rectangle(
-      this.battleLogViewportLeft + this.battleLogViewportWidth / 2,
-      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
-      this.battleLogViewportWidth,
-      this.battleLogViewportHeight,
-      0x030507,
-      0.32
-    ).setDepth(9).setAlpha(0);
-
-    const leftMark = this.add.rectangle(
-      panelLeft + 11,
-      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
-      2,
-      this.battleLogViewportHeight,
-      UI.colors.goldDark,
-      0.24
-    ).setDepth(11).setAlpha(0);
-
-    this.battleLogTopFade = this.createBattleLogEdgeFade(
-      this.battleLogViewportLeft,
-      this.battleLogViewportTop,
-      this.battleLogViewportWidth,
-      layout.veryCompact ? 12 : 15,
-      true
-    ).setDepth(15).setAlpha(0);
-
-    this.battleLogBottomFade = this.createBattleLogEdgeFade(
-      this.battleLogViewportLeft,
-      this.battleLogViewportTop + this.battleLogViewportHeight - (layout.veryCompact ? 12 : 15),
-      this.battleLogViewportWidth,
-      layout.veryCompact ? 12 : 15,
-      false
-    ).setDepth(15).setAlpha(0);
-
-    this.battleLogMaskGraphics = this.add.graphics();
-    this.battleLogMaskGraphics.setDepth(200);
-    this.battleLogMaskGraphics.setAlpha(0.0001);
-    this.battleLogMaskGraphics.fillStyle(0xffffff, 1);
-    this.battleLogMaskGraphics.fillRect(
-      this.battleLogViewportLeft,
-      this.battleLogViewportTop,
-      this.battleLogViewportWidth,
-      this.battleLogViewportHeight
-    );
-    this.battleLogMask = this.battleLogMaskGraphics.createGeometryMask();
-
+  
+    // Невидимый текст оставлен только как технический объект совместимости:
+    // сама летопись больше не занимает постоянную область на экране.
     this.logText = this.add.text(0, 0, '', {
       fontFamily: UI.font.body,
       fontSize: '1px',
       color: '#000000',
     }).setOrigin(0, 0).setVisible(false).setAlpha(0).setDepth(-1000);
 
-    const scrollbarX = this.battleLogViewportLeft + this.battleLogViewportWidth + scrollbarGap + scrollbarWidth / 2;
+    this.battleLogObjects.push(this.logText);
+    this.createBattleLogOpenButton();
+  }
 
-    this.battleLogScrollTrack = this.add.rectangle(
-      scrollbarX,
-      this.battleLogViewportTop + this.battleLogViewportHeight / 2,
-      scrollbarWidth,
-      this.battleLogViewportHeight,
-      0x000000,
-      0.36
-    ).setDepth(14).setAlpha(0);
+  private createBattleLogOpenButton() {
+    const layout = this.getBattleLayout();
+    const panelWidth = Math.min(layout.contentWidth, 650);
+    const buttonWidth = layout.veryCompact ? 92 : layout.compact ? 106 : 118;
+    const buttonHeight = layout.veryCompact ? 28 : 32;
+    const buttonX = layout.centerX + panelWidth / 2 - buttonWidth / 2 - (layout.veryCompact ? 8 : 12);
+    const buttonY = layout.safeTop + buttonHeight / 2 + (layout.veryCompact ? 8 : 10);
 
-    this.battleLogScrollThumb = this.add.rectangle(
-      scrollbarX,
-      this.battleLogViewportTop + 10,
-      scrollbarWidth,
-      24,
-      UI.colors.goldDark,
-      0.82
-    ).setDepth(15).setAlpha(0);
+    const container = this.add.container(buttonX, buttonY).setDepth(45);
 
-    this.battleLogNewMessageText = this.add.text(
-      this.battleLogViewportLeft + this.battleLogViewportWidth - 2,
-      this.battleLogViewportTop + this.battleLogViewportHeight - 4,
-      'новое ↓',
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.36);
+    shadow.fillRoundedRect(-buttonWidth / 2, -buttonHeight / 2 + 3, buttonWidth, buttonHeight, 12);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x08090d, 0.92);
+    bg.fillRoundedRect(-buttonWidth / 2, -buttonHeight / 2, buttonWidth, buttonHeight, 12);
+    bg.fillStyle(0x21160d, 0.36);
+    bg.fillRoundedRect(-buttonWidth / 2 + 4, -buttonHeight / 2 + 4, buttonWidth - 8, buttonHeight - 8, 8);
+    bg.lineStyle(1.5, UI.colors.goldDark, 0.72);
+    bg.strokeRoundedRect(-buttonWidth / 2, -buttonHeight / 2, buttonWidth, buttonHeight, 12);
+
+    const label = this.add.text(0, 0, '▤ Летопись', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '9px' : '11px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      maxLines: 1,
+    }).setOrigin(0.5);
+
+    this.battleLogButtonNewMessageText = this.add.text(
+      buttonWidth / 2 - 7,
+      -buttonHeight / 2 + 6,
+      '•',
       {
-        fontFamily: UI.font.body,
-        fontSize: layout.veryCompact ? '8px' : '9px',
-        color: UI.colors.goldText,
+        fontFamily: UI.font.title,
+        fontSize: layout.veryCompact ? '14px' : '16px',
+        color: '#ffd36e',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
       }
-    ).setOrigin(1, 1).setDepth(16).setVisible(false).setAlpha(0);
+    ).setOrigin(0.5).setVisible(false).setAlpha(0);
 
-    this.battleLogScrollZone = this.add.zone(
-      this.battleLogViewportLeft,
-      this.battleLogViewportTop,
-      this.battleLogViewportWidth + scrollbarGap + scrollbarWidth,
-      this.battleLogViewportHeight
-    ).setOrigin(0, 0).setInteractive({ useHandCursor: false }).setDepth(31);
+    const zone = this.add.zone(0, 0, buttonWidth, buttonHeight)
+      .setInteractive({ useHandCursor: true });
 
-    this.battleLogScrollZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.battleLogDragging = true;
-      this.battleLogDragStartY = pointer.y;
-      this.battleLogDragStartScrollY = this.battleLogScrollY;
-      this.battleLogScrollTween?.stop();
-      this.battleLogScrollTween = undefined;
+    zone.on('pointerover', () => {
+      this.tweens.killTweensOf(container);
+      this.tweens.add({
+        targets: container,
+        scale: 1.035,
+        duration: 100,
+        ease: 'Sine.easeOut',
+      });
     });
 
-    this.battleLogScrollZone.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.battleLogDragging) {
-        return;
-      }
-
-      const deltaY = this.battleLogDragStartY - pointer.y;
-      this.scrollBattleLogTo(this.battleLogDragStartScrollY + deltaY, true);
+    zone.on('pointerout', () => {
+      this.tweens.killTweensOf(container);
+      this.tweens.add({
+        targets: container,
+        scale: 1,
+        duration: 120,
+        ease: 'Sine.easeOut',
+      });
     });
 
-    this.battleLogScrollZone.on('pointerup', () => this.stopBattleLogDrag());
-    this.battleLogScrollZone.on('pointerupoutside', () => this.stopBattleLogDrag());
-    this.battleLogScrollZone.on('pointerout', () => this.stopBattleLogDrag());
-    this.battleLogScrollZone.on('pointercancel', () => this.stopBattleLogDrag());
+    zone.on('pointerup', () => {
+      this.showBattleLogPopup();
+    });
 
-    if (this.battleLogWheelHandler) {
-      this.input.off('wheel', this.battleLogWheelHandler);
+    container.add([
+      shadow,
+      bg,
+      label,
+      this.battleLogButtonNewMessageText,
+      zone,
+    ]);
+
+    this.battleLogButtonObjects.push(container);
+  }
+
+  private destroyBattleLogOpenButton() {
+    this.battleLogButtonObjects.forEach(object => {
+      this.tweens.killTweensOf(object);
+      object.destroy();
+    });
+
+    this.battleLogButtonObjects = [];
+    this.battleLogButtonNewMessageText = undefined;
+  }
+
+  private formatBattleLogForPopup() {
+    if (this.battleLogLines.length === 0) {
+      return 'Пока в летописи нет событий.';
     }
 
-    this.battleLogWheelHandler = (
-      pointer: Phaser.Input.Pointer,
-      _gameObjects: Phaser.GameObjects.GameObject[],
-      _deltaX: number,
-      deltaY: number
-    ) => {
-      if (!this.isPointerInsideBattleLog(pointer)) {
-        return;
-      }
+    return this.battleLogLines
+      .slice(-28)
+      .map(entry => `${this.getBattleLogIcon(entry.type)} ${entry.text}`)
+      .join('\n\n');
+  }
 
-      this.scrollBattleLogBy(deltaY * 0.5);
-    };
+  private showBattleLogPopup() {
+    this.hideTooltip();
+    this.hideBattleLogNewMessageIndicator();
 
-    this.input.on('wheel', this.battleLogWheelHandler);
-    this.input.on('pointerup', this.stopBattleLogDrag, this);
-    this.input.on('pointerupoutside', this.stopBattleLogDrag, this);
+    const { width, height } = this.scale;
+    const layout = this.getBattleLayout();
+    const modalWidth = Math.min(width - layout.safeX * 2, 640);
+    const modalHeight = Math.min(height - layout.safeTop * 2 - 88, layout.veryCompact ? 500 : 620);
+    const centerX = width / 2;
+    const centerY = height / 2 + (layout.veryCompact ? 8 : 14);
+    const top = centerY - modalHeight / 2;
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.off('pointerup', this.stopBattleLogDrag, this);
-      this.input.off('pointerupoutside', this.stopBattleLogDrag, this);
+    const overlay = this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.68)
+      .setDepth(540)
+      .setInteractive();
 
-      if (this.battleLogWheelHandler) {
-        this.input.off('wheel', this.battleLogWheelHandler);
-        this.battleLogWheelHandler = undefined;
-      }
-
-      this.battleLogScrollTween?.stop();
-      this.battleLogScrollTween = undefined;
+    const panel = this.createRoundedPanel({
+      x: centerX,
+      y: centerY,
+      width: modalWidth,
+      height: modalHeight,
+      radius: 26,
+      color: 0x08090d,
+      alpha: 0.985,
+      strokeColor: UI.colors.goldDark,
+      strokeAlpha: 0.78,
+      strokeWidth: 2,
+      depth: 541,
     });
 
-    this.battleLogObjects.push(
-      panel.panel,
+    const title = this.add.text(centerX, top + 36, 'Летопись боя', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '20px' : '24px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(544);
+
+    const divider = this.add.rectangle(
+      centerX,
+      top + 68,
+      modalWidth - 46,
+      1,
+      UI.colors.goldDark,
+      0.42
+    ).setDepth(544);
+
+    this.battleLogPopupText = this.add.text(
+      centerX - modalWidth / 2 + 28,
+      top + 86,
+      this.formatBattleLogForPopup(),
+      {
+        fontFamily: UI.font.body,
+        fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
+        color: UI.colors.text,
+        stroke: '#000000',
+        strokeThickness: 2,
+        align: 'left',
+        lineSpacing: layout.veryCompact ? 3 : 5,
+        wordWrap: {
+          width: modalWidth - 56,
+          useAdvancedWrap: true,
+        },
+        maxLines: layout.veryCompact ? 24 : 30,
+      }
+    ).setOrigin(0, 0).setDepth(544);
+
+    const closeButton = this.add.text(centerX, centerY + modalHeight / 2 - 34, 'Закрыть', {
+      fontFamily: UI.font.title,
+      fontSize: layout.veryCompact ? '13px' : '15px',
+      color: UI.colors.goldText,
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'center',
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(545);
+
+    const closeZone = this.add.zone(
+      centerX,
+      closeButton.y,
+      150,
+      42
+    ).setInteractive({ useHandCursor: true }).setDepth(546);
+
+    const close = () => {
+      this.hideTooltip();
+    };
+
+    overlay.on('pointerup', close);
+    closeZone.on('pointerup', close);
+
+    this.tooltipObjects.push(
+      overlay,
       panel.shadow,
-      titleText,
-      headerLine,
-      this.statusText,
-      viewportBg,
-      leftMark,
-      this.battleLogTopFade,
-      this.battleLogBottomFade,
-      this.battleLogScrollTrack,
-      this.battleLogScrollThumb,
-      this.battleLogNewMessageText,
-      this.battleLogScrollZone,
-      this.logText
+      panel.panel,
+      title,
+      divider,
+      this.battleLogPopupText!,
+      closeButton,
+      closeZone
     );
 
     this.tweens.add({
-      targets: [
-        panel.panel,
-        panel.shadow,
-        titleText,
-        headerLine,
-        this.statusText,
-        viewportBg,
-        leftMark,
-        this.battleLogScrollTrack,
-        this.battleLogScrollThumb,
-      ],
-      alpha: 1,
-      duration: 240,
-      delay: 150,
+      targets: [panel.shadow, panel.panel, title, divider, this.battleLogPopupText!, closeButton],
+      alpha: { from: 0, to: 1 },
+      duration: 150,
       ease: 'Sine.easeOut',
     });
-
-    this.updateBattleLogView(false);
   }
 
   private stopBattleLogDrag() {
-    this.battleLogDragging = false;
-  }
+    }
 
-  private createBattleLogEdgeFade(
+  public createBattleLogEdgeFade(
     x: number,
     y: number,
     width: number,
@@ -1392,7 +1352,6 @@ private getDebuffShortDescription(id: string, power: number) {
     const resolvedType = type === 'normal'
       ? this.inferBattleLogType(normalized)
       : type;
-    const wasAtBottom = this.isBattleLogAtBottom();
 
     this.battleLogLines.push({
       text: normalized,
@@ -1401,30 +1360,11 @@ private getDebuffShortDescription(id: string, power: number) {
 
     while (this.battleLogLines.length > this.maxBattleLogEntries) {
       this.battleLogLines.shift();
-      const oldObject = this.battleLogLineObjects.shift();
-      oldObject?.destroy();
     }
 
-    const newLine = this.createBattleLogLine(normalized, resolvedType);
-
-    this.updateBattleLogView(false);
-
-    if (newLine) {
-      newLine.setAlpha(0);
-
-      this.tweens.add({
-        targets: newLine,
-        alpha: 1,
-        duration: 170,
-        ease: 'Sine.easeOut',
-        onComplete: () => this.applyBattleLogScroll(),
-      });
-    }
-
-    if (wasAtBottom || this.battleLogLines.length <= 2) {
-      this.scrollBattleLogToBottom(true);
-      this.hideBattleLogNewMessageIndicator();
-    } else {
+    if (this.battleLogPopupText) {
+      this.battleLogPopupText.setText(this.formatBattleLogForPopup());
+    } else if (this.battleLogLines.length > 1) {
       this.showBattleLogNewMessageIndicator();
     }
 
@@ -1446,11 +1386,14 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogMaxScroll = 0;
     this.battleLogContentHeight = 0;
 
+    if (this.battleLogPopupText) {
+      this.battleLogPopupText.setText(this.formatBattleLogForPopup());
+    }
+
     this.hideBattleLogNewMessageIndicator();
-    this.updateBattleLogView(false);
   }
 
-  private createBattleLogLine(text: string, type: BattleLogType = 'normal') {
+  public createBattleLogLine(text: string, type: BattleLogType = 'normal') {
     const layout = this.getBattleLayout();
     const color = this.getBattleLogColor(type);
     const icon = this.getBattleLogIcon(type);
@@ -1482,7 +1425,7 @@ private getDebuffShortDescription(id: string, power: number) {
     return line;
   }
 
-  private updateBattleLogView(_animatedLastLine = false) {
+  public updateBattleLogView(_animatedLastLine = false) {
     if (this.battleLogLineObjects.length === 0) {
       this.battleLogContentHeight = 0;
       this.battleLogMaxScroll = 0;
@@ -1531,7 +1474,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.scrollBattleLogTo(this.battleLogScrollY + delta);
   }
 
-  private scrollBattleLogBy(deltaY: number) {
+  public scrollBattleLogBy(deltaY: number) {
     this.scrollBattleLog(deltaY);
   }
 
@@ -1539,7 +1482,7 @@ private getDebuffShortDescription(id: string, power: number) {
     return this.battleLogMaxScroll <= 1 || this.battleLogMaxScroll - this.battleLogScrollY <= 10;
   }
 
-  private scrollBattleLogToBottom(animated = true) {
+  public scrollBattleLogToBottom(animated = true) {
     this.scrollBattleLogTo(this.battleLogMaxScroll, !animated);
   }
 
@@ -1672,7 +1615,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogScrollThumb.setAlpha(0.88);
   }
 
-  private isPointerInsideBattleLog(pointer: Phaser.Input.Pointer) {
+  public isPointerInsideBattleLog(pointer: Phaser.Input.Pointer) {
     return (
       pointer.x >= this.battleLogViewportLeft &&
       pointer.x <= this.battleLogViewportLeft + this.battleLogViewportWidth &&
@@ -1682,6 +1625,20 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private showBattleLogNewMessageIndicator() {
+    if (this.battleLogButtonNewMessageText) {
+      this.battleLogButtonNewMessageText.setVisible(true);
+      this.tweens.killTweensOf(this.battleLogButtonNewMessageText);
+      this.tweens.add({
+        targets: this.battleLogButtonNewMessageText,
+        alpha: { from: 0.35, to: 1 },
+        scale: { from: 0.9, to: 1.15 },
+        duration: 420,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
     if (!this.battleLogNewMessageText) {
       return;
     }
@@ -1698,6 +1655,13 @@ private getDebuffShortDescription(id: string, power: number) {
   }
 
   private hideBattleLogNewMessageIndicator() {
+    if (this.battleLogButtonNewMessageText) {
+      this.tweens.killTweensOf(this.battleLogButtonNewMessageText);
+      this.battleLogButtonNewMessageText.setAlpha(0);
+      this.battleLogButtonNewMessageText.setScale(1);
+      this.battleLogButtonNewMessageText.setVisible(false);
+    }
+
     if (!this.battleLogNewMessageText) {
       return;
     }
@@ -1721,6 +1685,19 @@ private getDebuffShortDescription(id: string, power: number) {
         ? UI.colors.redHex
         : 0xf0d58a;
 
+    if (!this.battleLogScrollZone || this.battleLogViewportWidth <= 0 || this.battleLogViewportHeight <= 0) {
+      this.battleLogButtonObjects.forEach(object => {
+        this.tweens.add({
+          targets: object,
+          scale: { from: 1, to: 1.05 },
+          duration: 90,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+        });
+      });
+      return;
+    }
+
     const glow = this.add.rectangle(
       this.battleLogViewportLeft + this.battleLogViewportWidth / 2,
       this.battleLogViewportTop + this.battleLogViewportHeight / 2,
@@ -1728,7 +1705,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.battleLogViewportHeight,
       color,
       0.08
-    ).setDepth(14).setAlpha(0);
+    ).setDepth(560).setAlpha(0);
 
     if (this.battleLogMask) {
       glow.setMask(this.battleLogMask);
@@ -1775,8 +1752,7 @@ private getDebuffShortDescription(id: string, power: number) {
     this.battleLogBottomFade = undefined;
     this.battleLogNewMessageText = undefined;
 
-    this.battleLogDragging = false;
-    this.battleLogScrollY = 0;
+      this.battleLogScrollY = 0;
     this.battleLogTargetScrollY = 0;
     this.battleLogMaxScroll = 0;
     this.battleLogContentHeight = 0;
@@ -1926,36 +1902,6 @@ private getDebuffShortDescription(id: string, power: number) {
       .setAlpha(0.985);
 
     this.actionButtons.push(panel);
-
-    const top = layout.actionPanelY - panelHeight / 2;
-    const panelRight = layout.centerX + panelWidth / 2;
-
-    const energyBadge = this.add.container(
-      panelRight - (layout.veryCompact ? 58 : 66),
-      top + panelHeight * 0.055
-    ).setDepth(29);
-
-    const energyBadgeBg = this.add.rectangle(
-      0,
-      0,
-      layout.veryCompact ? 82 : 96,
-      layout.veryCompact ? 24 : 28,
-      0x07121f,
-      0.88
-    ).setStrokeStyle(1, 0x70a6ff, 0.52);
-
-    const energyHint = this.add.text(0, 0, `✦ ${player.energy}`, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '10px' : '12px',
-      color: '#b9d8ff',
-      stroke: '#000000',
-      strokeThickness: 2,
-      align: 'center',
-      maxLines: 1,
-    }).setOrigin(0.5);
-
-    energyBadge.add([energyBadgeBg, energyHint]);
-    this.actionButtons.push(energyBadge);
 
     // НАСТРОЙКА РАЗМЕРОВ КНОПОК:
     // gap — расстояние между двумя маленькими кнопками.
@@ -2310,7 +2256,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const enemyId = this.enemy?.id;
 
     if (enemyId === 'morvein_sealed_crypt_lord') {
-      return 1.22;
+      return 1.32;
     }
 
     const miniBossIds = new Set<string>([
@@ -2325,7 +2271,7 @@ private getDebuffShortDescription(id: string, power: number) {
     ]);
 
     if (enemyId && miniBossIds.has(enemyId)) {
-      return 1.12;
+      return 1.10;
     }
 
     const eliteIds = new Set<string>([
@@ -2342,10 +2288,10 @@ private getDebuffShortDescription(id: string, power: number) {
     ]);
 
     if (enemyId && eliteIds.has(enemyId)) {
-      return 1.06;
+      return 0.94;
     }
 
-    return 1;
+    return 0.78;
   }
 
   private fitImageToBox(
@@ -2378,31 +2324,30 @@ private getDebuffShortDescription(id: string, power: number) {
 
     const platform = this.add.ellipse(
       0,
-      maxHeight * 0.35,
-      maxWidth * 0.78 * sizeMultiplier,
-      Math.max(12, maxHeight * 0.16),
+      maxHeight * 0.36,
+      maxWidth * 0.72 * sizeMultiplier,
+      Math.max(10, maxHeight * 0.13),
       0x000000,
-      0.46
+      0.44
     );
 
     const platformGlow = this.add.ellipse(
       0,
-      maxHeight * 0.32,
-      maxWidth * 0.58 * sizeMultiplier,
-      Math.max(8, maxHeight * 0.10),
+      maxHeight * 0.33,
+      maxWidth * 0.54 * sizeMultiplier,
+      Math.max(8, maxHeight * 0.09),
       isBoss || this.enemy?.id === 'morvein_sealed_crypt_lord' ? 0xff6b35 : 0xff6b6b,
       glowAlpha
     );
 
-    const sprite = this.add.image(0, -maxHeight * 0.06, this.getEnemySpriteKey())
+    const sprite = this.add.image(0, -maxHeight * 0.05, this.getEnemySpriteKey())
       .setOrigin(0.5, 0.58)
-      // Враг стоит справа, поэтому разворачиваем его влево, к герою.
       .setFlipX(false);
 
     this.fitImageToBox(
       sprite,
-      maxWidth * 1.26 * sizeMultiplier,
-      maxHeight * 1.38 * sizeMultiplier,
+      maxWidth * 1.08 * sizeMultiplier,
+      maxHeight * 1.16 * sizeMultiplier,
       1
     );
 
@@ -2422,27 +2367,26 @@ private getDebuffShortDescription(id: string, power: number) {
     const platform = this.add.ellipse(
       0,
       maxHeight * 0.34,
-      maxWidth * 0.78,
-      Math.max(12, maxHeight * 0.16),
+      maxWidth * 0.68,
+      Math.max(10, maxHeight * 0.13),
       0x000000,
       0.42
     );
 
     const platformGlow = this.add.ellipse(
       0,
-      maxHeight * 0.32,
-      maxWidth * 0.58,
-      Math.max(8, maxHeight * 0.10),
+      maxHeight * 0.31,
+      maxWidth * 0.50,
+      Math.max(7, maxHeight * 0.09),
       UI.colors.gold,
       0.08
     );
 
-    const sprite = this.add.image(0, -maxHeight * 0.08, this.getPlayerRaceSpriteKey())
+    const sprite = this.add.image(0, -maxHeight * 0.07, this.getPlayerRaceSpriteKey())
       .setOrigin(0.5, 0.55)
-      // Герой стоит слева и смотрит вправо, к врагу.
       .setFlipX(false);
 
-    this.fitImageToBox(sprite, maxWidth * 1.24, maxHeight * 1.38, 1);
+    this.fitImageToBox(sprite, maxWidth * 0.98, maxHeight * 1.04, 1);
 
     container.add([platform, platformGlow, sprite]);
 
@@ -3837,205 +3781,157 @@ private createFighterSpriteCard(config: {
 }) {
   const layout = this.getBattleLayout();
 
-  const cardWidth = Math.min(
-    (layout.contentWidth - (layout.veryCompact ? 18 : 26)) / 2,
-    config.isBoss ? 344 : 318
-  );
-
-  const cardHeight = layout.veryCompact ? 258 : layout.compact ? 296 : 330;
   const container = this.add.container(config.x, config.y).setDepth(config.isEnemy ? 19 : 20);
 
   container.setData('baseX', config.x);
   container.setData('baseY', config.y);
   container.setData('side', config.isEnemy ? 'enemy' : 'player');
 
-  const strokeColor = config.isEnemy
+  const accentColor = config.isEnemy
     ? config.isBoss
-      ? 0xb84a2f
-      : 0x8d2f2f
-    : 0x6b5134;
-  const accentColor = config.isEnemy ? (config.isBoss ? 0xff8a5f : 0xff6b6b) : UI.colors.gold;
-  const titleColor = config.isEnemy ? (config.isBoss ? '#ffd0aa' : '#ffb0a8') : UI.colors.goldText;
+      ? 0xff8a5f
+      : 0xff6b6b
+    : UI.colors.gold;
+  const titleColor = config.isEnemy
+    ? config.isBoss
+      ? '#ffd0aa'
+      : '#ffb0a8'
+    : UI.colors.goldText;
 
-  // Размеры PNG-бойцов. Здесь можно менять крупность героя и врага.
-  const spriteMaxWidth = cardWidth * (config.isEnemy ? 1.08 : 1.00);
-  const spriteMaxHeight = cardHeight * (config.isEnemy ? 0.90 : 0.86);
-  const spriteY = -cardHeight * 0.24;
+  // Компактная RPG-композиция без больших прямоугольных карточек.
+  const fighterBoxWidth = layout.veryCompact ? 142 : layout.compact ? 164 : 184;
+  const fighterBoxHeight = layout.veryCompact ? 174 : layout.compact ? 204 : 232;
+  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.02 : 0.9);
+  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.02 : 0.88);
+  const spriteY = config.isEnemy
+    ? -(layout.veryCompact ? 28 : layout.compact ? 34 : 40)
+    : -(layout.veryCompact ? 18 : layout.compact ? 24 : 30);
 
   const aura = this.add.circle(
     0,
-    spriteY - cardHeight * 0.05,
-    Math.max(spriteMaxWidth, spriteMaxHeight) * 0.32,
+    spriteY - fighterBoxHeight * 0.04,
+    Math.max(spriteMaxWidth, spriteMaxHeight) * (config.isBoss ? 0.34 : 0.28),
     accentColor,
-    config.isBoss ? 0.105 : 0.058
+    config.isBoss ? 0.10 : 0.052
   );
 
   const fighterSprite = config.isEnemy
     ? this.createEnemySprite(0, spriteY, spriteMaxWidth, spriteMaxHeight, config.isBoss)
     : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
 
-  const infoWidth = cardWidth;
-  const infoHeight = layout.veryCompact ? 88 : layout.compact ? 98 : 106;
-  const infoX = 0;
-  const infoY = cardHeight * 0.35;
-  const infoLeft = infoX - infoWidth / 2;
-  const infoTop = infoY - infoHeight / 2;
+  const uiWidth = layout.veryCompact ? 146 : layout.compact ? 164 : 184;
+  const titleY = layout.veryCompact ? 74 : layout.compact ? 88 : 102;
+  const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
+  const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
+  const labelWidth = layout.veryCompact ? 22 : 28;
+  const valueWidth = layout.veryCompact ? 46 : 56;
+  const gap = layout.veryCompact ? 4 : 5;
+  const barWidth = Math.max(76, uiWidth - labelWidth - valueWidth - gap * 2);
+  const barLeft = -uiWidth / 2 + labelWidth + gap;
+  const barCenterX = barLeft + barWidth / 2;
+  const hpBarHeight = layout.veryCompact ? 6 : 7;
+  const energyBarHeight = layout.veryCompact ? 4 : 5;
 
-  const infoShadow = this.add.graphics();
-  infoShadow.fillStyle(0x000000, 0.42);
-  infoShadow.fillRoundedRect(infoLeft, infoTop + 5, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
-
-  const infoPanel = this.add.graphics();
-  infoPanel.fillStyle(config.isEnemy ? 0x10090a : 0x0b1018, 0.86);
-  infoPanel.fillRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
-  infoPanel.fillStyle(config.color, config.isEnemy ? 0.16 : 0.14);
-  infoPanel.fillRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 10 : 14);
-  infoPanel.lineStyle(config.isBoss ? 2 : 1.5, strokeColor, config.isBoss ? 0.78 : 0.58);
-  infoPanel.strokeRoundedRect(infoLeft, infoTop, infoWidth, infoHeight, layout.veryCompact ? 15 : 18);
-  infoPanel.lineStyle(1, 0xf0d58a, config.isBoss ? 0.18 : 0.10);
-  infoPanel.strokeRoundedRect(infoLeft + 6, infoTop + 6, infoWidth - 12, infoHeight - 12, layout.veryCompact ? 10 : 14);
-
-  const titleX = infoLeft + (layout.veryCompact ? 10 : 12);
-  const titleY = infoTop + (layout.veryCompact ? 15 : 18);
-  const badgeWidth = layout.veryCompact ? 54 : 64;
-  const badgeHeight = layout.veryCompact ? 18 : 22;
-  const badgeX = infoLeft + infoWidth - badgeWidth / 2 - 8;
-
-  const nameText = this.add.text(titleX, titleY, config.name, {
+  const nameText = this.add.text(0, titleY, config.name, {
     fontFamily: UI.font.title,
     fontSize: config.isBoss
-      ? layout.veryCompact ? '11px' : layout.compact ? '13px' : '15px'
-      : layout.veryCompact ? '10px' : layout.compact ? '12px' : '14px',
+      ? layout.veryCompact ? '12px' : layout.compact ? '14px' : '16px'
+      : layout.veryCompact ? '10px' : layout.compact ? '12px' : '13px',
     color: titleColor,
     stroke: '#000000',
     strokeThickness: 3,
+    align: 'center',
     wordWrap: {
-      width: Math.max(92, infoWidth - badgeWidth - 28),
+      width: uiWidth + (config.isBoss ? 34 : 12),
       useAdvancedWrap: true,
     },
     maxLines: config.isEnemy ? 2 : 1,
     lineSpacing: -3,
-  }).setOrigin(0, 0.5);
+  }).setOrigin(0.5);
 
-  const badge = this.add.rectangle(
-    badgeX,
-    titleY,
-    badgeWidth,
-    badgeHeight,
-    config.isEnemy ? 0x1a0907 : 0x101722,
-    0.92
-  ).setStrokeStyle(1, config.isEnemy ? accentColor : 0x70a6ff, config.isEnemy ? 0.44 : 0.4);
-
-  const badgeText = this.add.text(
-    badgeX,
-    titleY,
-    config.isEnemy ? (config.isBoss ? 'БОСС' : 'ВРАГ') : `Зелья: ${player.potions}`,
-    {
-      fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '9px' : '10px',
-      color: config.isEnemy ? '#ffb08a' : '#b9d8ff',
-      stroke: '#000000',
-      strokeThickness: 2,
-      align: 'center',
-      wordWrap: {
-        width: badgeWidth - 6,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }
-  ).setOrigin(0.5);
-
-  const hpText = this.add.text(titleX, infoTop + infoHeight * 0.42, '', {
+  const hpLabel = this.add.text(-uiWidth / 2, hpRowY, 'HP', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '12px',
-    color: config.isEnemy ? '#ffd0c2' : UI.colors.text,
-    wordWrap: {
-      width: infoWidth - 24,
-      useAdvancedWrap: true,
-    },
+    fontSize: layout.veryCompact ? '8px' : '9px',
+    color: config.isEnemy ? '#ffb0a8' : '#f0b1a8',
+    stroke: '#000000',
+    strokeThickness: 2,
     maxLines: 1,
   }).setOrigin(0, 0.5);
 
-  const extraText = this.add.text(titleX, infoTop + infoHeight * 0.59, '', {
+  const hpText = this.add.text(uiWidth / 2, hpRowY, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '11px',
-    color: '#b8aa91',
-    wordWrap: {
-      width: infoWidth - 24,
-      useAdvancedWrap: true,
-    },
+    fontSize: layout.veryCompact ? '8px' : '9px',
+    color: '#d8c7a3',
+    stroke: '#000000',
+    strokeThickness: 2,
+    align: 'right',
     maxLines: 1,
-  }).setOrigin(0, 0.5);
+  }).setOrigin(1, 0.5);
 
-  const barWidth = Math.max(112, infoWidth - (layout.veryCompact ? 22 : 28));
-  const barCenterX = titleX + barWidth / 2;
-  const barY = infoTop + infoHeight * 0.76;
-  const energyBarY = barY + (layout.veryCompact ? 11 : 13);
-  const hpBarHeight = layout.veryCompact ? 7 : 8;
-  const energyBarHeight = layout.veryCompact ? 5 : 6;
-
-  const barBack = this.add.rectangle(barCenterX, barY, barWidth, hpBarHeight, 0x020202, 0.96)
-    .setStrokeStyle(1, 0x000000, 0.85);
+  const barBack = this.add.rectangle(barCenterX, hpRowY, barWidth, hpBarHeight, 0x020202, 0.98)
+    .setStrokeStyle(1, 0x000000, 0.9);
 
   const hpBar = this.add.rectangle(
-    titleX,
-    barY,
+    barLeft,
+    hpRowY,
     barWidth,
-    hpBarHeight,
-    config.isEnemy ? 0xff6b6b : 0x75d184,
+    Math.max(2, hpBarHeight - 2),
+    config.isEnemy ? 0xff5d5d : 0x9f3535,
     0.98
   ).setOrigin(0, 0.5);
 
   const hpPreviewBar = this.add.rectangle(
-    titleX,
-    barY,
+    barLeft,
+    hpRowY,
     1,
-    hpBarHeight,
+    Math.max(2, hpBarHeight - 2),
     0xf0d58a,
     0.72
   ).setOrigin(0, 0.5).setVisible(false);
 
-  const hpBarFrame = this.add.rectangle(barCenterX, barY, barWidth, hpBarHeight)
-    .setStrokeStyle(1, 0x000000, 0.9);
+  const hpBarFrame = this.add.rectangle(barCenterX, hpRowY, barWidth, hpBarHeight)
+    .setStrokeStyle(1, 0x000000, 0.92);
 
-  const energyBack = this.add.rectangle(barCenterX, energyBarY, barWidth, energyBarHeight, 0x020202, config.isEnemy ? 0 : 0.96);
-  const energyBar = this.add.rectangle(titleX, energyBarY, barWidth, energyBarHeight, 0x70a6ff, config.isEnemy ? 0 : 0.96)
-    .setOrigin(0, 0.5);
-
-  const hoverZone = this.add.zone(0, cardHeight * 0.03, cardWidth, cardHeight * 0.94)
-    .setInteractive({ useHandCursor: true });
-
-  hoverZone.on('pointerup', () => {
-    if (config.isEnemy) {
-      this.showEnemyTooltip();
-    } else {
-      this.showPlayerTooltip();
-    }
-  });
-
-  container.add([
+  const cardObjects: Phaser.GameObjects.GameObject[] = [
     aura,
     fighterSprite,
-    infoShadow,
-    infoPanel,
     nameText,
-    badge,
-    badgeText,
+    hpLabel,
     hpText,
-    extraText,
     barBack,
     hpBar,
     hpPreviewBar,
     hpBarFrame,
-    energyBack,
-    energyBar,
-  ]);
+  ];
+
+  const energyBack = this.add.rectangle(barCenterX, energyRowY, barWidth, energyBarHeight, 0x020202, config.isEnemy ? 0 : 0.96)
+    .setStrokeStyle(1, 0x000000, config.isEnemy ? 0 : 0.86);
+  const energyBar = this.add.rectangle(barLeft, energyRowY, barWidth, Math.max(2, energyBarHeight - 2), 0x70a6ff, config.isEnemy ? 0 : 0.96)
+    .setOrigin(0, 0.5);
+  const energyLabel = this.add.text(-uiWidth / 2, energyRowY, 'ЭН', {
+    fontFamily: UI.font.body,
+    fontSize: layout.veryCompact ? '8px' : '9px',
+    color: '#b9d8ff',
+    stroke: '#000000',
+    strokeThickness: 2,
+    maxLines: 1,
+  }).setOrigin(0, 0.5).setVisible(!config.isEnemy);
+  const extraText = this.add.text(uiWidth / 2, energyRowY, '', {
+    fontFamily: UI.font.body,
+    fontSize: layout.veryCompact ? '8px' : '9px',
+    color: '#b9d8ff',
+    stroke: '#000000',
+    strokeThickness: 2,
+    align: 'right',
+    maxLines: 1,
+  }).setOrigin(1, 0.5).setVisible(!config.isEnemy);
+
+  if (!config.isEnemy) {
+    cardObjects.push(energyLabel, energyBack, energyBar, extraText);
+  }
 
   if (config.isBoss) {
-    const bossBanner = this.add.rectangle(0, infoTop - (layout.veryCompact ? 11 : 14), Math.min(infoWidth, 190), layout.veryCompact ? 20 : 24, 0x3a0907, 0.98)
-      .setStrokeStyle(2, 0xff6b35, 0.82);
-
-    const bossLabel = this.add.text(0, bossBanner.y, 'БОСС', {
+    const bossLabel = this.add.text(0, titleY - (layout.veryCompact ? 18 : 22), 'БОСС', {
       fontFamily: UI.font.title,
       fontSize: layout.veryCompact ? '9px' : '10px',
       color: '#ffb36b',
@@ -4045,10 +3941,10 @@ private createFighterSpriteCard(config: {
       maxLines: 1,
     }).setOrigin(0.5);
 
-    container.add([bossBanner, bossLabel]);
+    cardObjects.push(bossLabel);
 
     this.tweens.add({
-      targets: [bossBanner, bossLabel],
+      targets: bossLabel,
       alpha: 0.68,
       duration: 760,
       yoyo: true,
@@ -4056,15 +3952,29 @@ private createFighterSpriteCard(config: {
     });
   }
 
+  const hoverZone = this.add.zone(
+    0,
+    layout.veryCompact ? 8 : 12,
+    uiWidth + 28,
+    fighterBoxHeight + (layout.veryCompact ? 40 : 54)
+  ).setInteractive({ useHandCursor: true });
+
+  hoverZone.on('pointerup', () => {
+    if (config.isEnemy) {
+      this.showEnemyTooltip();
+    } else {
+      this.showPlayerTooltip();
+    }
+  });
+
+  cardObjects.push(hoverZone);
+  container.add(cardObjects);
+
   if (config.isEnemy) {
     this.enemyHpText = hpText;
     this.enemyHpBar = hpBar;
     this.enemyHpPreviewBar = hpPreviewBar;
     this.enemyHpBarMaxWidth = barWidth;
-
-    extraText.setText(`АТК ${this.enemy.attack} • ЗАЩ ${this.enemy.defense}`);
-
-    container.add(hoverZone);
   } else {
     this.playerHpText = hpText;
     this.playerHpBar = hpBar;
@@ -4073,35 +3983,21 @@ private createFighterSpriteCard(config: {
     this.energyBar = energyBar;
     this.energyBarMaxWidth = barWidth;
     this.energyText = extraText;
-    this.potionText = badgeText;
+    this.potionText = undefined;
 
-    const stats = this.getBattleStats();
-    const statLine = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 7 : 9), `АТК ${stats.attack} • ЗАЩ ${stats.defense} • КРИТ ${Math.round(stats.critChance * 100)}%`, {
+    this.playerDebuffText = this.add.text(-uiWidth / 2, energyRowY + (layout.veryCompact ? 12 : 15), '', {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : layout.compact ? '10px' : '11px',
-      color: '#b8aa91',
-      stroke: '#000000',
-      strokeThickness: 2,
-      wordWrap: {
-        width: infoWidth - 16,
-        useAdvancedWrap: true,
-      },
-      maxLines: 1,
-    }).setOrigin(0, 0.5);
-
-    this.playerDebuffText = this.add.text(titleX, infoTop + infoHeight + (layout.veryCompact ? 20 : 24), '', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : '10px',
+      fontSize: layout.veryCompact ? '8px' : '9px',
       color: '#c084fc',
       stroke: '#000000',
       strokeThickness: 2,
       wordWrap: {
-        width: infoWidth - 16,
+        width: uiWidth,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setVisible(false);
 
-    container.add([statLine, this.playerDebuffText, hoverZone]);
+    container.add(this.playerDebuffText);
   }
 
   return container;
@@ -4111,6 +4007,7 @@ private createFighterSpriteCard(config: {
   private hideTooltip() {
     this.tooltipObjects.forEach(object => object.destroy());
     this.tooltipObjects = [];
+    this.battleLogPopupText = undefined;
   }
 
   private showInfoModal(title: string, description: string, accentColor = UI.colors.gold) {
@@ -4700,12 +4597,11 @@ private renderPlayerEffectChips() {
   }
 
   const layout = this.getBattleLayout();
-  const cardHeight = layout.veryCompact ? 128 : layout.compact ? 150 : 174;
   const visibleCount = Math.min(effects.length, 3);
   const chipWidth = Math.min(142, (layout.contentWidth - 96) / visibleCount);
   const totalWidth = visibleCount * chipWidth + Math.max(0, visibleCount - 1) * 6;
   const startX = -totalWidth / 2 + chipWidth / 2;
-  const y = cardHeight / 2 + (layout.veryCompact ? 14 : 18);
+  const y = layout.veryCompact ? 92 : layout.compact ? 108 : 122;
 
   effects.slice(0, 3).forEach((effect, index) => {
     const x = startX + index * (chipWidth + 6);
@@ -4796,14 +4692,11 @@ private renderEnemyEffectChips() {
   }
 
   const layout = this.getBattleLayout();
-  const cardHeight = this.isBossBattle
-    ? layout.veryCompact ? 132 : layout.compact ? 154 : 178
-    : layout.veryCompact ? 118 : layout.compact ? 138 : 160;
   const visibleCount = Math.min(effects.length, 3);
   const chipWidth = Math.min(150, (layout.contentWidth - 96) / visibleCount);
   const totalWidth = visibleCount * chipWidth + Math.max(0, visibleCount - 1) * 6;
   const startX = this.enemyCard.x - totalWidth / 2 + chipWidth / 2;
-  const y = this.enemyCard.y + cardHeight / 2 + (layout.veryCompact ? 14 : 18);
+  const y = this.enemyCard.y + (layout.veryCompact ? 92 : layout.compact ? 108 : 122);
 
   effects.slice(0, 3).forEach((effect, index) => {
     const x = startX + index * (chipWidth + 6);
@@ -6676,15 +6569,15 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
    player.potions = Math.max(0, player.potions);
 
    if (this.playerHpText) {
-     this.playerHpText.setText(`HP: ${player.hp}/${stats.maxHp}`);
+     this.playerHpText.setText(`${player.hp}/${stats.maxHp}`);
    }
 
    if (this.enemyHpText) {
-     this.enemyHpText.setText(`HP: ${this.enemy.hp}/${this.enemy.maxHp}`);
+     this.enemyHpText.setText(`${this.enemy.hp}/${this.enemy.maxHp}`);
    }
 
    if (this.energyText) {
-     this.energyText.setText(`Энергия: ${player.energy}/${stats.maxEnergy}`);
+     this.energyText.setText(`${player.energy}/${stats.maxEnergy}`);
    }
 
    if (this.potionText) {
