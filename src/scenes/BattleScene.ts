@@ -1253,8 +1253,22 @@ private getDebuffShortDescription(id: string, power: number) {
       0.42
     ).setDepth(544);
 
+    // Текстовая область через отдельную камеру с viewport = content area.
+    // Viewport камеры и есть clip-регион — никакого masking не нужно.
+    const textCamX = Math.floor(centerX - modalWidth / 2 + contentPadX - 2);
+    const textCamY = Math.floor(contentTop);
+    const textCamW = Math.floor(modalWidth - contentPadX * 2 - scrollBarW - 14);
+    const textCamH = Math.floor(contentHeight);
+    const textCam = this.cameras.add(textCamX, textCamY, textCamW, textCamH, false, 'battleLogContentCam');
+    textCam.transparent = true;
+
+    // Все уже существующие объекты сцены — текстовая камера их НЕ рендерит
+    this.children.getAll().forEach(child => {
+      textCam.ignore(child as Phaser.GameObjects.GameObject);
+    });
+
     this.battleLogPopupText = this.add.text(
-      centerX - modalWidth / 2 + contentPadX,
+      textCamX,
       contentTop,
       this.formatBattleLogForPopup(),
       {
@@ -1266,26 +1280,18 @@ private getDebuffShortDescription(id: string, power: number) {
         align: 'left',
         lineSpacing: layout.veryCompact ? 3 : 5,
         wordWrap: {
-          width: modalWidth - contentPadX * 2 - scrollBarW - 10,
+          width: textCamW,
           useAdvancedWrap: true,
         },
       }
     ).setOrigin(0, 0).setDepth(544);
 
-    // Маска: depth между overlay(540) и panel(541) — визуально скрыта панелью,
-    // но рендерится в display list (stencil буфер пишется корректно).
-    const maskGraphics = this.add.graphics().setDepth(540);
-    maskGraphics.fillStyle(0xffffff);
-    maskGraphics.fillRect(
-      centerX - modalWidth / 2 + 4,
-      contentTop,
-      modalWidth - 8,
-      contentHeight
-    );
-    const mask = maskGraphics.createGeometryMask();
-    this.battleLogPopupText.setMask(mask);
+    // Основная камера текст НЕ видит — только textCam
+    this.cameras.main.ignore(this.battleLogPopupText);
+    // Начальная позиция текстовой камеры: мировой Y = contentTop
+    textCam.setScroll(textCamX, contentTop);
 
-    // Полоса прокрутки
+    // Полоса прокрутки (рендерится только основной камерой)
     const scrollTrack = this.add.rectangle(
       scrollBarX,
       contentTop + contentHeight / 2,
@@ -1321,50 +1327,50 @@ private getDebuffShortDescription(id: string, power: number) {
       42
     ).setInteractive({ useHandCursor: true }).setDepth(546);
 
-    // Скролл-состояние
+    // textCam игнорирует UI-элементы (они на основной камере)
+    textCam.ignore([scrollTrack, scrollThumb, closeButton, closeZone]);
+
+    // ── Скролл ──
     let scrollY = 0;
 
     const getTextHeight = () => this.battleLogPopupText!.height;
-
     const getMaxScroll = () => Math.max(0, getTextHeight() - contentHeight);
 
     const updateScrollThumb = () => {
-      const maxScroll = getMaxScroll();
       const textH = getTextHeight();
       if (textH <= contentHeight) {
         scrollThumb.setVisible(false);
         return;
       }
+      const maxScroll = getMaxScroll();
       scrollThumb.setVisible(true);
       const thumbH = Math.max(30, (contentHeight / textH) * contentHeight);
-      const thumbY = contentTop + (scrollY / maxScroll) * (contentHeight - thumbH);
+      const thumbY = contentTop + (maxScroll > 0 ? (scrollY / maxScroll) * (contentHeight - thumbH) : 0);
       scrollThumb.setSize(scrollBarW, thumbH);
       scrollThumb.setY(thumbY);
     };
 
     const applyScroll = (newScrollY: number) => {
-      const maxScroll = getMaxScroll();
-      scrollY = Phaser.Math.Clamp(newScrollY, 0, maxScroll);
-      this.battleLogPopupText!.setY(contentTop - scrollY);
+      scrollY = Phaser.Math.Clamp(newScrollY, 0, getMaxScroll());
+      // Камера scrollY смещает видимое окно мира вниз → текст уходит вверх
+      textCam.setScroll(textCamX, contentTop + scrollY);
       updateScrollThumb();
     };
 
     const scrollToBottom = () => applyScroll(getMaxScroll());
     this.battleLogPopupScrollToBottom = scrollToBottom;
-
-    // Сразу прокручиваем вниз
     scrollToBottom();
 
-    // Колёсико мыши
+    // ── Input ──
     const onWheel = (_pointer: Phaser.Input.Pointer, _gx: number, _gy: number, _dx: number, dy: number) => {
       applyScroll(scrollY + dy * 0.8);
     };
     this.input.on('wheel', onWheel);
 
-    // Тач/мышь-перетаскивание
     let dragStartY = 0;
     let dragStartScroll = 0;
     let isDragging = false;
+    let hasDragged = false;
 
     const onPointerDown = (pointer: Phaser.Input.Pointer) => {
       const px = pointer.x;
@@ -1376,6 +1382,7 @@ private getDebuffShortDescription(id: string, power: number) {
         py <= contentBottom
       ) {
         isDragging = true;
+        hasDragged = false;
         dragStartY = py;
         dragStartScroll = scrollY;
       }
@@ -1383,6 +1390,7 @@ private getDebuffShortDescription(id: string, power: number) {
     const onPointerMove = (pointer: Phaser.Input.Pointer) => {
       if (!isDragging) return;
       const delta = dragStartY - pointer.y;
+      if (Math.abs(delta) > 4) hasDragged = true;
       applyScroll(dragStartScroll + delta);
     };
     const onPointerUp = () => { isDragging = false; };
@@ -1396,10 +1404,15 @@ private getDebuffShortDescription(id: string, power: number) {
       this.input.off('pointerdown', onPointerDown);
       this.input.off('pointermove', onPointerMove);
       this.input.off('pointerup', onPointerUp);
-      mask.destroy();
+      const cam = this.cameras.getCamera('battleLogContentCam');
+      if (cam) this.cameras.remove(cam, false);
     };
 
-    const close = () => { this.hideTooltip(); };
+    // hasDragged защищает от закрытия при отпускании после drag
+    const close = () => {
+      if (hasDragged) { hasDragged = false; return; }
+      this.hideTooltip();
+    };
     overlay.on('pointerup', close);
     closeZone.on('pointerup', close);
 
@@ -1409,7 +1422,6 @@ private getDebuffShortDescription(id: string, power: number) {
       panel.panel,
       title,
       divider,
-      maskGraphics,
       this.battleLogPopupText!,
       scrollTrack,
       scrollThumb,
@@ -1418,7 +1430,7 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     this.tweens.add({
-      targets: [panel.shadow, panel.panel, title, divider, this.battleLogPopupText!, closeButton],
+      targets: [panel.shadow, panel.panel, title, divider, closeButton],
       alpha: { from: 0, to: 1 },
       duration: 150,
       ease: 'Sine.easeOut',
