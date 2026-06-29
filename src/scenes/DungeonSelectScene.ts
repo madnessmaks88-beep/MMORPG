@@ -16,6 +16,7 @@ import {
 import { saveGameAsync } from '../systems/SaveSystem';
 import { SANITY_COST_PER_FLOOR, hasEnoughSanityForFloor } from '../systems/SanitySystem';
 import { createBottomNav } from '../ui/createBottomNav';
+import { NAV_BACKPACK_ASSET } from '../data/itemSprites';
 
 import {
   formatCheckpointTimeLeft,
@@ -81,6 +82,12 @@ export class DungeonSelectScene extends Phaser.Scene {
 
   constructor() {
     super('DungeonSelectScene');
+  }
+
+  preload() {
+    if (!this.textures.exists(NAV_BACKPACK_ASSET.key)) {
+      this.load.image(NAV_BACKPACK_ASSET.key, NAV_BACKPACK_ASSET.url);
+    }
   }
 
   create() {

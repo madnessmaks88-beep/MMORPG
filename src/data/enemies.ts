@@ -3,7 +3,6 @@ export type EnemyWeakness =
   | 'axe'
   | 'katana'
   | 'hammer'
-  | 'shield_sword'
   | 'spear'
   | 'trident'
   | 'sword'
@@ -16,7 +15,6 @@ export type EnemyResistance =
   | 'axe'
   | 'katana'
   | 'hammer'
-  | 'shield_sword'
   | 'spear'
   | 'trident'
   | 'sword'
@@ -1295,7 +1293,7 @@ export const enemies: EnemyData[] = [
     expReward: 110,
     goldReward: 95,
     weaknesses: ['hammer', 'stun', 'bleed'],
-    resistances: ['shield_sword', 'curse'],
+    resistances: ['curse'],
     debuffOnHit: {
       id: 'armor_break',
       name: 'Рыцарский надлом',

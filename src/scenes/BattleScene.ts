@@ -212,7 +212,6 @@ export class BattleScene extends Phaser.Scene {
   private enemyBleedTurns = 0;
   private enemyBleedDamage = 0;
 
-  private shieldSwordGuardActive = false;
 
   private statusText?: Phaser.GameObjects.Text;
 
@@ -580,8 +579,6 @@ export class BattleScene extends Phaser.Scene {
 
   this.enemyBleedTurns = 0;
   this.enemyBleedDamage = 0;
-  this.shieldSwordGuardActive = false;
-
   this.playerDebuffs = [];
   this.playerStunTurns = 0;
   this.nextIncomingDamageBonus = 0;
@@ -4878,7 +4875,7 @@ private renderEnemyEffectChips() {
   if (tag === 'axe') return 'топор';
   if (tag === 'katana') return 'катана';
   if (tag === 'hammer') return 'молот';
-  if (tag === 'shield_sword') return 'щит-меч';
+
   if (tag === 'spear') return 'копьё';
   if (tag === 'trident') return 'трезубец';
   if (tag === 'sword') return 'меч';
@@ -4900,10 +4897,6 @@ private renderEnemyEffectChips() {
 
     if (this.enemyBleedTurns > 0) {
       statuses.push(`Кровотечение: ${this.enemyBleedTurns} х.`);
-    }
-
-    if (this.shieldSwordGuardActive) {
-      statuses.push('Защита щит-меча');
     }
 
     if (this.raceSkillCooldown > 0) {
@@ -5447,11 +5440,6 @@ private renderEnemyEffectChips() {
       return;
     }
 
-    if (weaponType === 'shield_sword') {
-      this.handleShieldSwordAttack();
-      return;
-    }
-
     if (weaponType === 'spear') {
       this.handleSpearAttack();
       return;
@@ -5804,35 +5792,6 @@ ${daggerTreeCritTexts.join('\n')}`
     this.afterPlayerAttack(playerActionText, {
       skipEnemyTurn: isStunned,
     });
-  }
-
-  private handleShieldSwordAttack() {
-    const stats = this.getBattleStats();
-
-    const damage = this.calculateDamage({
-      baseDamage: stats.attack,
-      multiplier: 0.82,
-      varianceMin: -1,
-      varianceMax: 3,
-      isBasicAttack: true,
-    });
-
-    const isCrit = this.rollPlayerCrit(stats.critChance);
-    const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.45)) : damage;
-    const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
-
-    this.shieldSwordGuardActive = true;
-
-    const weaknessText = this.getEnemyWeaknessText();
-
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-
-    const playerActionText = isCrit
-      ? `Щит-меч проводит безопасную критическую атаку: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.${treeCritText}`
-      : `Ты атакуешь из-за щита: ${finalDamage} урона.${weaknessText}\nСледующий удар врага будет ослаблен.`;
-
-    this.afterPlayerAttack(playerActionText);
   }
 
   private rollGoblinExtraMaterials(enemyDiedUnderMark: boolean) {
@@ -6552,14 +6511,6 @@ ${daggerTreeCritTexts.join('\n')}`
 
       damage = Math.max(1, Math.floor(damage * this.getRaceIncomingDamageMultiplier()));
 
-      let shieldSwordText = '';
-
-      if (this.shieldSwordGuardActive) {
-        damage = Math.max(1, Math.floor(damage * 0.6));
-        this.shieldSwordGuardActive = false;
-        shieldSwordText = '\nЩит-меч смягчил входящий удар.';
-      }
-
       if (isDefending) {
         damage = Math.max(1, Math.floor(damage * 0.45));
       }
@@ -6601,10 +6552,10 @@ ${daggerTreeCritTexts.join('\n')}`
           ? `${playerActionText}
 
 Ты заблокировал часть удара.
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`
+${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`
           : `${playerActionText}
 
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`;
+${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}`;
 
         this.tickRaceTurnEffectsAfterEnemyAction();
         this.handleVictory(thornVictoryText);
@@ -6637,12 +6588,12 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
           ? `${playerActionText}
 
 Ты заблокировал часть удара.
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
 
 Ты пал в катакомбах...`
           : `${playerActionText}
 
-${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
+${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${debuffText}
 
 Ты пал в катакомбах...`;
 
@@ -6653,8 +6604,8 @@ ${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defen
 
       this.appendBattleLog(
         isDefending
-          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
-          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${shieldSwordText}${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
+          ? `${playerActionText}\n\nТы заблокировал часть удара.\n${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
+          : `${playerActionText}\n\n${this.enemy.name} наносит ${damage} урона.${defenseTreeResult.text}${survivalText}${stoneThornsText}${demonRageText}${debuffText}${enemyStunText}\n${energyRestoreText}${passiveText}`
       );
 
       this.updateTexts();

@@ -92,7 +92,6 @@ export function getWeaponTypeText(weaponType?: string): string {
   if (weaponType === 'axe') return 'Топор';
   if (weaponType === 'katana') return 'Катана';
   if (weaponType === 'hammer') return 'Молот';
-  if (weaponType === 'shield_sword') return 'Щит-меч';
   if (weaponType === 'spear') return 'Копьё';
   if (weaponType === 'trident') return 'Трезубец';
   if (weaponType === 'sword') return 'Меч';
@@ -117,9 +116,7 @@ export function getWeaponTypeDescription(weaponType?: string): string {
     return 'Обычная атака наносит тяжёлый удар и сотрясает арену.';
   }
 
-  if (weaponType === 'shield_sword') {
-    return 'Обычная атака слабее, но считается осторожной.';
-  }
+
 
   if (weaponType === 'spear') {
     return 'Обычная атака имеет 20% шанс пробить часть защиты врага. Если враг уже ослаблен кровотечением, шанс повышается до 30%.';

@@ -50,7 +50,6 @@ export type WeaponType =
   | 'axe'
   | 'katana'
   | 'hammer'
-  | 'shield_sword'
   | 'spear'
   | 'trident'
   | 'sword';
@@ -144,16 +143,6 @@ export const items: ItemData[] = [
     weaponType: 'hammer',
     bonusAttack: 8,
     bonusDefense: 1,
-  },
-  {
-    id: 'guard_sword',
-    name: 'Меч стража',
-    description: 'Меч с широким щитком. Позволяет атаковать осторожнее.',
-    slot: 'weapon',
-    rarity: 'common',
-    weaponType: 'shield_sword',
-    bonusAttack: 3,
-    bonusDefense: 3,
   },
   {
     id: 'scarlet_katana',
@@ -320,56 +309,6 @@ export const items: ItemData[] = [
     bonusAttack: 26,
     bonusDefense: 6,
     bonusCritChance: 0.08,
-  },
-  {
-    id: 'forgotten_guard_shield_sword',
-    name: 'Щит-меч забытых стражей',
-    description: 'Старый щит-клинок из оружейной склепа.',
-    slot: 'weapon',
-    rarity: 'common',
-    weaponType: 'shield_sword',
-    bonusAttack: 2,
-    bonusDefense: 3,
-  },
-  {
-    id: 'funeral_shield_blade',
-    name: 'Погребальный щит-клинок',
-    description: 'Оружие стражей, сопровождавших погребальные процессии.',
-    slot: 'weapon',
-    rarity: 'rare',
-    weaponType: 'shield_sword',
-    bonusAttack: 5,
-    bonusDefense: 5,
-  },
-  {
-    id: 'bone_chapel_wall',
-    name: 'Стена Костяной Часовни',
-    description: 'Тяжелый щит-меч, украшенный костяными пластинами.',
-    slot: 'weapon',
-    rarity: 'rare',
-    weaponType: 'shield_sword',
-    bonusAttack: 7,
-    bonusDefense: 7,
-  },
-  {
-    id: 'sealed_niche_shield_blade',
-    name: 'Клинок-щит Запечатанной Ниши',
-    description: 'Эпический щит-меч, найденный за сломанной печатью.',
-    slot: 'weapon',
-    rarity: 'epic',
-    weaponType: 'shield_sword',
-    bonusAttack: 10,
-    bonusDefense: 10,
-  },
-  {
-    id: 'black_crypt_bulwark',
-    name: 'Оплот Черного Склепа',
-    description: 'Легендарный щит-меч, способный выдержать удар смерти.',
-    slot: 'weapon',
-    rarity: 'legendary',
-    weaponType: 'shield_sword',
-    bonusAttack: 14,
-    bonusDefense: 14,
   },
   {
     id: 'crypt_knife',
@@ -1070,18 +1009,6 @@ export const items: ItemData[] = [
     bonusHp: 30,
     bonusDefense: 8,
     bonusStrength: 2,
-  },
-  {
-    id: 'idris_last_light_blade',
-    name: 'Клинок последнего огонька',
-    description: 'Меч Идриса, найденный в глубинах. Лезвие холодное, но у самой гарды теплится слабый свет.',
-    slot: 'weapon',
-    rarity: 'legendary',
-    bossOnly: true,
-    weaponType: 'shield_sword',
-    bonusAttack: 18,
-    bonusDefense: 4,
-    bonusCritChance: 0.04,
   },
 
 ];

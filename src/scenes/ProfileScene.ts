@@ -12,6 +12,7 @@ import { getCachedVKUser } from '../systems/VKBridgeSystem';
 import { getUnlockedSecretAvatars } from '../systems/AvatarSystem';
 
 import { createBottomNav } from '../ui/createBottomNav';
+import { NAV_BACKPACK_ASSET } from '../data/itemSprites';
 
 import {
   UI,
@@ -96,6 +97,12 @@ export class ProfileScene extends Phaser.Scene {
 
   constructor() {
     super('ProfileScene');
+  }
+
+  preload() {
+    if (!this.textures.exists(NAV_BACKPACK_ASSET.key)) {
+      this.load.image(NAV_BACKPACK_ASSET.key, NAV_BACKPACK_ASSET.url);
+    }
   }
 
   create() {

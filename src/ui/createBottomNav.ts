@@ -12,6 +12,7 @@ type BottomNavItem = {
   label: string;
   scene: string;
   icon: string;
+  spriteKey?: string;
 };
 
 const BOTTOM_NAV_TRANSITION_COOLDOWN_MS = 520;
@@ -110,6 +111,7 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
       label: 'Сумка',
       scene: 'InventoryScene',
       icon: '▣',
+      spriteKey: 'nav_backpack',
     },
   ];
 
@@ -169,11 +171,25 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
       button.setStrokeStyle(1, UI.colors.goldDark, 0.25);
     }
 
-    const icon = scene.add.text(x, navY - 16, item.icon, {
-      fontFamily: UI.font.body,
-      fontSize: '22px',
-      color: iconColor,
-    }).setOrigin(0.5).setDepth(907);
+    const resolvedSpriteKey = item.spriteKey && scene.textures.exists(item.spriteKey) ? item.spriteKey : undefined;
+    const icon: Phaser.GameObjects.Image | Phaser.GameObjects.Text = resolvedSpriteKey
+      ? scene.add.image(x, navY - 16, resolvedSpriteKey)
+        .setOrigin(0.5)
+        .setDisplaySize(26, 26)
+        .setDepth(907)
+      : scene.add.text(x, navY - 16, item.icon, {
+        fontFamily: UI.font.body,
+        fontSize: '22px',
+        color: iconColor,
+      }).setOrigin(0.5).setDepth(907);
+
+    const setIconTint = (color: string | null) => {
+      if (icon instanceof Phaser.GameObjects.Image) {
+        color ? icon.setTint(Phaser.Display.Color.HexStringToColor(color).color) : icon.clearTint();
+      } else {
+        if (color) (icon as Phaser.GameObjects.Text).setColor(color);
+      }
+    };
 
     const label = scene.add.text(x, navY + 18, item.label, {
       fontFamily: UI.font.body,
@@ -183,7 +199,7 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
 
     const resetButtonVisual = () => {
       button.setFillStyle(bgColor, bgAlpha);
-      icon.setColor(iconColor);
+      setIconTint(iconColor);
       label.setColor(labelColor);
     };
 
@@ -193,7 +209,7 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
       }
 
       button.setFillStyle(0x21150f, 0.95);
-      icon.setColor('#f0d58a');
+      setIconTint('#f0d58a');
       label.setColor('#f0d58a');
     });
 
@@ -212,7 +228,7 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
       }
 
       button.setFillStyle(0x332216, 0.98);
-      icon.setColor('#ffe2a3');
+      setIconTint('#ffe2a3');
       label.setColor('#ffe2a3');
     });
 
@@ -236,7 +252,7 @@ export function createBottomNav(scene: Phaser.Scene, options: BottomNavOptions) 
 
       button.disableInteractive();
       button.setFillStyle(0x332216, 0.9);
-      icon.setColor('#ffe2a3');
+      setIconTint('#ffe2a3');
       label.setColor('#ffe2a3');
 
       startBottomNavScene(scene, item.scene);

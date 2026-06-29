@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { player, type EquipmentSlot, type InventoryItem } from '../data/player';
 import { createBottomNav } from '../ui/createBottomNav';
 import { saveGameAsync } from '../systems/SaveSystem';
+import { ITEM_SPRITE_ASSETS, TAB_SPRITE_ASSETS, NAV_BACKPACK_ASSET, getItemSpriteKey } from '../data/itemSprites';
 
 import { materials } from '../data/materials';
 
@@ -188,6 +189,15 @@ export class InventoryScene extends Phaser.Scene {
 
   constructor() {
     super('InventoryScene');
+  }
+
+  preload() {
+    const allAssets = [...TAB_SPRITE_ASSETS, ...ITEM_SPRITE_ASSETS, NAV_BACKPACK_ASSET];
+    allAssets.forEach(asset => {
+      if (!this.textures.exists(asset.key)) {
+        this.load.image(asset.key, asset.url);
+      }
+    });
   }
 
   init(data?: {
@@ -743,13 +753,19 @@ export class InventoryScene extends Phaser.Scene {
     const innerShade = this.add.circle(x, y + radius * 0.18, radius * 0.72, 0x000000, item ? 0.16 : 0.26)
       .setDepth(8);
 
-    const icon = this.add.text(x, y - (item ? 0 : radius * 0.08), getSlotIcon(slot), {
-      fontFamily: UI.font.body,
-      fontSize: `${Math.max(15, Math.floor(radius * 0.82))}px`,
-      color: item ? '#ffffff' : UI.colors.textMuted,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(9);
+    const _equippedSpriteKey = item ? getItemSpriteKey(item.id) : undefined;
+    const icon = (_equippedSpriteKey && this.textures.exists(_equippedSpriteKey))
+      ? this.add.image(x, y, _equippedSpriteKey)
+        .setOrigin(0.5)
+        .setDisplaySize(Math.floor(radius * 1.4), Math.floor(radius * 1.4))
+        .setDepth(9)
+      : this.add.text(x, y - (item ? 0 : radius * 0.08), getSlotIcon(slot), {
+        fontFamily: UI.font.body,
+        fontSize: `${Math.max(15, Math.floor(radius * 0.82))}px`,
+        color: item ? '#ffffff' : UI.colors.textMuted,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(9);
 
     const emptyHint = item
       ? undefined
@@ -1409,15 +1425,23 @@ export class InventoryScene extends Phaser.Scene {
         tabBg.bg.setAlpha(1);
       }
 
-      const icon = this.add.text(x, y - tabButtonHeight * 0.18, tab.icon, {
-        fontFamily: UI.font.body,
-        fontSize: layout.tabsPanelWidth < 64 ? '12px' : '14px',
-        color: isActive ? UI.colors.goldText : UI.colors.textMuted,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
+      const tabSpriteKey = isActive ? `tab_${tab.id}_on` : `tab_${tab.id}_off`;
+      const tabIconSize = Math.max(20, Math.min(28, tabButtonHeight - 18));
+      const icon = this.textures.exists(tabSpriteKey)
+        ? this.add.image(x, y - tabButtonHeight * 0.16, tabSpriteKey)
+          .setOrigin(0.5)
+          .setDisplaySize(tabIconSize, tabIconSize)
+          .setDepth(83)
+          .setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1)
+        : this.add.text(x, y - tabButtonHeight * 0.18, tab.icon, {
+          fontFamily: UI.font.body,
+          fontSize: layout.tabsPanelWidth < 64 ? '12px' : '14px',
+          color: isActive ? UI.colors.goldText : UI.colors.textMuted,
+          stroke: '#000000',
+          strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
 
-      const label = this.add.text(x, y + tabButtonHeight * 0.22, visibleLabel, {
+      const label = this.add.text(x, y + tabButtonHeight * 0.28, visibleLabel, {
         fontFamily: UI.font.body,
         fontSize: layout.tabsPanelWidth < 64 ? '7px' : '8px',
         color: isActive ? UI.colors.goldText : UI.colors.textMuted,
@@ -1473,12 +1497,20 @@ export class InventoryScene extends Phaser.Scene {
         }
       }
 
+      const setIconHover = (hover: boolean) => {
+        if (icon instanceof Phaser.GameObjects.Image) {
+          hover ? icon.setTint(0xf0d58a) : icon.clearTint();
+        } else {
+          icon.setColor(hover ? UI.colors.goldText : UI.colors.textMuted);
+        }
+      };
+
       tabBg.zone.on('pointerover', () => {
         if (this.selectedCategory === tab.id) {
           return;
         }
 
-        icon.setColor(UI.colors.goldText);
+        setIconHover(true);
         label.setColor(UI.colors.goldText);
         tabBg.bg.setAlpha(0.95);
       });
@@ -1488,7 +1520,7 @@ export class InventoryScene extends Phaser.Scene {
           return;
         }
 
-        icon.setColor(UI.colors.textMuted);
+        setIconHover(false);
         label.setColor(UI.colors.textMuted);
         tabBg.bg.setAlpha(1);
       });
@@ -2333,15 +2365,24 @@ export class InventoryScene extends Phaser.Scene {
         .setStrokeStyle(2, rarityStrokeColor, 0.86)
     );
 
-    cardObjects.push(
-      this.add.text(iconX, 0, getSlotIcon(item.slot), {
-        fontFamily: UI.font.body,
-        fontSize: '18px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5)
-    );
+    const itemSpriteKey = getItemSpriteKey(item.id);
+    if (itemSpriteKey && this.textures.exists(itemSpriteKey)) {
+      cardObjects.push(
+        this.add.image(iconX, 0, itemSpriteKey)
+          .setOrigin(0.5)
+          .setDisplaySize(32, 32)
+      );
+    } else {
+      cardObjects.push(
+        this.add.text(iconX, 0, getSlotIcon(item.slot), {
+          fontFamily: UI.font.body,
+          fontSize: '18px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 2,
+        }).setOrigin(0.5)
+      );
+    }
 
     cardObjects.push(
       this.add.text(textX, -cardHeight * 0.27, `${item.name}${upgrade}`, {
@@ -3042,11 +3083,16 @@ export class InventoryScene extends Phaser.Scene {
       0.88
     ).setStrokeStyle(3, rarityStrokeColor, 0.95);
 
-    const icon = this.add.text(layout.centerX, iconY, getSlotIcon(item.slot), {
-      fontFamily: UI.font.body,
-      fontSize: '26px',
-      color: '#ffffff',
-      stroke: '#000000',
+    const _infoSpriteKey = getItemSpriteKey(item.id);
+    const icon = (_infoSpriteKey && this.textures.exists(_infoSpriteKey))
+      ? this.add.image(layout.centerX, iconY, _infoSpriteKey)
+        .setOrigin(0.5)
+        .setDisplaySize(42, 42)
+      : this.add.text(layout.centerX, iconY, getSlotIcon(item.slot), {
+        fontFamily: UI.font.body,
+        fontSize: '26px',
+        color: '#ffffff',
+        stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5);
 
