@@ -1401,142 +1401,11 @@ export class InventoryScene extends Phaser.Scene {
       const x = panelX;
       const y = startY + index * (tabButtonHeight + gapY);
       const isActive = this.selectedCategory === tab.id;
-      const visibleLabel = useShortLabels ? tab.shortLabel : tab.label;
-
-      const tabBg = this.createRoundedButtonBg({
-        x,
-        y,
-        width: tabWidth,
-        height: tabButtonHeight,
-        radius: 13,
-        color: isActive ? 0x2c1d13 : 0x10100f,
-        alpha: isActive ? 0.98 : 0.78,
-        strokeColor: isActive ? UI.colors.gold : UI.colors.goldDark,
-        strokeAlpha: isActive ? 0.96 : 0.34,
-        strokeWidth: isActive ? 2 : 1,
-        depth: 80,
-      });
-
-      if (this.shouldPlayInventoryIntroAnimation) {
-        tabBg.shadow.setAlpha(0);
-        tabBg.bg.setAlpha(0);
-      } else {
-        tabBg.shadow.setAlpha(1);
-        tabBg.bg.setAlpha(1);
-      }
-
       const tabSpriteKey = isActive ? `tab_${tab.id}_on` : `tab_${tab.id}_off`;
-      const tabIconSize = Math.max(20, Math.min(28, tabButtonHeight - 18));
-      const icon = this.textures.exists(tabSpriteKey)
-        ? this.add.image(x, y - tabButtonHeight * 0.16, tabSpriteKey)
-          .setOrigin(0.5)
-          .setDisplaySize(tabIconSize, tabIconSize)
-          .setDepth(83)
-          .setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1)
-        : this.add.text(x, y - tabButtonHeight * 0.18, tab.icon, {
-          fontFamily: UI.font.body,
-          fontSize: layout.tabsPanelWidth < 64 ? '12px' : '14px',
-          color: isActive ? UI.colors.goldText : UI.colors.textMuted,
-          stroke: '#000000',
-          strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
+      const useSpriteTab = this.textures.exists(tabSpriteKey);
 
-      const label = this.add.text(x, y + tabButtonHeight * 0.28, visibleLabel, {
-        fontFamily: UI.font.body,
-        fontSize: layout.tabsPanelWidth < 64 ? '7px' : '8px',
-        color: isActive ? UI.colors.goldText : UI.colors.textMuted,
-        align: 'center',
-        wordWrap: {
-          width: tabWidth - 6,
-        },
-        maxLines: 1,
-      }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
-
-      const activeAccent = isActive
-        ? this.add.rectangle(x, y + tabButtonHeight / 2 - 2, Math.max(18, tabWidth * 0.5), 2, UI.colors.gold, 0.82)
-          .setDepth(84)
-          .setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1)
-        : undefined;
-
-      const tabObjects: Phaser.GameObjects.GameObject[] = [
-        tabBg.shadow,
-        tabBg.bg,
-        tabBg.zone,
-        icon,
-        label,
-      ];
-
-      if (activeAccent) {
-        tabObjects.push(activeAccent);
-      }
-
-      this.inventoryTabObjects.push(...tabObjects);
-      this.inventoryListCamera?.ignore(tabObjects);
-
-      if (this.shouldPlayInventoryIntroAnimation) {
-        this.tweens.add({
-          targets: [tabBg.shadow, tabBg.bg, icon, label, ...(activeAccent ? [activeAccent] : [])],
-          alpha: 1,
-          duration: 180,
-          delay: 220 + index * 25,
-          ease: 'Sine.easeOut',
-        });
-
-        if (isActive) {
-          this.tweens.add({
-            targets: tabBg.bg,
-            alpha: {
-              from: 0.84,
-              to: 1,
-            },
-            duration: 1200,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-          });
-        }
-      }
-
-      const setIconHover = (hover: boolean) => {
-        if (icon instanceof Phaser.GameObjects.Image) {
-          hover ? icon.setTint(0xf0d58a) : icon.clearTint();
-        } else {
-          icon.setColor(hover ? UI.colors.goldText : UI.colors.textMuted);
-        }
-      };
-
-      tabBg.zone.on('pointerover', () => {
-        if (this.selectedCategory === tab.id) {
-          return;
-        }
-
-        setIconHover(true);
-        label.setColor(UI.colors.goldText);
-        tabBg.bg.setAlpha(0.95);
-      });
-
-      tabBg.zone.on('pointerout', () => {
-        if (this.selectedCategory === tab.id) {
-          return;
-        }
-
-        setIconHover(false);
-        label.setColor(UI.colors.textMuted);
-        tabBg.bg.setAlpha(1);
-      });
-
-      tabBg.zone.on('pointerdown', () => {
-        tabBg.bg.setAlpha(0.78);
-      });
-
-      tabBg.zone.on('pointerup', () => {
-        tabBg.bg.setAlpha(this.selectedCategory === tab.id ? 1 : 0.95);
-
-        if (this.isItemInfoOpen || this.isRestartingInventory) {
-          return;
-        }
-
-        if (this.selectedCategory === tab.id) {
+      const switchTab = () => {
+        if (this.isItemInfoOpen || this.isRestartingInventory || this.selectedCategory === tab.id) {
           return;
         }
 
@@ -1551,11 +1420,138 @@ export class InventoryScene extends Phaser.Scene {
 
         this.rebuildCategoryTabsOnly();
         this.rebuildInventoryListOnly();
-      });
+      };
 
-      tabBg.zone.on('pointerupoutside', () => {
-        tabBg.bg.setAlpha(this.selectedCategory === tab.id ? 1 : 0.76);
-      });
+      if (useSpriteTab) {
+        const sprite = this.add.image(x, y, tabSpriteKey)
+          .setOrigin(0.5)
+          .setDisplaySize(tabWidth, tabButtonHeight)
+          .setDepth(81)
+          .setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
+
+        const zone = this.add.zone(x, y, tabWidth, tabButtonHeight)
+          .setInteractive({ useHandCursor: !isActive })
+          .setDepth(82);
+
+        const tabObjects: Phaser.GameObjects.GameObject[] = [sprite, zone];
+        this.inventoryTabObjects.push(...tabObjects);
+        this.inventoryListCamera?.ignore(tabObjects);
+
+        if (this.shouldPlayInventoryIntroAnimation) {
+          this.tweens.add({
+            targets: sprite,
+            alpha: 1,
+            duration: 180,
+            delay: 220 + index * 25,
+            ease: 'Sine.easeOut',
+          });
+        }
+
+        zone.on('pointerover', () => {
+          if (isActive) return;
+          sprite.setTint(0xd4bc82);
+        });
+
+        zone.on('pointerout', () => {
+          sprite.clearTint();
+        });
+
+        zone.on('pointerdown', () => {
+          if (isActive) return;
+          sprite.setAlpha(0.82);
+        });
+
+        zone.on('pointerupoutside', () => {
+          sprite.clearTint();
+          sprite.setAlpha(1);
+        });
+
+        zone.on('pointerup', () => {
+          sprite.clearTint();
+          sprite.setAlpha(1);
+          switchTab();
+        });
+
+      } else {
+        const visibleLabel = useShortLabels ? tab.shortLabel : tab.label;
+
+        const tabBg = this.createRoundedButtonBg({
+          x,
+          y,
+          width: tabWidth,
+          height: tabButtonHeight,
+          radius: 13,
+          color: isActive ? 0x2c1d13 : 0x10100f,
+          alpha: isActive ? 0.98 : 0.78,
+          strokeColor: isActive ? UI.colors.gold : UI.colors.goldDark,
+          strokeAlpha: isActive ? 0.96 : 0.34,
+          strokeWidth: isActive ? 2 : 1,
+          depth: 80,
+        });
+
+        if (this.shouldPlayInventoryIntroAnimation) {
+          tabBg.shadow.setAlpha(0);
+          tabBg.bg.setAlpha(0);
+        }
+
+        const icon = this.add.text(x, y - tabButtonHeight * 0.18, tab.icon, {
+          fontFamily: UI.font.body,
+          fontSize: '14px',
+          color: isActive ? UI.colors.goldText : UI.colors.textMuted,
+          stroke: '#000000',
+          strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
+
+        const label = this.add.text(x, y + tabButtonHeight * 0.28, visibleLabel, {
+          fontFamily: UI.font.body,
+          fontSize: '8px',
+          color: isActive ? UI.colors.goldText : UI.colors.textMuted,
+          align: 'center',
+          wordWrap: { width: tabWidth - 6 },
+          maxLines: 1,
+        }).setOrigin(0.5).setDepth(83).setAlpha(this.shouldPlayInventoryIntroAnimation ? 0 : 1);
+
+        const tabObjects: Phaser.GameObjects.GameObject[] = [tabBg.shadow, tabBg.bg, tabBg.zone, icon, label];
+        this.inventoryTabObjects.push(...tabObjects);
+        this.inventoryListCamera?.ignore(tabObjects);
+
+        if (this.shouldPlayInventoryIntroAnimation) {
+          this.tweens.add({
+            targets: [tabBg.shadow, tabBg.bg, icon, label],
+            alpha: 1,
+            duration: 180,
+            delay: 220 + index * 25,
+            ease: 'Sine.easeOut',
+          });
+        }
+
+        tabBg.zone.on('pointerover', () => {
+          if (isActive) return;
+          icon.setColor(UI.colors.goldText);
+          label.setColor(UI.colors.goldText);
+          tabBg.bg.setAlpha(0.95);
+        });
+
+        tabBg.zone.on('pointerout', () => {
+          if (isActive) return;
+          icon.setColor(UI.colors.textMuted);
+          label.setColor(UI.colors.textMuted);
+          tabBg.bg.setAlpha(1);
+        });
+
+        tabBg.zone.on('pointerdown', () => {
+          tabBg.bg.setAlpha(0.78);
+        });
+
+        tabBg.zone.on('pointerup', () => {
+          tabBg.bg.setAlpha(1);
+          switchTab();
+        });
+
+        tabBg.zone.on('pointerupoutside', () => {
+          tabBg.bg.setAlpha(1);
+        });
+      }
     });
   }
 
@@ -2356,23 +2352,18 @@ export class InventoryScene extends Phaser.Scene {
 
     cardObjects.push(cardZone);
 
-    cardObjects.push(
-      this.add.circle(iconX, 0, 27, rarityColor, 0.18)
-    );
-
-    cardObjects.push(
-      this.add.circle(iconX, 0, 22, rarityColor, 0.92)
-        .setStrokeStyle(2, rarityStrokeColor, 0.86)
-    );
-
     const itemSpriteKey = getItemSpriteKey(item.id);
     if (itemSpriteKey && this.textures.exists(itemSpriteKey)) {
       cardObjects.push(
         this.add.image(iconX, 0, itemSpriteKey)
           .setOrigin(0.5)
-          .setDisplaySize(32, 32)
+          .setDisplaySize(44, 44)
       );
     } else {
+      cardObjects.push(
+        this.add.circle(iconX, 0, 22, rarityColor, 0.92)
+          .setStrokeStyle(2, rarityStrokeColor, 0.86)
+      );
       cardObjects.push(
         this.add.text(iconX, 0, getSlotIcon(item.slot), {
           fontFamily: UI.font.body,
@@ -3075,26 +3066,23 @@ export class InventoryScene extends Phaser.Scene {
     const descriptionY = Math.min(top + 214, actionsTop - 220);
     const statsY = Math.min(top + 348, actionsTop - 84);
 
-    const iconBg = this.add.circle(
-      layout.centerX,
-      iconY,
-      32,
-      rarityColor,
-      0.88
-    ).setStrokeStyle(3, rarityStrokeColor, 0.95);
-
     const _infoSpriteKey = getItemSpriteKey(item.id);
+    const iconBg = (_infoSpriteKey && this.textures.exists(_infoSpriteKey))
+      ? undefined
+      : this.add.circle(layout.centerX, iconY, 32, rarityColor, 0.88)
+          .setStrokeStyle(3, rarityStrokeColor, 0.95);
+
     const icon = (_infoSpriteKey && this.textures.exists(_infoSpriteKey))
       ? this.add.image(layout.centerX, iconY, _infoSpriteKey)
         .setOrigin(0.5)
-        .setDisplaySize(42, 42)
+        .setDisplaySize(56, 56)
       : this.add.text(layout.centerX, iconY, getSlotIcon(item.slot), {
         fontFamily: UI.font.body,
         fontSize: '26px',
         color: '#ffffff',
         stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5);
+        strokeThickness: 2,
+      }).setOrigin(0.5);
 
     const title = this.add.text(
       layout.centerX,
@@ -3241,7 +3229,7 @@ export class InventoryScene extends Phaser.Scene {
     modal.add([
       overlay,
       ...panelObjects,
-      iconBg,
+      ...(iconBg ? [iconBg] : []),
       icon,
       title,
       typeText,
