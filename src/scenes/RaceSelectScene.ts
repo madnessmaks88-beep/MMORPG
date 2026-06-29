@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { player } from '../data/player';
 import { races, type RaceData, type RaceId } from '../data/races';
+import { preloadRaceAvatars, getRaceAvatarKey } from '../data/raceSprites';
 
 import { saveGameAsync } from '../systems/SaveSystem';
 
@@ -78,6 +79,10 @@ export class RaceSelectScene extends Phaser.Scene {
 
   constructor() {
     super('RaceSelectScene');
+  }
+
+  preload() {
+    preloadRaceAvatars(this);
   }
 
   create() {
@@ -635,23 +640,41 @@ export class RaceSelectScene extends Phaser.Scene {
     const buttonX = right - buttonWidth / 2 - 18;
     const textWidth = Math.max(160, buttonX - buttonWidth / 2 - textX - 12);
 
+    const cardAvatarKey = getRaceAvatarKey(race.id);
+    const cardAvatarR = selected ? 33 : 30;
+
     this.addTo(
       container,
-      this.add.circle(iconX, top + 52, selected ? 33 : 30, raceColor, selected ? 0.22 : 0.14)
+      this.add.circle(iconX, top + 52, cardAvatarR + 2, raceColor, selected ? 0.18 : 0.10)
         .setStrokeStyle(2, raceColor, selected ? 0.82 : 0.56)
         .setDepth(10)
     );
 
-    this.addTo(
-      container,
-      this.add.text(iconX, top + 52, raceIcon, {
-        fontFamily: UI.font.body,
-        fontSize: selected ? (layout.veryCompact ? '23px' : '26px') : (layout.veryCompact ? '21px' : '24px'),
-        color: '#f1eadc',
-        stroke: '#000000',
-        strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(11)
-    );
+    if (this.textures.exists(cardAvatarKey)) {
+      const cardAvatarImg = this.add.image(iconX, top + 52, cardAvatarKey)
+        .setOrigin(0.5)
+        .setDisplaySize(cardAvatarR * 2, cardAvatarR * 2)
+        .setDepth(11);
+
+      const cardMask = this.add.graphics();
+      cardMask.fillStyle(0xffffff, 1);
+      cardMask.fillCircle(iconX, top + 52, cardAvatarR - 1);
+      cardMask.setVisible(false);
+      cardAvatarImg.setMask(cardMask.createGeometryMask());
+
+      this.addTo(container, cardAvatarImg);
+    } else {
+      this.addTo(
+        container,
+        this.add.text(iconX, top + 52, raceIcon, {
+          fontFamily: UI.font.body,
+          fontSize: selected ? (layout.veryCompact ? '23px' : '26px') : (layout.veryCompact ? '21px' : '24px'),
+          color: '#f1eadc',
+          stroke: '#000000',
+          strokeThickness: 3,
+        }).setOrigin(0.5).setDepth(11)
+      );
+    }
 
     this.addTo(
       container,
@@ -1269,17 +1292,37 @@ export class RaceSelectScene extends Phaser.Scene {
       maxLines: 2,
     }).setOrigin(0.5).setDepth(1005);
 
-    const icon = this.add.circle(centerX, centerY - modalHeight / 2 + 118, 40, raceColor, 0.18)
-      .setStrokeStyle(2, raceColor, 0.82)
+    const modalAvatarY = centerY - modalHeight / 2 + 118;
+    const modalAvatarR = 44;
+    const modalAvatarKey = getRaceAvatarKey(race.id);
+
+    const icon = this.add.circle(centerX, modalAvatarY, modalAvatarR + 4, raceColor, 0.16)
+      .setStrokeStyle(2, raceColor, 0.78)
       .setDepth(1005);
 
-    const iconText = this.add.text(centerX, centerY - modalHeight / 2 + 118, this.getRaceIcon(race.id), {
-      fontFamily: UI.font.body,
-      fontSize: '31px',
-      color: '#f1eadc',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(1006);
+    let iconText: Phaser.GameObjects.Text | undefined;
+    let modalAvatarImg: Phaser.GameObjects.Image | undefined;
+
+    if (this.textures.exists(modalAvatarKey)) {
+      modalAvatarImg = this.add.image(centerX, modalAvatarY, modalAvatarKey)
+        .setOrigin(0.5)
+        .setDisplaySize(modalAvatarR * 2, modalAvatarR * 2)
+        .setDepth(1006);
+
+      const modalMask = this.add.graphics();
+      modalMask.fillStyle(0xffffff, 1);
+      modalMask.fillCircle(centerX, modalAvatarY, modalAvatarR - 1);
+      modalMask.setVisible(false);
+      modalAvatarImg.setMask(modalMask.createGeometryMask());
+    } else {
+      iconText = this.add.text(centerX, modalAvatarY, this.getRaceIcon(race.id), {
+        fontFamily: UI.font.body,
+        fontSize: '31px',
+        color: '#f1eadc',
+        stroke: '#000000',
+        strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(1006);
+    }
 
     const body = this.add.text(
       centerX,
@@ -1330,6 +1373,10 @@ export class RaceSelectScene extends Phaser.Scene {
       depth: 1006,
     });
 
+    const modalIconObjects: Phaser.GameObjects.GameObject[] = [];
+    if (modalAvatarImg) modalIconObjects.push(modalAvatarImg);
+    if (iconText) modalIconObjects.push(iconText);
+
     this.modalObjects = [
       modal,
       overlay,
@@ -1338,7 +1385,7 @@ export class RaceSelectScene extends Phaser.Scene {
       panel.glow,
       title,
       icon,
-      iconText,
+      ...modalIconObjects,
       body,
       ...cancel.objects,
       ...confirm.objects,

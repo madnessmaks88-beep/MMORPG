@@ -16,6 +16,7 @@ import {
 import { createButton } from '../ui/createButton';
 import { createBottomNav } from '../ui/createBottomNav';
 import { NAV_BACKPACK_ASSET } from '../data/itemSprites';
+import { preloadRaceAvatars } from '../data/raceSprites';
 import { getActiveCampfireBattleCheckpoint } from '../systems/CampfireCheckpointSystem';
 import { getMaterialName, type MaterialId } from '../data/materials';
 
@@ -179,6 +180,8 @@ export class CampScene extends Phaser.Scene {
     if (!this.textures.exists(NAV_BACKPACK_ASSET.key)) {
       this.load.image(NAV_BACKPACK_ASSET.key, NAV_BACKPACK_ASSET.url);
     }
+
+    preloadRaceAvatars(this);
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.applyNearestFilterToCampTextures();
