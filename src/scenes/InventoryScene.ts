@@ -289,7 +289,7 @@ export class InventoryScene extends Phaser.Scene {
     const statsHeight = tiny ? 92 : veryCompact ? 98 : compact ? 104 : 112;
     const statsY = safeTop + statsHeight / 2;
 
-    const equipmentHeight = tiny ? 142 : veryCompact ? 150 : compact ? 158 : 166;
+    const equipmentHeight = tiny ? 154 : veryCompact ? 164 : compact ? 172 : 182;
     const equipmentGap = tiny ? 6 : 8;
     const equipmentY = statsY + statsHeight / 2 + equipmentGap + equipmentHeight / 2;
 
@@ -404,44 +404,41 @@ export class InventoryScene extends Phaser.Scene {
   private createInventoryBackdrop(layout: InventoryLayout) {
     const { width, height, centerX } = layout;
 
-    this.add.rectangle(centerX, height / 2, width, height, INVENTORY_DARK.black, 1).setDepth(0);
-    this.add.rectangle(centerX, height * 0.34, width, height * 0.72, 0x0a0b12, 0.72).setDepth(0);
-    this.add.rectangle(centerX, height - 210, width, 420, 0x020202, 0.5).setDepth(0);
+    // Base fill
+    this.add.rectangle(centerX, height / 2, width, height, 0x020304, 1).setDepth(0);
 
-    const haloY = layout.safeTop + Math.round(height * 0.17);
-    this.add.circle(centerX, haloY, width * 0.5, INVENTORY_DARK.violet, 0.055).setDepth(0);
-    this.add.circle(centerX, haloY + 18, width * 0.28, INVENTORY_DARK.gold, 0.035).setDepth(0);
-    this.add.circle(centerX, haloY + 28, width * 0.16, INVENTORY_DARK.cold, 0.03).setDepth(0);
+    // Upper atmosphere gradient
+    this.add.rectangle(centerX, height * 0.22, width, height * 0.44, 0x080b14, 0.88).setDepth(0);
 
-    const pillarWidth = Math.max(24, width * 0.075);
-    const pillarAlpha = 0.22;
+    // Lower vignette
+    this.add.rectangle(centerX, height - 160, width, 320, 0x000000, 0.62).setDepth(0);
 
-    [layout.safeX * 0.55, width - layout.safeX * 0.55].forEach((x, index) => {
-      this.add.rectangle(x, height / 2, pillarWidth, height, 0x050608, pillarAlpha).setDepth(1);
-      this.add.rectangle(x, height / 2, 2, height, INVENTORY_DARK.bronze, 0.16).setDepth(2);
-      this.add.text(x, layout.safeTop + 120 + index * 34, '▥', {
-        fontFamily: UI.font.body,
-        fontSize: '42px',
-        color: '#ffffff',
-      }).setOrigin(0.5).setAlpha(0.035).setDepth(2);
+    // Ambient halos
+    const haloY = layout.safeTop + Math.round(height * 0.16);
+    this.add.circle(centerX, haloY, width * 0.48, INVENTORY_DARK.violet, 0.07).setDepth(0);
+    this.add.circle(centerX, haloY + 22, width * 0.26, INVENTORY_DARK.gold, 0.045).setDepth(0);
+    this.add.circle(centerX, haloY + 38, width * 0.14, INVENTORY_DARK.cold, 0.038).setDepth(0);
+
+    // Thin side pillars (subtle frame)
+    [layout.safeX * 0.5, width - layout.safeX * 0.5].forEach(x => {
+      this.add.rectangle(x, height / 2, 2, height, INVENTORY_DARK.bronze, 0.12).setDepth(1);
+      this.add.rectangle(x, height / 2, 6, height, 0x000000, 0.28).setDepth(0);
     });
 
-    for (let i = 0; i < 24; i += 1) {
-      const x = layout.safeX + 18 + i * ((width - layout.safeX * 2 - 36) / 23);
-      const y = layout.safeTop + 92 + (i % 8) * 63;
-      const size = 1.5 + (i % 3) * 0.8;
-
-      this.add.circle(x, y, size, INVENTORY_DARK.goldSoft, 0.035 + (i % 2) * 0.012).setDepth(2);
-    }
-
-    this.add.text(centerX, layout.safeTop + 158, '☥', {
+    // Subtle decorative glyph
+    this.add.text(centerX, layout.safeTop + 148, '☥', {
       fontFamily: UI.font.body,
-      fontSize: '118px',
+      fontSize: '106px',
       color: '#ffffff',
-    })
-      .setOrigin(0.5)
-      .setAlpha(0.026)
-      .setDepth(1);
+    }).setOrigin(0.5).setAlpha(0.018).setDepth(1);
+
+    // Particle-like dots
+    for (let i = 0; i < 18; i += 1) {
+      const px = layout.safeX + 22 + i * ((width - layout.safeX * 2 - 44) / 17);
+      const py = layout.safeTop + 80 + (i % 6) * 72;
+      const sz = 1.2 + (i % 3) * 0.7;
+      this.add.circle(px, py, sz, INVENTORY_DARK.goldSoft, 0.028 + (i % 2) * 0.01).setDepth(1);
+    }
   }
 
   private createInventoryHeader(layout: InventoryLayout) {
@@ -545,38 +542,44 @@ export class InventoryScene extends Phaser.Scene {
       height,
       radius,
       color: 0x0b0d11,
-      alpha: 0.96,
+      alpha: 0.97,
       strokeColor: accentColor,
-      strokeAlpha: 0.34,
+      strokeAlpha: 0.28,
       strokeWidth: 1,
       depth: 4,
     });
 
-    const iconX = x - width / 2 + Math.min(14, width * 0.18);
-    const textX = x - width / 2 + Math.min(26, width * 0.31);
-    const textWidth = Math.max(34, width - (textX - (x - width / 2)) - 4);
+    const accentHex = `#${accentColor.toString(16).padStart(6, '0')}`;
+    const barH = height - 10;
+    const accentBar = this.add.graphics().setDepth(5);
+    accentBar.fillStyle(accentColor, 0.72);
+    accentBar.fillRoundedRect(x - width / 2 + 3, y - barH / 2, 3, barH, 1);
 
-    const iconText = this.add.text(iconX, y, icon, {
+    const iconX = x - width / 2 + Math.min(17, width * 0.2);
+    const textX = x - width / 2 + Math.min(32, width * 0.34);
+    const textWidth = Math.max(32, width - (textX - (x - width / 2)) - 4);
+
+    const iconText = this.add.text(iconX, y + 1, icon, {
       fontFamily: UI.font.body,
-      fontSize: height < 38 ? '9px' : '10px',
-      color: UI.colors.textMuted,
+      fontSize: height < 38 ? '11px' : '13px',
+      color: accentHex,
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(7);
 
-    const labelText = this.add.text(textX, y - height * 0.2, label, {
+    const labelText = this.add.text(textX, y - height * 0.22, label, {
       fontFamily: UI.font.body,
-      fontSize: height < 38 ? '7px' : '8px',
-      color: UI.colors.textMuted,
+      fontSize: '7px',
+      color: '#6e6759',
       wordWrap: {
         width: textWidth,
       },
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const valueText = this.add.text(textX, y + height * 0.18, value, {
+    const valueText = this.add.text(textX, y + height * 0.16, value, {
       fontFamily: UI.font.title,
-      fontSize: height < 38 ? '10px' : '12px',
+      fontSize: height < 38 ? '11px' : '13px',
       color: UI.colors.text,
       stroke: '#000000',
       strokeThickness: 2,
@@ -586,7 +589,7 @@ export class InventoryScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(7);
 
-    const animatedObjects = [...objects, iconText, labelText, valueText];
+    const animatedObjects = [...objects, accentBar, iconText, labelText, valueText];
 
     if (this.shouldPlayInventoryIntroAnimation) {
       this.setObjectsAlpha(animatedObjects, 0);
@@ -743,25 +746,46 @@ export class InventoryScene extends Phaser.Scene {
     const labelFontSize = Math.max(8, Math.min(10, Math.floor(radius * 0.44)));
     const labelY = y + radius + labelFontSize + 5;
 
-    const shadow = this.add.circle(x, y + 5, radius + 5, 0x000000, 0.3).setDepth(5);
-    const outerGlow = this.add.circle(x, y, radius + 4, item ? rarityStrokeColor : 0x050506, item ? 0.18 : 0.22)
-      .setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 0.84 : 0.22)
-      .setDepth(6);
-    const bg = this.add.circle(x, y, radius, rarityFillColor, fillAlpha)
-      .setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha)
-      .setDepth(7);
-    const innerShade = this.add.circle(x, y + radius * 0.18, radius * 0.72, 0x000000, item ? 0.16 : 0.26)
-      .setDepth(8);
+    const size = radius * 2;
+    const corner = Math.max(10, Math.floor(size * 0.26));
+
+    const shadowGfx = this.add.graphics().setDepth(5);
+    shadowGfx.fillStyle(0x000000, 0.42);
+    shadowGfx.fillRoundedRect(x - size / 2 + 1, y - size / 2 + 4, size, size, corner);
+
+    const outerGlow = this.add.graphics().setDepth(6);
+    if (item) {
+      outerGlow.lineStyle(3, rarityStrokeColor, 0.38);
+      outerGlow.strokeRoundedRect(x - size / 2 - 3, y - size / 2 - 3, size + 6, size + 6, corner + 2);
+    }
+
+    const bg = this.add.graphics().setDepth(7);
+    const drawBg = (alpha: number, strokeAlphaVal: number) => {
+      bg.clear();
+      bg.fillStyle(rarityFillColor, alpha);
+      bg.fillRoundedRect(x - size / 2, y - size / 2, size, size, corner);
+      bg.lineStyle(item ? 2 : 1, rarityStrokeColor, strokeAlphaVal);
+      bg.strokeRoundedRect(x - size / 2, y - size / 2, size, size, corner);
+    };
+    drawBg(fillAlpha, strokeAlpha);
+
+    const innerShade = this.add.graphics().setDepth(8);
+    const drawInnerShade = (a: number) => {
+      innerShade.clear();
+      innerShade.fillStyle(0x000000, a);
+      innerShade.fillRoundedRect(x - size / 2 + 3, y - size / 2 + 3, size - 6, (size - 6) * 0.55, corner - 3);
+    };
+    drawInnerShade(item ? 0.14 : 0.24);
 
     const _equippedSpriteKey = item ? getItemSpriteKey(item.id) : undefined;
     const icon = (_equippedSpriteKey && this.textures.exists(_equippedSpriteKey))
       ? this.add.image(x, y, _equippedSpriteKey)
         .setOrigin(0.5)
-        .setDisplaySize(Math.floor(radius * 1.4), Math.floor(radius * 1.4))
+        .setDisplaySize(Math.floor(radius * 1.55), Math.floor(radius * 1.55))
         .setDepth(9)
       : this.add.text(x, y - (item ? 0 : radius * 0.08), getSlotIcon(slot), {
         fontFamily: UI.font.body,
-        fontSize: `${Math.max(15, Math.floor(radius * 0.82))}px`,
+        fontSize: `${Math.max(16, Math.floor(radius * 0.88))}px`,
         color: item ? '#ffffff' : UI.colors.textMuted,
         stroke: '#000000',
         strokeThickness: 2,
@@ -769,13 +793,11 @@ export class InventoryScene extends Phaser.Scene {
 
     const emptyHint = item
       ? undefined
-      : this.add.text(x, y + radius * 0.44, 'пусто', {
+      : this.add.text(x, y + radius * 0.42, 'пусто', {
         fontFamily: UI.font.body,
         fontSize: `${Math.max(7, Math.floor(radius * 0.28))}px`,
         color: '#665d50',
-        wordWrap: {
-          width: radius * 1.55,
-        },
+        wordWrap: { width: radius * 1.55 },
         maxLines: 1,
       }).setOrigin(0.5).setDepth(9);
 
@@ -785,13 +807,11 @@ export class InventoryScene extends Phaser.Scene {
       color: item ? UI.colors.text : UI.colors.textMuted,
       stroke: '#000000',
       strokeThickness: item ? 2 : 1,
-      wordWrap: {
-        width: radius * 2.45,
-      },
+      wordWrap: { width: radius * 2.6 },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(9);
 
-    const objects: Phaser.GameObjects.GameObject[] = [shadow, outerGlow, bg, innerShade, icon, labelText];
+    const objects: Phaser.GameObjects.GameObject[] = [shadowGfx, outerGlow, bg, innerShade, icon, labelText];
 
     if (emptyHint) {
       objects.push(emptyHint);
@@ -811,11 +831,8 @@ export class InventoryScene extends Phaser.Scene {
     if (item) {
       this.tweens.add({
         targets: outerGlow,
-        alpha: {
-          from: 0.2,
-          to: 0.34,
-        },
-        duration: 1450,
+        alpha: { from: 0.65, to: 1 },
+        duration: 1600,
         yoyo: true,
         repeat: -1,
         delay: 360 + index * 80,
@@ -823,41 +840,32 @@ export class InventoryScene extends Phaser.Scene {
       });
     }
 
-    const zoneHeight = radius * 2 + labelFontSize + 13;
-    const zone = this.add.zone(x, y + (labelY - y) / 2, radius * 2.7, zoneHeight)
+    const zoneHeight = size + labelFontSize + 13;
+    const zone = this.add.zone(x, y + (labelY - y) / 2, size + 10, zoneHeight)
       .setDepth(32)
       .setInteractive({ useHandCursor: true });
 
     let holdOpenedTooltip = false;
 
     zone.on('pointerover', () => {
-      if (this.isItemInfoOpen) {
-        return;
-      }
-
-      bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, item ? 1 : 0.48);
-      outerGlow.setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 1 : 0.36);
+      if (this.isItemInfoOpen) return;
+      drawBg(Math.min(1, fillAlpha + 0.12), Math.min(1, strokeAlpha + 0.22));
       this.showEquipmentTooltip(slot, inventoryItem, x, y);
     });
 
     zone.on('pointerout', () => {
-      bg.setStrokeStyle(item ? 3 : 2, rarityStrokeColor, strokeAlpha);
-      outerGlow.setStrokeStyle(item ? 3 : 2, item ? rarityStrokeColor : UI.colors.goldDark, item ? 0.84 : 0.22);
+      drawBg(fillAlpha, strokeAlpha);
       holdOpenedTooltip = false;
       this.cancelEquipmentTooltipHold();
       this.hideEquipmentTooltip();
     });
 
     zone.on('pointerdown', () => {
-      if (this.isItemInfoOpen) {
-        return;
-      }
-
-      bg.setAlpha(Math.max(0.46, fillAlpha - 0.14));
-      innerShade.setAlpha(item ? 0.28 : 0.38);
+      if (this.isItemInfoOpen) return;
+      drawBg(Math.max(0.34, fillAlpha - 0.18), strokeAlpha);
+      drawInnerShade(item ? 0.28 : 0.4);
       holdOpenedTooltip = false;
       this.cancelEquipmentTooltipHold();
-
       this.equipmentTooltipHoldTimer = this.time.delayedCall(430, () => {
         holdOpenedTooltip = true;
         this.showEquipmentTooltip(slot, inventoryItem, x, y);
@@ -865,14 +873,11 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     zone.on('pointerup', () => {
-      bg.setAlpha(fillAlpha);
-      innerShade.setAlpha(item ? 0.16 : 0.26);
+      drawBg(fillAlpha, strokeAlpha);
+      drawInnerShade(item ? 0.14 : 0.24);
       this.cancelEquipmentTooltipHold();
 
-      if (this.isItemInfoOpen) {
-        return;
-      }
-
+      if (this.isItemInfoOpen) return;
       if (holdOpenedTooltip) {
         holdOpenedTooltip = false;
         return;
@@ -888,8 +893,8 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     zone.on('pointerupoutside', () => {
-      bg.setAlpha(fillAlpha);
-      innerShade.setAlpha(item ? 0.16 : 0.26);
+      drawBg(fillAlpha, strokeAlpha);
+      drawInnerShade(item ? 0.14 : 0.24);
       holdOpenedTooltip = false;
       this.cancelEquipmentTooltipHold();
       this.hideEquipmentTooltip();
@@ -1051,8 +1056,8 @@ export class InventoryScene extends Phaser.Scene {
     const slotRadiusByHeight = (contentHeight - slotGapY - labelHeight * 2 - 8) / 4;
     const slotGapX = layout.veryCompact ? 10 : 12;
     const slotRadiusByWidth = (slotAreaWidth - slotGapX - 16) / 4;
-    const maxRadius = layout.veryCompact ? 20 : 23;
-    const minRadius = layout.veryCompact ? 15 : 17;
+    const maxRadius = layout.veryCompact ? 25 : 28;
+    const minRadius = layout.veryCompact ? 18 : 21;
     const slotRadius = Phaser.Math.Clamp(
       Math.floor(Math.min(slotRadiusByHeight, slotRadiusByWidth)),
       minRadius,
@@ -1870,7 +1875,7 @@ export class InventoryScene extends Phaser.Scene {
     }
 
     const count = Math.max(1, this.getFilteredInventoryItems().length);
-    const itemSpacing = layout.veryCompact ? 98 : layout.compact ? 106 : 112;
+    const itemSpacing = layout.veryCompact ? 106 : layout.compact ? 114 : 122;
 
     return 14 + count * itemSpacing + 18;
   }
@@ -1927,8 +1932,8 @@ export class InventoryScene extends Phaser.Scene {
       return;
     }
 
-    const itemSpacing = layout.veryCompact ? 98 : layout.compact ? 106 : 112;
-    const cardHeight = layout.veryCompact ? 88 : layout.compact ? 94 : 100;
+    const itemSpacing = layout.veryCompact ? 106 : layout.compact ? 114 : 122;
+    const cardHeight = layout.veryCompact ? 94 : layout.compact ? 102 : 108;
     const cardHalfHeight = cardHeight / 2;
     const topPadding = 14;
     const renderBuffer = 120;
@@ -2352,22 +2357,28 @@ export class InventoryScene extends Phaser.Scene {
 
     cardObjects.push(cardZone);
 
+    // Left rarity accent bar
+    const accentBar = this.add.graphics();
+    accentBar.fillStyle(rarityColor, isEquipped ? 0.95 : 0.72);
+    accentBar.fillRoundedRect(left + 5, -cardHeight / 2 + 8, 3, cardHeight - 16, 1.5);
+    cardObjects.push(accentBar);
+
     const itemSpriteKey = getItemSpriteKey(item.id);
     if (itemSpriteKey && this.textures.exists(itemSpriteKey)) {
       cardObjects.push(
         this.add.image(iconX, 0, itemSpriteKey)
           .setOrigin(0.5)
-          .setDisplaySize(44, 44)
+          .setDisplaySize(48, 48)
       );
     } else {
       cardObjects.push(
-        this.add.circle(iconX, 0, 22, rarityColor, 0.92)
+        this.add.circle(iconX, 0, 24, rarityColor, 0.92)
           .setStrokeStyle(2, rarityStrokeColor, 0.86)
       );
       cardObjects.push(
         this.add.text(iconX, 0, getSlotIcon(item.slot), {
           fontFamily: UI.font.body,
-          fontSize: '18px',
+          fontSize: '19px',
           color: '#ffffff',
           stroke: '#000000',
           strokeThickness: 2,
@@ -2378,10 +2389,10 @@ export class InventoryScene extends Phaser.Scene {
     cardObjects.push(
       this.add.text(textX, -cardHeight * 0.27, `${item.name}${upgrade}`, {
         fontFamily: UI.font.title,
-        fontSize: layout.veryCompact ? '13px' : '15px',
+        fontSize: layout.veryCompact ? '14px' : '16px',
         color: isEquipped ? UI.colors.goldText : UI.colors.text,
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
         wordWrap: {
           width: textWidth,
           useAdvancedWrap: true,
