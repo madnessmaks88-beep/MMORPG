@@ -503,7 +503,7 @@ export class CampScene extends Phaser.Scene {
     const bottomNavTop = height - safeBottom;
 
     // Верх сцены теперь занимает только тонкий RPG HUD.
-    const headerHeight = veryCompact ? 56 : compact ? 60 : 64;
+    const headerHeight = veryCompact ? 82 : compact ? 90 : 96;
     const heroTop = safeTop;
     const heroHeight = headerHeight;
     const actionsTop = safeTop + headerHeight + 2;
@@ -638,19 +638,18 @@ export class CampScene extends Phaser.Scene {
       0.42
     ).setDepth(39);
 
-    const avatarRadius = layout.veryCompact ? 20 : layout.compact ? 22 : 23;
+    const avatarRadius = layout.veryCompact ? 32 : layout.compact ? 35 : 38;
     const avatarX = layout.safeX + avatarRadius + 6;
     const avatarY = hudY;
 
-    const avatarGlow = this.add.circle(avatarX, avatarY, avatarRadius + 5, 0x7d55ff, 0.06)
+    const raceColor = race ? (race.id === 'human' ? 0xc8a85a : race.id === 'goblin' ? 0x6abf5e : race.id === 'demon' ? 0xc84040 : race.id === 'night_elf' ? 0x5e82c8 : race.id === 'stoneborn' ? 0x9a8060 : 0x9a5ec8) : 0x8a7048;
+
+    const avatarGlow = this.add.circle(avatarX, avatarY, avatarRadius + 8, raceColor, 0.10)
       .setDepth(39)
       .setBlendMode(Phaser.BlendModes.ADD);
 
-    const avatarBack = this.add.circle(avatarX, avatarY, avatarRadius, 0x09090d, 0.96)
-      .setStrokeStyle(2, 0xb99257, 0.76)
-      .setDepth(40);
-
-    const avatarInner = this.add.circle(avatarX, avatarY, Math.max(4, avatarRadius - 5), 0x131018, 0.78)
+    const avatarBack = this.add.circle(avatarX, avatarY, avatarRadius + 2, 0x060508, 1)
+      .setStrokeStyle(2, 0xb99257, 0.82)
       .setDepth(40);
 
     const raceTextureKey = player.raceId ? `race_${player.raceId}` : undefined;
@@ -659,12 +658,12 @@ export class CampScene extends Phaser.Scene {
     if (raceTextureKey && this.textures.exists(raceTextureKey)) {
       const avatarImage = this.add.image(avatarX, avatarY, raceTextureKey)
         .setOrigin(0.5)
-        .setDisplaySize(avatarRadius * 1.65, avatarRadius * 1.65)
+        .setDisplaySize(avatarRadius * 2, avatarRadius * 2)
         .setDepth(41);
 
       const avatarMask = this.add.graphics();
       avatarMask.fillStyle(0xffffff, 1);
-      avatarMask.fillCircle(avatarX, avatarY, avatarRadius - 3);
+      avatarMask.fillCircle(avatarX, avatarY, avatarRadius - 1);
       avatarMask.setVisible(false);
       avatarImage.setMask(avatarMask.createGeometryMask());
 
@@ -672,7 +671,7 @@ export class CampScene extends Phaser.Scene {
     } else {
       avatarObject = this.add.text(avatarX, avatarY, race ? this.getRaceIcon(race.id) : '◆', {
         fontFamily: this.PIXEL_FONT_FAMILY,
-        fontSize: layout.veryCompact ? '21px' : '24px',
+        fontSize: layout.veryCompact ? '28px' : '32px',
         color: '#d8b56d',
         stroke: '#000000',
         strokeThickness: 2,
@@ -680,52 +679,56 @@ export class CampScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(41);
     }
 
-    const goldPanelWidth = layout.veryCompact ? 76 : layout.compact ? 86 : 92;
-    const goldPanelHeight = 20;
+    // Блик сверху на аватарке
+    const avatarShine = this.add.arc(avatarX, avatarY - avatarRadius * 0.3, avatarRadius * 0.8, 195, 345, false, 0xffffff, 0.06)
+      .setDepth(42);
+
+    const goldPanelWidth = layout.veryCompact ? 88 : layout.compact ? 98 : 106;
+    const goldPanelHeight = layout.veryCompact ? 24 : 26;
     const goldPanelX = layout.width - layout.safeX - goldPanelWidth / 2 - 2;
-    const goldPanelY = hudTop + (layout.veryCompact ? 14 : 15);
+    const goldPanelY = hudTop + (layout.veryCompact ? 18 : 20);
 
     const goldPill = this.add.graphics().setDepth(40);
-    goldPill.fillStyle(0x0b0908, 0.86);
+    goldPill.fillStyle(0x0b0908, 0.88);
     goldPill.fillRoundedRect(
       goldPanelX - goldPanelWidth / 2,
       goldPanelY - goldPanelHeight / 2,
       goldPanelWidth,
       goldPanelHeight,
-      8
+      10
     );
-    goldPill.lineStyle(1, 0xb99257, 0.58);
+    goldPill.lineStyle(1, 0xc4a25a, 0.72);
     goldPill.strokeRoundedRect(
       goldPanelX - goldPanelWidth / 2,
       goldPanelY - goldPanelHeight / 2,
       goldPanelWidth,
       goldPanelHeight,
-      8
+      10
     );
 
     const goldText = this.add.text(goldPanelX, goldPanelY, `◆ ${player.gold}`, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '9px' : '10px',
+      fontSize: layout.veryCompact ? '11px' : '12px',
       color: '#f0d58a',
       stroke: '#000000',
       strokeThickness: 2,
       align: 'center',
       wordWrap: {
-        width: goldPanelWidth - 10,
+        width: goldPanelWidth - 12,
         useAdvancedWrap: true,
       },
       maxLines: 1,
     }).setOrigin(0.5).setDepth(41);
 
-    const infoX = avatarX + avatarRadius + (layout.veryCompact ? 9 : 11);
+    const infoX = avatarX + avatarRadius + (layout.veryCompact ? 10 : 12);
     const goldLeft = goldPanelX - goldPanelWidth / 2;
     const titleWidth = Math.max(96, goldLeft - infoX - 10);
     const raceTitle = race ? race.name : player.name || 'Безымянный';
 
-    const titleText = this.add.text(infoX, hudTop + (layout.veryCompact ? 12 : 13), raceTitle, {
+    const titleText = this.add.text(infoX, hudTop + (layout.veryCompact ? 14 : 16), raceTitle, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px',
-      color: '#e0c585',
+      fontSize: layout.veryCompact ? '13px' : layout.compact ? '14px' : '15px',
+      color: '#e8cc8a',
       stroke: '#000000',
       strokeThickness: 2,
       wordWrap: {
@@ -735,18 +738,18 @@ export class CampScene extends Phaser.Scene {
       maxLines: 1,
     }).setOrigin(0, 0.5).setDepth(41);
 
-    const labelWidth = layout.veryCompact ? 22 : 26;
-    const valueWidth = layout.veryCompact ? 42 : 48;
+    const labelWidth = layout.veryCompact ? 24 : 28;
+    const valueWidth = layout.veryCompact ? 46 : 52;
     const barGapX = layout.veryCompact ? 4 : 5;
-    const availableTotalWidth = Math.max(132, goldLeft - infoX - 10);
-    const maxBarWidth = Math.max(70, availableTotalWidth - labelWidth - valueWidth - barGapX * 2);
+    const availableTotalWidth = Math.max(140, goldLeft - infoX - 10);
+    const maxBarWidth = Math.max(80, availableTotalWidth - labelWidth - valueWidth - barGapX * 2);
 
     const hpBarWidth = maxBarWidth;
-    const energyBarWidth = Math.max(54, Math.floor(maxBarWidth * 0.78));
-    const sanityBarWidth = Math.max(48, Math.floor(maxBarWidth * 0.62));
+    const energyBarWidth = Math.max(60, Math.floor(maxBarWidth * 0.82));
+    const sanityBarWidth = Math.max(52, Math.floor(maxBarWidth * 0.65));
 
-    const barsStartY = hudTop + (layout.veryCompact ? 28 : 30);
-    const rowGap = layout.veryCompact ? 8 : 9;
+    const barsStartY = hudTop + (layout.veryCompact ? 36 : 40);
+    const rowGap = layout.veryCompact ? 14 : 16;
 
     this.createCompactHudBar({
       x: infoX,
@@ -808,8 +811,8 @@ export class CampScene extends Phaser.Scene {
       bronzeLine,
       avatarGlow,
       avatarBack,
-      avatarInner,
       avatarObject,
+      avatarShine,
       goldPill,
       goldText,
       titleText,
@@ -818,7 +821,7 @@ export class CampScene extends Phaser.Scene {
     this.playPixelIntro(introObjects, 20);
 
     this.tweens.add({
-      targets: [avatarGlow, avatarBack, avatarInner, avatarObject],
+      targets: [avatarGlow, avatarBack, avatarObject, avatarShine],
       alpha: { from: 0.25, to: 1 },
       duration: 170,
       delay: 55,
@@ -841,17 +844,17 @@ export class CampScene extends Phaser.Scene {
     veryCompact: boolean;
   }) {
     const progress = Phaser.Math.Clamp(config.progress, 0, 1);
-    const labelWidth = config.veryCompact ? 22 : 26;
-    const valueWidth = config.veryCompact ? 42 : 48;
-    const gap = config.veryCompact ? 4 : 5;
-    const barHeight = config.veryCompact ? 4 : 5;
+    const labelWidth = config.veryCompact ? 26 : 30;
+    const valueWidth = config.veryCompact ? 48 : 56;
+    const gap = config.veryCompact ? 5 : 6;
+    const barHeight = config.veryCompact ? 6 : 7;
     const barLeft = config.x + labelWidth + gap;
-    const barWidth = Math.max(28, config.width);
+    const barWidth = Math.max(32, config.width);
     const valueX = barLeft + barWidth + gap + valueWidth;
 
     const labelText = this.add.text(config.x, config.y, config.label, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: config.veryCompact ? '7px' : '8px',
+      fontSize: config.veryCompact ? '9px' : '10px',
       color: config.textColor,
       stroke: '#000000',
       strokeThickness: 2,
@@ -890,7 +893,7 @@ export class CampScene extends Phaser.Scene {
 
     const valueText = this.add.text(valueX, config.y, config.value, {
       fontFamily: this.PIXEL_FONT_FAMILY,
-      fontSize: config.veryCompact ? '7px' : '8px',
+      fontSize: config.veryCompact ? '9px' : '10px',
       color: '#d8c7a3',
       stroke: '#000000',
       strokeThickness: 2,

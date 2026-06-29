@@ -13,7 +13,7 @@ import { getUnlockedSecretAvatars } from '../systems/AvatarSystem';
 
 import { createBottomNav } from '../ui/createBottomNav';
 import { NAV_BACKPACK_ASSET } from '../data/itemSprites';
-import { preloadRaceAvatars, getRaceAvatarKey } from '../data/raceSprites';
+import { preloadRaceAvatars } from '../data/raceSprites';
 
 import {
   UI,
@@ -324,43 +324,12 @@ export class ProfileScene extends Phaser.Scene {
       depth: 2,
     });
 
-    const avatarX = innerLeft + 58;
-    const avatarY = topY + 82;
-    const avatarSize = layout.compact ? 82 : 92;
-    const avatarRadius = avatarSize / 2;
-
     this.addTo(
       container,
-      this.add.circle(avatarX, avatarY, avatarRadius + 14, raceColor, 0.06).setDepth(4)
+      this.add.circle(innerLeft + 58, topY + 82, 68, raceColor, 0.055).setDepth(4)
     );
 
-    const raceAvatarKey = race ? getRaceAvatarKey(race.id) : undefined;
-
-    if (raceAvatarKey && this.textures.exists(raceAvatarKey)) {
-      const avatarImg = this.add.image(avatarX, avatarY, raceAvatarKey)
-        .setOrigin(0.5)
-        .setDisplaySize(avatarSize, avatarSize)
-        .setDepth(6);
-
-      const maskGfx = this.add.graphics();
-      maskGfx.fillStyle(0xffffff, 1);
-      maskGfx.fillCircle(avatarX, avatarY, avatarRadius - 2);
-      maskGfx.setVisible(false);
-      avatarImg.setMask(maskGfx.createGeometryMask());
-
-      const border = this.add.circle(avatarX, avatarY, avatarRadius + 1, 0x000000, 0)
-        .setStrokeStyle(3, raceColor, 0.88)
-        .setDepth(7);
-
-      const shine = this.add.arc(avatarX, avatarY - avatarRadius * 0.22, avatarRadius * 0.7, 190, 350, false, 0xffffff, 0.06)
-        .setDepth(8);
-
-      this.addTo(container, avatarImg);
-      this.addTo(container, border);
-      this.addTo(container, shine);
-    } else {
-      this.createVkAvatar(container, avatarX, avatarY, avatarSize, 6, raceColor);
-    }
+    this.createVkAvatar(container, innerLeft + 58, topY + 82, layout.compact ? 82 : 92, 6, raceColor);
 
     const textX = innerLeft + 126;
     const titleWidth = Math.max(150, innerRight - textX - 76);
