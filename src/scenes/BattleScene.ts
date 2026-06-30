@@ -5205,11 +5205,6 @@ private renderEnemyEffectChips() {
     this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
 
     if (this.stonebornSprite) {
-      this.stonebornSprite.play('stoneborn_attack');
-      this.stonebornSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
-        this.stonebornSprite?.play('stoneborn_idle');
-      });
-
       const teleportLocalX = enemyBase.x - playerBase.x - 25;
 
       this.tweens.add({
@@ -5220,6 +5215,7 @@ private renderEnemyEffectChips() {
         ease: 'Sine.easeInOut',
       });
 
+      // Телепорт к врагу
       await new Promise<void>(resolve => {
         this.tweens.add({
           targets: this.stonebornSprite,
@@ -5236,6 +5232,8 @@ private renderEnemyEffectChips() {
         return;
       }
 
+      // Запускаем анимацию атаки у врага и наносим урон
+      this.stonebornSprite.play('stoneborn_attack');
       onImpact?.();
       this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
       this.tweens.add({
@@ -5249,17 +5247,23 @@ private renderEnemyEffectChips() {
         },
       });
 
+      // Ждём конца анимации атаки, только потом возвращаемся
       await new Promise<void>(resolve => {
-        this.tweens.add({
-          targets: this.stonebornSprite,
-          x: 0,
-          duration: 130,
-          ease: 'Cubic.easeOut',
-          onComplete: () => {
-            this.combatAnimationLocked = false;
-            resolve();
-          },
-        });
+        this.stonebornSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
+      });
+
+      if (!this.isBattleEnded) {
+        this.stonebornSprite.play('stoneborn_idle');
+      }
+
+      // Лок снимаем до возврата — враг может начать анимацию
+      this.combatAnimationLocked = false;
+
+      this.tweens.add({
+        targets: this.stonebornSprite,
+        x: 0,
+        duration: 130,
+        ease: 'Cubic.easeOut',
       });
 
       return;
