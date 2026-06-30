@@ -3949,11 +3949,11 @@ private createFighterSpriteCard(config: {
 
   const fighterBoxWidth = layout.veryCompact ? 222 : layout.compact ? 258 : 290;
   const fighterBoxHeight = layout.veryCompact ? 272 : layout.compact ? 318 : 358;
-  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 1.02);
-  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 1.0);
+  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 1.02) * 1.35;
+  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 1.0) * 1.35;
   const spriteY = config.isEnemy
-    ? -(layout.veryCompact ? 10 : layout.compact ? 13 : 16) + 35
-    : -(layout.veryCompact ? 6 : layout.compact ? 8 : 10) + 35;
+    ? -(layout.veryCompact ? 10 : layout.compact ? 13 : 16) + 75
+    : -(layout.veryCompact ? 6 : layout.compact ? 8 : 10) + 75;
 
   const aura = this.add.circle(
     0,
@@ -3968,7 +3968,7 @@ private createFighterSpriteCard(config: {
     : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
 
   const uiWidth = layout.veryCompact ? 156 : layout.compact ? 176 : 196;
-  const titleY = layout.veryCompact ? 127 : layout.compact ? 145 : 163;
+  const titleY = layout.veryCompact ? 162 : layout.compact ? 180 : 198;
   const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
   const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
   const labelWidth = layout.veryCompact ? 26 : 32;
