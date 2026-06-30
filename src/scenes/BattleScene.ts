@@ -3823,91 +3823,11 @@ private getSkillCostPenalty() {
       .setDisplaySize(bgTexture.width * bgScale, bgTexture.height * bgScale)
       .setDepth(0);
 
-    this.add.rectangle(width / 2, height * 0.4, width, height * 0.9, theme.background, 0.3).setDepth(0);
-    this.add.rectangle(width / 2, height / 2, width, height, isBoss ? 0x260707 : 0x070a12, isBoss ? 0.14 : 0.1).setDepth(0);
+    this.add.rectangle(width / 2, height / 2, width, height, isBoss ? 0x260707 : 0x070a12, isBoss ? 0.1 : 0.06).setDepth(1);
 
-    this.add.circle(width / 2, layout.enemyY - 24, width * 0.64, isBoss ? 0x5c120d : theme.glow, isBoss ? 0.095 : 0.055).setDepth(1);
-    this.add.circle(width / 2, layout.playerY + 26, width * 0.44, 0x070e18, 0.12).setDepth(1);
-
-    const hallTop = layout.safeTop + (layout.veryCompact ? 82 : 102);
-    const hallBottom = layout.logY - layout.logHeight / 2 - 8;
-    const hallHeight = Math.max(260, hallBottom - hallTop);
-    const hallY = hallTop + hallHeight / 2;
-
-    const backWall = this.add.graphics().setDepth(1);
-    backWall.fillStyle(isBoss ? 0x120606 : 0x08090d, 0.9);
-    backWall.fillRoundedRect(width / 2 - arenaWidth / 2, hallTop, arenaWidth, hallHeight, 32);
-    backWall.lineStyle(2, isBoss ? 0x5c1d12 : 0x30261d, isBoss ? 0.56 : 0.4);
-    backWall.strokeRoundedRect(width / 2 - arenaWidth / 2, hallTop, arenaWidth, hallHeight, 32);
-
-    const arch = this.add.graphics().setDepth(2);
-    arch.lineStyle(layout.veryCompact ? 10 : 14, isBoss ? 0x25100c : 0x12151c, 0.92);
-    arch.strokeCircle(width / 2, layout.enemyY + (layout.veryCompact ? 34 : 52), arenaWidth * 0.34);
-    arch.fillStyle(0x000000, 0.24);
-    arch.fillRect(width / 2 - arenaWidth * 0.38, layout.enemyY + (layout.veryCompact ? 32 : 50), arenaWidth * 0.76, hallBottom - layout.enemyY);
-
-    const brickWidth = Math.min(92, arenaWidth / 6.4);
-    const brickHeight = layout.veryCompact ? 20 : 26;
-    const brickRows = layout.veryCompact ? 5 : 7;
-    for (let row = 0; row < brickRows; row += 1) {
-      const count = row % 2 === 0 ? 6 : 7;
-      const y = hallTop + 18 + row * (brickHeight + 9);
-      for (let i = 0; i < count; i += 1) {
-        const x = width / 2 - ((count - 1) * brickWidth) / 2 + i * brickWidth + (row % 2 === 0 ? 0 : -brickWidth * 0.25);
-        this.add.rectangle(x, y, brickWidth - 7, brickHeight, isBoss ? 0x1a0b08 : 0x101218, 0.26)
-          .setStrokeStyle(1, isBoss ? 0x4a160f : 0x29303a, 0.2)
-          .setDepth(2);
-      }
-    }
-
-    const leftColumnX = width / 2 - arenaWidth / 2 + (layout.veryCompact ? 26 : 34);
-    const rightColumnX = width / 2 + arenaWidth / 2 - (layout.veryCompact ? 26 : 34);
-    [leftColumnX, rightColumnX].forEach((x, index) => {
-      this.add.rectangle(x, hallY, layout.veryCompact ? 32 : 42, hallHeight - 16, 0x0c0a08, 0.82)
-        .setStrokeStyle(2, isBoss ? 0x4a160f : 0x2c2118, 0.48)
-        .setDepth(3);
-      this.add.rectangle(x, hallTop + 18, layout.veryCompact ? 46 : 58, 20, 0x15100c, 0.86)
-        .setStrokeStyle(1, 0x5f4630, 0.38)
-        .setDepth(4);
-      this.add.rectangle(x, hallBottom - 18, layout.veryCompact ? 52 : 64, 24, 0x15100c, 0.86)
-        .setStrokeStyle(1, 0x5f4630, 0.38)
-        .setDepth(4);
-
-      const flame = this.add.circle(x, layout.enemyY - (layout.veryCompact ? 28 : 44), layout.veryCompact ? 9 : 12, index === 0 ? 0xb9985b : theme.accent, 0.24)
-        .setDepth(5);
-      this.tweens.add({
-        targets: flame,
-        alpha: 0.45,
-        scaleX: 1.18,
-        scaleY: 1.18,
-        duration: 900 + index * 170,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    });
-
-    const floorTopY = layout.fighterY + (layout.veryCompact ? 54 : 70);
-    const floorBottomY = Math.min(height - 206, layout.logY - layout.logHeight / 2 - 10);
-    const floorHeight = Math.max(76, floorBottomY - floorTopY);
-
-    const floorPlate = this.add.graphics().setDepth(4);
-    floorPlate.fillStyle(0x070605, 0.88);
-    floorPlate.fillRoundedRect(width / 2 - arenaWidth / 2 + 18, floorTopY, arenaWidth - 36, floorHeight, 18);
-    floorPlate.lineStyle(2, isBoss ? 0x5c1d12 : 0x372416, 0.5);
-    floorPlate.strokeRoundedRect(width / 2 - arenaWidth / 2 + 18, floorTopY, arenaWidth - 36, floorHeight, 18);
-
-    for (let i = 0; i < 9; i += 1) {
-      const xTop = width / 2 - arenaWidth / 2 + 46 + i * ((arenaWidth - 92) / 8);
-      const xBottom = width / 2 - arenaWidth / 2 + 20 + i * ((arenaWidth - 40) / 8);
-      this.add.line(0, 0, xTop, floorTopY + 4, xBottom, floorBottomY - 4, isBoss ? 0x4a160f : 0x302419, isBoss ? 0.32 : 0.24)
-        .setOrigin(0, 0)
-        .setDepth(5);
-    }
-
-    const enemyShadow = this.add.ellipse(layout.enemyX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.42)
+    const enemyShadow = this.add.ellipse(layout.enemyX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.38)
       .setDepth(4);
-    const playerShadow = this.add.ellipse(layout.playerX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.38)
+    const playerShadow = this.add.ellipse(layout.playerX, layout.fighterY + (layout.veryCompact ? 62 : 78), arenaWidth * 0.24, layout.veryCompact ? 56 : 72, 0x000000, 0.34)
       .setDepth(4);
 
     this.tweens.add({
@@ -4025,8 +3945,8 @@ private createFighterSpriteCard(config: {
       : '#ffb0a8'
     : UI.colors.goldText;
 
-  const fighterBoxWidth = layout.veryCompact ? 178 : layout.compact ? 208 : 234;
-  const fighterBoxHeight = layout.veryCompact ? 218 : layout.compact ? 256 : 288;
+  const fighterBoxWidth = layout.veryCompact ? 222 : layout.compact ? 258 : 290;
+  const fighterBoxHeight = layout.veryCompact ? 272 : layout.compact ? 318 : 358;
   const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 0.94);
   const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 0.92);
   const spriteY = config.isEnemy
