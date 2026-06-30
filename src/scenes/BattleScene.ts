@@ -475,6 +475,24 @@ export class BattleScene extends Phaser.Scene {
         url: new URL('../assets/images/battle/Demonarr.png', import.meta.url).href,
       },
     },
+    backgrounds: {
+      common: {
+        key: 'battle_bg_common',
+        url: new URL('../assets/images/battle/background/background_commonscl.png', import.meta.url).href,
+      },
+      elite: {
+        key: 'battle_bg_elite',
+        url: new URL('../assets/images/battle/background/background_elitescl.png', import.meta.url).href,
+      },
+      miniboss: {
+        key: 'battle_bg_miniboss',
+        url: new URL('../assets/images/battle/background/background_minibossscl.png', import.meta.url).href,
+      },
+      boss: {
+        key: 'battle_bg_boss',
+        url: new URL('../assets/images/battle/background/background_bossmorvein.png', import.meta.url).href,
+      },
+    },
     raceSprites: {
       human: {
         key: 'race_sprite_human',
@@ -524,6 +542,7 @@ export class BattleScene extends Phaser.Scene {
       ...Object.values(this.BATTLE_ASSETS.enemySprites),
       ...Object.values(this.BATTLE_ASSETS.buttons),
       ...Object.values(this.BATTLE_ASSETS.raceSprites),
+      ...Object.values(this.BATTLE_ASSETS.backgrounds),
     ];
 
     assetsToLoad.forEach(asset => {
@@ -2511,7 +2530,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.anims.create({
         key: 'stoneborn_idle',
         frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
-        frameRate: 3,
+        frameRate: 8,
         repeat: -1,
       });
     }
@@ -2767,6 +2786,7 @@ private handleTaintedSkill() {
 
   this.animatePlayerAttack('skill', () => {
     this.damageEnemy(damage);
+  }, () => {
     this.afterPlayerAttack(playerActionText);
   });
 }
@@ -2872,6 +2892,7 @@ private handleDemonSkill() {
 
   this.animatePlayerAttack('skill', () => {
     this.damageEnemy(damage);
+  }, () => {
     this.afterPlayerAttack(playerActionText);
   });
 }
@@ -2920,6 +2941,7 @@ private handleDemonSkill() {
 
     this.animatePlayerAttack('power', () => {
       this.damageEnemy(finalDamage);
+    }, () => {
       this.afterPlayerAttack(playerActionText);
     });
   }
@@ -3767,6 +3789,24 @@ private getSkillCostPenalty() {
     return burnText;
   }
 
+  private getBattleBackgroundKey(): string {
+    const room = getCurrentRoom();
+
+    if (room?.type === 'tier_boss') {
+      return this.BATTLE_ASSETS.backgrounds.boss.key;
+    }
+
+    if (room?.type === 'boss') {
+      return this.BATTLE_ASSETS.backgrounds.miniboss.key;
+    }
+
+    if (room?.type === 'elite') {
+      return this.BATTLE_ASSETS.backgrounds.elite.key;
+    }
+
+    return this.BATTLE_ASSETS.backgrounds.common.key;
+  }
+
   private createBattleBackground(isBoss = false) {
     const layout = this.getBattleLayout();
     const { width, height } = layout;
@@ -3775,7 +3815,15 @@ private getSkillCostPenalty() {
     const arenaWidth = Math.min(width - layout.safeX * 2, 690);
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x020203, 1).setDepth(0);
-    this.add.rectangle(width / 2, height * 0.4, width, height * 0.9, theme.background, 0.58).setDepth(0);
+
+    const bgKey = this.getBattleBackgroundKey();
+    const bgTexture = this.textures.get(bgKey).getSourceImage();
+    const bgScale = Math.max(width / bgTexture.width, height / bgTexture.height);
+    this.add.image(width / 2, height / 2, bgKey)
+      .setDisplaySize(bgTexture.width * bgScale, bgTexture.height * bgScale)
+      .setDepth(0);
+
+    this.add.rectangle(width / 2, height * 0.4, width, height * 0.9, theme.background, 0.3).setDepth(0);
     this.add.rectangle(width / 2, height / 2, width, height, isBoss ? 0x260707 : 0x070a12, isBoss ? 0.14 : 0.1).setDepth(0);
 
     this.add.circle(width / 2, layout.enemyY - 24, width * 0.64, isBoss ? 0x5c120d : theme.glow, isBoss ? 0.095 : 0.055).setDepth(1);
@@ -5187,9 +5235,10 @@ private renderEnemyEffectChips() {
     };
   }
 
-  private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void) {
+  private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void, onAfterReturn?: () => void) {
     if (!this.playerCard || !this.enemyCard || this.isBattleEnded || this.combatAnimationLocked) {
       onImpact?.();
+      onAfterReturn?.();
       return;
     }
 
@@ -5229,10 +5278,11 @@ private renderEnemyEffectChips() {
       if (this.isBattleEnded) {
         this.combatAnimationLocked = false;
         onImpact?.();
+        onAfterReturn?.();
         return;
       }
 
-      // Анимация атаки + визуальный удар (урон ещё не снимается)
+      // Анимация атаки + визуальный удар (урон снимается под конец анимации)
       this.stonebornSprite.play('stoneborn_attack');
       this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
       this.tweens.add({
@@ -5246,7 +5296,17 @@ private renderEnemyEffectChips() {
         },
       });
 
-      // Ждём конца анимации атаки
+      const attackAnim = this.stonebornSprite.anims.currentAnim;
+      const attackDuration = attackAnim ? attackAnim.duration : 300;
+      const impactDelay = Math.max(0, attackDuration - 90);
+
+      this.time.delayedCall(impactDelay, () => {
+        if (!this.isBattleEnded) {
+          onImpact?.();
+        }
+      });
+
+      // Ждём конца анимации атаки, прежде чем возвращаться
       await new Promise<void>(resolve => {
         this.stonebornSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
       });
@@ -5258,7 +5318,7 @@ private renderEnemyEffectChips() {
       // Снимаем лок до возврата
       this.combatAnimationLocked = false;
 
-      // Возвращаемся, затем 500мс пауза → урон + ход врага (итого ~1с после возврата)
+      // Возвращаемся, затем 500мс пауза → ход врага
       this.tweens.add({
         targets: this.stonebornSprite,
         x: 0,
@@ -5267,7 +5327,7 @@ private renderEnemyEffectChips() {
         onComplete: () => {
           this.time.delayedCall(500, () => {
             if (!this.isBattleEnded) {
-              onImpact?.();
+              onAfterReturn?.();
             }
           });
         },
@@ -5294,10 +5354,12 @@ private renderEnemyEffectChips() {
     if (this.isBattleEnded) {
       this.combatAnimationLocked = false;
       onImpact?.();
+      onAfterReturn?.();
       return;
     }
 
     onImpact?.();
+    onAfterReturn?.();
     this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
     this.tweens.add({
       targets: this.enemyCard,
@@ -5437,12 +5499,13 @@ private renderEnemyEffectChips() {
     this.createImpactFlash(base.x, base.y - 40, 0xc084fc, 0.16);
   }
 
-  private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void) {
-    void this.playPlayerAttackAnimation(kind, onImpact)
+  private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void, onAfterReturn?: () => void) {
+    void this.playPlayerAttackAnimation(kind, onImpact, onAfterReturn)
       .catch(error => {
         console.warn('Player attack animation failed:', error);
         this.combatAnimationLocked = false;
         onImpact?.();
+        onAfterReturn?.();
       });
   }
 
@@ -5615,6 +5678,7 @@ private renderEnemyEffectChips() {
 
     this.animatePlayerAttack('normal', () => {
       this.damageEnemy(critDamage);
+    }, () => {
       this.afterPlayerAttack(playerActionText);
     });
   }
@@ -5653,6 +5717,7 @@ private renderEnemyEffectChips() {
 
     this.animatePlayerAttack('power', () => {
       this.damageEnemy(finalDamage);
+    }, () => {
       this.afterPlayerAttack(playerActionText);
     });
   }
@@ -5686,6 +5751,7 @@ private renderEnemyEffectChips() {
 
     this.animatePlayerAttack('power', () => {
       this.damageEnemy(finalDamage);
+    }, () => {
       this.afterPlayerAttack(playerActionText);
     });
   }
@@ -5766,6 +5832,8 @@ ${daggerTreeCritTexts.join('\n')}`
         return;
       }
 
+      let shouldFinish = false;
+
       this.animatePlayerAttack('normal', () => {
         this.damageEnemy(hit.damage);
 
@@ -5789,12 +5857,11 @@ ${daggerTreeCritTexts.join('\n')}`
 
         this.updateTexts();
 
-        if (this.enemy.hp <= 0) {
-          finishDaggerAttack();
-          return;
+        if (this.enemy.hp <= 0 || index === hits.length - 1) {
+          shouldFinish = true;
         }
-
-        if (index === hits.length - 1) {
+      }, () => {
+        if (shouldFinish) {
           finishDaggerAttack();
         }
       });
@@ -5847,6 +5914,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
    this.animatePlayerAttack('normal', () => {
      this.damageEnemy(finalDamage);
+   }, () => {
      this.afterPlayerAttack(playerActionText);
    });
   }
@@ -5879,6 +5947,7 @@ ${daggerTreeCritTexts.join('\n')}`
 
     this.animatePlayerAttack('power', () => {
       this.damageEnemy(finalDamage);
+    }, () => {
       this.afterPlayerAttack(playerActionText);
     });
   }
@@ -5916,6 +5985,7 @@ ${daggerTreeCritTexts.join('\n')}`
     this.animatePlayerAttack('power', () => {
       this.damageEnemy(finalDamage);
       this.shakeBattle(0.008, 220);
+    }, () => {
       this.afterPlayerAttack(playerActionText, { skipEnemyTurn: isStunned });
     });
   }
