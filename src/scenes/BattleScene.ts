@@ -2509,8 +2509,8 @@ private getDebuffShortDescription(id: string, power: number) {
       glowAlpha
     );
 
-    const sprite = this.add.image(0, -maxHeight * 0.05, this.getEnemySpriteKey())
-      .setOrigin(0.5, 0.58)
+    const sprite = this.add.image(0, maxHeight * 0.36, this.getEnemySpriteKey())
+      .setOrigin(0.5, 1.0)
       .setFlipX(false);
 
     this.fitImageToBox(
@@ -2530,7 +2530,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.anims.create({
         key: 'stoneborn_idle',
         frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
-        frameRate: 8,
+        frameRate: 12,
         repeat: -1,
       });
     }
@@ -2571,16 +2571,16 @@ private getDebuffShortDescription(id: string, power: number) {
     );
 
     if (player.raceId === 'stoneborn') {
-      const sprite = this.add.sprite(0, -maxHeight * 0.07, this.BATTLE_ASSETS.stonebornSheets.idle.key)
-        .setOrigin(0.5, 0.55)
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.stonebornSheets.idle.key)
+        .setOrigin(0.5, 1.0)
         .setFlipX(false);
       this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
       sprite.play('stoneborn_idle');
       this.stonebornSprite = sprite;
       container.add([platform, platformGlow, sprite]);
     } else {
-      const sprite = this.add.image(0, -maxHeight * 0.07, this.getPlayerRaceSpriteKey())
-        .setOrigin(0.5, 0.55)
+      const sprite = this.add.image(0, maxHeight * 0.34, this.getPlayerRaceSpriteKey())
+        .setOrigin(0.5, 1.0)
         .setFlipX(false);
       this.fitImageToBox(sprite, maxWidth * 0.98, maxHeight * 1.04, 1);
       container.add([platform, platformGlow, sprite]);

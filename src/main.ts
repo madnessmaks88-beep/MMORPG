@@ -28,7 +28,7 @@ const config: Phaser.Types.Core.GameConfig = {
   // а PNG-спрайты пикселизируются отдельно через texture.setFilter(NEAREST).
   render: {
     antialias: true,
-    roundPixels: false,
+    roundPixels: true,
   },
   scene: [
     CampScene,
