@@ -3952,8 +3952,8 @@ private createFighterSpriteCard(config: {
   const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 1.02);
   const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 1.0);
   const spriteY = config.isEnemy
-    ? -(layout.veryCompact ? 10 : layout.compact ? 13 : 16)
-    : -(layout.veryCompact ? 6 : layout.compact ? 8 : 10);
+    ? -(layout.veryCompact ? 10 : layout.compact ? 13 : 16) + 35
+    : -(layout.veryCompact ? 6 : layout.compact ? 8 : 10) + 35;
 
   const aura = this.add.circle(
     0,
@@ -3968,7 +3968,7 @@ private createFighterSpriteCard(config: {
     : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
 
   const uiWidth = layout.veryCompact ? 156 : layout.compact ? 176 : 196;
-  const titleY = layout.veryCompact ? 92 : layout.compact ? 110 : 128;
+  const titleY = layout.veryCompact ? 127 : layout.compact ? 145 : 163;
   const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
   const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
   const labelWidth = layout.veryCompact ? 26 : 32;
@@ -3980,21 +3980,28 @@ private createFighterSpriteCard(config: {
   const hpBarHeight = layout.veryCompact ? 6 : 7;
   const energyBarHeight = layout.veryCompact ? 4 : 5;
 
+  const nameWrapWidth = config.isEnemy
+    ? uiWidth + (config.isBoss ? 90 : 80)
+    : uiWidth + 12;
+  const nameFontSize = config.isBoss
+    ? layout.veryCompact ? '14px' : layout.compact ? '16px' : '18px'
+    : config.isEnemy
+      ? layout.veryCompact ? '11px' : layout.compact ? '12px' : '13px'
+      : layout.veryCompact ? '12px' : layout.compact ? '14px' : '15px';
+
   const nameText = this.add.text(0, titleY, config.name, {
     fontFamily: UI.font.title,
-    fontSize: config.isBoss
-      ? layout.veryCompact ? '14px' : layout.compact ? '16px' : '18px'
-      : layout.veryCompact ? '12px' : layout.compact ? '14px' : '15px',
+    fontSize: nameFontSize,
     color: titleColor,
     stroke: '#000000',
     strokeThickness: 3,
     align: 'center',
     wordWrap: {
-      width: uiWidth + (config.isBoss ? 34 : 12),
+      width: nameWrapWidth,
       useAdvancedWrap: true,
     },
     maxLines: config.isEnemy ? 2 : 1,
-    lineSpacing: -3,
+    lineSpacing: -2,
   }).setOrigin(0.5);
 
   const hpLabel = this.add.text(-uiWidth / 2, hpRowY, 'HP', {
