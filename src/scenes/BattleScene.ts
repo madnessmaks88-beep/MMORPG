@@ -2511,7 +2511,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.anims.create({
         key: 'stoneborn_idle',
         frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
-        frameRate: 8,
+        frameRate: 3,
         repeat: -1,
       });
     }
@@ -5232,9 +5232,8 @@ private renderEnemyEffectChips() {
         return;
       }
 
-      // Запускаем анимацию атаки у врага и наносим урон
+      // Анимация атаки + визуальный удар (урон ещё не снимается)
       this.stonebornSprite.play('stoneborn_attack');
-      onImpact?.();
       this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
       this.tweens.add({
         targets: this.enemyCard,
@@ -5247,7 +5246,7 @@ private renderEnemyEffectChips() {
         },
       });
 
-      // Ждём конца анимации атаки, только потом возвращаемся
+      // Ждём конца анимации атаки
       await new Promise<void>(resolve => {
         this.stonebornSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
       });
@@ -5256,14 +5255,22 @@ private renderEnemyEffectChips() {
         this.stonebornSprite.play('stoneborn_idle');
       }
 
-      // Лок снимаем до возврата — враг может начать анимацию
+      // Снимаем лок до возврата
       this.combatAnimationLocked = false;
 
+      // Возвращаемся, затем 500мс пауза → урон + ход врага (итого ~1с после возврата)
       this.tweens.add({
         targets: this.stonebornSprite,
         x: 0,
         duration: 130,
         ease: 'Cubic.easeOut',
+        onComplete: () => {
+          this.time.delayedCall(500, () => {
+            if (!this.isBattleEnded) {
+              onImpact?.();
+            }
+          });
+        },
       });
 
       return;
