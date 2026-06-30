@@ -2247,7 +2247,7 @@ private getDebuffShortDescription(id: string, power: number) {
 
   const textX = -config.width / 2 + (isPrimary
     ? config.width * 0.185
-    : config.width * 0.245);
+    : config.width * 0.32);
   const rightPadding = isPrimary ? 28 : 16;
   const textWidth = Math.max(70, config.width / 2 - textX - rightPadding);
   const titleSize = this.getButtonTitleFontSize(config.width, isPrimary);
@@ -2377,7 +2377,7 @@ private getDebuffShortDescription(id: string, power: number) {
       return width < 430 ? '15px' : width < 520 ? '17px' : '19px';
     }
 
-    return width < 230 ? '10px' : width < 270 ? '11px' : '13px';
+    return width < 230 ? '12px' : width < 270 ? '13px' : '15px';
   }
 
   private getButtonSubtitleFontSize(width: number, isPrimary: boolean) {
@@ -2385,7 +2385,7 @@ private getDebuffShortDescription(id: string, power: number) {
       return width < 430 ? '10px' : width < 520 ? '11px' : '12px';
     }
 
-    return width < 230 ? '8px' : width < 270 ? '9px' : '10px';
+    return width < 230 ? '9px' : width < 270 ? '10px' : '11px';
   }
 
   private getRaceSkillButtonSpriteKey() {
@@ -3968,7 +3968,7 @@ private createFighterSpriteCard(config: {
     : this.createPlayerRaceSprite(0, spriteY, spriteMaxWidth, spriteMaxHeight);
 
   const uiWidth = layout.veryCompact ? 156 : layout.compact ? 176 : 196;
-  const titleY = layout.veryCompact ? 162 : layout.compact ? 180 : 198;
+  const titleY = layout.veryCompact ? 185 : layout.compact ? 205 : 225;
   const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
   const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
   const labelWidth = layout.veryCompact ? 26 : 32;
