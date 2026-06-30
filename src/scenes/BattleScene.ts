@@ -278,10 +278,22 @@ export class BattleScene extends Phaser.Scene {
 
 
 
+  private stonebornSprite?: Phaser.GameObjects.Sprite;
+
   private readonly BATTLE_ASSETS = {
     actionPanel: {
       key: 'battle_panel_actions',
       url: new URL('../assets/images/battle/battle_panel_actions.png', import.meta.url).href,
+    },
+    stonebornSheets: {
+      idle: {
+        key: 'stoneborn_idle_sheet',
+        url: new URL('../assets/images/battle/races/stoneborn/stoneborn_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'stoneborn_attack_sheet',
+        url: new URL('../assets/images/battle/races/stoneborn/stoneborn_attack.png', import.meta.url).href,
+      },
     },
     enemySprites: {
       bone_gnawer: {
@@ -520,6 +532,14 @@ export class BattleScene extends Phaser.Scene {
       }
     });
 
+    const { idle, attack } = this.BATTLE_ASSETS.stonebornSheets;
+    if (!this.textures.exists(idle.key)) {
+      this.load.spritesheet(idle.key, idle.url, { frameWidth: 256, frameHeight: 256 });
+    }
+    if (!this.textures.exists(attack.key)) {
+      this.load.spritesheet(attack.key, attack.url, { frameWidth: 256, frameHeight: 256 });
+    }
+
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.configurePixelSpriteRendering();
     this.applyNearestFilterToBattleTextures();
@@ -550,6 +570,7 @@ export class BattleScene extends Phaser.Scene {
   this.battleLogScrollZone = undefined;
   this.battleLogWheelHandler = undefined;
 
+  this.stonebornSprite = undefined;
   this.humanPassiveActivated = false;
   this.raceSkillCooldown = 0;
   this.potionCooldown = 0;
@@ -641,6 +662,7 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.fadeIn(260, 0, 0, 0);
 
     this.applyNearestFilterToBattleTextures();
+    this.createStonebornAnimations();
 
     this.createBattleBackground(isBoss);
 
@@ -2484,6 +2506,25 @@ private getDebuffShortDescription(id: string, power: number) {
     return container;
   }
 
+  private createStonebornAnimations() {
+    if (!this.anims.exists('stoneborn_idle')) {
+      this.anims.create({
+        key: 'stoneborn_idle',
+        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('stoneborn_attack')) {
+      this.anims.create({
+        key: 'stoneborn_attack',
+        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.attack.key, { start: 0, end: -1 }),
+        frameRate: 12,
+        repeat: 0,
+      });
+    }
+  }
+
   private createPlayerRaceSprite(
     x: number,
     y: number,
@@ -2510,13 +2551,21 @@ private getDebuffShortDescription(id: string, power: number) {
       0.08
     );
 
-    const sprite = this.add.image(0, -maxHeight * 0.07, this.getPlayerRaceSpriteKey())
-      .setOrigin(0.5, 0.55)
-      .setFlipX(false);
-
-    this.fitImageToBox(sprite, maxWidth * 0.98, maxHeight * 1.04, 1);
-
-    container.add([platform, platformGlow, sprite]);
+    if (player.raceId === 'stoneborn') {
+      const sprite = this.add.sprite(0, -maxHeight * 0.07, this.BATTLE_ASSETS.stonebornSheets.idle.key)
+        .setOrigin(0.5, 0.55)
+        .setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('stoneborn_idle');
+      this.stonebornSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
+    } else {
+      const sprite = this.add.image(0, -maxHeight * 0.07, this.getPlayerRaceSpriteKey())
+        .setOrigin(0.5, 0.55)
+        .setFlipX(false);
+      this.fitImageToBox(sprite, maxWidth * 0.98, maxHeight * 1.04, 1);
+      container.add([platform, platformGlow, sprite]);
+    }
 
     return container;
   }
@@ -2527,6 +2576,8 @@ private getDebuffShortDescription(id: string, power: number) {
       ...Object.values(this.BATTLE_ASSETS.enemySprites).map(asset => asset.key),
       ...Object.values(this.BATTLE_ASSETS.buttons).map(asset => asset.key),
       ...Object.values(this.BATTLE_ASSETS.raceSprites).map(asset => asset.key),
+      this.BATTLE_ASSETS.stonebornSheets.idle.key,
+      this.BATTLE_ASSETS.stonebornSheets.attack.key,
     ];
 
     keys.forEach(key => {
@@ -5151,6 +5202,13 @@ private renderEnemyEffectChips() {
 
     this.playerCard.setPosition(playerBase.x, playerBase.y);
     this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
+
+    if (this.stonebornSprite) {
+      this.stonebornSprite.play('stoneborn_attack');
+      this.stonebornSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        this.stonebornSprite?.play('stoneborn_idle');
+      });
+    }
 
     const dashDistance = kind === 'power' ? 40 : kind === 'skill' ? 34 : 30;
     const tilt = kind === 'power' ? 2.5 : 1.6;
