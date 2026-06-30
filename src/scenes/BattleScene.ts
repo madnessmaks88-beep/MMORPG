@@ -3680,6 +3680,8 @@ private getSkillCostPenalty() {
     if (!this.combatAnimationLocked) {
       this.animateHit(this.enemyCard);
     }
+
+    this.updateTexts();
   }
 
   private afterPlayerAttack(
@@ -3950,8 +3952,8 @@ private createFighterSpriteCard(config: {
   const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 0.94);
   const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 0.92);
   const spriteY = config.isEnemy
-    ? -(layout.veryCompact ? 36 : layout.compact ? 46 : 54)
-    : -(layout.veryCompact ? 26 : layout.compact ? 34 : 40);
+    ? -(layout.veryCompact ? 22 : layout.compact ? 30 : 36)
+    : -(layout.veryCompact ? 14 : layout.compact ? 20 : 26);
 
   const aura = this.add.circle(
     0,
