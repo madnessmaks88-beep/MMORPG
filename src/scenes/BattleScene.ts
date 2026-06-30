@@ -3949,11 +3949,11 @@ private createFighterSpriteCard(config: {
 
   const fighterBoxWidth = layout.veryCompact ? 222 : layout.compact ? 258 : 290;
   const fighterBoxHeight = layout.veryCompact ? 272 : layout.compact ? 318 : 358;
-  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 0.94);
-  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 0.92);
+  const spriteMaxWidth = fighterBoxWidth * (config.isEnemy ? 1.06 : 1.02);
+  const spriteMaxHeight = fighterBoxHeight * (config.isEnemy ? 1.06 : 1.0);
   const spriteY = config.isEnemy
-    ? -(layout.veryCompact ? 22 : layout.compact ? 30 : 36)
-    : -(layout.veryCompact ? 14 : layout.compact ? 20 : 26);
+    ? -(layout.veryCompact ? 10 : layout.compact ? 13 : 16)
+    : -(layout.veryCompact ? 6 : layout.compact ? 8 : 10);
 
   const aura = this.add.circle(
     0,
@@ -3971,8 +3971,8 @@ private createFighterSpriteCard(config: {
   const titleY = layout.veryCompact ? 92 : layout.compact ? 110 : 128;
   const hpRowY = titleY + (layout.veryCompact ? 18 : 21);
   const energyRowY = hpRowY + (layout.veryCompact ? 12 : 14);
-  const labelWidth = layout.veryCompact ? 22 : 28;
-  const valueWidth = layout.veryCompact ? 46 : 56;
+  const labelWidth = layout.veryCompact ? 26 : 32;
+  const valueWidth = layout.veryCompact ? 52 : 62;
   const gap = layout.veryCompact ? 4 : 5;
   const barWidth = Math.max(76, uiWidth - labelWidth - valueWidth - gap * 2);
   const barLeft = -uiWidth / 2 + labelWidth + gap;
@@ -3983,8 +3983,8 @@ private createFighterSpriteCard(config: {
   const nameText = this.add.text(0, titleY, config.name, {
     fontFamily: UI.font.title,
     fontSize: config.isBoss
-      ? layout.veryCompact ? '12px' : layout.compact ? '14px' : '16px'
-      : layout.veryCompact ? '10px' : layout.compact ? '12px' : '13px',
+      ? layout.veryCompact ? '14px' : layout.compact ? '16px' : '18px'
+      : layout.veryCompact ? '12px' : layout.compact ? '14px' : '15px',
     color: titleColor,
     stroke: '#000000',
     strokeThickness: 3,
@@ -3999,7 +3999,7 @@ private createFighterSpriteCard(config: {
 
   const hpLabel = this.add.text(-uiWidth / 2, hpRowY, 'HP', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '8px' : '9px',
+    fontSize: layout.veryCompact ? '9px' : '11px',
     color: config.isEnemy ? '#ffb0a8' : '#f0b1a8',
     stroke: '#000000',
     strokeThickness: 2,
@@ -4008,7 +4008,7 @@ private createFighterSpriteCard(config: {
 
   const hpText = this.add.text(uiWidth / 2, hpRowY, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '8px' : '9px',
+    fontSize: layout.veryCompact ? '9px' : '11px',
     color: '#d8c7a3',
     stroke: '#000000',
     strokeThickness: 2,
@@ -4058,7 +4058,7 @@ private createFighterSpriteCard(config: {
     .setOrigin(0, 0.5);
   const energyLabel = this.add.text(-uiWidth / 2, energyRowY, 'ЭН', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '8px' : '9px',
+    fontSize: layout.veryCompact ? '9px' : '11px',
     color: '#b9d8ff',
     stroke: '#000000',
     strokeThickness: 2,
@@ -4066,7 +4066,7 @@ private createFighterSpriteCard(config: {
   }).setOrigin(0, 0.5).setVisible(!config.isEnemy);
   const extraText = this.add.text(uiWidth / 2, energyRowY, '', {
     fontFamily: UI.font.body,
-    fontSize: layout.veryCompact ? '8px' : '9px',
+    fontSize: layout.veryCompact ? '9px' : '11px',
     color: '#b9d8ff',
     stroke: '#000000',
     strokeThickness: 2,
