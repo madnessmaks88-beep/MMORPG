@@ -2753,9 +2753,6 @@ private handleTaintedSkill() {
 
   const weaknessText = this.getEnemyWeaknessText();
 
-  this.animatePlayerAttack('skill');
-  this.damageEnemy(damage);
-
   this.taintedCorruptionTurns = Math.max(this.taintedCorruptionTurns, 2);
   this.taintedCorruptionDamageBonus = Math.max(this.taintedCorruptionDamageBonus, 0.12);
   this.taintedCorruptionJustApplied = true;
@@ -2768,7 +2765,10 @@ private handleTaintedSkill() {
       ? `Проклятый рывок!\nСкверна усиливает удар.\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}${corruptionText}`
       : `Проклятый рывок!\nТы теряешь ${hpCost} HP и наносишь ${damage} урона.${weaknessText}${corruptionText}`;
 
-  this.afterPlayerAttack(playerActionText);
+  this.animatePlayerAttack('skill', () => {
+    this.damageEnemy(damage);
+    this.afterPlayerAttack(playerActionText);
+  });
 }
 
 private handleStonebornSkill() {
@@ -2856,9 +2856,6 @@ private handleDemonSkill() {
 
   const weaknessText = this.getEnemyWeaknessText();
 
-  this.animatePlayerAttack('skill');
-  this.damageEnemy(damage);
-
   this.demonHellfireBurnTurns = Math.max(this.demonHellfireBurnTurns, 2);
   this.demonHellfireBurnDamage = Math.max(
     this.demonHellfireBurnDamage,
@@ -2873,7 +2870,10 @@ private handleDemonSkill() {
       ? `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}\nНизкое HP усилило пламя.${burnText}`
       : `Кровавое пламя!\nДемон теряет ${hpCost} HP и наносит ${damage} урона.${weaknessText}${burnText}`;
 
-  this.afterPlayerAttack(playerActionText);
+  this.animatePlayerAttack('skill', () => {
+    this.damageEnemy(damage);
+    this.afterPlayerAttack(playerActionText);
+  });
 }
   private handlePowerAttack() {
     if (this.isBattleEnded || this.isBusy) {
@@ -2914,14 +2914,14 @@ private handleDemonSkill() {
     const finalDamage = isCrit ? Math.floor(damage * this.getPlayerCritMultiplier(1.5)) : damage;
     const treeCritText = this.applyCriticalTreeEffects(isCrit, finalDamage);
 
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-
     const playerActionText = isCrit
       ? `Критический сильный удар! Ты наносишь ${finalDamage} урона.${treeCritText}`
       : `Ты наносишь сильный удар на ${finalDamage} урона.`;
 
-    this.afterPlayerAttack(playerActionText);
+    this.animatePlayerAttack('power', () => {
+      this.damageEnemy(finalDamage);
+      this.afterPlayerAttack(playerActionText);
+    });
   }
 
   private handleDefend() {
@@ -5187,8 +5187,9 @@ private renderEnemyEffectChips() {
     };
   }
 
-  private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal') {
+  private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void) {
     if (!this.playerCard || !this.enemyCard || this.isBattleEnded || this.combatAnimationLocked) {
+      onImpact?.();
       return;
     }
 
@@ -5208,6 +5209,60 @@ private renderEnemyEffectChips() {
       this.stonebornSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
         this.stonebornSprite?.play('stoneborn_idle');
       });
+
+      const teleportLocalX = enemyBase.x - playerBase.x - 25;
+
+      this.tweens.add({
+        targets: this.playerCard,
+        angle: kind === 'power' ? 3 : 2,
+        duration: 80,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+      });
+
+      await new Promise<void>(resolve => {
+        this.tweens.add({
+          targets: this.stonebornSprite,
+          x: teleportLocalX,
+          duration: 80,
+          ease: 'Cubic.easeIn',
+          onComplete: () => resolve(),
+        });
+      });
+
+      if (this.isBattleEnded) {
+        this.combatAnimationLocked = false;
+        onImpact?.();
+        return;
+      }
+
+      onImpact?.();
+      this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
+      this.tweens.add({
+        targets: this.enemyCard,
+        x: enemyBase.x + (kind === 'power' ? 18 : 12),
+        duration: 70,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
+        },
+      });
+
+      await new Promise<void>(resolve => {
+        this.tweens.add({
+          targets: this.stonebornSprite,
+          x: 0,
+          duration: 130,
+          ease: 'Cubic.easeOut',
+          onComplete: () => {
+            this.combatAnimationLocked = false;
+            resolve();
+          },
+        });
+      });
+
+      return;
     }
 
     const dashDistance = kind === 'power' ? 40 : kind === 'skill' ? 34 : 30;
@@ -5227,9 +5282,11 @@ private renderEnemyEffectChips() {
 
     if (this.isBattleEnded) {
       this.combatAnimationLocked = false;
+      onImpact?.();
       return;
     }
 
+    onImpact?.();
     this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
     this.tweens.add({
       targets: this.enemyCard,
@@ -5369,11 +5426,12 @@ private renderEnemyEffectChips() {
     this.createImpactFlash(base.x, base.y - 40, 0xc084fc, 0.16);
   }
 
-  private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal') {
-    void this.playPlayerAttackAnimation(kind)
+  private animatePlayerAttack(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void) {
+    void this.playPlayerAttackAnimation(kind, onImpact)
       .catch(error => {
         console.warn('Player attack animation failed:', error);
         this.combatAnimationLocked = false;
+        onImpact?.();
       });
   }
 
@@ -5540,14 +5598,14 @@ private renderEnemyEffectChips() {
       ? '\nГлубинный выпад пробил часть защиты врага.'
       : '';
 
-    this.animatePlayerAttack('normal');
-    this.damageEnemy(critDamage);
-
     const playerActionText = isCrit
       ? `Критический выпад копьём! Ты наносишь ${critDamage} урона.${pierceText}${weaknessText}${treeCritText}`
       : `Ты наносишь глубинный выпад копьём: ${critDamage} урона.${pierceText}${weaknessText}`;
 
-    this.afterPlayerAttack(playerActionText);
+    this.animatePlayerAttack('normal', () => {
+      this.damageEnemy(critDamage);
+      this.afterPlayerAttack(playerActionText);
+    });
   }
 
   private handleTridentAttack() {
@@ -5578,14 +5636,14 @@ private renderEnemyEffectChips() {
       ? '\nХватка чёрной воды: следующая атака героя нанесёт на 10% больше урона.'
       : '';
 
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-
     const playerActionText = isCrit
       ? `Критический удар трезубцем! Ты наносишь ${finalDamage} урона.${markText}${weaknessText}${treeCritText}`
       : `Ты пронзаешь врага трезубцем: ${finalDamage} урона.${markText}${weaknessText}`;
 
-    this.afterPlayerAttack(playerActionText);
+    this.animatePlayerAttack('power', () => {
+      this.damageEnemy(finalDamage);
+      this.afterPlayerAttack(playerActionText);
+    });
   }
 
 
@@ -5611,14 +5669,14 @@ private renderEnemyEffectChips() {
 Преимущество меча: враг крупнее, урон +${swordBonus.bonusPercent}%.`
       : '';
 
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-
     const playerActionText = isCrit
       ? `Критическая атака мечом! Ты наносишь ${finalDamage} урона.${swordBonusText}${weaknessText}${treeCritText}`
       : `Ты наносишь удар мечом: ${finalDamage} урона.${swordBonusText}${weaknessText}`;
 
-    this.afterPlayerAttack(playerActionText);
+    this.animatePlayerAttack('power', () => {
+      this.damageEnemy(finalDamage);
+      this.afterPlayerAttack(playerActionText);
+    });
   }
 
   private handleDaggerAttack() {
@@ -5697,37 +5755,38 @@ ${daggerTreeCritTexts.join('\n')}`
         return;
       }
 
-      this.animatePlayerAttack('normal');
-      this.damageEnemy(hit.damage);
+      this.animatePlayerAttack('normal', () => {
+        this.damageEnemy(hit.damage);
 
-      totalDamage += hit.damage;
+        totalDamage += hit.damage;
 
-      const healedHp = this.tryApplyDaggerLifesteal(hit.damage);
+        const healedHp = this.tryApplyDaggerLifesteal(hit.damage);
 
-      if (healedHp > 0) {
-        totalHeal += healedHp;
-        lifestealProcCount += 1;
-        lifestealHealAmounts.push(healedHp);
-      }
-
-      if (hit.isCrit) {
-        critCount += 1;
-
-        if (hit.treeCritText) {
-          daggerTreeCritTexts.push(hit.treeCritText);
+        if (healedHp > 0) {
+          totalHeal += healedHp;
+          lifestealProcCount += 1;
+          lifestealHealAmounts.push(healedHp);
         }
-      }
 
-      this.updateTexts();
+        if (hit.isCrit) {
+          critCount += 1;
 
-      if (this.enemy.hp <= 0) {
-        finishDaggerAttack();
-        return;
-      }
+          if (hit.treeCritText) {
+            daggerTreeCritTexts.push(hit.treeCritText);
+          }
+        }
 
-      if (index === hits.length - 1) {
-        finishDaggerAttack();
-      }
+        this.updateTexts();
+
+        if (this.enemy.hp <= 0) {
+          finishDaggerAttack();
+          return;
+        }
+
+        if (index === hits.length - 1) {
+          finishDaggerAttack();
+        }
+      });
     });
   });
 }
@@ -5767,9 +5826,6 @@ ${daggerTreeCritTexts.join('\n')}`
 
    const weaknessText = this.getEnemyWeaknessText();
 
-   this.animatePlayerAttack('normal');
-   this.damageEnemy(finalDamage);
-
    let playerActionText = isCrit
      ? `Критический рубящий удар топором! Ты наносишь ${finalDamage} урона.${weaknessText}${treeCritText}`
      : `Топор наносит тяжёлый рубящий удар: ${finalDamage} урона.${weaknessText}`;
@@ -5778,7 +5834,10 @@ ${daggerTreeCritTexts.join('\n')}`
      playerActionText += '\nБонус топора: враг в броне, удар пробивает защиту.';
    }
 
-   this.afterPlayerAttack(playerActionText);
+   this.animatePlayerAttack('normal', () => {
+     this.damageEnemy(finalDamage);
+     this.afterPlayerAttack(playerActionText);
+   });
   }
 
   private handleKatanaAttack() {
@@ -5803,14 +5862,14 @@ ${daggerTreeCritTexts.join('\n')}`
 
     const weaknessText = this.getEnemyWeaknessText();
 
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-
     const playerActionText = isCrit
       ? `Катана наносит точный критический разрез: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.${treeCritText}`
       : `Катана рассекает врага: ${finalDamage} урона.${weaknessText}\nВраг начинает кровоточить.`;
 
-    this.afterPlayerAttack(playerActionText);
+    this.animatePlayerAttack('power', () => {
+      this.damageEnemy(finalDamage);
+      this.afterPlayerAttack(playerActionText);
+    });
   }
 
   private handleHammerAttack() {
@@ -5835,10 +5894,6 @@ ${daggerTreeCritTexts.join('\n')}`
 
     const weaknessText = this.getEnemyWeaknessText();
 
-    this.animatePlayerAttack('power');
-    this.damageEnemy(finalDamage);
-    this.shakeBattle(0.008, 220);
-
     let playerActionText = isCrit
       ? `Критический удар молотом сотрясает арену: ${finalDamage} урона.${weaknessText}${treeCritText}`
       : `Молот обрушивается на врага: ${finalDamage} урона.${weaknessText}`;
@@ -5847,8 +5902,10 @@ ${daggerTreeCritTexts.join('\n')}`
       playerActionText += '\nВраг оглушён.';
     }
 
-    this.afterPlayerAttack(playerActionText, {
-      skipEnemyTurn: isStunned,
+    this.animatePlayerAttack('power', () => {
+      this.damageEnemy(finalDamage);
+      this.shakeBattle(0.008, 220);
+      this.afterPlayerAttack(playerActionText, { skipEnemyTurn: isStunned });
     });
   }
 
