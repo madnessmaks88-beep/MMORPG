@@ -2530,7 +2530,7 @@ private getDebuffShortDescription(id: string, power: number) {
       this.anims.create({
         key: 'stoneborn_idle',
         frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
-        frameRate: 12,
+        frameRate: 8,
         repeat: -1,
       });
     }
