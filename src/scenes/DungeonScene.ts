@@ -107,6 +107,7 @@ import {
   type CheckpointFlintType,
   type CampfireStateSnapshot,
 } from '../systems/CampfireCheckpointSystem';
+import { SVITOK_ASSET } from '../data/dungeonSprites';
 
 
 type FlintType = 'none' | 'dim' | 'black' | 'ruby';
@@ -139,8 +140,8 @@ type DungeonLayout = {
   compact: boolean;
   veryCompact: boolean;
   headerY: number;
-  floorInfoY: number;
-  routeY: number;
+  mapAreaTop: number;
+  mapAreaBottom: number;
   roomCardTop: number;
   roomCardHeight: number;
   actionDockTop: number;
@@ -173,13 +174,48 @@ export class DungeonScene extends Phaser.Scene {
 
   private readonly maxPotionCount = 6;
   private modalObjects: Phaser.GameObjects.GameObject[] = [];
-  private branchNodePositions = new Map<string, { x: number; y: number; color: number }>();
-  
+  private branchNodePositions = new Map<string, { x: number; yLocal: number; color: number }>();
+
+  private mapCamera?: Phaser.Cameras.Scene2D.Camera;
+  private mapContainer?: Phaser.GameObjects.Container;
+  private mapContentObjects: Phaser.GameObjects.GameObject[] = [];
+  private mapInteriorLeft = 0;
+  private mapInteriorTop = 0;
+  private mapInteriorWidth = 0;
+  private mapInteriorHeight = 0;
+  private mapScrollY = 0;
+  private mapTargetScrollY = 0;
+  private mapMaxScrollY = 0;
+  private mapCanScroll = false;
+  private isDraggingMap = false;
+  private didDragMap = false;
+  private mapDragStartY = 0;
+  private mapDragStartScroll = 0;
+  private mapPointerDownHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private mapPointerMoveHandler?: (pointer: Phaser.Input.Pointer) => void;
+  private mapPointerUpHandler?: () => void;
+  private mapWheelHandler?: (
+    pointer: Phaser.Input.Pointer,
+    gameObjects: unknown,
+    deltaX: number,
+    deltaY: number
+  ) => void;
+
   constructor() {
     super('DungeonScene');
   }
 
+  preload() {
+    if (!this.textures.exists(SVITOK_ASSET.key)) {
+      this.load.image(SVITOK_ASSET.key, SVITOK_ASSET.url);
+    }
+  }
+
   create() {
+    this.cleanupDungeonMapScroll();
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanupDungeonMapScroll, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupDungeonMapScroll, this);
+
     if (!gameState.floorRun.active || gameState.floorRun.rooms.length === 0) {
       if (!hasEnoughSanityForFloor()) {
         createSceneBackground(this);
@@ -230,22 +266,20 @@ export class DungeonScene extends Phaser.Scene {
     const actionDockTop = exitButtonY - secondaryButtonHeight / 2 - (veryCompact ? 14 : 18);
 
     const headerHeight = veryCompact ? 112 : compact ? 122 : 132;
-    const mapHeight = veryCompact ? 132 : compact ? 168 : 198;
-
     const headerY = safeTop + headerHeight / 2;
-    const floorInfoY = headerY;
-    const routeY = headerY + headerHeight / 2 + (veryCompact ? 8 : 10) + mapHeight / 2;
-    const roomCardTop = routeY + mapHeight / 2 + (veryCompact ? 10 : 12);
+    const headerBottom = safeTop + headerHeight;
 
-    const maxRoomCardHeight = veryCompact ? 372 : compact ? 488 : 580;
-    const availableRoomCardHeight = actionDockTop - roomCardTop - (veryCompact ? 10 : 14);
-    const roomCardHeight = Phaser.Math.Clamp(
-      availableRoomCardHeight,
-      veryCompact ? 232 : compact ? 322 : 400,
-      maxRoomCardHeight
-    );
+    // Карточка текущей комнаты держит фиксированный минимальный размер —
+    // весь освободившийся вертикальный запас достаётся свитку с картой.
+    const roomCardHeight = veryCompact ? 236 : compact ? 316 : 372;
+    const roomCardBottomGap = veryCompact ? 10 : 14;
+    const roomCardBottom = actionDockTop - roomCardBottomGap;
+    const roomCardTop = roomCardBottom - roomCardHeight;
 
-    const roomCardBottom = roomCardTop + roomCardHeight;
+    const mapGap = veryCompact ? 10 : 14;
+    const mapAreaTop = headerBottom + mapGap;
+    const mapAreaBottom = roomCardTop - mapGap;
+
     const actionGap = veryCompact ? 7 : 10;
     const actionBottomPadding = veryCompact ? 14 : 20;
 
@@ -263,8 +297,8 @@ export class DungeonScene extends Phaser.Scene {
       compact,
       veryCompact,
       headerY,
-      floorInfoY,
-      routeY,
+      mapAreaTop,
+      mapAreaBottom,
       roomCardTop,
       roomCardHeight,
       actionDockTop,
@@ -840,6 +874,123 @@ export class DungeonScene extends Phaser.Scene {
   };
 }
 
+  private cleanupDungeonMapScroll() {
+    if (this.mapPointerDownHandler) {
+      this.input.off('pointerdown', this.mapPointerDownHandler);
+      this.mapPointerDownHandler = undefined;
+    }
+
+    if (this.mapPointerMoveHandler) {
+      this.input.off('pointermove', this.mapPointerMoveHandler);
+      this.mapPointerMoveHandler = undefined;
+    }
+
+    if (this.mapPointerUpHandler) {
+      this.input.off('pointerup', this.mapPointerUpHandler);
+      this.input.off('pointerupoutside', this.mapPointerUpHandler);
+      this.mapPointerUpHandler = undefined;
+    }
+
+    if (this.mapWheelHandler) {
+      this.input.off('wheel', this.mapWheelHandler);
+      this.mapWheelHandler = undefined;
+    }
+
+    // Phaser уничтожает все не-главные камеры сам при SHUTDOWN сцены
+    // (CameraManager.shutdown вызывает destroy() для каждой камеры и чистит список),
+    // поэтому здесь просто забываем ссылку — переиспользовать её нельзя,
+    // при следующем create() камера будет создана заново.
+    this.mapCamera = undefined;
+
+    this.isDraggingMap = false;
+    this.didDragMap = false;
+    this.mapCanScroll = false;
+  }
+
+  update() {
+    if (!this.mapContainer || !this.mapCanScroll || this.isDraggingMap) {
+      return;
+    }
+
+    if (Math.abs(this.mapScrollY - this.mapTargetScrollY) < 0.4) {
+      this.mapScrollY = this.mapTargetScrollY;
+    } else {
+      this.mapScrollY = Phaser.Math.Linear(this.mapScrollY, this.mapTargetScrollY, 0.2);
+    }
+
+    this.mapContainer.setY(this.mapInteriorTop - this.mapScrollY);
+  }
+
+  private isPointerInsideMap(pointer: Phaser.Input.Pointer) {
+    return (
+      pointer.x >= this.mapInteriorLeft &&
+      pointer.x <= this.mapInteriorLeft + this.mapInteriorWidth &&
+      pointer.y >= this.mapInteriorTop &&
+      pointer.y <= this.mapInteriorTop + this.mapInteriorHeight
+    );
+  }
+
+  private createMapScrollHandlers() {
+    this.mapPointerDownHandler = (pointer: Phaser.Input.Pointer) => {
+      if (!this.mapCanScroll || !this.isPointerInsideMap(pointer)) {
+        return;
+      }
+
+      this.isDraggingMap = true;
+      this.didDragMap = false;
+      this.mapDragStartY = pointer.y;
+      this.mapDragStartScroll = this.mapTargetScrollY;
+    };
+
+    this.mapPointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
+      if (!this.isDraggingMap) {
+        return;
+      }
+
+      const dragDistance = pointer.y - this.mapDragStartY;
+
+      if (Math.abs(dragDistance) < 8) {
+        return;
+      }
+
+      this.didDragMap = true;
+
+      this.mapTargetScrollY = Phaser.Math.Clamp(
+        this.mapDragStartScroll - dragDistance,
+        0,
+        this.mapMaxScrollY
+      );
+      this.mapScrollY = this.mapTargetScrollY;
+      this.mapContainer?.setY(this.mapInteriorTop - this.mapScrollY);
+    };
+
+    this.mapPointerUpHandler = () => {
+      this.isDraggingMap = false;
+
+      this.time.delayedCall(80, () => {
+        this.didDragMap = false;
+      });
+    };
+
+    this.mapWheelHandler = (_pointer, _gameObjects, _deltaX, deltaY) => {
+      if (!this.mapCanScroll) {
+        return;
+      }
+
+      this.mapTargetScrollY = Phaser.Math.Clamp(
+        this.mapTargetScrollY + deltaY * 0.4,
+        0,
+        this.mapMaxScrollY
+      );
+    };
+
+    this.input.on('pointerdown', this.mapPointerDownHandler);
+    this.input.on('pointermove', this.mapPointerMoveHandler);
+    this.input.on('pointerup', this.mapPointerUpHandler);
+    this.input.on('pointerupoutside', this.mapPointerUpHandler);
+    this.input.on('wheel', this.mapWheelHandler);
+  }
+
   private createRoomMap() {
     const layout = this.getLayout();
 
@@ -850,125 +1001,117 @@ export class DungeonScene extends Phaser.Scene {
     const theme = getCryptDepthTheme(floor);
 
     this.branchNodePositions.clear();
+    this.mapContentObjects = [];
 
-    const mapHeight = layout.veryCompact ? 132 : layout.compact ? 168 : 198;
-    const width = layout.contentWidth;
-    const top = layout.routeY - mapHeight / 2;
-    const left = layout.centerX - width / 2;
-    const right = layout.centerX + width / 2;
-    const nodeBaseRadius = layout.veryCompact ? 12 : layout.compact ? 14 : 16;
+    const areaTop = layout.mapAreaTop;
+    const areaBottom = layout.mapAreaBottom;
+    const areaHeight = Math.max(140, areaBottom - areaTop);
+    const areaCenterY = areaTop + areaHeight / 2;
 
-    const mapPanel = this.createRoundedPanel({
-      x: layout.centerX,
-      y: layout.routeY,
-      width,
-      height: mapHeight,
-      radius: layout.veryCompact ? 24 : 30,
-      color: 0x050509,
-      alpha: 0.93,
-      strokeColor: theme.stroke,
-      strokeAlpha: 0.42,
-      strokeWidth: 2,
-      depth: 2,
-    });
+    // Вписываем портретный свиток (1080x1920) в доступную область карты.
+    const svitokAspect = 1080 / 1920;
+    const maxWidth = layout.contentWidth * (layout.veryCompact ? 0.9 : 0.94);
 
-    mapPanel.shadow.setAlpha(0);
-    mapPanel.panel.setAlpha(0);
+    let svitokHeight = areaHeight;
+    let svitokWidth = svitokHeight * svitokAspect;
+
+    if (svitokWidth > maxWidth) {
+      svitokWidth = maxWidth;
+      svitokHeight = svitokWidth / svitokAspect;
+    }
+
+    const svitokX = layout.centerX;
+    const svitokY = areaCenterY;
+    const svitokTop = svitokY - svitokHeight / 2;
+    const svitokLeft = svitokX - svitokWidth / 2;
+
+    const backGlow = this.add.circle(svitokX, svitokY, svitokWidth * 0.62, theme.glow, 0.05)
+      .setDepth(1)
+      .setAlpha(0);
 
     this.tweens.add({
-      targets: [mapPanel.shadow, mapPanel.panel],
-      alpha: 1,
-      duration: 260,
+      targets: backGlow,
+      alpha: 0.6,
+      duration: 400,
       ease: 'Sine.easeOut',
     });
 
-    const inner = this.add.graphics().setDepth(3).setAlpha(0);
-    inner.fillStyle(0x111016, 0.64);
-    inner.fillRoundedRect(
-      left + 8,
-      top + 8,
-      width - 16,
-      mapHeight - 16,
-      layout.veryCompact ? 18 : 22
-    );
-    inner.lineStyle(1, DUNGEON_DARK.bronze, 0.22);
-    inner.strokeRoundedRect(
-      left + 14,
-      top + 14,
-      width - 28,
-      mapHeight - 28,
-      layout.veryCompact ? 14 : 18
-    );
+    this.add.ellipse(svitokX, svitokTop + svitokHeight + 4, svitokWidth * 0.62, 20, 0x000000, 0.34)
+      .setDepth(1);
+
+    const svitokImage = this.add.image(svitokX, svitokY, SVITOK_ASSET.key)
+      .setDisplaySize(svitokWidth, svitokHeight)
+      .setDepth(2)
+      .setAlpha(0)
+      .setScale(0.97);
 
     this.tweens.add({
-      targets: inner,
+      targets: svitokImage,
       alpha: 1,
-      duration: 300,
-      delay: 70,
-      ease: 'Sine.easeOut',
+      scale: 1,
+      duration: 380,
+      ease: 'Back.easeOut',
     });
 
-    this.add.circle(layout.centerX, layout.routeY, width * 0.38, theme.glow, 0.055)
-      .setDepth(3)
-      .setAlpha(0.68);
+    const completedRooms = rooms.filter((room: any) => room.completed).length;
+    const totalRooms = Math.max(1, rooms.length);
 
-    const titleY = top + (layout.veryCompact ? 18 : 22);
-    this.add.text(layout.centerX, titleY, 'Карта разломов', {
+    const titleY = svitokTop + svitokHeight * 0.088;
+    this.add.text(svitokX, titleY, `Карта разломов  •  ${completedRooms}/${totalRooms}`, {
       fontFamily: UI.font.title,
-      fontSize: layout.veryCompact ? '14px' : layout.compact ? '16px' : '18px',
-      color: UI.colors.goldText,
-      stroke: '#000000',
-      strokeThickness: 4,
+      fontSize: layout.veryCompact ? '12px' : layout.compact ? '13px' : '14px',
+      color: '#3c2312',
       align: 'center',
       wordWrap: {
-        width: width - 68,
+        width: svitokWidth * 0.7,
         useAdvancedWrap: true,
       },
       maxLines: 1,
-    }).setOrigin(0.5).setDepth(8).setAlpha(0.95);
+    }).setOrigin(0.5).setDepth(3).setAlpha(0.88);
 
-    const runeLeft = this.add.text(left + 24, titleY, '◇', {
+    const legendY = svitokTop + svitokHeight * 0.915;
+    const legendText = layout.veryCompact
+      ? '◆ путь  ✓ пройдено  ? тайна  ♛ босс'
+      : '◆ доступно  ✓ пройдено  ? неизвестно  ♛ босс';
+
+    this.add.text(svitokX, legendY, legendText, {
       fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '13px' : '16px',
-      color: '#76604a',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
-
-    const runeRight = this.add.text(right - 24, titleY, '◇', {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '13px' : '16px',
-      color: '#76604a',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(8).setAlpha(0.72);
-
-    this.tweens.add({
-      targets: [runeLeft, runeRight],
-      alpha: {
-        from: 0.34,
-        to: 0.82,
+      fontSize: layout.veryCompact ? '8px' : '9px',
+      color: '#4a2c17',
+      align: 'center',
+      wordWrap: {
+        width: svitokWidth * 0.82,
       },
-      duration: 1400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+      maxLines: 1,
+    }).setOrigin(0.5).setDepth(3).setAlpha(0.8);
 
-    this.createBranchMapMist(layout.centerX, layout.routeY, width, mapHeight, theme.fog);
+    // Внутренняя область пергамента (без деревянных валиков по краям).
+    const interiorLeft = svitokLeft + svitokWidth * 0.205;
+    const interiorRight = svitokLeft + svitokWidth * 0.795;
+    const interiorTop = svitokTop + svitokHeight * 0.175;
+    const interiorBottom = svitokTop + svitokHeight * 0.825;
+    const interiorWidth = interiorRight - interiorLeft;
+    const interiorHeight = interiorBottom - interiorTop;
 
+    this.mapInteriorLeft = interiorLeft;
+    this.mapInteriorTop = interiorTop;
+    this.mapInteriorWidth = interiorWidth;
+    this.mapInteriorHeight = interiorHeight;
+
+    this.createBranchMapMist(
+      interiorLeft + interiorWidth / 2,
+      interiorTop + interiorHeight / 2,
+      interiorWidth,
+      interiorHeight,
+      theme.fog
+    );
+
+    // Всё, что создано выше, остаётся статичным фоном свитка — камера карты
+    // его игнорирует и рисует только прокручиваемое содержимое (узлы/пути).
+    const fixedObjectsBeforeMapContent = this.children.list.slice();
+
+    const nodeBaseRadius = layout.veryCompact ? 13 : layout.compact ? 15 : 17;
     const maxLayer = Math.max(...rooms.map((room: any) => room.branchLayer ?? 0), 0);
-    const layerCount = maxLayer + 1;
-    const nodeLeft = left + (layout.veryCompact ? 34 : 42);
-    const nodeRight = right - (layout.veryCompact ? 34 : 42);
-
-    const layerX = (layer: number) => {
-      if (layerCount <= 1) {
-        return layout.centerX;
-      }
-
-      return Phaser.Math.Linear(nodeLeft, nodeRight, layer / (layerCount - 1));
-    };
 
     const layerRooms = new Map<number, typeof rooms>();
 
@@ -981,9 +1124,55 @@ export class DungeonScene extends Phaser.Scene {
       layerRooms.set(layer, list);
     });
 
+    const minSpacing = nodeBaseRadius * 2 + (layout.veryCompact ? 36 : 46);
+    const topPad = nodeBaseRadius + (layout.veryCompact ? 22 : 28);
+    const bottomPad = nodeBaseRadius + (layout.veryCompact ? 28 : 36);
+
+    let spacing = 0;
+    let contentHeight = interiorHeight;
+
+    if (maxLayer > 0) {
+      const naturalSpacing = (interiorHeight - topPad - bottomPad) / maxLayer;
+      spacing = Math.max(minSpacing, naturalSpacing);
+      contentHeight = Math.max(interiorHeight, topPad + bottomPad + spacing * maxLayer);
+    }
+
+    this.mapCanScroll = contentHeight > interiorHeight + 1;
+    this.mapMaxScrollY = Math.max(0, contentHeight - interiorHeight);
+
+    // Слой 0 — старт пути — внизу свитка, дальше путь читается снизу вверх.
+    const rowY = (layer: number) => {
+      if (maxLayer <= 0) {
+        return contentHeight / 2;
+      }
+
+      return topPad + (maxLayer - layer) * spacing;
+    };
+
+    const nodePaddingX = layout.veryCompact ? 28 : 36;
+
+    const colX = (room: any) => {
+      const layer = room.branchLayer ?? 0;
+      const list = layerRooms.get(layer) ?? [];
+      const count = Math.max(1, list.length);
+
+      if (count <= 1) {
+        return interiorWidth / 2;
+      }
+
+      const roomIndex = list.findIndex((candidate: any) => candidate.id === room.id);
+      const column = typeof room.branchColumn === 'number' ? room.branchColumn : Math.max(0, roomIndex);
+      const normalized = Phaser.Math.Clamp(column / Math.max(1, count - 1), 0, 1);
+
+      return Phaser.Math.Linear(nodePaddingX, interiorWidth - nodePaddingX, normalized);
+    };
+
+    const mapContainer = this.add.container(interiorLeft, interiorTop).setDepth(5);
+    this.mapContainer = mapContainer;
+
     rooms.forEach((room: any) => {
-      const fromX = layerX(room.branchLayer ?? 0);
-      const fromY = this.getBranchNodeY(top, mapHeight, room, layerRooms);
+      const fromX = colX(room);
+      const fromY = rowY(room.branchLayer ?? 0);
 
       (room.nextRoomIds ?? []).forEach((nextRoomId: string) => {
         const nextRoom = rooms.find((candidate: any) => candidate.id === nextRoomId);
@@ -1003,8 +1192,8 @@ export class DungeonScene extends Phaser.Scene {
           return;
         }
 
-        const toX = layerX(nextRoom.branchLayer ?? 0);
-        const toY = this.getBranchNodeY(top, mapHeight, nextRoom, layerRooms);
+        const toX = colX(nextRoom);
+        const toY = rowY(nextRoom.branchLayer ?? 0);
         const isActivePath = connectionState === 'active' || connectionState === 'bossActive';
         const isBossPath = connectionState === 'bossActive' || connectionState === 'bossCompleted';
         const color = connectionState === 'bossLocked'
@@ -1028,14 +1217,15 @@ export class DungeonScene extends Phaser.Scene {
           color,
           alpha,
           isActivePath,
-          isBossPath
+          isBossPath,
+          mapContainer
         );
       });
     });
 
     rooms.forEach((room: any, index: number) => {
-      const x = layerX(room.branchLayer ?? 0);
-      const y = this.getBranchNodeY(top, mapHeight, room, layerRooms);
+      const x = colX(room);
+      const y = rowY(room.branchLayer ?? 0);
       const roomType = String(room.type);
       const isCurrent = currentRoom?.id === room.id && !isAwaitingRoomChoice();
       const isAvailable = availableRooms.some(candidate => candidate.id === room.id);
@@ -1066,12 +1256,12 @@ export class DungeonScene extends Phaser.Scene {
               : nodeBaseRadius;
 
       this.branchNodePositions.set(room.id, {
-        x,
-        y,
+        x: interiorLeft + x,
+        yLocal: y,
         color: visual.stroke,
       });
 
-      const delay = 110 + index * 35;
+      const delay = 110 + index * 30;
 
       this.createRoomMapNode({
         x,
@@ -1085,71 +1275,47 @@ export class DungeonScene extends Phaser.Scene {
         isQuestion,
         isBoss,
         delay,
+        container: mapContainer,
         onClick: isAvailable
           ? () => {
+              if (this.didDragMap) {
+                return;
+              }
+
               this.chooseBranchRoom(room.id);
             }
           : undefined,
       });
     });
 
-    const legendY = top + mapHeight - (layout.veryCompact ? 15 : 18);
-    const legendText = layout.veryCompact
-      ? '◆ путь   ✓ пройдено   ? тайна   ♛ босс'
-      : '◆ доступно   ✓ пройдено   ? неизвестно   ♛ босс';
+    // Стартовая позиция скролла — так, чтобы текущая комната была в центре видимой области.
+    const currentLayer = currentRoom?.branchLayer ?? 0;
+    const currentLocalY = rowY(currentLayer);
+    const initialScroll = Phaser.Math.Clamp(
+      currentLocalY - interiorHeight / 2,
+      0,
+      this.mapMaxScrollY
+    );
 
-    const legendBg = this.add.rectangle(layout.centerX, legendY, width - 52, layout.veryCompact ? 18 : 22, 0x020203, 0.44)
-      .setStrokeStyle(1, DUNGEON_DARK.bronze, 0.2)
-      .setDepth(6);
+    this.mapScrollY = initialScroll;
+    this.mapTargetScrollY = initialScroll;
+    mapContainer.setY(interiorTop - initialScroll);
 
-    const legend = this.add.text(layout.centerX, legendY, legendText, {
-      fontFamily: UI.font.body,
-      fontSize: layout.veryCompact ? '9px' : '10px',
-      color: '#b8aa91',
-      align: 'center',
-      wordWrap: {
-        width: width - 64,
-      },
-      maxLines: 1,
-    }).setOrigin(0.5).setDepth(8);
-
-    this.tweens.add({
-      targets: [legendBg, legend],
-      alpha: {
-        from: 0.15,
-        to: 0.82,
-      },
-      duration: 260,
-      delay: 300,
-      ease: 'Sine.easeOut',
-    });
-  }
-
-
-  private getBranchNodeY(
-    top: number,
-    mapHeight: number,
-    room: { id?: string; branchLayer?: number; branchColumn?: number },
-    layerRooms: Map<number, Array<{ id?: string; branchColumn?: number }>>
-  ) {
-    const layer = room.branchLayer ?? 0;
-    const roomsInLayer = layerRooms.get(layer) ?? [];
-    const count = Math.max(1, roomsInLayer.length);
-    const mapTop = top + (this.getLayout().veryCompact ? 46 : 54);
-    const mapBottom = top + mapHeight - (this.getLayout().veryCompact ? 36 : 42);
-
-    if (count <= 1) {
-      return (mapTop + mapBottom) / 2;
+    if (!this.mapCamera) {
+      this.mapCamera = this.cameras.add(interiorLeft, interiorTop, interiorWidth, interiorHeight);
+    } else {
+      this.mapCamera.setViewport(interiorLeft, interiorTop, interiorWidth, interiorHeight);
+      this.mapCamera.visible = true;
     }
 
-    const roomIndex = roomsInLayer.findIndex(candidate => candidate.id === room.id);
-    const column = typeof room.branchColumn === 'number'
-      ? room.branchColumn
-      : Math.max(0, roomIndex);
+    this.mapCamera.setScroll(interiorLeft, interiorTop);
+    this.mapCamera.setBackgroundColor('rgba(0,0,0,0)');
+    this.mapCamera.ignore(fixedObjectsBeforeMapContent);
 
-    const normalized = Phaser.Math.Clamp(column / Math.max(1, count - 1), 0, 1);
+    this.cameras.main.ignore(mapContainer);
+    this.cameras.main.ignore(this.mapContentObjects);
 
-    return Phaser.Math.Linear(mapTop, mapBottom, normalized);
+    this.createMapScrollHandlers();
   }
 
 
@@ -1194,7 +1360,8 @@ export class DungeonScene extends Phaser.Scene {
     color: number,
     alpha: number,
     animated: boolean,
-    danger = false
+    danger = false,
+    container?: Phaser.GameObjects.Container
   ) {
     const midX = (fromX + toX) / 2;
     const bend = Phaser.Math.Clamp(Math.abs(toY - fromY) * 0.18, 4, 14);
@@ -1259,6 +1426,11 @@ export class DungeonScene extends Phaser.Scene {
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+    }
+
+    if (container) {
+      container.add([shadow, crack, runeGlow]);
+      this.mapContentObjects.push(shadow, crack, runeGlow);
     }
   }
 
@@ -1434,6 +1606,7 @@ export class DungeonScene extends Phaser.Scene {
     isBoss: boolean;
     delay: number;
     onClick?: () => void;
+    container?: Phaser.GameObjects.Container;
   }) {
     const {
       x,
@@ -1447,6 +1620,7 @@ export class DungeonScene extends Phaser.Scene {
       isBoss,
       delay,
       onClick,
+      container,
     } = config;
 
     const glowRadius = radius + (isBoss ? 15 : isCurrent ? 14 : isAvailable ? 12 : 8);
@@ -1509,7 +1683,7 @@ export class DungeonScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(9).setAlpha(0)
       : undefined;
 
-    const appearingTargets = marker
+    const appearingTargets: Phaser.GameObjects.GameObject[] = marker
       ? [outerGlow, shadow, ring, core, label, marker]
       : [outerGlow, shadow, ring, core, label];
 
@@ -1600,6 +1774,13 @@ export class DungeonScene extends Phaser.Scene {
 
         onClick();
       });
+
+      appearingTargets.push(zone);
+    }
+
+    if (container) {
+      container.add(appearingTargets);
+      this.mapContentObjects.push(...appearingTargets);
     }
   }
 
@@ -1610,7 +1791,9 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    const pulse = this.add.circle(point.x, point.y, 12, point.color, 0.02)
+    const worldY = (this.mapContainer?.y ?? this.mapInteriorTop) + point.yLocal;
+
+    const pulse = this.add.circle(point.x, worldY, 12, point.color, 0.02)
       .setStrokeStyle(3, point.color, 0.92)
       .setDepth(18);
 
