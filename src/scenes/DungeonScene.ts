@@ -3466,8 +3466,6 @@ export class DungeonScene extends Phaser.Scene {
       return;
     }
 
-    // Важно: максимум HP/энергии берём через итоговые характеристики героя.
-    // Так костёр учитывает дерево характеристик, предметы и реликвии.
     const restoredBeforeCheckpoint = restorePlayerVitalsToMaximum(player, this.maxPotionCount);
 
     campfireState.remainingCampfireUses = Math.max(0, campfireState.remainingCampfireUses - 1);
@@ -3487,8 +3485,6 @@ export class DungeonScene extends Phaser.Scene {
       campfireStateSnapshot: this.createCampfireStateSnapshot(),
     });
 
-    // Повторно применяем после создания чекпоинта, чтобы в сохранение и UI точно ушли
-    // текущие максимумы после дерева характеристик.
     const restored = restorePlayerVitalsToMaximum(player, this.maxPotionCount);
     const checkpointTime = formatCheckpointTimeLeft(checkpoint.expiresAt - Date.now());
 
@@ -5380,8 +5376,8 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     const tierStart = (tier - 1) * 25;
 
     return [
-      tierStart + Phaser.Math.Between(3, 11),
-      tierStart + Phaser.Math.Between(12, 18),
+      tierStart + Phaser.Math.Between(3, 9),
+      tierStart + Phaser.Math.Between(10, 18),
       tierStart + Phaser.Math.Between(19, 24),
     ];
   }
@@ -5477,7 +5473,7 @@ HP: ${restoredBeforeCheckpoint.hpBefore}/${restored.hpMax} → ${restored.hpAfte
     const subtitle = this.add.text(
       width / 2,
       height / 2 - 252,
-      'Огниво выбирается в начале яруса. Один заряд активирует костёр, восстанавливает силы и создаёт чекпоинт: обычное — 1 час, редкое — сутки, донатное — навсегда.',
+      'Огниво выбирается в начале яруса. Один заряд активирует костёр, восстанавливает HP, энергию и зелья и создаёт чекпоинт: обычное — 1 час, редкое — сутки, донатное — навсегда.',
       {
         fontFamily: UI.font.body,
         fontSize: '16px',

@@ -279,6 +279,7 @@ export class BattleScene extends Phaser.Scene {
 
 
   private stonebornSprite?: Phaser.GameObjects.Sprite;
+  private demonSprite?: Phaser.GameObjects.Sprite;
 
   private readonly BATTLE_ASSETS = {
     actionPanel: {
@@ -293,6 +294,16 @@ export class BattleScene extends Phaser.Scene {
       attack: {
         key: 'stoneborn_attack_sheet',
         url: new URL('../assets/images/battle/races/stoneborn/stoneborn_attack.png', import.meta.url).href,
+      },
+    },
+    demonSheets: {
+      idle: {
+        key: 'demon_idle_sheet',
+        url: new URL('../assets/images/battle/races/demon/demon_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'demon_attack_sheet',
+        url: new URL('../assets/images/battle/races/demon/demon_attack.png', import.meta.url).href,
       },
     },
     enemySprites: {
@@ -559,6 +570,14 @@ export class BattleScene extends Phaser.Scene {
       this.load.spritesheet(attack.key, attack.url, { frameWidth: 256, frameHeight: 256 });
     }
 
+    const demonSheets = this.BATTLE_ASSETS.demonSheets;
+    if (!this.textures.exists(demonSheets.idle.key)) {
+      this.load.spritesheet(demonSheets.idle.key, demonSheets.idle.url, { frameWidth: 256, frameHeight: 256 });
+    }
+    if (!this.textures.exists(demonSheets.attack.key)) {
+      this.load.spritesheet(demonSheets.attack.key, demonSheets.attack.url, { frameWidth: 256, frameHeight: 256 });
+    }
+
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.configurePixelSpriteRendering();
     this.applyNearestFilterToBattleTextures();
@@ -590,6 +609,7 @@ export class BattleScene extends Phaser.Scene {
   this.battleLogWheelHandler = undefined;
 
   this.stonebornSprite = undefined;
+  this.demonSprite = undefined;
   this.humanPassiveActivated = false;
   this.raceSkillCooldown = 0;
   this.potionCooldown = 0;
@@ -682,6 +702,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.applyNearestFilterToBattleTextures();
     this.createStonebornAnimations();
+    this.createDemonAnimations();
 
     this.createBattleBackground(isBoss);
 
@@ -2525,12 +2546,31 @@ private getDebuffShortDescription(id: string, power: number) {
     return container;
   }
 
+  private createDemonAnimations() {
+    if (!this.anims.exists('demon_idle')) {
+      this.anims.create({
+        key: 'demon_idle',
+        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.demonSheets.idle.key, { start: 0, end: -1 }),
+        frameRate: 12,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('demon_attack')) {
+      this.anims.create({
+        key: 'demon_attack',
+        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.demonSheets.attack.key, { start: 0, end: -1 }),
+        frameRate: 12,
+        repeat: 0,
+      });
+    }
+  }
+
   private createStonebornAnimations() {
     if (!this.anims.exists('stoneborn_idle')) {
       this.anims.create({
         key: 'stoneborn_idle',
         frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.stonebornSheets.idle.key, { start: 0, end: -1 }),
-        frameRate: 8,
+        frameRate: 12,
         repeat: -1,
       });
     }
@@ -2578,6 +2618,14 @@ private getDebuffShortDescription(id: string, power: number) {
       sprite.play('stoneborn_idle');
       this.stonebornSprite = sprite;
       container.add([platform, platformGlow, sprite]);
+    } else if (player.raceId === 'demon') {
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.demonSheets.idle.key)
+        .setOrigin(0.5, 1.0)
+        .setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('demon_idle');
+      this.demonSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
     } else {
       const sprite = this.add.image(0, maxHeight * 0.34, this.getPlayerRaceSpriteKey())
         .setOrigin(0.5, 1.0)
@@ -2597,6 +2645,8 @@ private getDebuffShortDescription(id: string, power: number) {
       ...Object.values(this.BATTLE_ASSETS.raceSprites).map(asset => asset.key),
       this.BATTLE_ASSETS.stonebornSheets.idle.key,
       this.BATTLE_ASSETS.stonebornSheets.attack.key,
+      this.BATTLE_ASSETS.demonSheets.idle.key,
+      this.BATTLE_ASSETS.demonSheets.attack.key,
     ];
 
     keys.forEach(key => {
@@ -5181,6 +5231,84 @@ private renderEnemyEffectChips() {
 
     this.playerCard.setPosition(playerBase.x, playerBase.y);
     this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
+
+    if (this.demonSprite) {
+      const teleportLocalX = enemyBase.x - playerBase.x - 25;
+
+      this.tweens.add({
+        targets: this.playerCard,
+        angle: kind === 'power' ? 3 : 2,
+        duration: 80,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+      });
+
+      await new Promise<void>(resolve => {
+        this.tweens.add({
+          targets: this.demonSprite,
+          x: teleportLocalX,
+          duration: 80,
+          ease: 'Cubic.easeIn',
+          onComplete: () => resolve(),
+        });
+      });
+
+      if (this.isBattleEnded) {
+        this.combatAnimationLocked = false;
+        onImpact?.();
+        onAfterReturn?.();
+        return;
+      }
+
+      this.demonSprite.play('demon_attack');
+      this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
+      this.tweens.add({
+        targets: this.enemyCard,
+        x: enemyBase.x + (kind === 'power' ? 18 : 12),
+        duration: 70,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
+        },
+      });
+
+      const demonAttackAnim = this.demonSprite.anims.currentAnim;
+      const demonAttackDuration = demonAttackAnim ? demonAttackAnim.duration : 300;
+      const demonImpactDelay = Math.max(0, demonAttackDuration - 90);
+
+      this.time.delayedCall(demonImpactDelay, () => {
+        if (!this.isBattleEnded) {
+          onImpact?.();
+        }
+      });
+
+      await new Promise<void>(resolve => {
+        this.demonSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
+      });
+
+      if (!this.isBattleEnded) {
+        this.demonSprite.play('demon_idle');
+      }
+
+      this.combatAnimationLocked = false;
+
+      this.tweens.add({
+        targets: this.demonSprite,
+        x: 0,
+        duration: 130,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          this.time.delayedCall(500, () => {
+            if (!this.isBattleEnded) {
+              onAfterReturn?.();
+            }
+          });
+        },
+      });
+
+      return;
+    }
 
     if (this.stonebornSprite) {
       const teleportLocalX = enemyBase.x - playerBase.x - 25;
