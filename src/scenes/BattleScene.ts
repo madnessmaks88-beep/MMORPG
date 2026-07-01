@@ -280,6 +280,10 @@ export class BattleScene extends Phaser.Scene {
 
   private stonebornSprite?: Phaser.GameObjects.Sprite;
   private demonSprite?: Phaser.GameObjects.Sprite;
+  private humanSprite?: Phaser.GameObjects.Sprite;
+  private goblinSprite?: Phaser.GameObjects.Sprite;
+  private nightElfSprite?: Phaser.GameObjects.Sprite;
+  private taintedSprite?: Phaser.GameObjects.Sprite;
 
   private readonly BATTLE_ASSETS = {
     actionPanel: {
@@ -304,6 +308,46 @@ export class BattleScene extends Phaser.Scene {
       attack: {
         key: 'demon_attack_sheet',
         url: new URL('../assets/images/battle/races/demon/demon_attack.png', import.meta.url).href,
+      },
+    },
+    humanSheets: {
+      idle: {
+        key: 'human_idle_sheet',
+        url: new URL('../assets/images/battle/races/human/human_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'human_attack_sheet',
+        url: new URL('../assets/images/battle/races/human/human_attack.png', import.meta.url).href,
+      },
+    },
+    goblinSheets: {
+      idle: {
+        key: 'goblin_idle_sheet',
+        url: new URL('../assets/images/battle/races/goblin/goblin_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'goblin_attack_sheet',
+        url: new URL('../assets/images/battle/races/goblin/goblin_attack.png', import.meta.url).href,
+      },
+    },
+    nightElfSheets: {
+      idle: {
+        key: 'night_elf_idle_sheet',
+        url: new URL('../assets/images/battle/races/night_elf/night_elf_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'night_elf_attack_sheet',
+        url: new URL('../assets/images/battle/races/night_elf/night_elf_attack.png', import.meta.url).href,
+      },
+    },
+    taintedSheets: {
+      idle: {
+        key: 'tainted_idle_sheet',
+        url: new URL('../assets/images/battle/races/tainted_halfblood/tainted_halfblood_idle.png', import.meta.url).href,
+      },
+      attack: {
+        key: 'tainted_attack_sheet',
+        url: new URL('../assets/images/battle/races/tainted_halfblood/tainted_halfblood_attack.png', import.meta.url).href,
       },
     },
     enemySprites: {
@@ -578,6 +622,20 @@ export class BattleScene extends Phaser.Scene {
       this.load.spritesheet(demonSheets.attack.key, demonSheets.attack.url, { frameWidth: 256, frameHeight: 256 });
     }
 
+    for (const sheets of [
+      this.BATTLE_ASSETS.humanSheets,
+      this.BATTLE_ASSETS.goblinSheets,
+      this.BATTLE_ASSETS.nightElfSheets,
+      this.BATTLE_ASSETS.taintedSheets,
+    ]) {
+      if (!this.textures.exists(sheets.idle.key)) {
+        this.load.spritesheet(sheets.idle.key, sheets.idle.url, { frameWidth: 256, frameHeight: 256 });
+      }
+      if (!this.textures.exists(sheets.attack.key)) {
+        this.load.spritesheet(sheets.attack.key, sheets.attack.url, { frameWidth: 256, frameHeight: 256 });
+      }
+    }
+
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.configurePixelSpriteRendering();
     this.applyNearestFilterToBattleTextures();
@@ -610,6 +668,10 @@ export class BattleScene extends Phaser.Scene {
 
   this.stonebornSprite = undefined;
   this.demonSprite = undefined;
+  this.humanSprite = undefined;
+  this.goblinSprite = undefined;
+  this.nightElfSprite = undefined;
+  this.taintedSprite = undefined;
   this.humanPassiveActivated = false;
   this.raceSkillCooldown = 0;
   this.potionCooldown = 0;
@@ -703,6 +765,10 @@ export class BattleScene extends Phaser.Scene {
     this.applyNearestFilterToBattleTextures();
     this.createStonebornAnimations();
     this.createDemonAnimations();
+    this.createRaceAnimations('human', this.BATTLE_ASSETS.humanSheets.idle.key, this.BATTLE_ASSETS.humanSheets.attack.key);
+    this.createRaceAnimations('goblin', this.BATTLE_ASSETS.goblinSheets.idle.key, this.BATTLE_ASSETS.goblinSheets.attack.key);
+    this.createRaceAnimations('night_elf', this.BATTLE_ASSETS.nightElfSheets.idle.key, this.BATTLE_ASSETS.nightElfSheets.attack.key);
+    this.createRaceAnimations('tainted_halfblood', this.BATTLE_ASSETS.taintedSheets.idle.key, this.BATTLE_ASSETS.taintedSheets.attack.key);
 
     this.createBattleBackground(isBoss);
 
@@ -2546,23 +2612,27 @@ private getDebuffShortDescription(id: string, power: number) {
     return container;
   }
 
-  private createDemonAnimations() {
-    if (!this.anims.exists('demon_idle')) {
+  private createRaceAnimations(race: string, idleKey: string, attackKey: string) {
+    if (!this.anims.exists(`${race}_idle`)) {
       this.anims.create({
-        key: 'demon_idle',
-        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.demonSheets.idle.key, { start: 0, end: -1 }),
+        key: `${race}_idle`,
+        frames: this.anims.generateFrameNumbers(idleKey, { start: 0, end: -1 }),
         frameRate: 12,
         repeat: -1,
       });
     }
-    if (!this.anims.exists('demon_attack')) {
+    if (!this.anims.exists(`${race}_attack`)) {
       this.anims.create({
-        key: 'demon_attack',
-        frames: this.anims.generateFrameNumbers(this.BATTLE_ASSETS.demonSheets.attack.key, { start: 0, end: -1 }),
+        key: `${race}_attack`,
+        frames: this.anims.generateFrameNumbers(attackKey, { start: 0, end: -1 }),
         frameRate: 12,
         repeat: 0,
       });
     }
+  }
+
+  private createDemonAnimations() {
+    this.createRaceAnimations('demon', this.BATTLE_ASSETS.demonSheets.idle.key, this.BATTLE_ASSETS.demonSheets.attack.key);
   }
 
   private createStonebornAnimations() {
@@ -2620,16 +2690,42 @@ private getDebuffShortDescription(id: string, power: number) {
       container.add([platform, platformGlow, sprite]);
     } else if (player.raceId === 'demon') {
       const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.demonSheets.idle.key)
-        .setOrigin(0.5, 1.0)
-        .setFlipX(false);
+        .setOrigin(0.5, 1.0).setFlipX(false);
       this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
       sprite.play('demon_idle');
       this.demonSprite = sprite;
       container.add([platform, platformGlow, sprite]);
+    } else if (player.raceId === 'human') {
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.humanSheets.idle.key)
+        .setOrigin(0.5, 1.0).setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('human_idle');
+      this.humanSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
+    } else if (player.raceId === 'goblin') {
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.goblinSheets.idle.key)
+        .setOrigin(0.5, 1.0).setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('goblin_idle');
+      this.goblinSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
+    } else if (player.raceId === 'night_elf') {
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.nightElfSheets.idle.key)
+        .setOrigin(0.5, 1.0).setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('night_elf_idle');
+      this.nightElfSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
+    } else if (player.raceId === 'tainted_halfblood') {
+      const sprite = this.add.sprite(0, maxHeight * 0.34, this.BATTLE_ASSETS.taintedSheets.idle.key)
+        .setOrigin(0.5, 1.0).setFlipX(false);
+      this.fitImageToBox(sprite as unknown as Phaser.GameObjects.Image, maxWidth * 0.98, maxHeight * 1.04, 1);
+      sprite.play('tainted_halfblood_idle');
+      this.taintedSprite = sprite;
+      container.add([platform, platformGlow, sprite]);
     } else {
       const sprite = this.add.image(0, maxHeight * 0.34, this.getPlayerRaceSpriteKey())
-        .setOrigin(0.5, 1.0)
-        .setFlipX(false);
+        .setOrigin(0.5, 1.0).setFlipX(false);
       this.fitImageToBox(sprite, maxWidth * 0.98, maxHeight * 1.04, 1);
       container.add([platform, platformGlow, sprite]);
     }
@@ -2647,6 +2743,14 @@ private getDebuffShortDescription(id: string, power: number) {
       this.BATTLE_ASSETS.stonebornSheets.attack.key,
       this.BATTLE_ASSETS.demonSheets.idle.key,
       this.BATTLE_ASSETS.demonSheets.attack.key,
+      this.BATTLE_ASSETS.humanSheets.idle.key,
+      this.BATTLE_ASSETS.humanSheets.attack.key,
+      this.BATTLE_ASSETS.goblinSheets.idle.key,
+      this.BATTLE_ASSETS.goblinSheets.attack.key,
+      this.BATTLE_ASSETS.nightElfSheets.idle.key,
+      this.BATTLE_ASSETS.nightElfSheets.attack.key,
+      this.BATTLE_ASSETS.taintedSheets.idle.key,
+      this.BATTLE_ASSETS.taintedSheets.attack.key,
     ];
 
     keys.forEach(key => {
@@ -5214,6 +5318,16 @@ private renderEnemyEffectChips() {
     };
   }
 
+  private getActiveRaceAnimSprite(): { sprite: Phaser.GameObjects.Sprite; idleKey: string; attackKey: string } | null {
+    if (this.stonebornSprite) return { sprite: this.stonebornSprite, idleKey: 'stoneborn_idle', attackKey: 'stoneborn_attack' };
+    if (this.demonSprite)     return { sprite: this.demonSprite,     idleKey: 'demon_idle',     attackKey: 'demon_attack' };
+    if (this.humanSprite)     return { sprite: this.humanSprite,     idleKey: 'human_idle',     attackKey: 'human_attack' };
+    if (this.goblinSprite)    return { sprite: this.goblinSprite,    idleKey: 'goblin_idle',    attackKey: 'goblin_attack' };
+    if (this.nightElfSprite)  return { sprite: this.nightElfSprite,  idleKey: 'night_elf_idle', attackKey: 'night_elf_attack' };
+    if (this.taintedSprite)   return { sprite: this.taintedSprite,   idleKey: 'tainted_halfblood_idle', attackKey: 'tainted_halfblood_attack' };
+    return null;
+  }
+
   private async playPlayerAttackAnimation(kind: 'normal' | 'power' | 'skill' = 'normal', onImpact?: () => void, onAfterReturn?: () => void) {
     if (!this.playerCard || !this.enemyCard || this.isBattleEnded || this.combatAnimationLocked) {
       onImpact?.();
@@ -5232,7 +5346,9 @@ private renderEnemyEffectChips() {
     this.playerCard.setPosition(playerBase.x, playerBase.y);
     this.enemyCard.setPosition(enemyBase.x, enemyBase.y);
 
-    if (this.demonSprite) {
+    const raceAnim = this.getActiveRaceAnimSprite();
+    if (raceAnim) {
+      const { sprite, idleKey, attackKey } = raceAnim;
       const teleportLocalX = enemyBase.x - playerBase.x - 25;
 
       this.tweens.add({
@@ -5245,7 +5361,7 @@ private renderEnemyEffectChips() {
 
       await new Promise<void>(resolve => {
         this.tweens.add({
-          targets: this.demonSprite,
+          targets: sprite,
           x: teleportLocalX,
           duration: 80,
           ease: 'Cubic.easeIn',
@@ -5260,7 +5376,7 @@ private renderEnemyEffectChips() {
         return;
       }
 
-      this.demonSprite.play('demon_attack');
+      sprite.play(attackKey);
       this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
       this.tweens.add({
         targets: this.enemyCard,
@@ -5273,88 +5389,8 @@ private renderEnemyEffectChips() {
         },
       });
 
-      const demonAttackAnim = this.demonSprite.anims.currentAnim;
-      const demonAttackDuration = demonAttackAnim ? demonAttackAnim.duration : 300;
-      const demonImpactDelay = Math.max(0, demonAttackDuration - 90);
-
-      this.time.delayedCall(demonImpactDelay, () => {
-        if (!this.isBattleEnded) {
-          onImpact?.();
-        }
-      });
-
-      await new Promise<void>(resolve => {
-        this.demonSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
-      });
-
-      if (!this.isBattleEnded) {
-        this.demonSprite.play('demon_idle');
-      }
-
-      this.combatAnimationLocked = false;
-
-      this.tweens.add({
-        targets: this.demonSprite,
-        x: 0,
-        duration: 130,
-        ease: 'Cubic.easeOut',
-        onComplete: () => {
-          this.time.delayedCall(500, () => {
-            if (!this.isBattleEnded) {
-              onAfterReturn?.();
-            }
-          });
-        },
-      });
-
-      return;
-    }
-
-    if (this.stonebornSprite) {
-      const teleportLocalX = enemyBase.x - playerBase.x - 25;
-
-      this.tweens.add({
-        targets: this.playerCard,
-        angle: kind === 'power' ? 3 : 2,
-        duration: 80,
-        yoyo: true,
-        ease: 'Sine.easeInOut',
-      });
-
-      // Телепорт к врагу
-      await new Promise<void>(resolve => {
-        this.tweens.add({
-          targets: this.stonebornSprite,
-          x: teleportLocalX,
-          duration: 80,
-          ease: 'Cubic.easeIn',
-          onComplete: () => resolve(),
-        });
-      });
-
-      if (this.isBattleEnded) {
-        this.combatAnimationLocked = false;
-        onImpact?.();
-        onAfterReturn?.();
-        return;
-      }
-
-      // Анимация атаки + визуальный удар (урон снимается под конец анимации)
-      this.stonebornSprite.play('stoneborn_attack');
-      this.createImpactFlash(this.enemyCard.x - 12, this.enemyCard.y - 34, kind === 'skill' ? 0xc084fc : kind === 'power' ? 0xff9a3d : 0xf0d58a);
-      this.tweens.add({
-        targets: this.enemyCard,
-        x: enemyBase.x + (kind === 'power' ? 18 : 12),
-        duration: 70,
-        yoyo: true,
-        ease: 'Sine.easeOut',
-        onComplete: () => {
-          this.enemyCard?.setPosition(enemyBase.x, enemyBase.y);
-        },
-      });
-
-      const attackAnim = this.stonebornSprite.anims.currentAnim;
-      const attackDuration = attackAnim ? attackAnim.duration : 300;
+      const currentAnim = sprite.anims.currentAnim;
+      const attackDuration = currentAnim ? currentAnim.duration : 300;
       const impactDelay = Math.max(0, attackDuration - 90);
 
       this.time.delayedCall(impactDelay, () => {
@@ -5363,21 +5399,18 @@ private renderEnemyEffectChips() {
         }
       });
 
-      // Ждём конца анимации атаки, прежде чем возвращаться
       await new Promise<void>(resolve => {
-        this.stonebornSprite!.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
+        sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
       });
 
       if (!this.isBattleEnded) {
-        this.stonebornSprite.play('stoneborn_idle');
+        sprite.play(idleKey);
       }
 
-      // Снимаем лок до возврата
       this.combatAnimationLocked = false;
 
-      // Возвращаемся, затем 500мс пауза → ход врага
       this.tweens.add({
-        targets: this.stonebornSprite,
+        targets: sprite,
         x: 0,
         duration: 130,
         ease: 'Cubic.easeOut',
